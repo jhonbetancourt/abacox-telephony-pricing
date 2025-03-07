@@ -1,0 +1,16 @@
+id,name,callCategoryId,usesTrunks
+1,Celufijo,1,0
+2,Celular,2,1
+3,Local,3,1
+4,Nacional,3,1
+5,Internacional,3,1
+6,Servicios varios,3,1
+7,Interna,4,0
+8,Interna Local,4,0
+9,Interna Nacional,4,0
+10,Satelital,3,1
+11,Números especiales,3,0
+12,Local extendida,3,1
+13,Pago revertido,3,0
+14,Interna Internacional,4,0
+16,Sin Consumo,5,0

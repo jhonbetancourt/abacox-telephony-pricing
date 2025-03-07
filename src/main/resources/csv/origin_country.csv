@@ -1,0 +1,14 @@
+id,name,currencySymbol,code,active
+1,Colombia,$,COP,1
+2,Ecuador,USD$,USD,1
+3,Venezuela,Bs.F.,VBF,1
+4,República Dominicana,RD$,DOP,1
+5,Argentina,ARS$,ARS,1
+6,Brasil,R$,BRL,1
+7,Chile,CLP,CLP,1
+8,España,EUR,EUR,1
+9,México,MXN$,MXN,1
+10,Panamá,PAB,PAB,1
+11,Perú,S/,PEN,1
+12,Estados Unidos,USD$,USD,1
+13,El Salvador,USD$,USD,1

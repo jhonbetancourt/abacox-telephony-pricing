@@ -1,0 +1,2271 @@
+id,telephoneTypeId,departmentCountry,city,cityId,isAssociated,originCountryId,operatorId
+1,4,Cundinamarca,Agua de Dios,525,0,1,0
+2,4,Cundinamarca,Alban,526,0,1,0
+3,4,Cundinamarca,Anapoima,527,0,1,0
+4,4,Cundinamarca,Anolaima,528,0,1,0
+6,4,Cundinamarca,Apulo,529,0,1,0
+7,4,Cundinamarca,Arbelaez,530,0,1,0
+8,4,Cundinamarca,Bituima,532,0,1,0
+9,4,Cundinamarca,BojacÃ¡,533,0,1,0
+10,4,Cundinamarca,Cabrera,534,0,1,0
+11,4,Cundinamarca,Cachipay,535,0,1,0
+12,4,Cundinamarca,Cajica,536,0,1,0
+13,4,Cundinamarca,Caparrapi,537,0,1,0
+15,4,Cundinamarca,Caqueza,538,0,1,0
+16,4,Cundinamarca,Carmen de Carupa,539,0,1,0
+18,4,Cundinamarca,Chaguani,540,0,1,0
+19,4,Cundinamarca,Chia,541,0,1,0
+23,4,Cundinamarca,Chipaque,542,0,1,0
+24,4,Cundinamarca,Choachi,543,0,1,0
+25,4,Cundinamarca,Choconta,544,0,1,0
+26,4,Cundinamarca,Cogua,545,0,1,0
+27,4,Cundinamarca,Cota,546,0,1,0
+28,4,Cundinamarca,Cucunuba,547,0,1,0
+29,4,Cundinamarca,El Colegio,548,0,1,0
+33,4,Cundinamarca,Facatativa,551,0,1,0
+35,4,Cundinamarca,Fomeque,552,0,1,0
+36,4,Cundinamarca,Fosca,553,0,1,0
+37,4,Cundinamarca,Funza,554,0,1,0
+38,4,Cundinamarca,Fuquene,555,0,1,0
+39,4,Cundinamarca,Fusagasuga,556,0,1,0
+41,4,Cundinamarca,Gachala,557,0,1,0
+42,4,Cundinamarca,Gachancipa,558,0,1,0
+43,4,Cundinamarca,Gacheta,559,0,1,0
+44,4,Cundinamarca,Gama,560,0,1,0
+45,4,Cundinamarca,Girardot,561,0,1,0
+48,4,Cundinamarca,Granada,562,0,1,0
+49,4,Cundinamarca,Guacheta,563,0,1,0
+50,4,Cundinamarca,Guaduas,564,0,1,0
+51,4,Cundinamarca,Guasca,565,0,1,0
+54,4,Cundinamarca,Guatavita,567,0,1,0
+55,4,Cundinamarca,Guayabal de Siquima,568,0,1,0
+56,4,Cundinamarca,Guayabetal,569,0,1,0
+57,4,Cundinamarca,Gutierrez,570,0,1,0
+58,4,Cundinamarca,Jerusalen,571,0,1,0
+59,4,Cundinamarca,Junin,572,0,1,0
+60,4,Cundinamarca,La Calera,573,0,1,0
+64,4,Cundinamarca,La Mesa,574,0,1,0
+67,4,Cundinamarca,La Palma,575,0,1,0
+68,4,Cundinamarca,La PeÃ±a,576,0,1,0
+69,4,Cundinamarca,Subachoque,612,0,1,0
+71,4,Cundinamarca,La Vega,577,0,1,0
+72,4,Cundinamarca,Lenguazaque,578,0,1,0
+73,4,Cundinamarca,Macheta,579,0,1,0
+74,4,Cundinamarca,Madrid,580,0,1,0
+75,4,Cundinamarca,Manta,581,0,1,0
+76,4,Cundinamarca,Mosquera,583,0,1,0
+77,4,Cundinamarca,Nemocon,585,0,1,0
+78,4,Cundinamarca,Nilo,586,0,1,0
+79,4,Cundinamarca,Nimaima,587,0,1,0
+80,4,Cundinamarca,Nocaima,588,0,1,0
+81,4,Cundinamarca,Pacho,589,0,1,0
+82,4,Cundinamarca,Pandi,591,0,1,0
+83,4,Cundinamarca,Pasca,593,0,1,0
+86,4,Cundinamarca,Quetame,597,0,1,0
+87,4,Cundinamarca,Quipile,598,0,1,0
+89,4,Cundinamarca,San Bernardo,601,0,1,0
+90,4,Cundinamarca,San Francisco,603,0,1,0
+92,4,Cundinamarca,Sasaima,605,0,1,0
+95,4,Cundinamarca,Sesquile,606,0,1,0
+97,4,Cundinamarca,Silvania,608,0,1,0
+98,4,Cundinamarca,Simijaca,609,0,1,0
+99,4,Cundinamarca,Sopo,611,0,1,0
+102,4,Cundinamarca,Suesca,613,0,1,0
+103,4,Cundinamarca,Supata,614,0,1,0
+104,4,Cundinamarca,Susa,615,0,1,0
+105,4,Cundinamarca,Sutatausa,616,0,1,0
+106,4,Cundinamarca,Tabio,617,0,1,0
+107,4,Cundinamarca,Tausa,618,0,1,0
+108,4,Cundinamarca,Tena,619,0,1,0
+109,4,Cundinamarca,Tenjo,620,0,1,0
+110,4,Cundinamarca,Tibacuy,621,0,1,0
+111,4,Cundinamarca,Tibirita,622,0,1,0
+112,4,Cundinamarca,Tocaima,623,0,1,0
+113,4,Cundinamarca,Tocancipa,624,0,1,0
+114,4,Cundinamarca,Ubala,626,0,1,0
+115,4,Cundinamarca,Ubaque,627,0,1,0
+116,4,Cundinamarca,Ubate,628,0,1,0
+117,4,Cundinamarca,Une,629,0,1,0
+118,4,Cundinamarca,Utica,630,0,1,0
+119,4,Cundinamarca,Venecia,631,0,1,0
+120,4,Cundinamarca,Vergara,632,0,1,0
+121,4,Cundinamarca,Viani,633,0,1,0
+122,4,Cundinamarca,Villapinzon,635,0,1,0
+123,4,Cundinamarca,Villeta,636,0,1,0
+124,4,Cundinamarca,Viota,637,0,1,0
+125,4,Cundinamarca,Yacopi,638,0,1,0
+126,4,Cundinamarca,Zipacon,639,0,1,0
+127,4,Cundinamarca,Zipaquira,640,0,1,0
+128,4,Tolima,Icononzo,1043,0,1,0
+129,4,Cauca,Almaguer,400,0,1,0
+130,4,Cauca,Balboa,402,0,1,0
+132,4,Cauca,Bolivar,403,0,1,0
+133,4,Cauca,Buenos Aires,404,0,1,0
+134,4,Cauca,Cajibio,405,0,1,0
+135,4,Cauca,Caldono,406,0,1,0
+136,4,Cauca,Caloto,407,0,1,0
+138,4,Cauca,Corinto,408,0,1,0
+140,4,Cauca,El Tambo,409,0,1,0
+141,4,Cauca,Guachene,0,0,1,0
+142,4,Cauca,Guapi,411,0,1,0
+143,4,Cauca,Inza,412,0,1,0
+144,4,Cauca,Jambalo,413,0,1,0
+145,4,Cauca,La Sierra,414,0,1,0
+146,4,Cauca,La Vega,415,0,1,0
+148,4,Cauca,Mercaderes,417,0,1,0
+149,4,Cauca,Miranda,418,0,1,0
+151,4,Cauca,Morales,419,0,1,0
+152,4,Cauca,Padilla,420,0,1,0
+155,4,Cauca,Piendamo,424,0,1,0
+156,4,Cauca,Popayan,399,0,1,0
+159,4,Cauca,Puerto Tejada,425,0,1,0
+161,4,Cauca,Purace,426,0,1,0
+162,4,Cauca,Rosas,427,0,1,0
+164,4,Cauca,Santander de Quilichao,430,0,1,0
+166,4,Cauca,Silvia,431,0,1,0
+167,4,Cauca,Suarez,433,0,1,0
+168,4,Cauca,Timbio,435,0,1,0
+169,4,Cauca,Timbiqui,436,0,1,0
+170,4,Cauca,Toribio,437,0,1,0
+171,4,Cauca,Totoro,438,0,1,0
+173,4,NariÃ±o,Aldana,767,0,1,0
+174,4,NariÃ±o,Barbacoas,770,0,1,0
+175,4,NariÃ±o,Belen,771,0,1,0
+176,4,NariÃ±o,Bocas de Satinga,806,0,1,0
+177,4,NariÃ±o,Buesaco,772,0,1,0
+178,4,NariÃ±o,Cordoba,777,0,1,0
+179,4,NariÃ±o,Cumbal,779,0,1,0
+180,4,NariÃ±o,El Charco,781,0,1,0
+181,4,NariÃ±o,Funes,787,0,1,0
+182,4,NariÃ±o,Guachucal,788,0,1,0
+183,4,NariÃ±o,Guaitarilla,789,0,1,0
+184,4,NariÃ±o,Gualmatan,790,0,1,0
+185,4,NariÃ±o,Ipiales,793,0,1,0
+187,4,NariÃ±o,La Cruz,794,0,1,0
+188,4,NariÃ±o,La Union,798,0,1,0
+190,4,NariÃ±o,Pasto,765,0,1,0
+192,4,NariÃ±o,Potosi,809,0,1,0
+193,4,NariÃ±o,Puerres,811,0,1,0
+194,4,NariÃ±o,Pupiales,812,0,1,0
+195,4,NariÃ±o,Samaniego,815,0,1,0
+196,4,NariÃ±o,San Pablo,818,0,1,0
+197,4,NariÃ±o,Sandona,820,0,1,0
+198,4,NariÃ±o,Tumaco,826,0,1,0
+199,4,NariÃ±o,Tuquerres,827,0,1,0
+201,4,Valle del Cauca,Alcala,1069,0,1,0
+204,4,Valle del Cauca,Andalucia,1070,0,1,0
+206,4,Valle del Cauca,Ansermanuevo,1071,0,1,0
+208,4,Valle del Cauca,Argelia,1072,0,1,0
+211,4,Valle del Cauca,Bolivar,1073,0,1,0
+214,4,Valle del Cauca,Buenaventura,1074,0,1,0
+215,4,Valle del Cauca,Buga,1075,0,1,0
+219,4,Valle del Cauca,Caicedonia,1077,0,1,0
+222,4,Valle del Cauca,Cali,1068,0,1,0
+228,4,Valle del Cauca,Candelaria,1079,0,1,0
+230,4,Valle del Cauca,Cartago,1080,0,1,0
+234,4,Valle del Cauca,Versalles,1105,0,1,0
+238,4,Valle del Cauca,Dagua,1081,0,1,0
+240,4,Valle del Cauca,El Aguila,1082,0,1,0
+244,4,Valle del Cauca,El Cairo,1083,0,1,0
+247,4,Valle del Cauca,El Cerrito,1084,0,1,0
+250,4,Valle del Cauca,El Dovio,1085,0,1,0
+252,4,Valle del Cauca,Florida,1086,0,1,0
+254,4,Valle del Cauca,Ginebra,1087,0,1,0
+256,4,Valle del Cauca,Guacari,1088,0,1,0
+264,4,Valle del Cauca,La Cumbre,1090,0,1,0
+272,4,Valle del Cauca,La Union,1091,0,1,0
+274,4,Valle del Cauca,La Victoria,1092,0,1,0
+277,4,Valle del Cauca,Ulloa,1104,0,1,0
+278,4,Valle del Cauca,Roldanillo,1098,0,1,0
+280,4,Valle del Cauca,Obando,1093,0,1,0
+284,4,Valle del Cauca,Palmira,1094,0,1,0
+287,4,Valle del Cauca,Jamundi,1089,0,1,0
+288,4,Valle del Cauca,Pradera,1095,0,1,0
+292,4,Valle del Cauca,Restrepo,1096,0,1,0
+295,4,Valle del Cauca,Riofrio,1097,0,1,0
+302,4,Valle del Cauca,Sevilla,1100,0,1,0
+303,4,Valle del Cauca,Toro,1101,0,1,0
+304,4,Valle del Cauca,San Pedro,1099,0,1,0
+316,4,Valle del Cauca,Trujillo,1102,0,1,0
+318,4,Valle del Cauca,Tulua,1103,0,1,0
+323,4,Valle del Cauca,Vijes,1106,0,1,0
+326,4,Valle del Cauca,Yotoco,1107,0,1,0
+331,4,Valle del Cauca,Zarzal,1109,0,1,0
+335,4,Antioquia,Abejorral,13,0,1,0
+336,4,Antioquia,Abriaqui,14,0,1,0
+337,4,Antioquia,Alejandria,15,0,1,0
+338,4,Antioquia,Betulia,31,0,1,0
+339,4,Antioquia,Amaga,16,0,1,0
+340,4,Antioquia,Amalfi,17,0,1,0
+341,4,Antioquia,Andes,18,0,1,0
+342,4,Antioquia,Angelopolis,19,0,1,0
+343,4,Antioquia,Angostura,20,0,1,0
+344,4,Antioquia,Anori,21,0,1,0
+345,4,Antioquia,Anza,22,0,1,0
+346,4,Antioquia,Apartado,23,0,1,0
+347,4,Antioquia,Arboletes,24,0,1,0
+348,4,Antioquia,Argelia,25,0,1,0
+349,4,Antioquia,Armenia,26,0,1,0
+351,4,Antioquia,Belmira,29,0,1,0
+352,4,Antioquia,Betania,30,0,1,0
+356,4,Antioquia,BriceÃ±o,32,0,1,0
+357,4,Antioquia,Buritica,33,0,1,0
+358,4,Antioquia,Caceres,34,0,1,0
+359,4,Antioquia,Caicedo,35,0,1,0
+360,4,Antioquia,Campamento,37,0,1,0
+361,4,Antioquia,CaÃ±asgordas,38,0,1,0
+362,4,Antioquia,Caracoli,39,0,1,0
+363,4,Antioquia,Caramanta,40,0,1,0
+364,4,Antioquia,Carepa,41,0,1,0
+365,4,Antioquia,Carolina,43,0,1,0
+366,4,Antioquia,Caucasia,44,0,1,0
+368,4,Antioquia,Chigorodo,45,0,1,0
+369,4,Antioquia,Cisneros,46,0,1,0
+370,4,Antioquia,Cocorna,48,0,1,0
+371,4,Antioquia,Concepcion,49,0,1,0
+372,4,Antioquia,Concordia,50,0,1,0
+374,4,Antioquia,Dabeiba,52,0,1,0
+375,4,Antioquia,Don Matias,53,0,1,0
+377,4,Antioquia,Ebejico,54,0,1,0
+381,4,Antioquia,El Bagre,55,0,1,0
+383,4,Antioquia,Entrerrios,56,0,1,0
+384,4,Antioquia,Fredonia,58,0,1,0
+385,4,Antioquia,Frontino,59,0,1,0
+386,4,Antioquia,Giraldo,60,0,1,0
+387,4,Antioquia,Gomez Plata,62,0,1,0
+388,4,Antioquia,Granada,63,0,1,0
+389,4,Antioquia,Guadalupe,64,0,1,0
+390,4,Antioquia,Guatape,66,0,1,0
+391,4,Antioquia,Heliconia,67,0,1,0
+392,4,Antioquia,Hispania,68,0,1,0
+394,4,Antioquia,Ituango,70,0,1,0
+395,4,Antioquia,Jardin,71,0,1,0
+396,4,Antioquia,Jerico,72,0,1,0
+398,4,Antioquia,La Pintada,75,0,1,0
+400,4,Antioquia,Liborina,77,0,1,0
+403,4,Antioquia,Maceo,78,0,1,0
+404,4,Antioquia,Medellin,12,0,1,0
+406,4,Antioquia,Montebello,80,0,1,0
+407,4,Antioquia,Murindo,81,0,1,0
+408,4,Antioquia,Mutata,82,0,1,0
+409,4,Antioquia,NariÃ±o,83,0,1,0
+410,4,Antioquia,Nechi,84,0,1,0
+411,4,Antioquia,Necocli,85,0,1,0
+416,4,Antioquia,Peque,88,0,1,0
+418,4,Antioquia,Pueblorrico,89,0,1,0
+421,4,Antioquia,Puerto Nare,91,0,1,0
+423,4,Antioquia,Puerto Triunfo,92,0,1,0
+424,4,Antioquia,Remedios,93,0,1,0
+425,4,Antioquia,Sabanalarga,96,0,1,0
+426,4,Antioquia,Salgar,98,0,1,0
+427,4,Antioquia,San AndrÃ©s,99,0,1,0
+428,4,Antioquia,San Carlos,100,0,1,0
+429,4,Antioquia,San Francisco,101,0,1,0
+430,4,Antioquia,San Jeronimo,102,0,1,0
+431,4,Antioquia,San Jose de la MontaÃ±a,103,0,1,0
+434,4,Antioquia,San Juan de Uraba,104,0,1,0
+435,4,Antioquia,San Luis,105,0,1,0
+436,4,Antioquia,Sonson,117,0,1,0
+437,4,Antioquia,San Pedro,106,0,1,0
+438,4,Antioquia,San Pedro de Uraba,107,0,1,0
+439,4,Antioquia,San Rafael,108,0,1,0
+440,4,Antioquia,San Roque,109,0,1,0
+441,4,Antioquia,San Vicente,110,0,1,0
+442,4,Antioquia,Santa Barbara,111,0,1,0
+444,4,Antioquia,Santa Rosa de Osos,112,0,1,0
+445,4,Antioquia,Santo Domingo,113,0,1,0
+446,4,Antioquia,Segovia,116,0,1,0
+449,4,Antioquia,Sopetran,118,0,1,0
+452,4,Antioquia,Tamesis,119,0,1,0
+454,4,Antioquia,Taraza,120,0,1,0
+455,4,Antioquia,Tarso,121,0,1,0
+456,4,Antioquia,Titiribi,122,0,1,0
+457,4,Antioquia,Toledo,123,0,1,0
+458,4,Antioquia,Turbo,124,0,1,0
+459,4,Antioquia,Uramita,125,0,1,0
+460,4,Antioquia,Urrao,126,0,1,0
+461,4,Antioquia,Valdivia,127,0,1,0
+462,4,Antioquia,Valparaiso,128,0,1,0
+463,4,Antioquia,Vegachi,129,0,1,0
+464,4,Antioquia,Venecia,130,0,1,0
+466,4,Antioquia,Vigia del Fuerte,131,0,1,0
+467,4,Antioquia,Yali,132,0,1,0
+468,4,Antioquia,Yarumal,133,0,1,0
+470,4,Antioquia,Yolombo,134,0,1,0
+471,4,Antioquia,Yondo,135,0,1,0
+472,4,Antioquia,Zaragoza,136,0,1,0
+473,4,ChocÃ³,Bahia Solano,470,0,1,0
+474,4,ChocÃ³,Condoto,476,0,1,0
+476,4,ChocÃ³,Istmina,479,0,1,0
+477,4,ChocÃ³,Nuqui,487,0,1,0
+479,4,ChocÃ³,Quibdo,465,0,1,0
+480,4,ChocÃ³,Riosucio,490,0,1,0
+481,4,ChocÃ³,Tado,493,0,1,0
+482,4,ChocÃ³,Unguia,494,0,1,0
+483,4,CÃ³rdoba,Ayapel,497,0,1,0
+484,4,CÃ³rdoba,Buenavista,498,0,1,0
+485,4,CÃ³rdoba,Cerete,500,0,1,0
+488,4,CÃ³rdoba,Chinu,502,0,1,0
+489,4,CÃ³rdoba,Cienaga de Oro,503,0,1,0
+491,4,CÃ³rdoba,La Apartada,505,0,1,0
+492,4,CÃ³rdoba,Lorica,506,0,1,0
+493,4,CÃ³rdoba,Momil,508,0,1,0
+494,4,CÃ³rdoba,Montelibano,509,0,1,0
+495,4,CÃ³rdoba,Monteria,496,0,1,0
+497,4,CÃ³rdoba,Planeta Rica,511,0,1,0
+498,4,CÃ³rdoba,Pueblo Nuevo,512,0,1,0
+499,4,CÃ³rdoba,Puerto Libertador,514,0,1,0
+500,4,CÃ³rdoba,Purisima,515,0,1,0
+501,4,CÃ³rdoba,Sahagun,516,0,1,0
+503,4,CÃ³rdoba,San Andres de Sotavento,517,0,1,0
+504,4,CÃ³rdoba,San Antero,518,0,1,0
+505,4,CÃ³rdoba,San Bernardo del Viento,519,0,1,0
+506,4,CÃ³rdoba,San Pelayo,521,0,1,0
+509,4,CÃ³rdoba,Urra,0,0,1,0
+510,4,CÃ³rdoba,Valencia,523,0,1,0
+520,4,AtlÃ¡ntico,Baranoa,147,0,1,0
+521,4,AtlÃ¡ntico,Barranquilla,146,0,1,0
+523,4,AtlÃ¡ntico,Campo de la Cruz,148,0,1,0
+524,4,AtlÃ¡ntico,Candelaria,149,0,1,0
+525,4,AtlÃ¡ntico,Galapa,150,0,1,0
+526,4,AtlÃ¡ntico,Juan de Acosta,151,0,1,0
+527,4,AtlÃ¡ntico,Luruaco,152,0,1,0
+528,4,AtlÃ¡ntico,Manati,154,0,1,0
+529,4,AtlÃ¡ntico,Palmar de Varela,155,0,1,0
+530,4,AtlÃ¡ntico,Tubara,167,0,1,0
+532,4,AtlÃ¡ntico,Ponedera,158,0,1,0
+533,4,AtlÃ¡ntico,Puerto Colombia,159,0,1,0
+534,4,AtlÃ¡ntico,Repelon,160,0,1,0
+536,4,AtlÃ¡ntico,Sabanalarga,162,0,1,0
+537,4,AtlÃ¡ntico,Santa Lucia,163,0,1,0
+538,4,AtlÃ¡ntico,Santo Tomas,164,0,1,0
+539,4,AtlÃ¡ntico,Suan,166,0,1,0
+541,4,AtlÃ¡ntico,Usiacuri,168,0,1,0
+542,4,Bolivar,Achi,170,0,1,0
+543,4,Bolivar,Arjona,173,0,1,0
+545,4,Bolivar,Barranco de Loba,175,0,1,0
+547,4,Bolivar,Calamar,176,0,1,0
+548,4,Bolivar,Cartagena,169,0,1,0
+551,4,Bolivar,Cordoba,180,0,1,0
+553,4,Bolivar,El Guamo,182,0,1,0
+554,4,Bolivar,Magangue,185,0,1,0
+555,4,Bolivar,Mahates,186,0,1,0
+557,4,Bolivar,Margarita,187,0,1,0
+558,4,Bolivar,Maria La Baja,188,0,1,0
+559,4,Bolivar,Mompos,189,0,1,0
+560,4,Bolivar,Morales,191,0,1,0
+561,4,Bolivar,Pinillos,192,0,1,0
+563,4,Bolivar,San Estanislao,196,0,1,0
+564,4,Bolivar,San Fernando,197,0,1,0
+565,4,Bolivar,San Jacinto,198,0,1,0
+566,4,Bolivar,San Juan Nepomuceno,200,0,1,0
+567,4,Bolivar,San Martin de Loba,201,0,1,0
+568,4,Bolivar,Santa Catalina,203,0,1,0
+569,4,Bolivar,SimitÃ­,206,0,1,0
+570,4,Bolivar,Santa Rosa,204,0,1,0
+574,4,Bolivar,Talaigua Nuevo,208,0,1,0
+575,4,Bolivar,Turbana,211,0,1,0
+576,4,Bolivar,Villanueva,212,0,1,0
+577,4,Bolivar,Zambrano,213,0,1,0
+578,4,Cesar,Aguachica,441,0,1,0
+579,4,Cesar,Astrea,443,0,1,0
+580,4,Cesar,Becerril,444,0,1,0
+581,4,Cesar,Bosconia,445,0,1,0
+582,4,Cesar,Chimichagua,446,0,1,0
+583,4,Cesar,Chiriguana,447,0,1,0
+584,4,Cesar,AgustÃ­n Codazzi,442,0,1,0
+585,4,Cesar,Curumani,448,0,1,0
+586,4,Cesar,El Copey,449,0,1,0
+587,4,Cesar,El Paso,450,0,1,0
+588,4,Cesar,Gamarra,451,0,1,0
+589,4,Cesar,La Gloria,453,0,1,0
+590,4,Cesar,La Jagua de Ibirico,454,0,1,0
+591,4,Cesar,La Paz,455,0,1,0
+592,4,Cesar,Manaure,456,0,1,0
+593,4,Cesar,Pailitas,457,0,1,0
+594,4,Cesar,Pelaya,458,0,1,0
+595,4,Cesar,Pueblo Bello,459,0,1,0
+596,4,Cesar,San Alberto,461,0,1,0
+597,4,Cesar,San Diego,462,0,1,0
+599,4,Cesar,San Martin,463,0,1,0
+600,4,Cesar,Tamalameque,464,0,1,0
+601,4,Cesar,Valledupar,440,0,1,0
+603,4,La Guajira,Albania,692,0,1,0
+604,4,La Guajira,Barrancas,693,0,1,0
+605,4,La Guajira,El Molino,696,0,1,0
+606,4,La Guajira,Fonseca,697,0,1,0
+608,4,La Guajira,Maicao,700,0,1,0
+609,4,La Guajira,Manaure,701,0,1,0
+611,4,La Guajira,Riohacha,691,0,1,0
+612,4,La Guajira,San Juan del Cesar,702,0,1,0
+613,4,La Guajira,Uribia,703,0,1,0
+614,4,La Guajira,Urumita,704,0,1,0
+615,4,La Guajira,Villanueva,705,0,1,0
+616,4,Magdalena,Aracataca,708,0,1,0
+617,4,Magdalena,Ariguani,709,0,1,0
+618,4,Magdalena,Chivolo,711,0,1,0
+619,4,Magdalena,Cienaga,712,0,1,0
+620,4,Magdalena,El Banco,714,0,1,0
+621,4,Magdalena,Fundacion,717,0,1,0
+622,4,Magdalena,Guamal,718,0,1,0
+623,4,Magdalena,Pivijay,722,0,1,0
+625,4,Magdalena,Remolino,725,0,1,0
+626,4,Magdalena,Salamina,727,0,1,0
+627,4,Magdalena,Santa Ana,730,0,1,0
+628,4,Magdalena,Santa Marta,706,0,1,0
+629,4,Magdalena,Sitionuevo,732,0,1,0
+630,4,Magdalena,Tenerife,733,0,1,0
+632,4,Sucre,Buenavista,996,0,1,0
+633,4,Sucre,Caimito,997,0,1,0
+634,4,Sucre,Corozal,1000,0,1,0
+636,4,Sucre,Galeras,1003,0,1,0
+637,4,Sucre,Majagual,1007,0,1,0
+638,4,Sucre,Ovejas,1009,0,1,0
+639,4,Sucre,Sampues,1011,0,1,0
+641,4,Sucre,San Marcos,1014,0,1,0
+642,4,Sucre,San Onofre,1015,0,1,0
+643,4,Sucre,San Pedro,1016,0,1,0
+644,4,Sucre,Since,1017,0,1,0
+645,4,Sucre,Sincelejo,995,0,1,0
+646,4,Sucre,Sucre,1018,0,1,0
+647,4,Sucre,Tolu,1019,0,1,0
+648,4,Sucre,Toluviejo,1020,0,1,0
+649,4,Caldas,Aguadas,338,0,1,0
+650,4,Caldas,Anserma,339,0,1,0
+651,4,Caldas,Aranzazu,340,0,1,0
+653,4,Caldas,Belalcazar,341,0,1,0
+657,4,Caldas,Chinchina,342,0,1,0
+659,4,Caldas,Filadelfia,343,0,1,0
+663,4,Caldas,La Dorada,344,0,1,0
+664,4,Caldas,La Merced,345,0,1,0
+666,4,Caldas,Manizales,337,0,1,0
+669,4,Caldas,Manzanares,346,0,1,0
+670,4,Caldas,Marmato,347,0,1,0
+671,4,Caldas,Marquetalia,348,0,1,0
+672,4,Caldas,Marulanda,349,0,1,0
+674,4,Caldas,Neira,350,0,1,0
+677,4,Caldas,Pacora,352,0,1,0
+680,4,Caldas,Pensilvania,354,0,1,0
+681,4,Caldas,Riosucio,355,0,1,0
+682,4,Caldas,Risaralda,356,0,1,0
+683,4,Caldas,Salamina,357,0,1,0
+684,4,Caldas,Samana,358,0,1,0
+691,4,Caldas,Supia,360,0,1,0
+692,4,Caldas,Victoria,361,0,1,0
+693,4,Caldas,Viterbo,363,0,1,0
+694,4,ChocÃ³,San Jose del Palmar,491,0,1,0
+695,4,Cundinamarca,Puerto Salgar,594,0,1,0
+696,4,QuindÃ­o,Armenia,882,0,1,0
+698,4,QuindÃ­o,Buenavista,883,0,1,0
+699,4,QuindÃ­o,Calarca,884,0,1,0
+700,4,QuindÃ­o,Circasia,885,0,1,0
+701,4,QuindÃ­o,Cordoba,886,0,1,0
+702,4,QuindÃ­o,Filandia,887,0,1,0
+703,4,QuindÃ­o,Genova,888,0,1,0
+704,4,QuindÃ­o,La Tebaida,889,0,1,0
+705,4,QuindÃ­o,Montenegro,890,0,1,0
+706,4,QuindÃ­o,Pijao,891,0,1,0
+708,4,QuindÃ­o,Quimbaya,892,0,1,0
+709,4,QuindÃ­o,Salento,893,0,1,0
+711,4,Risaralda,Apia,895,0,1,0
+712,4,Risaralda,Balboa,896,0,1,0
+713,4,Risaralda,Belen de Umbria,897,0,1,0
+714,4,Risaralda,Dosquebradas,898,0,1,0
+715,4,Risaralda,Guatica,899,0,1,0
+717,4,Risaralda,La Celia,900,0,1,0
+718,4,Risaralda,La Virginia,901,0,1,0
+719,4,Risaralda,Marsella,902,0,1,0
+720,4,Risaralda,Mistrato,903,0,1,0
+721,4,Risaralda,Pereira,894,0,1,0
+723,4,Risaralda,Pueblo Rico,904,0,1,0
+724,4,Risaralda,Quinchia,905,0,1,0
+727,4,Risaralda,Santa Rosa de Cabal,906,0,1,0
+728,4,Risaralda,Santuario,907,0,1,0
+730,4,Arauca,Arauca,137,0,1,0
+731,4,Arauca,Arauquita,138,0,1,0
+732,4,Arauca,Cravo Norte,139,0,1,0
+733,4,Arauca,Fortul,140,0,1,0
+735,4,Arauca,Puerto Rondon,141,0,1,0
+736,4,Arauca,Saravena,142,0,1,0
+737,4,Arauca,Tame,143,0,1,0
+739,4,BoyacÃ¡,Cubara,242,0,1,0
+741,4,Norte de Santander,Abrego,830,0,1,0
+742,4,Norte de Santander,Arboledas,831,0,1,0
+743,4,Norte de Santander,Bochalema,832,0,1,0
+744,4,Norte de Santander,Bucarasica,833,0,1,0
+745,4,Norte de Santander,Cacota,835,0,1,0
+746,4,Norte de Santander,Chinacota,836,0,1,0
+747,4,Norte de Santander,Chitaga,837,0,1,0
+748,4,Norte de Santander,Convencion,838,0,1,0
+749,4,Norte de Santander,Cucuta,829,0,1,0
+751,4,Norte de Santander,Cucutilla,839,0,1,0
+752,4,Norte de Santander,Durania,840,0,1,0
+753,4,Norte de Santander,El Carmen,841,0,1,0
+754,4,Norte de Santander,El Tarra,842,0,1,0
+755,4,Norte de Santander,Gramalote,844,0,1,0
+757,4,Norte de Santander,Hacari,845,0,1,0
+758,4,Norte de Santander,Herran,846,0,1,0
+760,4,Norte de Santander,La Esperanza,847,0,1,0
+762,4,Norte de Santander,La Playa,848,0,1,0
+763,4,Norte de Santander,Labateca,849,0,1,0
+765,4,Norte de Santander,Lourdes,851,0,1,0
+766,4,Norte de Santander,Mutiscua,852,0,1,0
+767,4,Norte de Santander,OcaÃ±a,853,0,1,0
+769,4,Norte de Santander,Pamplona,854,0,1,0
+770,4,Norte de Santander,Puerto Santander,856,0,1,0
+771,4,Norte de Santander,Ragonvalia,857,0,1,0
+772,4,Norte de Santander,Salazar,858,0,1,0
+774,4,Norte de Santander,San Cayetano,860,0,1,0
+775,4,Norte de Santander,Santiago,861,0,1,0
+776,4,Norte de Santander,Sardinata,862,0,1,0
+777,4,Norte de Santander,Silos,863,0,1,0
+778,4,Norte de Santander,Teorama,864,0,1,0
+779,4,Norte de Santander,Tibu,865,0,1,0
+780,4,Norte de Santander,Toledo,866,0,1,0
+781,4,Norte de Santander,Villa del Rosario,868,0,1,0
+783,4,Santander,Aratoca,911,0,1,0
+784,4,Santander,Barbosa,912,0,1,0
+785,4,Santander,Barichara,913,0,1,0
+786,4,Santander,Barrancabermeja,914,0,1,0
+787,4,Santander,Betulia,915,0,1,0
+788,4,Santander,Bolivar,916,0,1,0
+789,4,Santander,Bucaramanga,908,0,1,0
+793,4,Santander,Capitanejo,919,0,1,0
+794,4,Santander,Carcasi,920,0,1,0
+795,4,Santander,Cerrito,922,0,1,0
+796,4,Santander,Charala,923,0,1,0
+797,4,Santander,Cimitarra,927,0,1,0
+799,4,Santander,Concepcion,928,0,1,0
+800,4,Santander,Contratacion,930,0,1,0
+801,4,Santander,Curiti,932,0,1,0
+803,4,Santander,El Playon,936,0,1,0
+804,4,Santander,Guaca,944,0,1,0
+805,4,Santander,Guadalupe,945,0,1,0
+806,4,Santander,Guavata,947,0,1,0
+807,4,Santander,GÃ¼epsa,948,0,1,0
+808,4,Santander,Landazuri,954,0,1,0
+809,4,Santander,Lebrija,955,0,1,0
+810,4,Santander,Los Santos,956,0,1,0
+811,4,Santander,Malaga,958,0,1,0
+812,4,Santander,Matanza,959,0,1,0
+814,4,Santander,Mogotes,960,0,1,0
+815,4,Santander,Molagavita,961,0,1,0
+816,4,Santander,Oiba,963,0,1,0
+818,4,Santander,Onzaga,964,0,1,0
+819,4,Santander,Piedecuesta,968,0,1,0
+820,4,Santander,Puente Nacional,970,0,1,0
+821,4,Santander,Puerto Parra,971,0,1,0
+822,4,Santander,Puerto Wilches,972,0,1,0
+823,4,Santander,Rionegro,973,0,1,0
+824,4,Santander,Sabana de Torres,974,0,1,0
+825,4,Santander,San Andres,975,0,1,0
+826,4,Santander,San Gil,977,0,1,0
+827,4,Santander,San Jose de Miranda,979,0,1,0
+829,4,Santander,San Vicente de Chucuri,981,0,1,0
+830,4,Santander,Simacota,984,0,1,0
+831,4,Santander,Socorro,985,0,1,0
+832,4,Santander,Suaita,986,0,1,0
+833,4,Santander,Surata,988,0,1,0
+835,4,Santander,Valle de San Jose,990,0,1,0
+836,4,Santander,Velez,991,0,1,0
+837,4,Santander,Vetas,992,0,1,0
+838,4,Santander,Villanueva,993,0,1,0
+839,4,Amazonas,Leticia,1,0,1,0
+840,4,BoyacÃ¡,Aquitania,216,0,1,0
+841,4,BoyacÃ¡,Arcabuco,217,0,1,0
+842,4,BoyacÃ¡,Belen,218,0,1,0
+843,4,BoyacÃ¡,Nobsa,272,0,1,0
+844,4,BoyacÃ¡,Boavita,221,0,1,0
+845,4,BoyacÃ¡,Boyaca,222,0,1,0
+846,4,BoyacÃ¡,Cerinza,228,0,1,0
+847,4,BoyacÃ¡,Chinavita,229,0,1,0
+848,4,BoyacÃ¡,Chiquinquira,230,0,1,0
+849,4,BoyacÃ¡,Chiscas,232,0,1,0
+850,4,BoyacÃ¡,Chita,233,0,1,0
+851,4,BoyacÃ¡,Chitaraque,234,0,1,0
+852,4,BoyacÃ¡,Chivor,236,0,1,0
+853,4,BoyacÃ¡,Cienega,237,0,1,0
+854,4,BoyacÃ¡,Combita,238,0,1,0
+855,4,BoyacÃ¡,Corrales,240,0,1,0
+856,4,BoyacÃ¡,Cucaita,243,0,1,0
+857,4,BoyacÃ¡,Duitama,245,0,1,0
+858,4,BoyacÃ¡,El Cocuy,246,0,1,0
+859,4,BoyacÃ¡,El Espino,247,0,1,0
+861,4,BoyacÃ¡,Floresta,249,0,1,0
+863,4,BoyacÃ¡,Garagoa,252,0,1,0
+864,4,BoyacÃ¡,Guateque,254,0,1,0
+865,4,BoyacÃ¡,Guayata,255,0,1,0
+867,4,BoyacÃ¡,Iza,257,0,1,0
+869,4,BoyacÃ¡,La Capilla,260,0,1,0
+870,4,BoyacÃ¡,La Uvita,261,0,1,0
+871,4,BoyacÃ¡,Macanal,264,0,1,0
+873,4,BoyacÃ¡,Miraflores,266,0,1,0
+874,4,BoyacÃ¡,Mongua,267,0,1,0
+875,4,BoyacÃ¡,Mongui,268,0,1,0
+876,4,BoyacÃ¡,Moniquira,269,0,1,0
+877,4,BoyacÃ¡,Muzo,271,0,1,0
+879,4,BoyacÃ¡,Nuevo Colon,273,0,1,0
+880,4,BoyacÃ¡,Otanche,275,0,1,0
+881,4,BoyacÃ¡,Pachavita,276,0,1,0
+882,4,BoyacÃ¡,Paez,277,0,1,0
+883,4,BoyacÃ¡,Paipa,278,0,1,0
+884,4,BoyacÃ¡,Pajarito,279,0,1,0
+885,4,BoyacÃ¡,Pauna,281,0,1,0
+887,4,BoyacÃ¡,Pesca,284,0,1,0
+888,4,BoyacÃ¡,Puerto Boyaca,286,0,1,0
+889,4,BoyacÃ¡,Ramiriqui,288,0,1,0
+890,4,BoyacÃ¡,Raquira,289,0,1,0
+891,4,BoyacÃ¡,Saboya,291,0,1,0
+892,4,BoyacÃ¡,Sachica,292,0,1,0
+893,4,BoyacÃ¡,Samaca,293,0,1,0
+894,4,BoyacÃ¡,San Jose de Pare,295,0,1,0
+895,4,BoyacÃ¡,San Luis de Gaceno,296,0,1,0
+896,4,BoyacÃ¡,San Mateo,297,0,1,0
+897,4,BoyacÃ¡,San Miguel de Sema,298,0,1,0
+898,4,BoyacÃ¡,San Pablo de Borbur,299,0,1,0
+899,4,BoyacÃ¡,Santa Maria,300,0,1,0
+900,4,BoyacÃ¡,Santa Rosa de Viterbo,301,0,1,0
+901,4,BoyacÃ¡,Santa Sofia,302,0,1,0
+902,4,BoyacÃ¡,Santana,303,0,1,0
+904,4,BoyacÃ¡,Soata,307,0,1,0
+905,4,BoyacÃ¡,Socha,308,0,1,0
+906,4,BoyacÃ¡,Socota,309,0,1,0
+907,4,BoyacÃ¡,Sogamoso,310,0,1,0
+908,4,BoyacÃ¡,Somondoco,311,0,1,0
+909,4,BoyacÃ¡,Sotaquira,314,0,1,0
+910,4,BoyacÃ¡,Susacon,315,0,1,0
+911,4,BoyacÃ¡,Sutamarchan,316,0,1,0
+912,4,BoyacÃ¡,Sutatenza,317,0,1,0
+913,4,BoyacÃ¡,Tasco,318,0,1,0
+914,4,BoyacÃ¡,Tenza,319,0,1,0
+915,4,BoyacÃ¡,Tibana,320,0,1,0
+916,4,BoyacÃ¡,Tibasosa,321,0,1,0
+917,4,BoyacÃ¡,Tinjaca,322,0,1,0
+918,4,BoyacÃ¡,Tipacoque,323,0,1,0
+919,4,BoyacÃ¡,Toca,324,0,1,0
+920,4,BoyacÃ¡,TogÃ¼Ã­,325,0,1,0
+921,4,BoyacÃ¡,Topaga,326,0,1,0
+922,4,BoyacÃ¡,Tunja,214,0,1,0
+924,4,BoyacÃ¡,Turmeque,329,0,1,0
+925,4,BoyacÃ¡,Tuta,330,0,1,0
+926,4,BoyacÃ¡,Ventaquemada,333,0,1,0
+927,4,BoyacÃ¡,Villa de Leyva,334,0,1,0
+928,4,BoyacÃ¡,Viracacha,335,0,1,0
+929,4,BoyacÃ¡,Zetaquira,336,0,1,0
+930,4,CaquetÃ¡,Albania,365,0,1,0
+931,4,CaquetÃ¡,Belen de Los Andaquies,366,0,1,0
+932,4,CaquetÃ¡,Cartagena del Chaira,367,0,1,0
+933,4,CaquetÃ¡,Curillo,368,0,1,0
+934,4,CaquetÃ¡,El Doncello,369,0,1,0
+935,4,CaquetÃ¡,El Paujil,370,0,1,0
+936,4,CaquetÃ¡,Florencia,364,0,1,0
+938,4,CaquetÃ¡,Milan,371,0,1,0
+939,4,CaquetÃ¡,Morelia,373,0,1,0
+940,4,CaquetÃ¡,Puerto Rico,374,0,1,0
+942,4,CaquetÃ¡,San Vicente del Caguan,376,0,1,0
+943,4,CaquetÃ¡,Valparaiso,379,0,1,0
+944,4,Casanare,Aguazul,381,0,1,0
+945,4,Casanare,Chameza,382,0,1,0
+947,4,Casanare,Tauramena,396,0,1,0
+948,4,Casanare,Hato Corozal,383,0,1,0
+949,4,Casanare,Mani,385,0,1,0
+950,4,Casanare,Monterrey,386,0,1,0
+951,4,Casanare,Nunchia,387,0,1,0
+952,4,Casanare,Orocue,388,0,1,0
+953,4,Casanare,Paz de Ariporo,389,0,1,0
+954,4,Casanare,Pore,390,0,1,0
+955,4,Casanare,Recetor,391,0,1,0
+956,4,Casanare,Sabanalarga,392,0,1,0
+957,4,Casanare,San Luis de Palenque,394,0,1,0
+958,4,Casanare,Tamara,395,0,1,0
+960,4,Casanare,Trinidad,397,0,1,0
+961,4,Casanare,Villanueva,398,0,1,0
+962,4,Casanare,Yopal,380,0,1,0
+964,4,ChocÃ³,Acandi,466,0,1,0
+965,4,Cundinamarca,Beltran,531,0,1,0
+967,4,Cundinamarca,Medina,582,0,1,0
+968,4,Cundinamarca,Paratebueno,592,0,1,0
+970,4,Guaviare,San Jose del Guaviare,650,0,1,0
+971,4,Huila,Acevedo,655,0,1,0
+972,4,Huila,Agrado,656,0,1,0
+973,4,Huila,Aipe,657,0,1,0
+974,4,Huila,Algeciras,658,0,1,0
+975,4,Huila,Altamira,659,0,1,0
+976,4,Huila,Baraya,660,0,1,0
+977,4,Huila,La Plata,671,0,1,0
+979,4,Huila,Campoalegre,661,0,1,0
+980,4,Huila,Colombia,662,0,1,0
+984,4,Huila,Garzon,664,0,1,0
+985,4,Huila,Gigante,665,0,1,0
+986,4,Huila,Guadalupe,666,0,1,0
+987,4,Huila,Hobo,667,0,1,0
+988,4,Huila,Iquira,668,0,1,0
+989,4,Huila,La Argentina,670,0,1,0
+995,4,Huila,Nataga,672,0,1,0
+996,4,Huila,Neiva,654,0,1,0
+999,4,Huila,Oporapa,673,0,1,0
+1000,4,Huila,Tesalia,687,0,1,0
+1001,4,Huila,Paicol,674,0,1,0
+1002,4,Huila,Palermo,675,0,1,0
+1003,4,Huila,Palestina,676,0,1,0
+1004,4,Huila,Pital,677,0,1,0
+1005,4,Huila,Pitalito,678,0,1,0
+1007,4,Huila,Tarqui,684,0,1,0
+1008,4,Huila,Rivera,679,0,1,0
+1010,4,Huila,Saladoblanco,680,0,1,0
+1011,4,Huila,San Agustin,681,0,1,0
+1014,4,Huila,Santa Maria,682,0,1,0
+1015,4,Huila,Suaza,683,0,1,0
+1017,4,Huila,Tello,685,0,1,0
+1018,4,Huila,Teruel,686,0,1,0
+1020,4,Huila,Timana,688,0,1,0
+1023,4,Huila,Yaguara,690,0,1,0
+1025,4,Meta,Acacias,737,0,1,0
+1027,4,Meta,Castilla La Nueva,740,0,1,0
+1028,4,Meta,Cubarral,741,0,1,0
+1029,4,Meta,Cumaral,742,0,1,0
+1031,4,Meta,Fuente de Oro,746,0,1,0
+1032,4,Meta,Granada,747,0,1,0
+1033,4,Meta,Guamal,748,0,1,0
+1034,4,Meta,Lejanias,750,0,1,0
+1035,4,Meta,Puerto Gaitan,754,0,1,0
+1036,4,Meta,Puerto Lleras,755,0,1,0
+1037,4,Meta,Puerto Lopez,756,0,1,0
+1039,4,Meta,Puerto Rico,757,0,1,0
+1040,4,Meta,Restrepo,758,0,1,0
+1043,4,Meta,San Juan de Arama,760,0,1,0
+1044,4,Meta,San Martin,762,0,1,0
+1045,4,Meta,Villavicencio,736,0,1,0
+1050,4,Putumayo,Colon,870,0,1,0
+1051,4,Putumayo,La Hormiga,880,0,1,0
+1053,4,Putumayo,Mocoa,869,0,1,0
+1054,4,Putumayo,Orito,871,0,1,0
+1055,4,Putumayo,Puerto Asis,872,0,1,0
+1056,4,Putumayo,Puerto Caicedo,873,0,1,0
+1057,4,Putumayo,Puerto Leguizamo,875,0,1,0
+1058,4,Putumayo,San Francisco,877,0,1,0
+1059,4,Putumayo,Santiago,878,0,1,0
+1060,4,Putumayo,Sibundoy,879,0,1,0
+1065,4,Tolima,Alpujarra,1022,0,1,0
+1066,4,Tolima,Alvarado,1023,0,1,0
+1067,4,Tolima,Ambalema,1024,0,1,0
+1068,4,Tolima,Anzoategui,1025,0,1,0
+1069,4,Tolima,Ataco,1027,0,1,0
+1070,4,Tolima,Cajamarca,1028,0,1,0
+1071,4,Tolima,Carmen de Apicala,1029,0,1,0
+1074,4,Tolima,Chaparral,1031,0,1,0
+1077,4,Tolima,Coello,1032,0,1,0
+1079,4,Tolima,Coyaima,1033,0,1,0
+1080,4,Tolima,Cunday,1034,0,1,0
+1082,4,Tolima,Dolores,1035,0,1,0
+1084,4,Tolima,Espinal,1036,0,1,0
+1085,4,Tolima,Falan,1037,0,1,0
+1086,4,Tolima,Flandes,1038,0,1,0
+1088,4,Tolima,Fresno,1039,0,1,0
+1091,4,Tolima,Guamo,1040,0,1,0
+1093,4,Tolima,Herveo,1041,0,1,0
+1094,4,Tolima,Honda,1042,0,1,0
+1096,4,Tolima,Ibague,1021,0,1,0
+1102,4,Tolima,Lerida,1044,0,1,0
+1103,4,Tolima,Libano,1045,0,1,0
+1104,4,Tolima,Mariquita,1046,0,1,0
+1105,4,Tolima,Melgar,1047,0,1,0
+1107,4,Tolima,Murillo,1048,0,1,0
+1108,4,Tolima,Natagaima,1049,0,1,0
+1110,4,Tolima,Ortega,1050,0,1,0
+1113,4,Tolima,Palocabildo,1051,0,1,0
+1115,4,Tolima,Piedras,1052,0,1,0
+1116,4,Tolima,Planadas,1053,0,1,0
+1118,4,Tolima,Prado,1054,0,1,0
+1120,4,Tolima,Purificacion,1055,0,1,0
+1121,4,Tolima,Rioblanco,1056,0,1,0
+1122,4,Tolima,Roncesvalles,1057,0,1,0
+1123,4,Tolima,Rovira,1058,0,1,0
+1124,4,Tolima,SaldaÃ±a,1059,0,1,0
+1125,4,Tolima,San Antonio,1060,0,1,0
+1126,4,Tolima,San Luis,1061,0,1,0
+1127,4,Tolima,Santa Isabel,1062,0,1,0
+1130,4,Tolima,Suarez,1063,0,1,0
+1132,4,Tolima,Valle de San Juan,1064,0,1,0
+1134,4,Tolima,Venadillo,1065,0,1,0
+1135,4,Tolima,Villahermosa,1066,0,1,0
+1136,4,Tolima,Villarrica,1067,0,1,0
+1137,4,Vichada,Puerto CarreÃ±o,1116,0,1,0
+1138,4,VaupÃ©s,Mitu,1110,0,1,0
+1143,4,Santander,Zapatoca,994,0,1,0
+1145,4,Santander,Charta,924,0,1,0
+1146,4,Santander,Tona,989,0,1,0
+1147,4,Santander,San Miguel,980,0,1,0
+1148,4,Santander,Chima,925,0,1,0
+1149,4,Santander,Galan,941,0,1,0
+1150,4,Santander,San Joaquin,978,0,1,0
+1470,4,Cundinamarca,Guataqui,566,0,1,0
+1471,4,Cundinamarca,NariÃ±o,584,0,1,0
+1472,4,Cundinamarca,Quebradanegra,596,0,1,0
+1473,4,Cundinamarca,Ricaurte,599,0,1,0
+1476,4,Antioquia,Olaya,86,0,1,0
+1477,4,AtlÃ¡ntico,Piojo,156,0,1,0
+1479,4,BoyacÃ¡,Maripi,265,0,1,0
+1480,4,BoyacÃ¡,Quipama,287,0,1,0
+1481,4,BoyacÃ¡,Sora,312,0,1,0
+1484,4,Cauca,Paez,421,0,1,0
+1486,4,Cauca,Sotara,432,0,1,0
+1487,4,ChocÃ³,Bajo Baudo,471,0,1,0
+1489,4,CÃ³rdoba,Canalete,499,0,1,0
+1490,4,CÃ³rdoba,Chima,501,0,1,0
+1491,4,CÃ³rdoba,Cotorra,504,0,1,0
+1492,4,CÃ³rdoba,Los Cordobas,507,0,1,0
+1493,4,CÃ³rdoba,MoÃ±itos,510,0,1,0
+1494,4,CÃ³rdoba,Puerto Escondido,513,0,1,0
+1495,4,CÃ³rdoba,San Carlos,520,0,1,0
+1496,4,Guaviare,Calamar,651,0,1,0
+1497,4,Guaviare,Miraflores,653,0,1,0
+1498,4,Vichada,Santa Rosalia,1119,0,1,0
+1499,4,Huila,Isnos,669,0,1,0
+1500,4,La Guajira,Dibulla,694,0,1,0
+1501,4,Magdalena,Cerro de San Antonio,710,0,1,0
+1502,4,Magdalena,El PiÃ±on,715,0,1,0
+1503,4,Magdalena,Pedraza,720,0,1,0
+1504,4,Meta,El Castillo,744,0,1,0
+1505,4,Meta,La Macarena,749,0,1,0
+1506,4,Meta,Mesetas,752,0,1,0
+1507,4,NariÃ±o,Alban,766,0,1,0
+1508,4,NariÃ±o,Contadero,776,0,1,0
+1509,4,NariÃ±o,Cuaspud,778,0,1,0
+1511,4,NariÃ±o,El Tambo,785,0,1,0
+1512,4,NariÃ±o,Iles,791,0,1,0
+1513,4,NariÃ±o,Imues,792,0,1,0
+1514,4,NariÃ±o,NariÃ±o,805,0,1,0
+1515,4,NariÃ±o,Ospina,807,0,1,0
+1516,4,NariÃ±o,Sapuyes,823,0,1,0
+1517,4,NariÃ±o,Yacuanquer,828,0,1,0
+1518,4,Putumayo,San Miguel,876,0,1,0
+1519,4,Santander,Enciso,938,0,1,0
+1520,4,Santander,Floridablanca,940,0,1,0
+1521,4,Santander,Gambita,942,0,1,0
+1522,4,Santander,Giron,943,0,1,0
+1523,4,Santander,La Paz,953,0,1,0
+1524,4,Sucre,Chalan,998,0,1,0
+1525,4,Sucre,Coloso,999,0,1,0
+1526,4,Sucre,Guaranda,1004,0,1,0
+1527,4,Sucre,La Union,1005,0,1,0
+1528,4,Sucre,Los Palmitos,1006,0,1,0
+1529,4,Sucre,Morroa,1008,0,1,0
+1530,4,Sucre,Palmito,1010,0,1,0
+1531,4,Sucre,San Juan de Betulia,1013,0,1,0
+1548,4,Cundinamarca,BogotÃ¡ D.C.,524,0,1,0
+1555,4,Cundinamarca,San Juan de Rioseco,604,0,1,0
+1556,4,Cundinamarca,San Antonio de Tequendama,600,0,1,0
+1561,4,Valle del Cauca,Bugalagrande,1076,0,1,0
+1563,4,Valle del Cauca,Calima (Darien),1078,0,1,0
+1565,4,Valle del Cauca,Yumbo,1108,0,1,0
+1568,4,NariÃ±o,La Tola,797,0,1,0
+1569,4,NariÃ±o,Providencia,810,0,1,0
+1570,4,Cauca,El Bordo,422,0,1,0
+1571,4,Cauca,LÃ³pez de Micai,416,0,1,0
+1572,4,Cauca,Santa Rosa,429,0,1,0
+1573,4,Cauca,Villa Rica,439,0,1,0
+1574,4,Antioquia,Area Metropolitana del Valle de Aburra,0,0,1,0
+1575,4,ChocÃ³,El Carmen de Atrato,478,0,1,0
+1576,4,ChocÃ³,BojayÃ¡,473,0,1,0
+1579,4,CÃ³rdoba,Tierralta,522,0,1,0
+1582,4,Antioquia,Ciudad Bolivar,47,0,1,0
+1583,4,Antioquia,El PeÃ±ol,87,0,1,0
+1584,4,Antioquia,Santa Fe Antioquia,114,0,1,0
+1585,4,Sucre,San Benito,1012,0,1,0
+1586,4,Magdalena,Plato,723,0,1,0
+1588,4,Bolivar,San Pablo,202,0,1,0
+1589,4,Bolivar,Santa Rosa del Sur,205,0,1,0
+1590,4,Bolivar,Soplaviento,207,0,1,0
+1591,4,Bolivar,El Carmen de BolÃ­var,181,0,1,0
+1593,4,La Guajira,Hato Nuevo,698,0,1,0
+1594,4,AtlÃ¡ntico,Sabanagrande,161,0,1,0
+1595,4,AtlÃ¡ntico,Polonuevo,157,0,1,0
+1596,4,Caldas,San JosÃ©,359,0,1,0
+1597,4,Norte de Santander,San Calixto,859,0,1,0
+1598,4,Norte de Santander,Cachira,834,0,1,0
+1599,4,Santander,El Carmen de Chucuri,933,0,1,0
+1602,4,Arauca,Puerto NariÃ±o,0,0,1,0
+1604,4,Tolima,Armero (Guayabal),1026,0,1,0
+1605,4,Tolima,Casabianca,1030,0,1,0
+1606,4,Putumayo,VillagarzÃ³n,881,0,1,0
+1607,4,CaquetÃ¡,MontaÃ±ita,372,0,1,0
+1608,4,CaquetÃ¡,San Jose de Fragua,375,0,1,0
+1609,4,San AndrÃ©s Islas,San AndrÃ©s,144,0,1,0
+1610,4,San AndrÃ©s Islas,Providencia,145,0,1,0
+1611,4,Guainia,Puerto InÃ­rida,641,0,1,0
+1613,4,Meta,Vistahermosa,764,0,1,0
+1614,4,Meta,San Carlos de Guaroa,759,0,1,0
+1615,4,BoyacÃ¡,Jenesano,258,0,1,0
+1616,4,BoyacÃ¡,Firavitoba,248,0,1,0
+1617,4,BoyacÃ¡,GÃ¡meza,251,0,1,0
+1619,4,BoyacÃ¡,Paz del Rio,283,0,1,0
+1620,4,BoyacÃ¡,GÃ¼icÃ¡n,256,0,1,0
+1621,4,BoyacÃ¡,Sativanorte,304,0,1,0
+1622,4,Huila,Villavieja,689,0,1,0
+1623,4,Cundinamarca,Soacha,610,0,1,0
+1624,4,Cundinamarca,Puli,595,0,1,0
+1625,4,Cundinamarca,Paime,590,0,1,0
+1626,4,Cundinamarca,San Cayetano,602,0,1,0
+1627,4,Cundinamarca,Topaipi,625,0,1,0
+1628,4,Cundinamarca,VillagÃ³mez,634,0,1,0
+1629,4,Cundinamarca,El PeÃ±on,549,0,1,0
+1631,4,NariÃ±o,ConsacÃ¡,775,0,1,0
+1632,4,NariÃ±o,Arboleda,769,0,1,0
+1633,4,NariÃ±o,Cumbitara,780,0,1,0
+1634,4,NariÃ±o,San Pedro de Cartago,819,0,1,0
+1635,4,NariÃ±o,Ancuya,768,0,1,0
+1636,4,NariÃ±o,El Rosario,783,0,1,0
+1637,4,NariÃ±o,El TablÃ³n,784,0,1,0
+1638,4,NariÃ±o,La Florida,795,0,1,0
+1639,4,NariÃ±o,Leiva,799,0,1,0
+1640,4,NariÃ±o,Los Andes,801,0,1,0
+1641,4,NariÃ±o,Olaya Herrera,806,0,1,0
+1642,4,NariÃ±o,Francisco Pizarro,786,0,1,0
+1643,4,NariÃ±o,Policarpa,808,0,1,0
+1644,4,NariÃ±o,Ricaurte,813,0,1,0
+1645,4,NariÃ±o,Roberto PayÃ¡n,814,0,1,0
+1646,4,NariÃ±o,Magui,802,0,1,0
+1647,4,NariÃ±o,Mallama,803,0,1,0
+1648,4,NariÃ±o,Mosquera,804,0,1,0
+1649,4,NariÃ±o,Linares,800,0,1,0
+1650,4,NariÃ±o,San Lorenzo,817,0,1,0
+1651,4,NariÃ±o,Santa Barbara,821,0,1,0
+1652,4,NariÃ±o,Santa Cruz,822,0,1,0
+1653,4,NariÃ±o,Timinango,824,0,1,0
+1654,4,Cauca,Florencia,410,0,1,0
+1655,4,Cauca,Argelia,401,0,1,0
+1656,4,Cauca,San SebastiÃ¡n,428,0,1,0
+1658,4,Antioquia,Caldas,36,0,1,0
+1659,4,Antioquia,Bello,28,0,1,0
+1660,4,Antioquia,Envigado,57,0,1,0
+1661,4,Antioquia,Sabaneta,97,0,1,0
+1662,4,ChocÃ³,Alto Baudo,467,0,1,0
+1663,4,ChocÃ³,BagadÃ³,469,0,1,0
+1664,4,ChocÃ³,San Juan,481,0,1,0
+1665,4,ChocÃ³,JuradÃ³,480,0,1,0
+1666,4,ChocÃ³,Lloro,482,0,1,0
+1667,4,ChocÃ³,Novita,486,0,1,0
+1668,4,ChocÃ³,Sipi,492,0,1,0
+1669,4,AtlÃ¡ntico,Soledad,165,0,1,0
+1670,4,Magdalena,San SebastiÃ¡n de Buenavista,728,0,1,0
+1671,4,Cesar,GonzÃ¡lez,452,0,1,0
+1672,4,Cesar,Rio de Oro,460,0,1,0
+1673,4,Bolivar,Rioviejo,194,0,1,0
+1674,4,Caldas,VillamarÃ­a,362,0,1,0
+1675,4,Norte de Santander,Pamplonita,855,0,1,0
+1676,4,Norte de Santander,Los Patios,850,0,1,0
+1677,4,Norte de Santander,Villa Caro,867,0,1,0
+1678,4,Santander,California,918,0,1,0
+1679,4,Santander,Macaravita,957,0,1,0
+1680,4,Santander,Santa Barbara,982,0,1,0
+1681,4,Santander,Confines,929,0,1,0
+1682,4,Santander,PÃ¡ramo,967,0,1,0
+1683,4,Santander,Encino,937,0,1,0
+1684,4,Santander,Coromoro,931,0,1,0
+1685,4,Santander,Cabrera,917,0,1,0
+1686,4,Santander,Santa Helena del OpÃ³n,983,0,1,0
+1687,4,Santander,El Guacamayo,934,0,1,0
+1688,4,Santander,Hato,949,0,1,0
+1689,4,Santander,Palmar,965,0,1,0
+1690,4,Santander,Palmas del Socorro,966,0,1,0
+1691,4,Santander,Jordan,951,0,1,0
+1692,4,Santander,Cepita,921,0,1,0
+1693,4,Santander,Pinchote,969,0,1,0
+1694,4,Santander,Ocamonte,962,0,1,0
+1695,4,Santander,Guapota,946,0,1,0
+1696,4,Santander,Aguada,909,0,1,0
+1697,4,Santander,San Benito,976,0,1,0
+1698,4,Santander,Albania,910,0,1,0
+1699,4,Santander,Sucre,987,0,1,0
+1700,4,Santander,JesÃºs MarÃ­a,950,0,1,0
+1701,4,Santander,El PeÃ±on,935,0,1,0
+1702,4,Santander,Florian,939,0,1,0
+1703,4,Santander,La Belleza,952,0,1,0
+1704,4,Santander,ChipatÃ¡,926,0,1,0
+1705,4,CaquetÃ¡,Solano,377,0,1,0
+1706,4,Casanare,La Salina,384,0,1,0
+1707,4,Casanare,Sacama,393,0,1,0
+1708,4,Meta,Barranca de UpÃ­a,738,0,1,0
+1709,4,Meta,Cabuyaro,739,0,1,0
+1710,4,Meta,San Juanito,761,0,1,0
+1711,4,Meta,El Calvario,743,0,1,0
+1712,4,Meta,MapiripÃ¡n,751,0,1,0
+1713,4,Meta,Uribe,763,0,1,0
+1714,4,BoyacÃ¡,La Victoria,262,0,1,0
+1715,4,BoyacÃ¡,Tunungua,328,0,1,0
+1716,4,BoyacÃ¡,Buenavista,224,0,1,0
+1717,4,BoyacÃ¡,BriceÃ±o,223,0,1,0
+1718,4,BoyacÃ¡,Caldas,226,0,1,0
+1719,4,BoyacÃ¡,Coper,239,0,1,0
+1720,4,BoyacÃ¡,Umbita,332,0,1,0
+1721,4,BoyacÃ¡,Siachoque,306,0,1,0
+1722,4,BoyacÃ¡,Gachantiva,250,0,1,0
+1723,4,BoyacÃ¡,Motavita,270,0,1,0
+1724,4,BoyacÃ¡,OicatÃ¡,274,0,1,0
+1725,4,BoyacÃ¡,RondÃ³n,290,0,1,0
+1726,4,BoyacÃ¡,San Eduardo,294,0,1,0
+1727,4,BoyacÃ¡,Berbeo,219,0,1,0
+1728,4,BoyacÃ¡,SoracÃ¡,313,0,1,0
+1729,4,BoyacÃ¡,Chiquiza,231,0,1,0
+1730,4,BoyacÃ¡,ChivatÃ¡,235,0,1,0
+1731,4,BoyacÃ¡,Campohermoso,227,0,1,0
+1732,4,BoyacÃ¡,Almeida,215,0,1,0
+1733,4,BoyacÃ¡,Tota,327,0,1,0
+1734,4,BoyacÃ¡,Cuitiva,244,0,1,0
+1735,4,BoyacÃ¡,CovarachÃ­a,241,0,1,0
+1736,4,BoyacÃ¡,JericÃ³,259,0,1,0
+1737,4,BoyacÃ¡,Guacamayas,253,0,1,0
+1738,4,BoyacÃ¡,Panqueba,280,0,1,0
+1739,4,BoyacÃ¡,TutazÃ¡,331,0,1,0
+1740,4,BoyacÃ¡,Busbanza,225,0,1,0
+1741,4,BoyacÃ¡,Pisva,285,0,1,0
+1742,4,BoyacÃ¡,Paya,282,0,1,0
+1743,4,BoyacÃ¡,Labranzagrande,263,0,1,0
+1744,4,BoyacÃ¡,Beteitiva,220,0,1,0
+1745,4,BoyacÃ¡,Sativasur,305,0,1,0
+1746,4,Huila,Elias,663,0,1,0
+1747,5,Africa,Seychelles,0,0,0,0
+1748,5,Africa,Sudan,0,0,0,0
+1749,5,Africa,Rwanda,0,0,0,0
+1750,5,Africa,Etiopia,0,0,0,0
+1751,5,Africa,Somalia,0,0,0,0
+1752,5,Africa,Djibouti,0,0,0,0
+1753,5,Africa,Kenya,0,0,0,0
+1754,5,Africa,Tanzania,0,0,0,0
+1755,5,Africa,Uganda,0,0,0,0
+1756,5,Africa,Burundi,0,0,0,0
+1757,5,Africa,Mozambique,0,0,0,0
+1758,5,Africa,Zambia,0,0,0,0
+1759,5,Africa,Madagascar,0,0,0,0
+1760,5,Africa,"Reunion, Isla",0,0,0,0
+1761,5,Africa,Zimbabwe,0,0,0,0
+1762,5,Africa,Namibia,0,0,0,0
+1763,5,Africa,Malawi,0,0,0,0
+1764,5,Africa,Lesotho,0,0,0,0
+1765,5,Africa,Botswana,0,0,0,0
+1766,5,Africa,Swazilandia,0,0,0,0
+1767,5,Africa,Comoras,0,0,0,0
+1768,5,Africa,"Mayotte (Mahore), Isla",0,0,0,0
+1769,5,Africa,Sudafrica,0,0,0,0
+1770,5,Africa,"Santa Helena, Isla",0,0,0,0
+1771,5,Mar Caribe,Aruba,0,0,0,0
+1772,5,Europa,"Feroe, Islas",0,0,0,0
+1773,5,AmÃ©rica del Norte,Groenlandia,0,0,0,0
+1774,5,Europa,Grecia,0,0,0,0
+1775,5,Europa,PaÃ­ses Bajos (Holanda),0,0,0,0
+1776,5,Europa,Belgica,0,0,0,0
+1777,5,Europa,Francia,0,0,0,0
+1778,5,Europa,EspaÃ±a,0,0,0,0
+1779,5,Europa,Gibraltar,0,0,0,0
+1780,5,Europa,Portugal,0,0,0,0
+1781,5,Europa,Luxemburgo,0,0,0,0
+1782,5,Europa,Irlanda,0,0,0,0
+1783,5,Europa,Islandia,0,0,0,0
+1784,5,Europa,Albania,0,0,0,0
+1785,5,Europa,Malta,0,0,0,0
+1786,5,Europa,Chipre,0,0,0,0
+1787,5,Europa,Finlandia,0,0,0,0
+1788,5,Europa,Bulgaria,0,0,0,0
+1789,5,Europa,Hungria,0,0,0,0
+1790,5,Europa,Lituania,0,0,0,0
+1791,5,Europa,Letonia,0,0,0,0
+1792,5,Europa,Estonia,0,0,0,0
+1793,5,Europa,Moldova,0,0,0,0
+1794,5,Europa,Armenia,0,0,0,0
+1795,5,Europa,Belarus,0,0,0,0
+1796,5,Europa,Andorra,0,0,0,0
+1797,5,Europa,Monaco,0,0,0,0
+1798,5,Europa,San Marino,0,0,0,0
+1799,5,Europa,Ucrania,0,0,0,0
+1800,5,Europa,Yugoslavia,0,0,0,0
+1801,5,Europa,Croacia,0,0,0,0
+1802,5,Europa,Eslovenia,0,0,0,0
+1803,5,Europa,Bosnia y Herzegovina,0,0,0,0
+1804,5,Europa,Macedonia,0,0,0,0
+1805,5,Europa,Italia,0,0,0,0
+1806,5,Europa,Rumania,0,0,0,0
+1807,5,Europa,Suiza,0,0,0,0
+1808,5,Europa,Republica Checa,0,0,0,0
+1809,5,Europa,Eslovaquia,0,0,0,0
+1810,5,Europa,Liechtenstein,0,0,0,0
+1811,5,Europa,Austria,0,0,0,0
+1812,5,Europa,Reino Unido,0,0,0,0
+1813,5,Europa,Dinamarca,0,0,0,0
+1814,5,Europa,Suecia,0,0,0,0
+1815,5,Europa,Noruega,0,0,0,0
+1816,5,Europa,Polonia,0,0,0,0
+1817,5,Europa,Alemania,0,0,0,0
+1818,5,AmÃ©rica del Sur,"Falkland (Malvinas), Islas",0,0,0,0
+1819,5,AmÃ©rica Central,Belice,0,0,0,0
+1820,5,AmÃ©rica Central,Guatemala,0,0,0,0
+1821,5,AmÃ©rica Central,El Salvador,0,0,0,0
+1822,5,AmÃ©rica Central,Honduras,0,0,0,0
+1823,5,AmÃ©rica Central,Nicaragua,0,0,0,0
+1824,5,AmÃ©rica Central,Costa Rica,0,0,0,0
+1825,5,AmÃ©rica Central,Panama,0,0,0,0
+1826,5,AmÃ©rica del Norte,"San Pedro y Miguelon, Islas",0,0,0,0
+1827,5,Mar Caribe,Haiti,0,0,0,0
+1828,5,AmÃ©rica del Sur,Peru,0,0,0,0
+1829,5,AmÃ©rica Central,Mexico,0,0,0,0
+1830,5,Mar Caribe,Cuba,0,0,0,0
+1831,5,AmÃ©rica del Sur,Argentina,0,0,0,0
+1832,5,AmÃ©rica del Sur,Brasil,0,0,0,0
+1833,5,AmÃ©rica del Sur,Chile,0,0,0,0
+1835,5,AmÃ©rica del Sur,Venezuela,0,0,0,0
+1836,5,Mar Caribe,"Guadalupe, Isla",0,0,0,0
+1837,5,AmÃ©rica del Sur,Bolivia,0,0,0,0
+1838,5,AmÃ©rica del Sur,Guyana,0,0,0,0
+1839,5,AmÃ©rica del Sur,Ecuador,0,0,0,0
+1841,5,AmÃ©rica del Sur,Guayana Francesa,0,0,0,0
+1842,5,AmÃ©rica del Sur,Paraguay,0,0,0,0
+1843,5,Mar Caribe,"Martinica, Islas",0,0,0,0
+1844,5,AmÃ©rica del Sur,Suriname,0,0,0,0
+1845,5,AmÃ©rica del Sur,Uruguay,0,0,0,0
+1846,5,Mar Caribe,Antillas Holandesas,0,0,0,0
+1847,5,Asia,Malasia,0,0,0,0
+1848,5,OceanÃ­a,Australia,0,0,0,0
+1849,5,Asia,Indonesia,0,0,0,0
+1850,5,Asia,Filipinas,0,0,0,0
+1851,5,OceanÃ­a,Nueva Zelandia,0,0,0,0
+1852,5,Asia,Singapur,0,0,0,0
+1853,5,Asia,Tailandia,0,0,0,0
+1854,5,Asia,Brunei,0,0,0,0
+1855,5,OceanÃ­a,Nauru,0,0,0,0
+1856,5,OceanÃ­a,Papua Nueva Guinea,0,0,0,0
+1857,5,OceanÃ­a,Tonga,0,0,0,0
+1858,5,OceanÃ­a,Salomon,0,0,0,0
+1859,5,OceanÃ­a,Vanuatu,0,0,0,0
+1860,5,OceanÃ­a,Fiji,0,0,0,0
+1861,5,OceanÃ­a,Palau,0,0,0,0
+1862,5,OceanÃ­a,"Wallis y Futuna, Islas",0,0,0,0
+1863,5,OceanÃ­a,"Cook, Islas",0,0,0,0
+1864,5,OceanÃ­a,"Samoa Norteamericana, Islas",0,0,0,0
+1865,5,OceanÃ­a,Samoa Occidental,0,0,0,0
+1866,5,OceanÃ­a,Kiribati,0,0,0,0
+1867,5,OceanÃ­a,Nueva Caledonia,0,0,0,0
+1868,5,OceanÃ­a,Polinesia Francesa,0,0,0,0
+1869,5,OceanÃ­a,Micronesia,0,0,0,0
+1870,5,OceanÃ­a,"Marshall,rep. de las Islas",0,0,0,0
+1871,5,Asia,Kazajstan,0,0,0,0
+1872,5,Europa/Asia,Red Astelit (Rusia),0,0,0,0
+1873,5,Europa/Asia,Red Combelga (Moscu),0,0,0,0
+1874,5,Europa/Asia,Red Comstar (Moscu),0,0,0,0
+1875,5,Europa/Asia,Rusia,0,0,0,0
+1876,5,Asia,Japon,0,0,0,0
+1877,5,Asia,Corea del Sur,0,0,0,0
+1878,5,Asia,Vietnam,0,0,0,0
+1879,5,Asia,Corea del Norte,0,0,0,0
+1880,5,Asia,Hong Kong,0,0,0,0
+1881,5,Asia,Macao,0,0,0,0
+1882,5,Asia,Camboya,0,0,0,0
+1883,5,Asia,Laos,0,0,0,0
+1884,5,Asia,"China,republica Popular De",0,0,0,0
+1885,10,,Inmarsat,0,0,0,0
+1889,5,Asia,Bangladesh,0,0,0,0
+1890,10,,Iridium,0,0,0,0
+1892,5,Europa,Global Office Application (British Telecom),0,0,0,0
+1893,5,Asia,"China,republica de (Taiwan)",0,0,0,0
+1894,5,Europa/Asia,Turquia,0,0,0,0
+1895,5,Asia,India,0,0,0,0
+1896,5,Asia,Pakistan,0,0,0,0
+1897,5,Asia,Sri Lanka,0,0,0,0
+1898,5,Asia,Myanmar (antes Birmania),0,0,0,0
+1899,5,Asia,Maldivas,0,0,0,0
+1900,5,Asia,Libano,0,0,0,0
+1901,5,Asia,Jordania,0,0,0,0
+1902,5,Asia,Siria,0,0,0,0
+1903,5,Asia,Iraq,0,0,0,0
+1904,5,Asia,Kuwait,0,0,0,0
+1905,5,Asia,Arabia Saudita,0,0,0,0
+1906,5,Asia,Yemen,0,0,0,0
+1907,5,Asia,Oman,0,0,0,0
+1908,5,Asia,Emiratos Arabes Unidos,0,0,0,0
+1909,5,Asia,Israel,0,0,0,0
+1910,5,Asia,Bahrein,0,0,0,0
+1911,5,Asia,Qatar,0,0,0,0
+1912,5,Asia,Bhutan,0,0,0,0
+1913,5,Asia,Mongolia,0,0,0,0
+1914,5,Asia,Nepal,0,0,0,0
+1915,5,Asia,Iran,0,0,0,0
+1916,5,Asia,Tayikistan,0,0,0,0
+1917,5,Europa/Asia,Georgia,0,0,0,0
+1918,5,Asia,Kirguistan,0,0,0,0
+1919,5,Asia,Uzbekistan,0,0,0,0
+1920,5,O.AtlÃ¡ntico,"Ascension, Isla",0,0,0,0
+1921,5,AmÃ©rica del Norte,Alaska,0,0,0,0
+1922,5,Mar Caribe,"Anguila, Isla",0,0,0,0
+1923,5,Mar Caribe,Antigua y Barbuda,0,0,0,0
+1924,5,Mar Caribe,Bahamas,0,0,0,0
+1925,5,Mar Caribe,Barbados,0,0,0,0
+1926,5,AmÃ©rica del Norte,"Bermudas, Islas",0,0,0,0
+1927,5,Mar Caribe,"Caiman, Islas",0,0,0,0
+1928,5,AmÃ©rica del Norte,Canada,0,0,0,0
+1929,5,Mar Caribe,Dominica,0,0,0,0
+1930,5,AmÃ©rica del Norte,Estados Unidos,0,0,0,0
+1933,5,Mar Caribe,Granada,0,0,0,0
+1934,5,OceanÃ­a,"Guam, Isla",0,0,0,0
+1935,5,OceanÃ­a,"Hawai, Islas",0,0,0,0
+1936,5,Mar Caribe,Jamaica,0,0,0,0
+1937,5,OceanÃ­a,"Marianas del Norte, Islas",0,0,0,0
+1938,5,Mar Caribe,"Montserrat, Isla",0,0,0,0
+1939,5,Mar Caribe,Puerto Rico,0,0,0,0
+1940,5,Mar Caribe,Republica Dominicana,0,0,0,0
+1941,5,Mar Caribe,San Cristobal y Nevis,0,0,0,0
+1942,5,Mar Caribe,San Vicente y las Granadinas,0,0,0,0
+1943,5,Mar Caribe,Santa Lucia,0,0,0,0
+1944,5,Mar Caribe,Trinidad y Tobago,0,0,0,0
+1945,5,Mar Caribe,"Turcas y Caicos, Islas",0,0,0,0
+1946,5,Mar Caribe,"Virgenes Americanas, Islas",0,0,0,0
+1947,5,Mar Caribe,"Virgenes Britanicas, Islas",0,0,0,0
+1948,5,Africa,Egipto,0,0,0,0
+1949,5,Africa,Marruecos,0,0,0,0
+1950,5,Africa,Argelia,0,0,0,0
+1951,5,Africa,Tunez,0,0,0,0
+1952,5,Africa,Libia,0,0,0,0
+1953,5,Africa,Gambia,0,0,0,0
+1954,5,Africa,Senegal,0,0,0,0
+1955,5,Africa,Mauritania,0,0,0,0
+1956,5,Africa,Mali,0,0,0,0
+1957,5,Africa,"Guinea,republica De",0,0,0,0
+1958,5,Africa,Costa de Marfil,0,0,0,0
+1959,5,Africa,Burkina Faso,0,0,0,0
+1960,5,Africa,Niger,0,0,0,0
+1961,5,Africa,Togo,0,0,0,0
+1962,5,Africa,Benin,0,0,0,0
+1963,5,Africa,Mauricio,0,0,0,0
+1964,5,Africa,Liberia,0,0,0,0
+1965,5,Africa,Sierra Leona,0,0,0,0
+1966,5,Africa,Ghana,0,0,0,0
+1967,5,Africa,Nigeria,0,0,0,0
+1968,5,Africa,Chad,0,0,0,0
+1969,5,Africa,"Centroafricana,rep.",0,0,0,0
+1970,5,Africa,Camerun,0,0,0,0
+1971,5,Africa,Cabo Verde,0,0,0,0
+1972,5,Africa,Santo Tome y Principe,0,0,0,0
+1973,5,Africa,Guinea Ecuatorial,0,0,0,0
+1974,5,Africa,Gabon,0,0,0,0
+1975,5,Africa,"Congo,rep. Popular",0,0,0,0
+1976,5,Africa,Congo Rep. Dem. (antes Zaire),0,0,0,0
+1977,5,Africa,Angola,0,0,0,0
+1978,5,Africa,Guinea Bissau,0,0,0,0
+1979,5,O.Indico,"Diego Garcia,atolon",0,0,0,0
+1981,2,,Claro,0,0,1,21
+1983,2,,Movistar,0,0,1,22
+1985,2,,Tigo,0,0,1,56
+1986,13,,Cobro Revertido,0,0,1,0
+1987,6,,Tarifa con prima,0,0,1,0
+1988,6,,Acceso a Internet por demanda,0,0,1,0
+1989,6,,Acceso a Internet,0,0,1,0
+1990,6,,Aplicaciones MÃ³viles,0,0,1,0
+1991,4,Amazonas,El Encanto,2,0,1,0
+1992,4,Amazonas,La Chorrera,3,0,1,0
+1993,4,Amazonas,La Pedrera,4,0,1,0
+1998,4,Amazonas,TarapacÃ¡,11,0,1,0
+1999,4,Antioquia,Barbosa,27,0,1,0
+2000,4,Antioquia,Carmen de Viboral,42,0,1,0
+2001,4,Antioquia,Copacabana,51,0,1,0
+2002,4,Antioquia,Girardota,61,0,1,0
+2003,4,Antioquia,Guarne,65,0,1,0
+2004,4,Antioquia,ItagÃ¼Ã­,69,0,1,0
+2005,4,Antioquia,La Ceja,73,0,1,0
+2006,4,Antioquia,La Estrella,74,0,1,0
+2007,4,Antioquia,La UniÃ³n,76,0,1,0
+2008,4,Antioquia,Marinilla,79,0,1,0
+2009,4,Antioquia,Puerto BerrÃ­o,90,0,1,0
+2010,4,Antioquia,Retiro,94,0,1,0
+2011,4,Antioquia,Rionegro,95,0,1,0
+2012,4,Antioquia,Santuario,115,0,1,0
+2013,4,AtlÃ¡ntico,Malambo,153,0,1,0
+2014,4,Bolivar,Altos del Rosario,171,0,1,0
+2015,4,Bolivar,Arenal,172,0,1,0
+2016,4,Bolivar,Arroyohondo,174,0,1,0
+2017,4,Bolivar,Cantagallo,177,0,1,0
+2018,4,Bolivar,Cicuco,178,0,1,0
+2019,4,Bolivar,Clemencia,179,0,1,0
+2020,4,Bolivar,El PeÃ±Ã³n,183,0,1,0
+2021,4,Bolivar,Hatillo de Loba,184,0,1,0
+2022,4,Bolivar,Montecristo,190,0,1,0
+2023,4,Bolivar,Regidor,193,0,1,0
+2024,4,Bolivar,San CristÃ³bal,195,0,1,0
+2025,4,Bolivar,San Jacinto del Cauca,199,0,1,0
+2026,4,Bolivar,Tiquisio,209,0,1,0
+2027,4,Bolivar,Turbaco,210,0,1,0
+2028,4,Caldas,Norcasia,351,0,1,0
+2029,4,Caldas,Palestina,353,0,1,0
+2030,4,CaquetÃ¡,Solita,378,0,1,0
+2031,4,Cauca,Piamonte,423,0,1,0
+2032,4,ChocÃ³,Atrato,468,0,1,0
+2033,4,ChocÃ³,El CantÃ³n del San Pablo,477,0,1,0
+2034,4,ChocÃ³,Medio BaudÃ³,484,0,1,0
+2035,4,Cundinamarca,El Rosal,550,0,1,0
+2036,4,Cundinamarca,SibatÃ©,607,0,1,0
+2037,4,Guainia,Barranco Mina,642,0,1,0
+2038,4,Guainia,Cacahual,643,0,1,0
+2039,4,Guainia,La Guadalupe,644,0,1,0
+2041,4,Guainia,Morichal Nuevo,646,0,1,0
+2042,4,Guainia,PanÃ¡-panÃ¡,647,0,1,0
+2043,4,Guainia,Puerto Colombia,648,0,1,0
+2044,4,Guainia,San Felipe,649,0,1,0
+2045,4,Guaviare,El Retorno,652,0,1,0
+2046,4,La Guajira,DistracciÃ³n,695,0,1,0
+2047,4,La Guajira,La Jagua del Pilar,699,0,1,0
+2048,4,Magdalena,Algarrobo,707,0,1,0
+2049,4,Magdalena,Concordia,713,0,1,0
+2050,4,Magdalena,El RetÃ©n,716,0,1,0
+2052,4,Magdalena,PijiÃ±o del Carmen,721,0,1,0
+2053,4,Magdalena,Puebloviejo,724,0,1,0
+2054,4,Magdalena,Sabanas de San Angel,726,0,1,0
+2055,4,Magdalena,San ZenÃ³n,729,0,1,0
+2056,4,Magdalena,Santa Barbara de Pinto,731,0,1,0
+2057,4,Magdalena,ZapayÃ¡n,734,0,1,0
+2058,4,Magdalena,Zona Bananera,735,0,1,0
+2059,4,Meta,El Dorado,745,0,1,0
+2060,4,Meta,Puerto Concordia,753,0,1,0
+2061,4,NariÃ±o,ChachagÃ¼Ã­,773,0,1,0
+2062,4,NariÃ±o,ColÃ³n,774,0,1,0
+2063,4,NariÃ±o,El PeÃ±ol,782,0,1,0
+2064,4,NariÃ±o,La Llanada,796,0,1,0
+2065,4,NariÃ±o,San Bernardo,816,0,1,0
+2066,4,NariÃ±o,Tangua,825,0,1,0
+2067,4,Norte de Santander,El Zulia,843,0,1,0
+2068,4,Putumayo,Puerto GuzmÃ¡n,874,0,1,0
+2069,4,Sucre,CoveÃ±as,1001,0,1,0
+2070,4,Sucre,El Roble,1002,0,1,0
+2071,4,VaupÃ©s,CarurÃº,1111,0,1,0
+2072,4,VaupÃ©s,Pacoa,1112,0,1,0
+2073,4,VaupÃ©s,Papunaua,1113,0,1,0
+2074,4,VaupÃ©s,Taraira,1114,0,1,0
+2075,4,VaupÃ©s,YavaratÃ©,1115,0,1,0
+2076,4,Vichada,Cumaribo,1117,0,1,0
+2077,4,Vichada,La Primavera,1118,0,1,0
+2078,4,Amazonas,MiritÃ­-paranÃ¡,6,0,1,0
+2079,4,Amazonas,Santander,10,0,1,0
+2080,2,,Avantel,0,0,1,23
+2082,4,Antioquia,Reservada,12,0,1,0
+2083,4,Arauca,Reservada,137,0,1,0
+2084,4,AtlÃ¡ntico,Reservada,146,0,1,0
+2086,4,Bolivar,Reservada,169,0,1,0
+2087,4,BoyacÃ¡,Reservada,214,0,1,0
+2088,4,Caldas,Reservada,337,0,1,0
+2089,4,CaquetÃ¡,Reservada,364,0,1,0
+2090,4,Casanare,Reservada,380,0,1,0
+2091,4,Cauca,Reservada,399,0,1,0
+2092,4,Cesar,Reservada,440,0,1,0
+2098,4,La Guajira,Reservada,691,0,1,0
+2101,4,NariÃ±o,Reservada,765,0,1,0
+2102,4,Norte de Santander,Reservada,829,0,1,0
+2103,4,Putumayo,Reservada,869,0,1,0
+2104,4,QuindÃ­o,Reservada,882,0,1,0
+2107,4,Santander,Reservada,908,0,1,0
+2109,4,Tolima,Reservada,1021,0,1,0
+2110,4,Valle del Cauca,Reservada,1068,0,1,0
+2113,4,Cundinamarca,Reservada,524,0,1,0
+2115,4,Amazonas,TMR,0,0,1,0
+2116,4,Antioquia,TMR,0,0,1,0
+2117,4,Arauca,TMR,0,0,1,0
+2118,4,AtlÃ¡ntico,TMR,0,0,1,0
+2120,4,Bolivar,TMR,0,0,1,0
+2121,4,BoyacÃ¡,TMR,0,0,1,0
+2122,4,Caldas,TMR,0,0,1,0
+2123,4,CaquetÃ¡,TMR,0,0,1,0
+2124,4,Casanare,TMR,0,0,1,0
+2125,4,Cauca,TMR,0,0,1,0
+2126,4,Cesar,TMR,0,0,1,0
+2127,4,ChocÃ³,TMR,0,0,1,0
+2128,4,CÃ³rdoba,TMR,0,0,1,0
+2129,4,Cundinamarca,TMR,0,0,1,0
+2130,4,Guainia,TMR,0,0,1,0
+2131,4,Guaviare,TMR,0,0,1,0
+2132,4,Huila,TMR,0,0,1,0
+2133,4,La Guajira,TMR,0,0,1,0
+2134,4,Magdalena,TMR,0,0,1,0
+2135,4,Meta,TMR,0,0,1,0
+2136,4,NariÃ±o,TMR,0,0,1,0
+2137,4,Norte de Santander,TMR,0,0,1,0
+2138,4,Putumayo,TMR,0,0,1,0
+2139,4,QuindÃ­o,TMR,0,0,1,0
+2140,4,Risaralda,TMR,0,0,1,0
+2141,4,San AndrÃ©s Islas,TMR,0,0,1,0
+2142,4,Santander,TMR,0,0,1,0
+2143,4,Sucre,TMR,0,0,1,0
+2144,4,Tolima,TMR,0,0,1,0
+2145,4,Valle del Cauca,TMR,0,0,1,0
+2146,4,VaupÃ©s,TMR,0,0,1,0
+2147,4,Vichada,TMR,0,0,1,0
+2149,4,VaupÃ©s,Acaricuara,1110,1,1,0
+2150,4,VaupÃ©s,Villa Fatima,1110,1,1,0
+2155,4,NariÃ±o,Santiago,765,1,1,0
+2156,4,NariÃ±o,Sibundoy,765,1,1,0
+2163,4,Putumayo,Valle del Guamuez,869,1,1,0
+2164,4,Vichada,San Jose de Ocune,1116,1,1,0
+2165,4,Vichada,Santa Rita,1116,1,1,0
+2168,2,,Sistemas MÃ³viles Satelitales,0,0,1,61
+2169,4,Nacional,Reservada,0,0,1,0
+2171,2,Acceso Fijo Satelital,Colombia Movil,0,0,1,56
+2172,2,Acceso Fijo Satelital,Gilat Colombia,0,0,1,61
+2225,2,Sistemas MÃ³viles Satelitales,Reservada,0,0,1,61
+2227,4,Territorios Nacionales,Nacional,0,0,1,0
+2236,4,Antioquia,Damasco,404,1,1,0
+2237,4,Antioquia,Movil Roaming EDA,404,1,1,0
+2238,4,Antioquia,Palermo,404,1,1,0
+2239,4,Antioquia,Puerto Claver,404,1,1,0
+2240,4,Antioquia,Telefonia Movil EDA,404,1,1,0
+2242,4,Caldas,Guarinocito,666,1,1,0
+2243,4,Caldas,Ont. Bonito,666,1,1,0
+2244,4,Caldas,Palermo,666,1,1,0
+2245,4,Caldas,Samaria,666,1,1,0
+2246,4,Cesar,Albania,601,1,1,0
+2247,4,Cesar,Villanueva,601,1,1,0
+2249,4,Cundinamarca,Cambao,0,2,1,0
+2252,4,Meta,Puente de Oro,1045,1,1,0
+2253,4,Norte de Santander,La Donjuana,749,1,1,0
+2254,4,Risaralda,Alto Cauca,721,1,1,0
+2255,4,Risaralda,Irra,721,1,1,0
+2256,4,Risaralda,San Antonio del Chami,721,1,1,0
+2257,4,Santander,Olival,789,1,1,0
+2258,4,Santander,Vado Real,789,1,1,0
+2259,4,Sucre,San Benito de Abad,1012,0,1,0
+2262,4,Tolima,Castilla,1096,1,1,0
+2263,4,Tolima,Chenque Asoleado,1096,1,1,0
+2264,4,Tolima,Convenio,1096,1,1,0
+2265,4,Tolima,Doima,1096,1,1,0
+2266,4,Tolima,El Tablazo,1096,1,1,0
+2267,4,Tolima,Herbeo,1096,1,1,0
+2268,4,Tolima,Junin,1096,1,1,0
+2269,4,Tolima,La Arada,1096,1,1,0
+2270,4,Tolima,La Chamba,1096,1,1,0
+2271,4,Tolima,La Herrera,1096,1,1,0
+2272,4,Tolima,La Sierra,1096,1,1,0
+2273,4,Tolima,Olaya Herrera,1096,1,1,0
+2274,4,Tolima,Padua,1096,1,1,0
+2275,4,Tolima,Pajonales,1096,1,1,0
+2276,4,Tolima,Santa Teresa,1096,1,1,0
+2277,4,Tolima,Santiago Perez,1096,1,1,0
+2278,4,Valle del Cauca,Bitaco,222,1,1,0
+2279,4,Valle del Cauca,La Bocana,222,1,1,0
+2280,4,Valle del Cauca,La Dolores,222,1,1,0
+2281,4,Valle del Cauca,Queremal,222,1,1,0
+2282,4,Valle del Cauca,Sonso,222,1,1,0
+2283,5,Asia,AfganistÃ¡n,0,0,0,0
+2284,5,Asia/Europa,AzerbaiyÃ¡n,0,0,0,0
+2285,5,Asia,Palestina,0,0,0,0
+2286,5,Asia,Timor Oriental,0,0,0,0
+2287,5,Asia,TurkmenistÃ¡n,0,0,0,0
+2289,5,Europa,Ciudad del Vaticano,0,0,0,0
+2290,5,Europa,Montenegro,0,0,0,0
+2292,5,Europa,Serbia,0,0,0,0
+2293,5,OceanÃ­a,Tuvalu,0,0,0,0
+2294,5,OceanÃ­a,"Norfolk, Islas",0,0,0,0
+2295,5,AmÃ©rica del Sur,Colombia,0,0,0,0
+2296,4,Pichincha,Carapungo,0,0,2,0
+2297,4,Pichincha,Calderon,0,0,2,0
+2298,4,Pichincha,San Jose De Moran,0,0,2,0
+2299,4,Pichincha,Zabala,0,0,2,0
+2300,4,Pichincha,Cumbaya,0,0,2,0
+2301,4,Pichincha,Miravalle,0,0,2,0
+2302,4,Pichincha,Conocoto,0,0,2,0
+2303,4,Pichincha,Sangolqui,0,0,2,0
+2304,4,Pichincha,Cayambe,0,0,2,0
+2305,4,Pichincha,Olmedo,0,0,2,0
+2306,4,Pichincha,Nanegalito,0,0,2,0
+2307,4,Pichincha,El Quinche,0,0,2,0
+2308,4,Pichincha,Guayllabamba,0,0,2,0
+2309,4,Pichincha,Puembo,0,0,2,0
+2310,4,Pichincha,Tababela,0,0,2,0
+2311,4,Pichincha,Puerto Quito,0,0,2,0
+2312,4,Pichincha,Nanegal,0,0,2,0
+2313,4,Pichincha,Malchingui,0,0,2,0
+2314,4,Pichincha,San Jacinto Del Bua,0,0,2,0
+2315,4,Pichincha,Nuevo Israel,0,0,2,0
+2316,4,Pichincha,Quito,0,0,2,0
+2317,4,Pichincha,Checa,0,0,2,0
+2318,4,Pichincha,San Jose Minas,0,0,2,0
+2319,4,Pichincha,Atahualpa,0,0,2,0
+2320,4,Pichincha,Calacali,0,0,2,0
+2321,4,Pichincha,Aloasi,0,0,2,0
+2322,4,Pichincha,Machachi,0,0,2,0
+2323,4,Pichincha,Tambillo,0,0,2,0
+2324,4,Pichincha,Pomasqui,0,0,2,0
+2325,4,Pichincha,Tabacundo,0,0,2,0
+2326,4,Pichincha,Tumbaco,0,0,2,0
+2327,4,Pichincha,Aloag,0,0,2,0
+2328,4,Pichincha,La Merced,0,0,2,0
+2329,4,Pichincha,Pifo,0,0,2,0
+2330,4,Pichincha,Pintag,0,0,2,0
+2331,4,Pichincha,P.V. Maldonado,0,0,2,0
+2332,4,Pichincha,San Antonio De Pichincha,0,0,2,0
+2333,4,Pichincha,Luz De America,0,0,2,0
+2334,4,Pichincha,Alluriquin,0,0,2,0
+2335,4,Pichincha,La Concordia,0,0,2,0
+2336,4,Pichincha,Guajalo,0,0,2,0
+2337,4,Pichincha,San Miguel Bancos,0,0,2,0
+2338,4,Pichincha,Valle Hermoso,0,0,2,0
+2339,4,Pichincha,Puellaro,0,0,2,0
+2340,4,Pichincha,Yaruqui,0,0,2,0
+2341,4,Pichincha,Perucho,0,0,2,0
+2342,4,Pichincha,Chavezpamba,0,0,2,0
+2343,4,Pichincha,Ascazubi,0,0,2,0
+2344,4,Pichincha,Nono,0,0,2,0
+2345,4,Pichincha,Alangasi,0,0,2,0
+2346,4,Pichincha,AmaguaÃ±a,0,0,2,0
+2347,4,Pichincha,Selva Alegre,0,0,2,0
+2348,4,Pichincha,Zambiza,0,0,2,0
+2349,4,Pichincha,Tanda,0,0,2,0
+2350,4,Pichincha,Nayon,0,0,2,0
+2351,4,Pichincha,San Rafael,0,0,2,0
+2353,4,Santo Domingo de los TsÃ¡chilas,Santo Domingo,0,0,2,0
+2355,4,Morona Santiago,Palora,0,0,2,0
+2356,4,Morona Santiago,San Juan,0,0,2,0
+2357,4,Morona Santiago,Macas,0,0,2,0
+2358,4,Morona Santiago,Sucua,0,0,2,0
+2359,4,Morona Santiago,Santiago De Mendez,0,0,2,0
+2360,4,Morona Santiago,Huamboya,0,0,2,0
+2361,4,Morona Santiago,Gral. Plaza (Limon),0,0,2,0
+2362,4,Morona Santiago,Gualaquiza,0,0,2,0
+2363,4,Cotopaxi,Latacunga,0,0,2,0
+2364,4,Cotopaxi,Moraspungo,0,0,2,0
+2365,4,Cotopaxi,El Corazon,0,0,2,0
+2366,4,Cotopaxi,La ManÃ¡,0,0,2,0
+2367,4,Cotopaxi,Guaytacama,0,0,2,0
+2368,4,Cotopaxi,Tanicuchi,0,0,2,0
+2369,4,Cotopaxi,Mulliquindil,0,0,2,0
+2370,4,Cotopaxi,Mulalo,0,0,2,0
+2371,4,Cotopaxi,Pastocalle,0,0,2,0
+2372,4,Cotopaxi,Sigchos,0,0,2,0
+2373,4,Cotopaxi,Toacaso,0,0,2,0
+2374,4,Cotopaxi,Lasso,0,0,2,0
+2375,4,Cotopaxi,Pujili,0,0,2,0
+2376,4,Cotopaxi,Salcedo,0,0,2,0
+2377,4,Cotopaxi,Saquisili,0,0,2,0
+2379,4,Bolivar,Guaranda,0,0,2,0
+2380,4,Bolivar,San Miguel De Bolivar,0,0,2,0
+2381,4,Bolivar,San Luis de Pambil,0,0,2,0
+2382,4,Bolivar,Las Naves,0,0,2,0
+2383,4,Bolivar,Echeandia,0,0,2,0
+2384,4,Bolivar,La Magdalena,0,0,2,0
+2385,4,Bolivar,Caluma,0,0,2,0
+2386,4,Bolivar,Chillanes,0,0,2,0
+2387,4,Bolivar,San Jose De Chimbo,0,0,2,0
+2388,4,Tungurahua,Izamba,0,0,2,0
+2389,4,Tungurahua,Ambato,0,0,2,0
+2390,4,Tungurahua,Quero,0,0,2,0
+2391,4,Tungurahua,Tisaleo,0,0,2,0
+2392,4,Tungurahua,Pilahuin,0,0,2,0
+2393,4,Tungurahua,Picaihua,0,0,2,0
+2394,4,Tungurahua,Quisapincha,0,0,2,0
+2395,4,Tungurahua,Mocha,0,0,2,0
+2396,4,Tungurahua,Pelileo,0,0,2,0
+2397,4,Tungurahua,San Andres De Pillaro,0,0,2,0
+2398,4,Tungurahua,Huambalo,0,0,2,0
+2399,4,Tungurahua,Patate,0,0,2,0
+2400,4,Tungurahua,Cevallos,0,0,2,0
+2401,4,Tungurahua,Pillaro,0,0,2,0
+2403,4,Tungurahua,BaÃ±os,0,0,2,0
+2404,4,Chimborazo,Riobamba,0,0,2,0
+2405,4,Chimborazo,Calpi (Riobamba),0,0,2,0
+2406,4,Chimborazo,La Victoria,0,0,2,0
+2407,4,Chimborazo,Totoras,0,0,2,0
+2408,4,Chimborazo,San Andres,0,0,2,0
+2409,4,Chimborazo,Penipe,0,0,2,0
+2410,4,Chimborazo,Guano,0,0,2,0
+2411,4,Chimborazo,Chambo,0,0,2,0
+2412,4,Chimborazo,Guamote,0,0,2,0
+2413,4,Chimborazo,Pallatanga,0,0,2,0
+2414,4,Chimborazo,Chunchi,0,0,2,0
+2415,4,Chimborazo,Huigra,0,0,2,0
+2416,4,Chimborazo,Alausi,0,0,2,0
+2417,4,El Oro,Santa Rosa,0,0,2,0
+2418,4,El Oro,Huaquillas,0,0,2,0
+2419,4,El Oro,Arenillas,0,0,2,0
+2420,4,El Oro,Pasaje A,0,0,2,0
+2421,4,El Oro,Pasaje B,0,0,2,0
+2422,4,El Oro,Puerto Bolivar- A,0,0,2,0
+2423,4,El Oro,Machala 1,0,0,2,0
+2424,4,El Oro,Puerto Bolivar- B,0,0,2,0
+2425,4,El Oro,La Avanzada,0,0,2,0
+2426,4,El Oro,Buenavista,0,0,2,0
+2427,4,El Oro,La Victoria,0,0,2,0
+2428,4,El Oro,Balsas,0,0,2,0
+2429,4,El Oro,Marcabeli,0,0,2,0
+2430,4,El Oro,Paccha,0,0,2,0
+2431,4,El Oro,El Guabo,0,0,2,0
+2432,4,El Oro,Machala 2B (L/T),0,0,2,0
+2433,4,El Oro,El Cambio,0,0,2,0
+2434,4,El Oro,PiÃ±as,0,0,2,0
+2435,4,El Oro,Zaruma,0,0,2,0
+2436,4,El Oro,Unioro,0,0,2,0
+2437,4,El Oro,Huaquillas Centro,0,0,2,0
+2438,4,El Oro,Machala 2A (L/T),0,0,2,0
+2439,4,El Oro,Portovelo,0,0,2,0
+2440,4,Pastaza,Mera,0,0,2,0
+2441,4,Pastaza,Shell Mera,0,0,2,0
+2442,4,Pastaza,Puyo,0,0,2,0
+2443,4,NN,Techo Propio,0,0,2,0
+2444,4,NN,Valdez,0,0,2,0
+2445,4,NN,San Isidro,0,0,2,0
+2446,4,NN,San Camilo,0,0,2,0
+2447,4,NN,Centro,0,0,2,0
+2448,4,NN,Facte,0,0,2,0
+2449,4,NN,Capulispamba,0,0,2,0
+2450,4,Cajabamba,Cajabamba,0,0,2,0
+2451,4,Guayas,Guayaquil,0,0,2,0
+2452,4,Guayas,Laurel,0,0,2,0
+2453,4,Guayas,Pedro Carbo,0,0,2,0
+2454,4,Guayas,Isidro Ayora,0,0,2,0
+2455,4,Guayas,Nobol,0,0,2,0
+2456,4,Guayas,Santa Lucia,0,0,2,0
+2457,4,Guayas,P. J. Montero (Boliche),0,0,2,0
+2458,4,Guayas,Roberto Astudillo,0,0,2,0
+2459,4,Guayas,Milagro 1,0,0,2,0
+2460,4,Guayas,Yaguachi,0,0,2,0
+2461,4,Guayas,Bucay,0,0,2,0
+2462,4,Guayas,El Triunfo,0,0,2,0
+2463,4,Guayas,Marc. MaridueÃ±a,0,0,2,0
+2464,4,Guayas,Naranjito,0,0,2,0
+2465,4,Guayas,Puna,0,0,2,0
+2466,4,Guayas,Tenguel,0,0,2,0
+2467,4,Guayas,Jujan,0,0,2,0
+2468,4,Guayas,Balao,0,0,2,0
+2469,4,Guayas,Naranjal,0,0,2,0
+2470,4,Guayas,Posorja,0,0,2,0
+2471,4,Guayas,SamborondÃ³n,0,0,2,0
+2472,4,Guayas,Simon Bolivar,0,0,2,0
+2473,4,Guayas,Playas,0,0,2,0
+2474,4,Guayas,Salinas,0,0,2,0
+2475,4,Guayas,Palestina,0,0,2,0
+2476,4,Guayas,Daule,0,0,2,0
+2477,4,Guayas,Lomas De Sargentillo,0,0,2,0
+2478,4,Guayas,Salitre,0,0,2,0
+2479,4,Guayas,Palmar,0,0,2,0
+2480,4,Guayas,Ancon,0,0,2,0
+2481,4,Guayas,Chanduy,0,0,2,0
+2482,4,Guayas,Ayangue,0,0,2,0
+2483,4,Guayas,Anconcito,0,0,2,0
+2484,4,Guayas,Colimes,0,0,2,0
+2485,4,Guayas,El Empalme,0,0,2,0
+2486,4,Guayas,Milagro 2,0,0,2,0
+2487,4,Guayas,Balzar,0,0,2,0
+2488,4,Guayas,Tamarindo,0,0,2,0
+2489,4,Santa Elena,La Libertad,0,0,2,0
+2490,4,Santa Elena,Manglaralto,0,0,2,0
+2491,4,Santa Elena,San Pablo,0,0,2,0
+2492,4,Santa Elena,Punta Blanca,0,0,2,0
+2493,4,Santa Elena,Punta Carnero,0,0,2,0
+2494,4,Santa Elena,Santa Elena,0,0,2,0
+2495,4,Santa Elena,Ballenita,0,0,2,0
+2496,4,ManabÃ­,Crucita,0,0,2,0
+2497,4,ManabÃ­,Flavio Alfaro,0,0,2,0
+2498,4,ManabÃ­,Cojimies,0,0,2,0
+2499,4,ManabÃ­,Leonidas Plaza,0,0,2,0
+2500,4,ManabÃ­,Machalilla,0,0,2,0
+2501,4,ManabÃ­,Puerto Lopez,0,0,2,0
+2502,4,ManabÃ­,Montecristi,0,0,2,0
+2503,4,ManabÃ­,Jaramijo,0,0,2,0
+2504,4,ManabÃ­,Jipijapa,0,0,2,0
+2505,4,ManabÃ­,Manta 2,0,0,2,0
+2506,4,ManabÃ­,Manta 2B,0,0,2,0
+2507,4,ManabÃ­,Santa Ana,0,0,2,0
+2508,4,ManabÃ­,Sucre 24/Mayo,0,0,2,0
+2509,4,ManabÃ­,Pichincha,0,0,2,0
+2510,4,ManabÃ­,AbdÃ³n Calderon,0,0,2,0
+2511,4,ManabÃ­,Pajan,0,0,2,0
+2512,4,ManabÃ­,Rocafuerte,0,0,2,0
+2513,4,ManabÃ­,Portoviejo B,0,0,2,0
+2514,4,ManabÃ­,Charapoto,0,0,2,0
+2515,4,ManabÃ­,Jama,0,0,2,0
+2516,4,ManabÃ­,San Vicente,0,0,2,0
+2517,4,ManabÃ­,Tosagua,0,0,2,0
+2518,4,ManabÃ­,Calceta,0,0,2,0
+2519,4,ManabÃ­,BahÃ­a de CarÃ¡quez,0,0,2,0
+2520,4,ManabÃ­,Chone,0,0,2,0
+2521,4,ManabÃ­,Manta 2A (L/T),0,0,2,0
+2522,4,ManabÃ­,Portoviejo A,0,0,2,0
+2523,4,ManabÃ­,La Union,0,0,2,0
+2524,4,ManabÃ­,Tarqui,0,0,2,0
+2525,4,ManabÃ­,Pedernales,0,0,2,0
+2526,4,GalÃ¡pagos,Puerto Villamil,0,0,2,0
+2527,4,GalÃ¡pagos,Puerto Ayora,0,0,2,0
+2528,4,GalÃ¡pagos,Puerto Baquerizo Moreno,0,0,2,0
+2529,4,Los Rios,El Carmen,0,0,2,0
+2530,4,Los Rios,Patricia Pilar,0,0,2,0
+2531,4,Los Rios,Babahoyo,0,0,2,0
+2532,4,Los Rios,Quevedo,0,0,2,0
+2533,4,Los Rios,San Carlos,0,0,2,0
+2534,4,Los Rios,Quinzaloma,0,0,2,0
+2535,4,Los Rios,Palenque,0,0,2,0
+2536,4,Los Rios,Baba,0,0,2,0
+2537,4,Los Rios,Antonio Sotomayor,0,0,2,0
+2538,4,Los Rios,Mocache,0,0,2,0
+2539,4,Los Rios,Valencia,0,0,2,0
+2540,4,Los Rios,Montalvo,0,0,2,0
+2541,4,Los Rios,Puebloviejo,0,0,2,0
+2542,4,Los Rios,San Juan/Pueblo Viejo,0,0,2,0
+2543,4,Los Rios,Buena FÃ©,0,0,2,0
+2544,4,Los Rios,Ventanas,0,0,2,0
+2545,4,Los Rios,Vinces,0,0,2,0
+2546,4,Junin,Junin,0,0,2,0
+2547,4,Carchi,Catarama/Ricau.,0,0,2,0
+2549,4,Carchi,Mira,0,0,2,0
+2550,4,Carchi,Bolivar,0,0,2,0
+2551,4,Carchi,San Gabriel,0,0,2,0
+2552,4,Carchi,TulcÃ¡n,0,0,2,0
+2553,4,Carchi,Huaca,0,0,2,0
+2554,4,Carchi,El Angel,0,0,2,0
+2555,4,Carchi,La Paz,0,0,2,0
+2556,4,Carchi,El Ejido,0,0,2,0
+2557,4,Napo,Baeza,0,0,2,0
+2558,4,Napo,El Chaco,0,0,2,0
+2559,4,Napo,Tena,0,0,2,0
+2560,4,Napo,Archidona,0,0,2,0
+2561,4,Napo,Misahualli,0,0,2,0
+2563,4,SucumbÃ­os,Tarapoa,0,0,2,0
+2564,4,SucumbÃ­os,Puerto El Carmen,0,0,2,0
+2565,4,SucumbÃ­os,Cascales,0,0,2,0
+2566,4,SucumbÃ­os,Lago Agrio,0,0,2,0
+2567,4,SucumbÃ­os,Shushufindi,0,0,2,0
+2568,4,SucumbÃ­os,San Lorenzo,0,0,2,0
+2569,4,Orellana,Nuevo Rocafuerte,0,0,2,0
+2570,4,Orellana,Rocafuerte,0,0,2,0
+2571,4,Orellana,La Joya De Los Sachas,0,0,2,0
+2572,4,Orellana,Loreto,0,0,2,0
+2573,4,Orellana,El Coca,0,0,2,0
+2574,4,Esmeraldas,Muisne,0,0,2,0
+2575,4,Esmeraldas,San Jose De Chamanga,0,0,2,0
+2576,4,Esmeraldas,Las Golondrinas,0,0,2,0
+2577,4,Esmeraldas,Ciudad Esmeraldas,0,0,2,0
+2578,4,Esmeraldas,Atacames,0,0,2,0
+2579,4,Esmeraldas,Quininde,0,0,2,0
+2580,4,Esmeraldas,Rio Verde,0,0,2,0
+2581,4,Esmeraldas,Borbon,0,0,2,0
+2582,4,Esmeraldas,Pueblo Nuevo,0,0,2,0
+2583,4,Imbabura,Ibarra,0,0,2,0
+2584,4,Imbabura,La Esperanza,0,0,2,0
+2585,4,Imbabura,Angochagua,0,0,2,0
+2586,4,Imbabura,Salinas,0,0,2,0
+2587,4,Imbabura,La Union,0,0,2,0
+2588,4,Imbabura,Atuntaqui,0,0,2,0
+2589,4,Imbabura,Cotacachi,0,0,2,0
+2590,4,Imbabura,San Pablo del Lago,0,0,2,0
+2591,4,Imbabura,Otavalo,0,0,2,0
+2592,4,Imbabura,Tumbabiro,0,0,2,0
+2593,4,Imbabura,Pimampiro,0,0,2,0
+2594,4,Imbabura,Urcuqui,0,0,2,0
+2595,4,Imbabura,San Antonio De Ibarra,0,0,2,0
+2596,4,Imbabura,Ambuqui,0,0,2,0
+2597,4,Imbabura,Iluman,0,0,2,0
+2598,4,Imbabura,San Isidro,0,0,2,0
+2600,4,Loja,Saraguro,0,0,2,0
+2601,4,Loja,Chaguarpamba,0,0,2,0
+2602,4,Loja,Loja - Norte,0,0,2,0
+2603,4,Loja,Loja 2,0,0,2,0
+2604,4,Loja,Loja 2A,0,0,2,0
+2605,4,Loja,Amaluza,0,0,2,0
+2606,4,Loja,Celica,0,0,2,0
+2607,4,Loja,Zapotillo,0,0,2,0
+2608,4,Loja,Malacatos,0,0,2,0
+2609,4,Loja,GonzamanÃ¡,0,0,2,0
+2610,4,Loja,Catamayo (La Toma),0,0,2,0
+2611,4,Loja,Alamor,0,0,2,0
+2612,4,Loja,Cariamanga,0,0,2,0
+2613,4,Loja,Catacocha,0,0,2,0
+2614,4,Loja,Sozoranga,0,0,2,0
+2615,4,Loja,MacarÃ¡,0,0,2,0
+2616,4,Loja,Santa Rosa,0,0,2,0
+2617,4,Loja,El Valle,0,0,2,0
+2619,4,Azuay,Bulcay (El Cabo),0,0,2,0
+2620,4,Azuay,Ingapirca,0,0,2,0
+2621,4,Azuay,Chordeleg,0,0,2,0
+2622,4,Azuay,Gualaceo,0,0,2,0
+2623,4,Azuay,Paute,0,0,2,0
+2624,4,Azuay,A. Calderon (La UniÃ³n),0,0,2,0
+2625,4,Azuay,Sigsig,0,0,2,0
+2626,4,Azuay,San Fernando,0,0,2,0
+2627,4,Azuay,Giron,0,0,2,0
+2628,4,Azuay,Santa Isabel,0,0,2,0
+2629,4,Azuay,Sevilla De Oro,0,0,2,0
+2630,4,Azuay,El Pan,0,0,2,0
+2631,4,Azuay,Guachapala,0,0,2,0
+2632,4,Azuay,Cuenca,0,0,2,0
+2633,4,Azuay,Cochancay,0,0,2,0
+2634,4,Azuay,Ponce Enriquez,0,0,2,0
+2635,4,Azuay,Pucara,0,0,2,0
+2636,4,Azuay,OÃ±a,0,0,2,0
+2638,4,Azuay,Cumbe,0,0,2,0
+2639,4,Azuay,Victoria Del Portete,0,0,2,0
+2640,4,Azuay,Miraflores,0,0,2,0
+2641,4,Azuay,Monay,0,0,2,0
+2642,4,Azuay,Tarqui,0,0,2,0
+2643,4,Azuay,Sidcay,0,0,2,0
+2644,4,Azuay,Narancay,0,0,2,0
+2645,4,Azuay,Sinincay,0,0,2,0
+2646,4,Azuay,BaÃ±os,0,0,2,0
+2647,4,Azuay,El Verde,0,0,2,0
+2648,4,Azuay,El Cebollar,0,0,2,0
+2649,4,Azuay,Zhucay,0,0,2,0
+2650,4,Azuay,Guangarcucho,0,0,2,0
+2651,4,Azuay,Ricaurte,0,0,2,0
+2657,4,Azuay,Sayausi,0,0,2,0
+2658,4,CaÃ±ar,Deleg,0,0,2,0
+2659,4,CaÃ±ar,Javier Loyola,0,0,2,0
+2660,4,CaÃ±ar,El Tambo,0,0,2,0
+2661,4,CaÃ±ar,Suscal,0,0,2,0
+2662,4,CaÃ±ar,Biblian,0,0,2,0
+2663,4,CaÃ±ar,CaÃ±ar,0,0,2,0
+2664,4,CaÃ±ar,Azogues A,0,0,2,0
+2665,4,CaÃ±ar,Azogues B,0,0,2,0
+2666,4,CaÃ±ar,La Troncal,0,0,2,0
+2667,4,CaÃ±ar,La Ramada,0,0,2,0
+2668,4,Zamora Chinchipe,Yantzaza,0,0,2,0
+2669,4,Zamora Chinchipe,San Carlos De Las Minas,0,0,2,0
+2670,4,Zamora Chinchipe,Zumba,0,0,2,0
+2671,4,Zamora Chinchipe,El Pangui,0,0,2,0
+2672,4,Zamora Chinchipe,Zamora,0,0,2,0
+2673,2,,Allegro,0,0,2,68
+2674,2,,Movistar,0,0,2,62
+2675,2,,Porta,0,0,2,67
+2679,6,,Servicios Nacionales,0,0,2,0
+2680,13,,Pago Revertido,0,0,2,0
+2681,4,Portuguesa,Acarigua,0,0,3,0
+2682,4,Portuguesa,Araure,0,0,3,0
+2683,4,Portuguesa,PaÃ©z,0,0,3,0
+2684,4,Portuguesa,Pimpinela,0,0,3,0
+2685,4,Portuguesa,Biscocuy,0,0,3,0
+2686,4,Portuguesa,Boconoito,0,0,3,0
+2687,4,Portuguesa,Guanare,0,0,3,0
+2688,4,Portuguesa,Guanarito,0,0,3,0
+2689,4,Portuguesa,Mesa Cavaca,0,0,3,0
+2690,4,Portuguesa,Papelon,0,0,3,0
+2691,4,Portuguesa,Ospino,0,0,3,0
+2692,4,Portuguesa,Piritu,0,0,3,0
+2693,4,Portuguesa,Centro Turen,0,0,3,0
+2694,4,Portuguesa,Villa Bruzual,0,0,3,0
+2695,4,Apure,Achaguas,0,0,3,0
+2696,4,Apure,Arichuna,0,0,3,0
+2697,4,Apure,Biruaca,0,0,3,0
+2698,4,Apure,Boquerones,0,0,3,0
+2699,4,Apure,CamaguÃ¡n,0,0,3,0
+2700,4,Apure,Cazorla,0,0,3,0
+2701,4,Apure,Cunaviche,0,0,3,0
+2702,4,Apure,Guayabal,0,0,3,0
+2703,4,Apure,Payara,0,0,3,0
+2704,4,Apure,Puerto Paez,0,0,3,0
+2705,4,Apure,Recreo,0,0,3,0
+2706,4,Apure,San Fernando de Apure,0,0,3,0
+2707,4,Apure,Ciudad Sucre,0,0,3,0
+2708,4,Apure,Guasdualito,0,0,3,0
+2709,4,Apure,Nula,0,0,3,0
+2710,4,Apure,Palmarito,0,0,3,0
+2711,4,Apure,Sta Barbara de Barinas,0,0,3,0
+2713,4,FalcÃ³n,Adicora,0,0,3,0
+2714,4,FalcÃ³n,Amuay,0,0,3,0
+2715,4,FalcÃ³n,Carirubana,0,0,3,0
+2716,4,FalcÃ³n,Punta Cardon,0,0,3,0
+2717,4,FalcÃ³n,Punto Fijo,0,0,3,0
+2718,4,FalcÃ³n,Bariro,0,0,3,0
+2719,4,FalcÃ³n,Barojo,0,0,3,0
+2720,4,FalcÃ³n,Camaronera,0,0,3,0
+2721,4,FalcÃ³n,CapatÃ¡rida,0,0,3,0
+2722,4,FalcÃ³n,Dabajuro,0,0,3,0
+2723,4,FalcÃ³n,Los Pedros,0,0,3,0
+2724,4,FalcÃ³n,Mene Mauroa,0,0,3,0
+2725,4,FalcÃ³n,Cabure,0,0,3,0
+2726,4,FalcÃ³n,Churuguara,0,0,3,0
+2727,4,FalcÃ³n,Coro,0,0,3,0
+2728,4,FalcÃ³n,Miranda,0,0,3,0
+2729,4,FalcÃ³n,Pedregal,0,0,3,0
+2730,4,FalcÃ³n,Puerto Cumarebo,0,0,3,0
+2731,4,FalcÃ³n,Pto Cabello,0,0,3,0
+2732,4,Lara,Agua Grande,0,0,3,0
+2733,4,Lara,Aroa,0,0,3,0
+2734,4,Lara,Bobare,0,0,3,0
+2735,4,Lara,Duaca,0,0,3,0
+2736,4,Lara,Quibor,0,0,3,0
+2737,4,Lara,Siquisique,0,0,3,0
+2738,4,Lara,Tintorero,0,0,3,0
+2739,4,Lara,Tocuyo,0,0,3,0
+2740,4,Lara,Barquisimeto,0,0,3,0
+2741,4,Lara,Cabudare,0,0,3,0
+2742,4,Lara,Chivacoa,0,0,3,0
+2743,4,Lara,Iribarren,0,0,3,0
+2744,4,Lara,La Miel,0,0,3,0
+2745,4,Lara,Sarare,0,0,3,0
+2746,4,Lara,Yaritagua,0,0,3,0
+2747,4,Lara,Carora,0,0,3,0
+2748,4,Lara,Curarigua,0,0,3,0
+2749,4,Lara,El Empedrado,0,0,3,0
+2750,4,Lara,La Pastora,0,0,3,0
+2751,4,Lara,Qda Arriba,0,0,3,0
+2752,4,Lara,Rio Tocuyo,0,0,3,0
+2753,4,Lara,San Francisco,0,0,3,0
+2754,4,Lara,Torres,0,0,3,0
+2758,4,GuÃ¡rico,Altagracia de Orituco,0,0,3,0
+2759,4,GuÃ¡rico,San Jose de Guaribe,0,0,3,0
+2760,4,GuÃ¡rico,Tucupido,0,0,3,0
+2761,4,GuÃ¡rico,Zaraza,0,0,3,0
+2762,4,GuÃ¡rico,Cabruta,0,0,3,0
+2763,4,GuÃ¡rico,Chaguaramas,0,0,3,0
+2764,4,GuÃ¡rico,Las Mercedes,0,0,3,0
+2765,4,GuÃ¡rico,Valle de la Pascua,0,0,3,0
+2766,4,GuÃ¡rico,Calabozo,0,0,3,0
+2767,4,GuÃ¡rico,El Sombrero,0,0,3,0
+2768,4,GuÃ¡rico,Ortiz,0,0,3,0
+2769,4,GuÃ¡rico,San Juan de los Morros,0,0,3,0
+2770,4,AnzoÃ¡tegui,Anaco,0,0,3,0
+2771,4,AnzoÃ¡tegui,Aragua de Barcelona,0,0,3,0
+2772,4,AnzoÃ¡tegui,Santa Rosa,0,0,3,0
+2773,4,AnzoÃ¡tegui,Atapirire,0,0,3,0
+2774,4,AnzoÃ¡tegui,El Tigre,0,0,3,0
+2775,4,AnzoÃ¡tegui,Pariaguan,0,0,3,0
+2776,4,AnzoÃ¡tegui,San TomÃ©,0,0,3,0
+2777,4,AnzoÃ¡tegui,Zuata,0,0,3,0
+2778,4,AnzoÃ¡tegui,Barcelona,0,0,3,0
+2779,4,AnzoÃ¡tegui,Boca de Uchire,0,0,3,0
+2780,4,AnzoÃ¡tegui,BolÃ­var,0,0,3,0
+2781,4,AnzoÃ¡tegui,Clarines,0,0,3,0
+2782,4,AnzoÃ¡tegui,Guanape,0,0,3,0
+2783,4,AnzoÃ¡tegui,Juan Antonio Sotillo,0,0,3,0
+2784,4,AnzoÃ¡tegui,Pto. La Cruz,0,0,3,0
+2785,4,AnzoÃ¡tegui,Pto. Piritu,0,0,3,0
+2786,4,Merida,Apartaderos,0,0,3,0
+2787,4,Merida,Jaji,0,0,3,0
+2788,4,Merida,Libertador,0,0,3,0
+2789,4,Merida,Merida,0,0,3,0
+2790,4,Merida,Mucuchies,0,0,3,0
+2791,4,Merida,Pueblo Llano,0,0,3,0
+2792,4,Merida,Santo Domingo,0,0,3,0
+2793,4,Merida,Casigua,0,0,3,0
+2794,4,Merida,El Vigia,0,0,3,0
+2795,4,Merida,Pueblo Nuevo,0,0,3,0
+2796,4,Merida,Santa Barbara,0,0,3,0
+2797,4,Merida,Tovar,0,0,3,0
+2799,4,Amazonas,Atabapo,0,0,3,0
+2800,4,Amazonas,Isla RatÃ³n,0,0,3,0
+2801,4,Amazonas,Puerto Ayacucho,0,0,3,0
+2802,4,Amazonas,San Juan de Manapiare,0,0,3,0
+2803,4,Amazonas,Yutaje,0,0,3,0
+2804,4,Amazonas,Cocuy,0,0,3,0
+2805,4,Amazonas,La Esmeralda,0,0,3,0
+2806,4,Amazonas,Maroa,0,0,3,0
+2807,4,Amazonas,San Carlos de RÃ­o Negro,0,0,3,0
+2808,4,Zulia,Bachaquero,0,0,3,0
+2809,4,Zulia,Mene Grande,0,0,3,0
+2810,4,Zulia,Cabimas,0,0,3,0
+2811,4,Zulia,Santa Rita,0,0,3,0
+2812,4,Zulia,Ciudad Ojeda,0,0,3,0
+2813,4,Zulia,Lagunillas,0,0,3,0
+2814,4,Zulia,El MojÃ¡n,0,0,3,0
+2815,4,Zulia,La Concepcion,0,0,3,0
+2816,4,Zulia,Sta Cruz de Mara,0,0,3,0
+2817,4,Zulia,El Tablazo,0,0,3,0
+2818,4,Zulia,Sabaneta de Palma,0,0,3,0
+2819,4,Zulia,Machiques de PerijÃ¡,0,0,3,0
+2820,4,Zulia,Rosario de PerijÃ¡,0,0,3,0
+2821,4,Zulia,Maracaibo,0,0,3,0
+2823,4,Barinas,Barinas,0,0,3,0
+2824,4,Barinas,Barinitas,0,0,3,0
+2825,4,Barinas,Libertad,0,0,3,0
+2826,4,Barinas,Socopo,0,0,3,0
+2827,4,Carabobo,Barrera,0,0,3,0
+2828,4,Carabobo,Bejuma,0,0,3,0
+2829,4,Carabobo,Campo Carabobo,0,0,3,0
+2830,4,Carabobo,Chirgua,0,0,3,0
+2831,4,Carabobo,Boca de Aroa,0,0,3,0
+2832,4,Carabobo,Chichiriviche,0,0,3,0
+2833,4,Carabobo,Sanare,0,0,3,0
+2834,4,Carabobo,SanJuan Cayos,0,0,3,0
+2835,4,Carabobo,Yaracal,0,0,3,0
+2836,4,Carabobo,Capadare,0,0,3,0
+2837,4,Carabobo,Mirimire,0,0,3,0
+2838,4,Carabobo,Tucacas,0,0,3,0
+2839,4,Carabobo,Boqueron,0,0,3,0
+2840,4,Carabobo,Ciudad Alianza,0,0,3,0
+2841,4,Carabobo,El Frio,0,0,3,0
+2842,4,Carabobo,El Roble,0,0,3,0
+2843,4,Carabobo,Guacara,0,0,3,0
+2844,4,Carabobo,Guigue,0,0,3,0
+2845,4,Carabobo,San Joaquin,0,0,3,0
+2846,4,Carabobo,Bruzual,0,0,3,0
+2847,4,Carabobo,Elorza,0,0,3,0
+2848,4,Carabobo,Mantecal,0,0,3,0
+2849,4,Carabobo,Mata Vieja,0,0,3,0
+2850,4,Carabobo,Quintero,0,0,3,0
+2851,4,Carabobo,SamÃ¡n Apure,0,0,3,0
+2852,4,Carabobo,Trinidad Arichuna,0,0,3,0
+2853,4,Carabobo,Cedral,0,0,3,0
+2854,4,Carabobo,Guachara,0,0,3,0
+2855,4,Carabobo,Ramoncito,0,0,3,0
+2856,4,Carabobo,Yagual,0,0,3,0
+2857,4,Carabobo,Naguanagua,0,0,3,0
+2858,4,Carabobo,San Diego,0,0,3,0
+2859,4,Carabobo,Tocuyito,0,0,3,0
+2860,4,Carabobo,Valencia,0,0,3,0
+2861,4,BolÃ­var,Bauxiven,0,0,3,0
+2862,4,BolÃ­var,Caicara del Orinoco,0,0,3,0
+2863,4,BolÃ­var,Guamalito,0,0,3,0
+2864,4,BolÃ­var,La Urbana,0,0,3,0
+2865,4,BolÃ­var,Las Bonitas,0,0,3,0
+2866,4,BolÃ­var,Pijiguaos,0,0,3,0
+2867,4,BolÃ­var,Santa Rosalia,0,0,3,0
+2868,4,BolÃ­var,Camp.Callao,0,0,3,0
+2869,4,BolÃ­var,Campetoy,0,0,3,0
+2870,4,BolÃ­var,Canaima,0,0,3,0
+2871,4,BolÃ­var,Cristinas,0,0,3,0
+2872,4,BolÃ­var,El Palmar,0,0,3,0
+2873,4,BolÃ­var,Guasipati,0,0,3,0
+2874,4,BolÃ­var,Guri,0,0,3,0
+2875,4,BolÃ­var,Kanavayen,0,0,3,0
+2876,4,BolÃ­var,Parupa,0,0,3,0
+2877,4,BolÃ­var,Santa Elena de Ãairen,0,0,3,0
+2878,4,BolÃ­var,Tumeremo,0,0,3,0
+2879,4,BolÃ­var,Upata,0,0,3,0
+2880,4,BolÃ­var,CaronÃ­,0,0,3,0
+2881,4,BolÃ­var,Puerto Ordaz,0,0,3,0
+2882,4,BolÃ­var,San Felix,0,0,3,0
+2883,4,BolÃ­var,Ciudad Bolivar,0,0,3,0
+2884,4,BolÃ­var,Ciudad Piar,0,0,3,0
+2885,4,BolÃ­var,Heres,0,0,3,0
+2886,4,BolÃ­var,La Paragua,0,0,3,0
+2887,4,BolÃ­var,Soledad,0,0,3,0
+2888,4,BolÃ­var,El Casabe,0,0,3,0
+2889,4,BolÃ­var,IcabarÃº,0,0,3,0
+2890,4,BolÃ­var,Las Claritas,0,0,3,0
+2891,4,Trujillo,BoconÃ³,0,0,3,0
+2892,4,Trujillo,Campo ElÃ­as,0,0,3,0
+2893,4,Trujillo,Sabaneta,0,0,3,0
+2894,4,Trujillo,San Antonio,0,0,3,0
+2895,4,Trujillo,Trujillo,0,0,3,0
+2896,4,Trujillo,Escuque,0,0,3,0
+2897,4,Trujillo,Sabana de Mendoza,0,0,3,0
+2898,4,Trujillo,Valera,0,0,3,0
+2899,4,Trujillo,La Puerta,0,0,3,0
+2902,4,Aragua,Cagua,0,0,3,0
+2903,4,Aragua,Colonia Tovar,0,0,3,0
+2904,4,Aragua,JosÃ© Felix Ribas,0,0,3,0
+2905,4,Aragua,La Victoria,0,0,3,0
+2906,4,Aragua,Magdaleno,0,0,3,0
+2907,4,Aragua,Tejerias,0,0,3,0
+2908,4,Aragua,Turmero,0,0,3,0
+2909,4,Aragua,Villa de Cura,0,0,3,0
+2910,4,Aragua,Camatagua,0,0,3,0
+2911,4,Aragua,San Casimiro,0,0,3,0
+2912,4,Aragua,San Sebastian,0,0,3,0
+2913,4,Aragua,Choroni,0,0,3,0
+2914,4,Aragua,Las Delicias,0,0,3,0
+2915,4,Aragua,Libertador/Girardot,0,0,3,0
+2916,4,Aragua,Maracay,0,0,3,0
+2917,4,Aragua,Mariara,0,0,3,0
+2918,4,Aragua,Ocumare de La Costa,0,0,3,0
+2919,4,Aragua,Palo Negro,0,0,3,0
+2920,4,Aragua,Turagua,0,0,3,0
+2921,4,MÃ©rida,Caja Seca,0,0,3,0
+2922,4,Sucre,Cariaco,0,0,3,0
+2923,4,Sucre,Carupano,0,0,3,0
+2924,4,Sucre,Guiria,0,0,3,0
+2925,4,Sucre,Rio Caribe,0,0,3,0
+2926,4,Sucre,San Juan de Unare,0,0,3,0
+2927,4,Sucre,Saucedo,0,0,3,0
+2928,4,Sucre,Cuamanacoa,0,0,3,0
+2929,4,Sucre,Cumana,0,0,3,0
+2930,4,Sucre,Mariguitar,0,0,3,0
+2931,4,Sucre,Sucre,0,0,3,0
+2932,4,Monagas,Caripe,0,0,3,0
+2933,4,Monagas,Chaguaramal,0,0,3,0
+2934,4,Monagas,Punta de Mata,0,0,3,0
+2935,4,Monagas,Caripito,0,0,3,0
+2936,4,Monagas,MaturÃ­n,0,0,3,0
+2937,4,Monagas,Quiriquire,0,0,3,0
+2938,4,Miranda,Caucagua,0,0,3,0
+2939,4,Miranda,Higuerote,0,0,3,0
+2940,4,Miranda,Rio Chico,0,0,3,0
+2941,4,Miranda,Tacarigua,0,0,3,0
+2942,4,Miranda,Charallave,0,0,3,0
+2943,4,Miranda,Ocumare del Tuy,0,0,3,0
+2944,4,Miranda,Santa Lucia,0,0,3,0
+2945,4,Miranda,Santa Teresa,0,0,3,0
+2946,4,Yaracuy,Cocorote,0,0,3,0
+2947,4,Yaracuy,Nirgua,0,0,3,0
+2948,4,Yaracuy,San Felipe,0,0,3,0
+2949,4,Dist Capital (DC),Caracas,0,0,3,0
+2950,4,Cojedes,El Baul,0,0,3,0
+2951,4,Cojedes,Tinaco,0,0,3,0
+2952,4,Cojedes,San Carlos,0,0,3,0
+2953,4,Cojedes,Tinaquillo,0,0,3,0
+2954,4,Nueva Esparta,Juan Griego,0,0,3,0
+2955,4,Nueva Esparta,La Asuncion,0,0,3,0
+2956,4,Nueva Esparta,MariÃ±o,0,0,3,0
+2957,4,Nueva Esparta,P. El Agua,0,0,3,0
+2958,4,Nueva Esparta,Pampatar,0,0,3,0
+2959,4,Nueva Esparta,Porlamar,0,0,3,0
+2960,4,Nueva Esparta,Punta de Piedras,0,0,3,0
+2961,4,Tachira,La Ceiba,0,0,3,0
+2962,4,Tachira,La Fria,0,0,3,0
+2963,4,Tachira,La Grita,0,0,3,0
+2964,4,Tachira,San Juan de ColÃ³n,0,0,3,0
+2965,4,Tachira,San CristÃ³bal,0,0,3,0
+2966,4,Tachira,Rubio,0,0,3,0
+2967,4,Dependencias Federales,La Tortuga,0,0,3,0
+2968,4,Dependencias Federales,Los Monjes,0,0,3,0
+2969,4,Dependencias Federales,Los Roques,0,0,3,0
+2970,4,Dependencias Federales,Los Testigos,0,0,3,0
+2971,4,Delta Amacuro,Temblador,0,0,3,0
+2972,4,Delta Amacuro,Tucupita,0,0,3,0
+2973,2,,Digitel,0,0,3,74
+2974,2,,Digicel,0,0,3,75
+2975,2,,Infonet,0,0,3,76
+2976,2,,Movilnet,0,0,3,77
+2977,2,,Movistar,0,0,3,78
+2978,2,,Tesam,0,0,3,79
+2979,2,TelefonÃ­a MÃ³vil,Varios,0,0,3,80
+2981,13,,Pago Revertido,0,0,3,0
+2982,4,Todas las ciudades,CÃ³digo de Ã¡rea 809,0,0,4,0
+2983,2,,CÃ³digo de Ã¡rea 809 MÃ³viles,0,0,4,0
+2985,4,Todas las ciudades,CÃ³digo de Ã¡rea 829,0,0,4,0
+2986,2,,CÃ³digo de Ã¡rea 829 MÃ³viles,0,0,4,0
+2987,4,Nacional,Cualquier Ciudad,0,0,5,0
+2988,2,TelefonÃ­a MÃ³vil,Cualquier Operador,0,0,5,0
+2989,4,Nacional,Cualquier Ciudad,0,0,6,0
+2990,2,TelefonÃ­a MÃ³vil,Cualquier Operador,0,0,6,0
+2991,4,Nacional,Cualquier Ciudad,0,0,7,0
+2993,2,TelefonÃ­a MÃ³vil,Cualquier Operador,0,0,7,0
+2994,4,Nacional,Cualquier Ciudad,0,0,8,0
+2995,2,TelefonÃ­a MÃ³vil,Cualquier Operador,0,0,8,0
+2996,4,Nacional,Cualquier Ciudad,0,0,9,0
+2997,2,TelefonÃ­a MÃ³vil,Cualquier Operador,0,0,9,0
+2998,4,Nacional,Cualquier Ciudad,0,0,10,0
+2999,2,TelefonÃ­a MÃ³vil,Cualquier Operador,0,0,10,0
+3000,4,Nacional,Cualquier Ciudad,0,0,11,0
+3001,2,TelefonÃ­a MÃ³vil,Cualquier Operador,0,0,11,0
+3002,4,Nacional,Cualquier Ciudad,0,0,12,0
+3003,2,TelefonÃ­a MÃ³vil,Cualquier Operador,0,0,12,0
+3004,4,Amazonas,Amazonas,0,0,11,0
+3005,4,Amazonas,Rural Amazonas,0,0,11,0
+3006,4,Amazonas,Rural Reservado Amazonas,0,0,11,0
+3007,4,Ancash,Ancash,0,0,11,0
+3008,4,Ancash,Rural Ancash,0,0,11,0
+3009,4,Ancash,Rural Reservado Ancash,0,0,11,0
+3010,4,ApurÃ­mac,ApurÃ­mac,0,0,11,0
+3011,4,ApurÃ­mac,Rural ApurÃ­mac,0,0,11,0
+3012,4,ApurÃ­mac,Rural Reservado ApurÃ­mac,0,0,11,0
+3013,4,Arequipa,Arequipa,0,0,11,0
+3014,4,Arequipa,Rural Arequipa,0,0,11,0
+3015,4,Arequipa,Rural Reservado Arequipa,0,0,11,0
+3016,4,Ayacucho,Ayacucho,0,0,11,0
+3017,4,Ayacucho,Rural Ayacucho,0,0,11,0
+3018,4,Ayacucho,Rural Reservado Ayacucho,0,0,11,0
+3019,4,Cajamarca,Cajamarca,0,0,11,0
+3020,4,Cajamarca,Rural Cajamarca,0,0,11,0
+3021,4,Cajamarca,Rural Reservado Cajamarca,0,0,11,0
+3022,4,Cusco,Cusco,0,0,11,0
+3023,4,Cusco,Rural Cusco,0,0,11,0
+3024,4,Cusco,Rural Reservado Cusco,0,0,11,0
+3025,4,Huancavelica,Huancavelica,0,0,11,0
+3026,4,Huancavelica,Rural Huancavelica,0,0,11,0
+3027,4,Huancavelica,Rural Reservado Huancavelica,0,0,11,0
+3028,4,HuÃ¡nuco,HuÃ¡nuco,0,0,11,0
+3029,4,HuÃ¡nuco,Rural HuÃ¡nuco,0,0,11,0
+3030,4,HuÃ¡nuco,Rural Reservado HuÃ¡nuco,0,0,11,0
+3031,4,Ica,Ica,0,0,11,0
+3032,4,Ica,Rural Ica,0,0,11,0
+3033,4,Ica,Rural Reservado Ica,0,0,11,0
+3034,4,JunÃ­n,JunÃ­n,0,0,11,0
+3035,4,JunÃ­n,Rural JunÃ­n,0,0,11,0
+3036,4,JunÃ­n,Rural Reservado JunÃ­n,0,0,11,0
+3037,4,La Libertad,La Libertad,0,0,11,0
+3038,4,La Libertad,Rural La Libertad,0,0,11,0
+3039,4,La Libertad,Rural Reservado La Libertad,0,0,11,0
+3040,4,Lambayeque,Lambayeque,0,0,11,0
+3041,4,Lambayeque,Rural Lambayeque,0,0,11,0
+3042,4,Lambayeque,Rural Reservado Lambayeque,0,0,11,0
+3043,4,Lima,Rural Lima,0,0,11,0
+3044,4,Lima,Lima,0,0,11,0
+3045,4,Provincia Especial,Callao,0,0,11,0
+3046,4,Loreto,Loreto,0,0,11,0
+3047,4,Loreto,Rural Loreto,0,0,11,0
+3048,4,Loreto,Rural Reservado Loreto,0,0,11,0
+3049,4,Madre De Dios,Madre De Dios,0,0,11,0
+3050,4,Madre De Dios,Rural Madre De Dios,0,0,11,0
+3051,4,Madre De Dios,Rural Reservado Madre De Dios,0,0,11,0
+3052,4,Moquegua,Moquegua,0,0,11,0
+3053,4,Moquegua,Rural Moquegua,0,0,11,0
+3054,4,Moquegua,Rural Reservado Moquegua,0,0,11,0
+3055,4,Pasco,Pasco,0,0,11,0
+3056,4,Pasco,Rural Pasco,0,0,11,0
+3057,4,Pasco,Rural Reservado Pasco,0,0,11,0
+3058,4,Piura,Piura,0,0,11,0
+3059,4,Piura,Rural Piura,0,0,11,0
+3060,4,Piura,Rural Reservado Piura,0,0,11,0
+3061,4,Puno,Puno,0,0,11,0
+3062,4,Puno,Rural Puno,0,0,11,0
+3063,4,Puno,Rural Reservado Puno,0,0,11,0
+3064,4,San MartÃ­n,San MartÃ­n,0,0,11,0
+3065,4,San MartÃ­n,Rural San MartÃ­n,0,0,11,0
+3066,4,San MartÃ­n,Rural Reservado San MartÃ­n,0,0,11,0
+3067,4,Tacna,Tacna,0,0,11,0
+3068,4,Tacna,Rural Tacna,0,0,11,0
+3069,4,Tacna,Rural Reservado Tacna,0,0,11,0
+3070,4,Tumbes,Tumbes,0,0,11,0
+3071,4,Tumbes,Rural Tumbes,0,0,11,0
+3072,4,Tumbes,Rural Reservado Tumbes,0,0,11,0
+3073,4,Ucayali,Ucayali,0,0,11,0
+3074,4,Ucayali,Rural Ucayali,0,0,11,0
+3075,4,Ucayali,Rural Reservado Ucayali,0,0,11,0
+3076,2,,Reservada PerÃº,0,0,11,125
+3078,2,,Claro PerÃº,0,0,11,98
+3084,13,,Cobro Revertido AutomÃ¡tico,0,0,11,0
+3085,6,,Pago Compartido,0,0,11,0
+3086,6,,NÃºmero Universal,0,0,11,0
+3087,6,,NÃºmero Personal,0,0,11,0
+3088,6,,Llamadas Masivas / Televoto,0,0,11,0
+3089,6,,Red Privada Virtual,0,0,11,0
+3090,6,,Audio Servicios de Valor Adicional,0,0,11,0
+3091,5,Europa,"Azores, Isla",0,0,0,0
+3092,5,Europa,"Madeira, Isla",0,0,0,0
+3093,5,OceanÃ­a,"Casey Base, AntÃ¡rtica",0,0,0,0
+3094,5,OceanÃ­a,"Scott Base, AntÃ¡rtica",0,0,0,0
+3095,5,Mar Caribe,"Bonaire, Isla",0,0,0,0
+3096,5,Mar Caribe,"PaÃ­ses Bajos, Reino (Ant. Holandesas)",0,0,0,0
+3097,5,Mar Caribe,Curazao,0,0,0,0
+3099,5,Mar Caribe,"San Eustaquio, Isla",0,0,0,0
+3100,5,Mar Caribe,"San MartÃ­n, Isla",0,0,0,0
+3101,5,Ãfrica,"TristÃ¡n da cunha, Isla",0,0,0,0
+3102,5,Ãfrica,Eritrea,0,0,0,0
+3103,5,OceanÃ­a,"Niue Isla, Republica De",0,0,0,0
+3104,5,OceanÃ­a,"Christmas, Isla",0,0,0,0
+3105,5,OceanÃ­a,"Cocos, Isla",0,0,0,0
+3106,5,OceanÃ­a,"Estado de Chuuk, Isla (Truk)",0,0,0,0
+3107,5,Europa/Asia,"Sakhalin, Isla (SajalÃ­n)",0,0,0,0
+3108,5,OceanÃ­a,"Tokelau, Isla",0,0,0,0
+3109,5,OceanÃ­a,"Wake, Isla",0,0,0,0
+3110,2,,Nextel,0,0,11,128
+3115,2,,Movistar,0,0,11,129
+3121,4,Nacional,Cualquier Ciudad,0,0,13,0
+3122,2,TelefonÃ­a MÃ³vil,Cualquier Operador,0,0,13,0
+3124,4,Nacional,TMR,0,0,1,0
+3125,6,,Otros servicios,0,0,1,0
+3127,2,TelefonÃ­a MÃ³vil Virtual,Tigo,0,0,1,56
+3129,2,TelefonÃ­a MÃ³vil Virtual,Movistar,0,0,1,22
+3130,2,TelefonÃ­a MÃ³vil Virtual,Varios,0,0,1,61
+3131,2,,Compatel Colombia SAS,0,0,1,61
+3132,2,,ETB,0,0,1,1
+3133,2,TelefonÃ­a MÃ³vil,Varios,0,0,1,61
+3134,2,,UNE EPM,0,0,1,44
+3149,4,Cauca,Sucre,434,0,1,0
+3150,4,ChocÃ³,CarmÃ©n del DariÃ©n,474,0,1,0
+3151,4,ChocÃ³,CÃ©rtegui,475,0,1,0
+3152,4,ChocÃ³,Medio San Juan,485,0,1,0
+3153,4,ChocÃ³,Rio IrÃ³,488,0,1,0
+3154,4,ChocÃ³,Rio Quito,489,0,1,0
+3155,4,ChocÃ³,UniÃ³n Panamericana,495,0,1,0
+3163,2,TelefonÃ­a MÃ³vil,Reservada,0,0,1,61
+3167,2,TelefonÃ­a MÃ³vil Virtual,Reservada,0,0,1,61
+3185,2,Acceso Fijo Satelital,Reservada,0,0,1,61
+3186,4,CÃ³rdoba,NorosÃ­,0,0,1,0
+3187,4,CÃ³rdoba,Tuchin,0,0,1,0
+3191,5,AmÃ©rica del Sur,Venezuela MÃ³vil,0,0,0,0
+3192,5,Europa,Alemania MÃ³vil,0,0,0,0
+3193,5,Europa,EspaÃ±a MÃ³vil,0,0,0,0
+3194,5,Europa,Francia MÃ³vil,0,0,0,0
+3195,5,Europa,Inglaterra MÃ³vil,0,0,0,0
+3196,5,Europa,Italia MÃ³vil,0,0,0,0
+3197,5,AmÃ©rica del Norte,Estados Unidos (Free),0,0,0,0

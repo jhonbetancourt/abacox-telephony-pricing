@@ -1,0 +1,83 @@
+id,name,originCountryId
+1,ETB,1
+20,Números especiales,1
+21,Claro,1
+22,Movistar,1
+23,Avantel,1
+44,UNE,1
+45,Telefónica Telecom,1
+56,Tigo,1
+59,Interno,1
+60,Local,1
+61,Varios,1
+62,Movistar,2
+63,Interno,2
+65,Local,2
+67,Porta,2
+68,Allegro PCS,2
+69,PacificTel S.A.,2
+70,Andinatel S.A.,2
+71,ETAPA,2
+72,Varios,2
+73,Telefonía Fija,3
+74,Digitel,3
+75,Digicel,3
+76,Infonet,3
+77,Movilnet,3
+78,Movistar,3
+79,Globalstar TESAM,3
+80,Otros móviles,3
+81,Varios,3
+82,Local,3
+83,DDN,4
+84,Local,4
+85,CEL,4
+86,DDN,5
+87,DDI,5
+88,CEL,5
+89,Local,5
+90,DDN,7
+91,DDI,7
+92,CEL,7
+93,Local,7
+94,DDN,10
+95,DDI,10
+96,CEL,10
+97,Local,10
+98,Claro,11
+99,DDN,11
+100,DDI,11
+101,Local,11
+102,CEL Local,6
+103,DDI,6
+104,DDN,6
+105,CEL,8
+106,DDN,8
+107,DDI,8
+108,Local,8
+109,CEL,9
+110,DDN,9
+111,DDI,9
+112,Local,9
+113,Cualquiera,12
+114,Interno,5
+115,Interno,6
+116,Interno,7
+117,Interno,8
+118,Interno,12
+119,Interno,9
+120,Interno,10
+122,Interno,11
+123,Interno,3
+124,Interno,4
+125,Varios,11
+126,Servicios especiales básicos,11
+127,Números especiales,2
+128,Nextel,11
+129,Movistar,11
+130,CEL,13
+131,DDI,13
+132,DDN,13
+133,Local,13
+134,Varios,13
+135,Interno,13

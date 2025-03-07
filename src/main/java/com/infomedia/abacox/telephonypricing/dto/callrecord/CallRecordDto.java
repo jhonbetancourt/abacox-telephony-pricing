@@ -1,0 +1,54 @@
+package com.infomedia.abacox.telephonypricing.dto.callrecord;
+
+import com.infomedia.abacox.telephonypricing.dto.superclass.AuditedDto;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.EqualsAndHashCode;
+import lombok.NoArgsConstructor;
+
+import java.io.Serializable;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+
+/**
+ * DTO for {@link com.infomedia.abacox.telephonypricing.entity.CallRecord}
+ */
+@EqualsAndHashCode(callSuper = true)
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+public class CallRecordDto extends AuditedDto {
+    private Long id;
+    private String dial;
+    private Long commLocationId;
+    private CommunicationLocationDto communicationLocation;
+    private LocalDateTime serviceDate;
+    private Long operatorId;
+    private OperatorDto operator;
+    private String employeeExtension;
+    private String employeeKey;
+    private Long indicatorId;
+    private IndicatorDto indicator;
+    private String destinationPhone;
+    private Integer duration;
+    private Integer ringCount;
+    private Long telephonyTypeId;
+    private TelephonyTypeDto telephonyType;
+    private BigDecimal billedAmount;
+    private BigDecimal pricePerMinute;
+    private BigDecimal initialPrice;
+    private boolean isIncoming;
+    private String trunk;
+    private String initialTrunk;
+    private Long employeeId;
+    private EmployeeDto employee;
+    private String employeeTransfer;
+    private boolean transferCause;
+    private boolean assignmentCause;
+    private Long destinationEmployeeId;
+    private EmployeeDto destinationEmployee;
+    private Long fileInfoId;
+    private Long centralizedId;
+    private String originIp;
+    private Byte manualReproduction;
+}
