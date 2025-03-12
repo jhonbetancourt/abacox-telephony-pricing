@@ -45,7 +45,7 @@ public class Indicator extends AuditedEntity {
      */
     @Column(name = "telephony_type_id", nullable = false)
     @ColumnDefault("0")
-    private Long telephoneTypeId;
+    private Long telephonyTypeId;
 
     /**
      * Telephone type relationship.

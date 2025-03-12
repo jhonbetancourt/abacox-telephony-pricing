@@ -1,7 +1,6 @@
 package com.infomedia.abacox.telephonypricing.entity;
 
 import com.infomedia.abacox.telephonypricing.entity.superclass.ActivableEntity;
-import com.infomedia.abacox.telephonypricing.entity.superclass.AuditedEntity;
 import jakarta.persistence.*;
 import lombok.*;
 

@@ -70,7 +70,6 @@ public class CallRecord extends AuditedEntity {
      * Original field: ACUMTOTAL_FECHA_SERVICIO
      */
     @Column(name = "service_date", nullable = false)
-    @ColumnDefault("CURRENT_TIMESTAMP")
     private LocalDateTime serviceDate;
 
     /**

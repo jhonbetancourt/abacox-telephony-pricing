@@ -1,12 +1,16 @@
 package com.infomedia.abacox.telephonypricing.dto.callrecord;
 
+import com.infomedia.abacox.telephonypricing.dto.comlocation.CommunicationLocationDto;
+import com.infomedia.abacox.telephonypricing.dto.employee.EmployeeDto;
+import com.infomedia.abacox.telephonypricing.dto.indicator.IndicatorDto;
+import com.infomedia.abacox.telephonypricing.dto.operator.OperatorDto;
 import com.infomedia.abacox.telephonypricing.dto.superclass.AuditedDto;
+import com.infomedia.abacox.telephonypricing.dto.telephonytype.TelephonyTypeDto;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 
-import java.io.Serializable;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 

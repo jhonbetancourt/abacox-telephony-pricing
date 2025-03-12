@@ -1,6 +1,5 @@
 package com.infomedia.abacox.telephonypricing.service.common;
 
-import com.infomedia.abacox.telephonypricing.dto.superclass.ActivationDto;
 import com.infomedia.abacox.telephonypricing.entity.superclass.ActivableEntity;
 import com.infomedia.abacox.telephonypricing.exception.ResourceDeletionException;
 import com.infomedia.abacox.telephonypricing.exception.ResourceDisabledException;
@@ -88,10 +87,10 @@ public abstract class CrudService<E, I, R extends JpaRepository<E, I> & JpaSpeci
         return repository.findAll();
     }
 
-    public E changeActivation(I id, ActivationDto activationDto) {
+    public E changeActivation(I id, boolean active) {
         E entity = get(id);
         if (entity instanceof ActivableEntity activableEntity) {
-            activableEntity.setActive(activationDto.getActive());
+            activableEntity.setActive(active);
         } else {
             throw new UnsupportedOperationException("Entity of type " + getEntityClass().getSimpleName() + " does not support activation");
         }
@@ -102,7 +101,7 @@ public abstract class CrudService<E, I, R extends JpaRepository<E, I> & JpaSpeci
         return repository.save(entity);
     }
 
-    public void deleteAll(Collection<E> entities) {
-        repository.deleteAll(entities);
+    protected List<E> saveAll(Collection<E> entities) {
+        return repository.saveAll(entities);
     }
 }

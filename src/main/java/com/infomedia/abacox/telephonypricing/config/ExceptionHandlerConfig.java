@@ -178,7 +178,7 @@ public class ExceptionHandlerConfig extends ResponseEntityExceptionHandler {
             ServerErrorMessage serverErrorMessage = psqlException.getServerErrorMessage();
             if(serverErrorMessage!=null){
                 ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT
-                        , serverErrorMessage.getMessage()+": "+serverErrorMessage.getDetail());
+                        , serverErrorMessage.getDetail());
                 problemDetail.setTitle("Data Integrity Violation");
                 problemDetail.setType(URI.create("data-integrity-violation"));
                 problemDetail.setProperty("timestamp", LocalDateTime.now());

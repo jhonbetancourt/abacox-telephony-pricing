@@ -6,8 +6,6 @@ import lombok.*;
 
 import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.ColumnDefault;
-import org.hibernate.annotations.NotFound;
-import org.hibernate.annotations.NotFoundAction;
 
 /**
  * Entity representing employees or staff members.
@@ -49,34 +47,38 @@ public class Employee extends ActivableEntity {
      * ID of the subdivision/department.
      * Original field: FUNCIONARIO_SUBDIRECCION_ID
      */
-    @Column(name = "subdivision_id", nullable = false)
-    @ColumnDefault("0")
+    @Column(name = "subdivision_id", nullable = true)
     private Long subdivisionId;
 
     /**
      * Subdivision relationship.
      */
     @ManyToOne
-    @NotFound(action = NotFoundAction.IGNORE)
-    @JoinColumn(name = "subdivision_id", insertable = false, updatable = false,
-            foreignKey = @ForeignKey(value = ConstraintMode.NO_CONSTRAINT))
+    @JoinColumn(
+            name = "subdivision_id",
+            insertable = false,
+            updatable = false,
+            foreignKey = @ForeignKey(name = "fk_employee_subdivision")
+    )
     private Subdivision subdivision;
 
     /**
      * ID of the cost center.
      * Original field: FUNCIONARIO_CENTROCOSTOS_ID
      */
-    @Column(name = "cost_center_id", nullable = false)
-    @ColumnDefault("0")
+    @Column(name = "cost_center_id", nullable = true)
     private Long costCenterId;
 
     /**
      * Cost center relationship.
      */
     @ManyToOne
-    @NotFound(action = NotFoundAction.IGNORE)
-    @JoinColumn(name = "cost_center_id", insertable = false, updatable = false,
-            foreignKey = @ForeignKey(value = ConstraintMode.NO_CONSTRAINT))
+    @JoinColumn(
+            name = "cost_center_id",
+            insertable = false,
+            updatable = false,
+            foreignKey = @ForeignKey(name = "fk_employee_cost_center")
+    )
     private CostCenter costCenter;
 
     /**
@@ -99,34 +101,38 @@ public class Employee extends ActivableEntity {
      * ID of the communication location.
      * Original field: FUNCIONARIO_COMUBICACION_ID
      */
-    @Column(name = "communication_location_id", nullable = false)
-    @ColumnDefault("0")
+    @Column(name = "communication_location_id", nullable = true)
     private Long communicationLocationId;
 
     /**
      * Communication location relationship.
      */
     @ManyToOne
-    @NotFound(action = NotFoundAction.IGNORE)
-    @JoinColumn(name = "communication_location_id", insertable = false, updatable = false,
-            foreignKey = @ForeignKey(value = ConstraintMode.NO_CONSTRAINT))
+    @JoinColumn(
+            name = "communication_location_id",
+            insertable = false,
+            updatable = false,
+            foreignKey = @ForeignKey(name = "fk_employee_communication_location")
+    )
     private CommunicationLocation communicationLocation;
 
     /**
      * ID of the employee's position/role.
      * Original field: FUNCIONARIO_FUNCARGO_ID
      */
-    @Column(name = "job_position_id", nullable = false)
-    @ColumnDefault("0")
+    @Column(name = "job_position_id", nullable = true)
     private Long jobPositionId;
 
     /**
      * Job position relationship.
      */
     @ManyToOne
-    @NotFound(action = NotFoundAction.IGNORE)
-    @JoinColumn(name = "job_position_id", insertable = false, updatable = false,
-            foreignKey = @ForeignKey(value = ConstraintMode.NO_CONSTRAINT))
+    @JoinColumn(
+            name = "job_position_id",
+            insertable = false,
+            updatable = false,
+            foreignKey = @ForeignKey(name = "fk_employee_job_position")
+    )
     private JobPosition jobPosition;
 
     /**
@@ -168,33 +174,4 @@ public class Employee extends ActivableEntity {
     @Column(name = "id_number", length = 20, nullable = false)
     @ColumnDefault("")
     private String idNumber;
-
-
-    // The following fields were commented out in the original schema:
-    // The comment indicates they're added automatically
-
-    /**
-     * Start date of history record (commented out in original schema).
-     * Original field: FUNCIONARIO_HISTODESDE
-     * Note: Added automatically according to original schema comment.
-     */
-    // @Column(name = "history_start_date")
-    // private LocalDateTime historyStartDate;
-
-    /**
-     * History of changes (commented out in original schema).
-     * Original field: FUNCIONARIO_HISTOCAMBIO
-     * Note: Added automatically according to original schema comment.
-     */
-    // @Column(name = "change_history", columnDefinition = "TEXT")
-    // private String changeHistory;
-
-    /**
-     * ID of the history control (commented out in original schema).
-     * Original field: FUNCIONARIO_HISTORICTL_ID
-     * Note: Added automatically according to original schema comment.
-     */
-    // @Column(name = "history_control_id", nullable = false)
-    // @ColumnDefault("0")
-    // private Integer historyControlId;
 }

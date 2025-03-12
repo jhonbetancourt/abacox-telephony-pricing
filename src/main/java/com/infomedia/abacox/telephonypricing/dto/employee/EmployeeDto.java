@@ -1,12 +1,14 @@
-package com.infomedia.abacox.telephonypricing.dto.callrecord;
+package com.infomedia.abacox.telephonypricing.dto.employee;
 
+import com.infomedia.abacox.telephonypricing.dto.comlocation.CommunicationLocationDto;
+import com.infomedia.abacox.telephonypricing.dto.costcenter.CostCenterDto;
+import com.infomedia.abacox.telephonypricing.dto.jobposition.JobPositionDto;
+import com.infomedia.abacox.telephonypricing.dto.subdivision.SubdivisionDto;
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivableDto;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
-
-import java.io.Serializable;
 
 /**
  * DTO for {@link com.infomedia.abacox.telephonypricing.entity.Employee}
@@ -29,4 +31,8 @@ public class EmployeeDto extends ActivableDto {
     private String address;
     private String cellPhone;
     private String idNumber;
+    private SubdivisionDto subdivision;
+    private CostCenterDto costCenter;
+    private CommunicationLocationDto communicationLocation;
+    private JobPositionDto jobPosition;
 }
