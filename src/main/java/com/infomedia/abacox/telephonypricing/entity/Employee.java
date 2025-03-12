@@ -6,6 +6,8 @@ import lombok.*;
 
 import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.ColumnDefault;
+import org.hibernate.annotations.NotFound;
+import org.hibernate.annotations.NotFoundAction;
 
 /**
  * Entity representing employees or staff members.
@@ -52,12 +54,30 @@ public class Employee extends ActivableEntity {
     private Long subdivisionId;
 
     /**
+     * Subdivision relationship.
+     */
+    @ManyToOne
+    @NotFound(action = NotFoundAction.IGNORE)
+    @JoinColumn(name = "subdivision_id", insertable = false, updatable = false,
+            foreignKey = @ForeignKey(value = ConstraintMode.NO_CONSTRAINT))
+    private Subdivision subdivision;
+
+    /**
      * ID of the cost center.
      * Original field: FUNCIONARIO_CENTROCOSTOS_ID
      */
     @Column(name = "cost_center_id", nullable = false)
     @ColumnDefault("0")
     private Long costCenterId;
+
+    /**
+     * Cost center relationship.
+     */
+    @ManyToOne
+    @NotFound(action = NotFoundAction.IGNORE)
+    @JoinColumn(name = "cost_center_id", insertable = false, updatable = false,
+            foreignKey = @ForeignKey(value = ConstraintMode.NO_CONSTRAINT))
+    private CostCenter costCenter;
 
     /**
      * Access key or password.
@@ -84,12 +104,30 @@ public class Employee extends ActivableEntity {
     private Long communicationLocationId;
 
     /**
+     * Communication location relationship.
+     */
+    @ManyToOne
+    @NotFound(action = NotFoundAction.IGNORE)
+    @JoinColumn(name = "communication_location_id", insertable = false, updatable = false,
+            foreignKey = @ForeignKey(value = ConstraintMode.NO_CONSTRAINT))
+    private CommunicationLocation communicationLocation;
+
+    /**
      * ID of the employee's position/role.
      * Original field: FUNCIONARIO_FUNCARGO_ID
      */
     @Column(name = "job_position_id", nullable = false)
     @ColumnDefault("0")
     private Long jobPositionId;
+
+    /**
+     * Job position relationship.
+     */
+    @ManyToOne
+    @NotFound(action = NotFoundAction.IGNORE)
+    @JoinColumn(name = "job_position_id", insertable = false, updatable = false,
+            foreignKey = @ForeignKey(value = ConstraintMode.NO_CONSTRAINT))
+    private JobPosition jobPosition;
 
     /**
      * Email address.
@@ -131,9 +169,10 @@ public class Employee extends ActivableEntity {
     @ColumnDefault("")
     private String idNumber;
 
+
     // The following fields were commented out in the original schema:
     // The comment indicates they're added automatically
-    
+
     /**
      * Start date of history record (commented out in original schema).
      * Original field: FUNCIONARIO_HISTODESDE

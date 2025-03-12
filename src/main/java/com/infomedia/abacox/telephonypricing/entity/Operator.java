@@ -6,6 +6,8 @@ import lombok.*;
 
 import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.ColumnDefault;
+import org.hibernate.annotations.NotFound;
+import org.hibernate.annotations.NotFoundAction;
 
 /**
  * Entity representing telecom operators.
@@ -50,4 +52,13 @@ public class Operator extends AuditedEntity {
     @Column(name = "origin_country_id", nullable = false)
     @ColumnDefault("1")
     private Long originCountryId;
+
+    /**
+     * Origin country relationship.
+     */
+    @ManyToOne
+    @NotFound(action = NotFoundAction.IGNORE)
+    @JoinColumn(name = "origin_country_id", insertable = false, updatable = false,
+            foreignKey = @ForeignKey(value = ConstraintMode.NO_CONSTRAINT))
+    private OriginCountry originCountry;
 }

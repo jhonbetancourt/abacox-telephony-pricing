@@ -6,6 +6,8 @@ import lombok.*;
 
 import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.ColumnDefault;
+import org.hibernate.annotations.NotFound;
+import org.hibernate.annotations.NotFoundAction;
 
 /**
  * Entity representing subdivisions or departments.
@@ -44,6 +46,15 @@ public class Subdivision extends AuditedEntity {
     private Long parentSubdivisionId;
 
     /**
+     * Parent subdivision relationship.
+     */
+    @ManyToOne
+    @NotFound(action = NotFoundAction.IGNORE)
+    @JoinColumn(name = "parent_subdivision_id", insertable = false, updatable = false,
+            foreignKey = @ForeignKey(value = ConstraintMode.NO_CONSTRAINT))
+    private Subdivision parentSubdivision;
+
+    /**
      * Name of the department.
      * Original field: SUBDIRECCION_NOMBRE
      */
@@ -52,7 +63,7 @@ public class Subdivision extends AuditedEntity {
     private String name;
 
     // The following field was commented out in the original schema:
-    
+
     /**
      * ID of the department head (commented out in original schema).
      * Original field: SUBDIRECCION_JEFE

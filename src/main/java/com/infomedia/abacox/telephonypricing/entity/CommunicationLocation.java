@@ -1,14 +1,16 @@
 package com.infomedia.abacox.telephonypricing.entity;
 
 import com.infomedia.abacox.telephonypricing.entity.superclass.ActivableEntity;
-import com.infomedia.abacox.telephonypricing.entity.superclass.AuditedEntity;
 import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDateTime;
+import java.util.Set;
 
 import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.ColumnDefault;
+import org.hibernate.annotations.NotFound;
+import org.hibernate.annotations.NotFoundAction;
 
 /**
  * Entity representing communication location/installation details.
@@ -55,6 +57,15 @@ public class CommunicationLocation extends ActivableEntity {
     private Long plantTypeId;
 
     /**
+     * Plant type relationship.
+     */
+    @ManyToOne
+    @NotFound(action = NotFoundAction.IGNORE)
+    @JoinColumn(name = "plant_type_id", insertable = false, updatable = false,
+            foreignKey = @ForeignKey(value = ConstraintMode.NO_CONSTRAINT))
+    private PlantType plantType;
+
+    /**
      * Serial number of the installation.
      * Original field: COMUBICACION_SERIAL
      */
@@ -69,6 +80,15 @@ public class CommunicationLocation extends ActivableEntity {
     @Column(name = "indicator_id", nullable = false)
     @ColumnDefault("0")
     private Long indicatorId;
+
+    /**
+     * Indicator relationship.
+     */
+    @ManyToOne
+    @NotFound(action = NotFoundAction.IGNORE)
+    @JoinColumn(name = "indicator_id", insertable = false, updatable = false,
+            foreignKey = @ForeignKey(value = ConstraintMode.NO_CONSTRAINT))
+    private Indicator indicator;
 
     /**
      * PBX prefix.
@@ -120,6 +140,15 @@ public class CommunicationLocation extends ActivableEntity {
     private Long bandGroupId;
 
     /**
+     * Band group relationship.
+     */
+    @ManyToOne
+    @NotFound(action = NotFoundAction.IGNORE)
+    @JoinColumn(name = "band_group_id", insertable = false, updatable = false,
+            foreignKey = @ForeignKey(value = ConstraintMode.NO_CONSTRAINT))
+    private BandGroup bandGroup;
+
+    /**
      * ID of the header.
      * Original field: COMUBICACION_CABECERA_ID
      */
@@ -136,7 +165,7 @@ public class CommunicationLocation extends ActivableEntity {
     private Integer withoutCaptures;
 
     // The following fields were commented out in the original schema:
-    
+
     /**
      * Internal prefix (commented out in original schema).
      * Original field: COMUBICACION_PREFIJOINTERNO

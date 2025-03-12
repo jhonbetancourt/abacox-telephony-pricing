@@ -4,8 +4,12 @@ import com.infomedia.abacox.telephonypricing.entity.superclass.AuditedEntity;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.util.Set;
+
 import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.ColumnDefault;
+import org.hibernate.annotations.NotFound;
+import org.hibernate.annotations.NotFoundAction;
 
 /**
  * Entity representing telephone types.
@@ -25,7 +29,7 @@ public class TelephonyType extends AuditedEntity {
      * Original field: TIPOTELE_ID
      */
     @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "telephone_type_id_seq")
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "telephony_type_id_seq")
     @SequenceGenerator(
             name = "telephony_type_id_seq",
             sequenceName = "telephony_type_id_seq",
@@ -52,6 +56,15 @@ public class TelephonyType extends AuditedEntity {
     private Long callCategoryId;
 
     /**
+     * Call category relationship.
+     */
+    @ManyToOne
+    @NotFound(action = NotFoundAction.IGNORE)
+    @JoinColumn(name = "call_category_id", insertable = false, updatable = false,
+            foreignKey = @ForeignKey(value = ConstraintMode.NO_CONSTRAINT))
+    private CallCategory callCategory;
+
+    /**
      * Flag indicating if it uses trunk lines.
      * Original field: TIPOTELE_TRONCALES
      */
@@ -60,7 +73,7 @@ public class TelephonyType extends AuditedEntity {
     private boolean usesTrunks;
 
     // The following fields were commented out in the original schema:
-    
+
     /**
      * Minimum value (commented out in original schema).
      * Original field: TIPOTELE_MIN

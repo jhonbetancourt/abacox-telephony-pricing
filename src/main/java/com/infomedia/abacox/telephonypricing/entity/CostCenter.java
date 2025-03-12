@@ -6,6 +6,8 @@ import lombok.*;
 
 import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.ColumnDefault;
+import org.hibernate.annotations.NotFound;
+import org.hibernate.annotations.NotFoundAction;
 
 /**
  * Entity representing cost centers.
@@ -33,7 +35,7 @@ public class CostCenter extends AuditedEntity {
             initialValue = 1000000
     )
     @Column(name = "id", nullable = false)
-    private Long costCenterId;
+    private Long id;
 
     /**
      * Name or identifier of the cost center.
@@ -60,10 +62,28 @@ public class CostCenter extends AuditedEntity {
     private Long parentCostCenterId;
 
     /**
-     * ID of the origin municipality.
+     * Parent cost center relationship.
+     */
+    @ManyToOne
+    @NotFound(action = NotFoundAction.IGNORE)
+    @JoinColumn(name = "parent_cost_center_id", insertable = false, updatable = false,
+            foreignKey = @ForeignKey(value = ConstraintMode.NO_CONSTRAINT))
+    private CostCenter parentCostCenter;
+
+    /**
+     * ID of the origin municipality/country.
      * Original field: CENTROCOSTOS_MPORIGEN_ID
      */
     @Column(name = "origin_country_id", nullable = false)
     @ColumnDefault("1")
     private Long originCountryId;
+
+    /**
+     * Origin country relationship.
+     */
+    @ManyToOne
+    @NotFound(action = NotFoundAction.IGNORE)
+    @JoinColumn(name = "origin_country_id", insertable = false, updatable = false,
+            foreignKey = @ForeignKey(value = ConstraintMode.NO_CONSTRAINT))
+    private OriginCountry originCountry;
 }

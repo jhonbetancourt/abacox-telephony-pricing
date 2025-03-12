@@ -6,30 +6,29 @@ import lombok.*;
 
 import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.ColumnDefault;
-import java.time.LocalDateTime;
 
 /**
- * Entity representing job positions or roles.
- * Original table name: funcargo
+ * Entity representing types of plants or facilities.
+ * Original table name: tipoplanta
  */
 @Entity
-@Table(name = "job_position")
+@Table(name = "plant_type")
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @SuperBuilder(toBuilder = true)
-public class JobPosition extends AuditedEntity {
+public class PlantType extends AuditedEntity {
 
     /**
-     * Primary key for the job position.
-     * Original field: FUNCARGO_ID
+     * Primary key for the plant type.
+     * Original field: TIPOPLANTA_ID
      */
     @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "job_position_id_seq")
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "plant_type_id_seq")
     @SequenceGenerator(
-            name = "job_position_id_seq",
-            sequenceName = "job_position_id_seq",
+            name = "plant_type_id_seq",
+            sequenceName = "plant_type_id_seq",
             allocationSize = 1,
             initialValue = 1000000
     )
@@ -37,10 +36,10 @@ public class JobPosition extends AuditedEntity {
     private Long id;
 
     /**
-     * Name of the job position.
-     * Original field: FUNCARGO_NOMBRE
+     * Name of the plant type.
+     * Original field: TIPOPLANTA_NOMBRE
      */
-    @Column(name = "name", length = 100, nullable = false)
+    @Column(name = "name", length = 40, nullable = false)
     @ColumnDefault("")
     private String name;
 }

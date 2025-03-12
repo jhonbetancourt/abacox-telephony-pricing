@@ -4,8 +4,12 @@ import com.infomedia.abacox.telephonypricing.entity.superclass.AuditedEntity;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.util.Set;
+
 import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.ColumnDefault;
+import org.hibernate.annotations.NotFound;
+import org.hibernate.annotations.NotFoundAction;
 
 /**
  * Entity representing telephone indicators/area codes.
@@ -39,10 +43,18 @@ public class Indicator extends AuditedEntity {
      * ID of the telephone type.
      * Original field: INDICATIVO_TIPOTELE_ID
      */
-    //TODO: This should be a foreign key to the TelephoneType entity
-    @Column(name = "telephone_type_id", nullable = false)
+    @Column(name = "telephony_type_id", nullable = false)
     @ColumnDefault("0")
     private Long telephoneTypeId;
+
+    /**
+     * Telephone type relationship.
+     */
+    @ManyToOne
+    @NotFound(action = NotFoundAction.IGNORE)
+    @JoinColumn(name = "telephony_type_id", insertable = false, updatable = false,
+            foreignKey = @ForeignKey(value = ConstraintMode.NO_CONSTRAINT))
+    private TelephonyType telephonyType;
 
     /**
      * The actual indicator/area code value.
@@ -65,18 +77,26 @@ public class Indicator extends AuditedEntity {
      * City associated with this indicator.
      * Original field: INDICATIVO_CIUDAD
      */
-    @Column(name = "city", length = 80, nullable = false)
+    @Column(name = "city_name", length = 80, nullable = false)
     @ColumnDefault("")
-    private String city;
+    private String cityName;
 
     /**
      * ID reference to a cities table.
      * Original field: INDICATIVO_CIUDADES_ID
      */
-    //TODO: This should be a foreign key to the Cities entity
     @Column(name = "city_id", nullable = false)
     @ColumnDefault("0")
     private Long cityId;
+
+    /**
+     * City relationship.
+     */
+    @ManyToOne
+    @NotFound(action = NotFoundAction.IGNORE)
+    @JoinColumn(name = "city_id", insertable = false, updatable = false,
+            foreignKey = @ForeignKey(value = ConstraintMode.NO_CONSTRAINT))
+    private City city;
 
     /**
      * Flag indicating if this indicator is associated with a partner/associate.
@@ -90,17 +110,33 @@ public class Indicator extends AuditedEntity {
      * ID of the telecom operator.
      * Original field: INDICATIVO_OPERADOR_ID
      */
-    //TODO: This should be a foreign key to the Operator entity
     @Column(name = "operator_id", nullable = false)
     @ColumnDefault("0")
     private Long operatorId;
 
     /**
+     * Operator relationship.
+     */
+    @ManyToOne
+    @NotFound(action = NotFoundAction.IGNORE)
+    @JoinColumn(name = "operator_id", insertable = false, updatable = false,
+            foreignKey = @ForeignKey(value = ConstraintMode.NO_CONSTRAINT))
+    private Operator operator;
+
+    /**
      * ID of the origin municipality.
      * Original field: INDICATIVO_MPORIGEN_ID
      */
-    //TODO: This should be a foreign key to the OriginCountry entity
     @Column(name = "origin_country_id", nullable = false)
     @ColumnDefault("1")
     private Long originCountryId;
+
+    /**
+     * Origin country relationship.
+     */
+    @ManyToOne
+    @NotFound(action = NotFoundAction.IGNORE)
+    @JoinColumn(name = "origin_country_id", insertable = false, updatable = false,
+            foreignKey = @ForeignKey(value = ConstraintMode.NO_CONSTRAINT))
+    private OriginCountry originCountry;
 }
