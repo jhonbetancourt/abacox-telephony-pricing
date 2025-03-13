@@ -1,4 +1,4 @@
-package com.infomedia.abacox.telephonypricing.dto.comlocation;
+package com.infomedia.abacox.telephonypricing.dto.commlocation;
 
 import com.infomedia.abacox.telephonypricing.dto.bandgroup.BandGroupDto;
 import com.infomedia.abacox.telephonypricing.dto.planttype.PlantTypeDto;
@@ -19,7 +19,7 @@ import java.time.LocalDateTime;
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-public class CommunicationLocationDto extends ActivableDto {
+public class CommLocationDto extends ActivableDto {
     private Long id;
     private String directory;
     private Long plantTypeId;

@@ -1,6 +1,6 @@
 package com.infomedia.abacox.telephonypricing.dto.callrecord;
 
-import com.infomedia.abacox.telephonypricing.dto.comlocation.CommunicationLocationDto;
+import com.infomedia.abacox.telephonypricing.dto.commlocation.CommLocationDto;
 import com.infomedia.abacox.telephonypricing.dto.employee.EmployeeDto;
 import com.infomedia.abacox.telephonypricing.dto.indicator.IndicatorDto;
 import com.infomedia.abacox.telephonypricing.dto.operator.OperatorDto;
@@ -25,7 +25,7 @@ public class CallRecordDto extends AuditedDto {
     private Long id;
     private String dial;
     private Long commLocationId;
-    private CommunicationLocationDto communicationLocation;
+    private CommLocationDto communicationLocation;
     private LocalDateTime serviceDate;
     private Long operatorId;
     private OperatorDto operator;

@@ -1,6 +1,6 @@
 package com.infomedia.abacox.telephonypricing.dto.employee;
 
-import com.infomedia.abacox.telephonypricing.dto.comlocation.CommunicationLocationDto;
+import com.infomedia.abacox.telephonypricing.dto.commlocation.CommLocationDto;
 import com.infomedia.abacox.telephonypricing.dto.costcenter.CostCenterDto;
 import com.infomedia.abacox.telephonypricing.dto.jobposition.JobPositionDto;
 import com.infomedia.abacox.telephonypricing.dto.subdivision.SubdivisionDto;
@@ -33,6 +33,6 @@ public class EmployeeDto extends ActivableDto {
     private String idNumber;
     private SubdivisionDto subdivision;
     private CostCenterDto costCenter;
-    private CommunicationLocationDto communicationLocation;
+    private CommLocationDto communicationLocation;
     private JobPositionDto jobPosition;
 }
