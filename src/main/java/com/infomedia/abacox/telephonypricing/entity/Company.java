@@ -85,9 +85,20 @@ public class Company extends AuditedEntity {
      * ID of the area code/indicator.
      * Original field: EMPRESA_INDICATIVO_ID
      */
-    @Column(name = "indicator_id", nullable = false)
-    @ColumnDefault("0")
+    @Column(name = "indicator_id", nullable = true)
     private Integer indicatorId;
+    
+    /**
+     * Indicator relationship.
+     */
+    @ManyToOne
+    @JoinColumn(
+        name = "indicator_id", 
+        insertable = false, 
+        updatable = false,
+        foreignKey = @ForeignKey(name = "fk_company_indicator")
+    )
+    private Indicator indicator;
 
     // The following field was commented out in the original schema:
     

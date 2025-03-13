@@ -9,8 +9,6 @@ import java.time.LocalDateTime;
 
 import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.ColumnDefault;
-import org.hibernate.annotations.NotFound;
-import org.hibernate.annotations.NotFoundAction;
 
 /**
  * Entity representing accumulated call records/totals.
@@ -52,17 +50,19 @@ public class CallRecord extends AuditedEntity {
      * ID of the communication location.
      * Original field: ACUMTOTAL_COMUBICACION_ID
      */
-    @Column(name = "comm_location_id", nullable = false)
-    @ColumnDefault("0")
+    @Column(name = "comm_location_id", nullable = true)
     private Long commLocationId;
     
     /**
      * Communication location relationship.
      */
     @ManyToOne
-    @NotFound(action = NotFoundAction.IGNORE)
-    @JoinColumn(name = "comm_location_id", insertable = false, updatable = false, 
-            foreignKey = @jakarta.persistence.ForeignKey(value = ConstraintMode.NO_CONSTRAINT))
+    @JoinColumn(
+        name = "comm_location_id", 
+        insertable = false, 
+        updatable = false,
+        foreignKey = @ForeignKey(name = "fk_call_record_comm_location")
+    )
     private CommunicationLocation communicationLocation;
 
     /**
@@ -76,17 +76,19 @@ public class CallRecord extends AuditedEntity {
      * ID of the operator.
      * Original field: ACUMTOTAL_OPERADOR_ID
      */
-    @Column(name = "operator_id", nullable = false)
-    @ColumnDefault("0")
+    @Column(name = "operator_id", nullable = true)
     private Long operatorId;
     
     /**
      * Operator relationship.
      */
     @ManyToOne
-    @NotFound(action = NotFoundAction.IGNORE)
-    @JoinColumn(name = "operator_id", insertable = false, updatable = false,
-            foreignKey = @ForeignKey(value = ConstraintMode.NO_CONSTRAINT))
+    @JoinColumn(
+        name = "operator_id", 
+        insertable = false, 
+        updatable = false,
+        foreignKey = @ForeignKey(name = "fk_call_record_operator")
+    )
     private Operator operator;
 
     /**
@@ -109,17 +111,19 @@ public class CallRecord extends AuditedEntity {
      * ID of the indicator/area code.
      * Original field: ACUMTOTAL_INDICATIVO_ID
      */
-    @Column(name = "indicator_id", nullable = false)
-    @ColumnDefault("0")
+    @Column(name = "indicator_id", nullable = true)
     private Long indicatorId;
     
     /**
      * Indicator relationship.
      */
     @ManyToOne
-    @NotFound(action = NotFoundAction.IGNORE)
-    @JoinColumn(name = "indicator_id", insertable = false, updatable = false,
-            foreignKey = @ForeignKey(value = ConstraintMode.NO_CONSTRAINT))
+    @JoinColumn(
+        name = "indicator_id", 
+        insertable = false, 
+        updatable = false,
+        foreignKey = @ForeignKey(name = "fk_call_record_indicator")
+    )
     private Indicator indicator;
 
     /**
@@ -150,17 +154,19 @@ public class CallRecord extends AuditedEntity {
      * ID of the telephone type.
      * Original field: ACUMTOTAL_TIPOTELE_ID
      */
-    @Column(name = "telephony_type_id", nullable = false)
-    @ColumnDefault("0")
+    @Column(name = "telephony_type_id", nullable = true)
     private Long telephonyTypeId;
     
     /**
      * Telephony type relationship.
      */
     @ManyToOne
-    @NotFound(action = NotFoundAction.IGNORE)
-    @JoinColumn(name = "telephony_type_id", insertable = false, updatable = false,
-            foreignKey = @ForeignKey(value = ConstraintMode.NO_CONSTRAINT))
+    @JoinColumn(
+        name = "telephony_type_id", 
+        insertable = false, 
+        updatable = false,
+        foreignKey = @ForeignKey(name = "fk_call_record_telephony_type")
+    )
     private TelephonyType telephonyType;
 
     /**
@@ -215,17 +221,19 @@ public class CallRecord extends AuditedEntity {
      * ID of the employee/user.
      * Original field: ACUMTOTAL_FUNCIONARIO_ID
      */
-    @Column(name = "employee_id", nullable = false)
-    @ColumnDefault("0")
+    @Column(name = "employee_id", nullable = true)
     private Long employeeId;
     
     /**
      * Employee relationship.
      */
     @ManyToOne
-    @NotFound(action = NotFoundAction.IGNORE)
-    @JoinColumn(name = "employee_id", insertable = false, updatable = false,
-            foreignKey = @ForeignKey(value = ConstraintMode.NO_CONSTRAINT))
+    @JoinColumn(
+        name = "employee_id", 
+        insertable = false, 
+        updatable = false,
+        foreignKey = @ForeignKey(name = "fk_call_record_employee")
+    )
     private Employee employee;
 
     /**
@@ -256,34 +264,38 @@ public class CallRecord extends AuditedEntity {
      * ID of the destination employee.
      * Original field: ACUMTOTAL_FUNDESTINO_ID
      */
-    @Column(name = "destination_employee_id", nullable = false)
-    @ColumnDefault("0")
+    @Column(name = "destination_employee_id", nullable = true)
     private Long destinationEmployeeId;
     
     /**
      * Destination employee relationship.
      */
     @ManyToOne
-    @NotFound(action = NotFoundAction.IGNORE)
-    @JoinColumn(name = "destination_employee_id", insertable = false, updatable = false,
-            foreignKey = @ForeignKey(value = ConstraintMode.NO_CONSTRAINT))
+    @JoinColumn(
+        name = "destination_employee_id", 
+        insertable = false, 
+        updatable = false,
+        foreignKey = @ForeignKey(name = "fk_call_record_destination_employee")
+    )
     private Employee destinationEmployee;
 
     /**
      * ID of the file information.
      * Original field: ACUMTOTAL_FILEINFO_ID
      */
-    @Column(name = "file_info_id", nullable = false)
-    @ColumnDefault("0")
+    @Column(name = "file_info_id", nullable = true)
     private Long fileInfoId;
     
     /**
      * File information relationship.
      */
     @ManyToOne
-    @NotFound(action = NotFoundAction.IGNORE)
-    @JoinColumn(name = "file_info_id", insertable = false, updatable = false,
-            foreignKey = @ForeignKey(value = ConstraintMode.NO_CONSTRAINT))
+    @JoinColumn(
+        name = "file_info_id", 
+        insertable = false, 
+        updatable = false,
+        foreignKey = @ForeignKey(name = "fk_call_record_file_info")
+    )
     private FileInfo fileInfo;
 
     /**
@@ -296,12 +308,18 @@ public class CallRecord extends AuditedEntity {
     
     /**
      * Centralized system relationship.
+     * Uncomment when CentralizedSystem entity is available
      */
-   /* @ManyToOne
-    @NotFound(action = NotFoundAction.IGNORE)
-    @JoinColumn(name = "centralized_id", insertable = false, updatable = false,
-            foreignKey = @ForeignKey(value = ConstraintMode.NO_CONSTRAINT))
-    private CentralizedSystem centralizedSystem;*/
+    /*
+    @ManyToOne
+    @JoinColumn(
+        name = "centralized_id", 
+        insertable = false, 
+        updatable = false,
+        foreignKey = @ForeignKey(name = "fk_call_record_centralized_system")
+    )
+    private CentralizedSystem centralizedSystem;
+    */
 
     /**
      * IP address of origin.

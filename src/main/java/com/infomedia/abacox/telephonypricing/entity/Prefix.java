@@ -41,19 +41,39 @@ public class Prefix extends AuditedEntity {
      * ID of the telecom operator.
      * Original field: PREFIJO_OPERADOR_ID
      */
-    //TODO: This should be a foreign key to the Operator entity
-    @Column(name = "operator_id", nullable = false)
-    @ColumnDefault("0")
+    @Column(name = "operator_id", nullable = true)
     private Long operatorId;
+
+    /**
+     * Operator relationship.
+     */
+    @ManyToOne
+    @JoinColumn(
+            name = "operator_id", 
+            insertable = false, 
+            updatable = false,
+            foreignKey = @ForeignKey(name = "fk_prefix_operator")
+    )
+    private Operator operator;
 
     /**
      * Type of telephone service.
      * Original field: PREFIJO_TIPOTELE_ID
      */
-    //TODO: This should be a foreign key to the TelephoneType entity
-    @Column(name = "telephone_type_id", nullable = false)
-    @ColumnDefault("0")
+    @Column(name = "telephone_type_id", nullable = true)
     private Long telephoneTypeId;
+
+    /**
+     * Telephone type relationship.
+     */
+    @ManyToOne
+    @JoinColumn(
+            name = "telephone_type_id", 
+            insertable = false, 
+            updatable = false,
+            foreignKey = @ForeignKey(name = "fk_prefix_telephone_type")
+    )
+    private TelephonyType telephonyType;
 
     /**
      * The actual prefix code string.

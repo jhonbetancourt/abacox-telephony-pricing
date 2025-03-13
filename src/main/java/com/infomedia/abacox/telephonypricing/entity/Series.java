@@ -39,10 +39,20 @@ public class Series extends AuditedEntity {
      * ID of the associated indicator/area code.
      * Original field: SERIE_INDICATIVO_ID
      */
-    //TODO: This should be a foreign key to the Indicator entity
-    @Column(name = "indicator_id", nullable = false)
-    @ColumnDefault("0")
+    @Column(name = "indicator_id", nullable = true)
     private Long indicatorId;
+
+    /**
+     * Indicator relationship.
+     */
+    @ManyToOne
+    @JoinColumn(
+            name = "indicator_id", 
+            insertable = false, 
+            updatable = false,
+            foreignKey = @ForeignKey(name = "fk_series_indicator")
+    )
+    private Indicator indicator;
 
     /**
      * NDC (National Destination Code) for this series.

@@ -6,7 +6,6 @@ import lombok.*;
 
 import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.ColumnDefault;
-import java.time.LocalDateTime;
 
 /**
  * Entity representing job positions or roles.

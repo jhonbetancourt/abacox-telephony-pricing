@@ -41,10 +41,20 @@ public class Band extends AuditedEntity {
      * ID of the associated prefix.
      * Original field: BANDA_PREFIJO_ID
      */
-    //TODO: This should be a foreign key to the Prefix entity
-    @Column(name = "prefix_id", nullable = false)
-    @ColumnDefault("0")
+    @Column(name = "prefix_id", nullable = true)
     private Long prefixId;
+
+    /**
+     * Prefix relationship.
+     */
+    @ManyToOne
+    @JoinColumn(
+            name = "prefix_id", 
+            insertable = false, 
+            updatable = false,
+            foreignKey = @ForeignKey(name = "fk_band_prefix")
+    )
+    private Prefix prefix;
 
     /**
      * Name of the band.
@@ -74,9 +84,20 @@ public class Band extends AuditedEntity {
      * ID indicating the origin of the band.
      * Original field: BANDA_INDICAORIGEN_ID
      */
-    @Column(name = "origin_indicator_id", nullable = false)
-    @ColumnDefault("0")
+    @Column(name = "origin_indicator_id", nullable = true)
     private Long originIndicatorId;
+
+    /**
+     * Origin indicator relationship.
+     */
+    @ManyToOne
+    @JoinColumn(
+            name = "origin_indicator_id", 
+            insertable = false, 
+            updatable = false,
+            foreignKey = @ForeignKey(name = "fk_band_origin_indicator")
+    )
+    private Indicator originIndicator;
 
     /**
      * Minimum distance for this band.
@@ -98,7 +119,18 @@ public class Band extends AuditedEntity {
      * ID of the band group this band belongs to.
      * Original field: BANDA_BANDAGRUPO_ID
      */
-    @Column(name = "band_group_id", nullable = false)
-    @ColumnDefault("0")
+    @Column(name = "band_group_id", nullable = true)
     private Long bandGroupId;
+
+    /**
+     * Band group relationship.
+     */
+    @ManyToOne
+    @JoinColumn(
+            name = "band_group_id", 
+            insertable = false, 
+            updatable = false,
+            foreignKey = @ForeignKey(name = "fk_band_band_group")
+    )
+    private BandGroup bandGroup;
 }

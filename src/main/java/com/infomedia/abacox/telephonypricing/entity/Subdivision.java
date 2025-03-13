@@ -6,8 +6,6 @@ import lombok.*;
 
 import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.ColumnDefault;
-import org.hibernate.annotations.NotFound;
-import org.hibernate.annotations.NotFoundAction;
 
 /**
  * Entity representing subdivisions or departments.
@@ -41,17 +39,19 @@ public class Subdivision extends AuditedEntity {
      * ID of the parent department.
      * Original field: SUBDIRECCION_PERTENECE
      */
-    @Column(name = "parent_subdivision_id", nullable = false)
-    @ColumnDefault("0")
+    @Column(name = "parent_subdivision_id", nullable = true)
     private Long parentSubdivisionId;
 
     /**
      * Parent subdivision relationship.
      */
     @ManyToOne
-    @NotFound(action = NotFoundAction.IGNORE)
-    @JoinColumn(name = "parent_subdivision_id", insertable = false, updatable = false,
-            foreignKey = @ForeignKey(value = ConstraintMode.NO_CONSTRAINT))
+    @JoinColumn(
+            name = "parent_subdivision_id", 
+            insertable = false, 
+            updatable = false,
+            foreignKey = @ForeignKey(name = "fk_subdivision_parent")
+    )
     private Subdivision parentSubdivision;
 
     /**

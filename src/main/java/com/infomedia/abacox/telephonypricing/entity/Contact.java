@@ -47,17 +47,39 @@ public class Contact extends AuditedEntity {
      * ID of the associated employee.
      * Original field: DIRECTORIO_FUNCIONARIO_ID
      */
-    @Column(name = "employee_id", nullable = false)
-    @ColumnDefault("0")
+    @Column(name = "employee_id", nullable = true)
     private Long employeeId;
+    
+    /**
+     * Employee relationship.
+     */
+    @ManyToOne
+    @JoinColumn(
+        name = "employee_id", 
+        insertable = false, 
+        updatable = false,
+        foreignKey = @ForeignKey(name = "fk_contact_employee")
+    )
+    private Employee employee;
 
     /**
      * ID of the associated company.
      * Original field: DIRECTORIO_EMPRESA_ID
      */
-    @Column(name = "company_id", nullable = false)
-    @ColumnDefault("0")
+    @Column(name = "company_id", nullable = true)
     private Long companyId;
+    
+    /**
+     * Company relationship.
+     */
+    @ManyToOne
+    @JoinColumn(
+        name = "company_id", 
+        insertable = false, 
+        updatable = false,
+        foreignKey = @ForeignKey(name = "fk_contact_company")
+    )
+    private Company company;
 
     /**
      * Phone number.
@@ -86,9 +108,20 @@ public class Contact extends AuditedEntity {
      * ID of the area code/indicator.
      * Original field: DIRECTORIO_INDICATIVO_ID
      */
-    @Column(name = "indicator_id", nullable = false)
-    @ColumnDefault("0")
+    @Column(name = "indicator_id", nullable = true)
     private Long indicatorId;
+    
+    /**
+     * Indicator relationship.
+     */
+    @ManyToOne
+    @JoinColumn(
+        name = "indicator_id", 
+        insertable = false, 
+        updatable = false,
+        foreignKey = @ForeignKey(name = "fk_contact_indicator")
+    )
+    private Indicator indicator;
 
     // The following field was commented out in the original schema:
     

@@ -8,8 +8,6 @@ import java.util.Set;
 
 import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.ColumnDefault;
-import org.hibernate.annotations.NotFound;
-import org.hibernate.annotations.NotFoundAction;
 
 /**
  * Entity representing telephone types.
@@ -51,17 +49,19 @@ public class TelephonyType extends AuditedEntity {
      * ID of the call class/type.
      * Original field: TIPOTELE_CLASELLAMA_ID
      */
-    @Column(name = "call_category_id", nullable = false)
-    @ColumnDefault("0")
+    @Column(name = "call_category_id", nullable = true)
     private Long callCategoryId;
 
     /**
      * Call category relationship.
      */
     @ManyToOne
-    @NotFound(action = NotFoundAction.IGNORE)
-    @JoinColumn(name = "call_category_id", insertable = false, updatable = false,
-            foreignKey = @ForeignKey(value = ConstraintMode.NO_CONSTRAINT))
+    @JoinColumn(
+            name = "call_category_id",
+            insertable = false,
+            updatable = false,
+            foreignKey = @ForeignKey(name = "fk_telephony_type_call_category")
+    )
     private CallCategory callCategory;
 
     /**

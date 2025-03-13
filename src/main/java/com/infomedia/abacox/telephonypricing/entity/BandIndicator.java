@@ -6,14 +6,21 @@ import lombok.*;
 
 
 import lombok.experimental.SuperBuilder;
-import org.hibernate.annotations.ColumnDefault;
 
 /**
  * Entity representing the relationship between bands and indicators.
  * Original table name: BANDAINDICA
  */
 @Entity
-@Table(name = "band_indicator")
+@Table(
+    name = "band_indicator",
+    uniqueConstraints = {
+        @UniqueConstraint(
+            name = "uk_band_indicator_band_indicator",
+            columnNames = {"band_id", "indicator_id"}
+        )
+    }
+)
 @Getter
 @Setter
 @NoArgsConstructor
@@ -40,17 +47,37 @@ public class BandIndicator extends AuditedEntity {
      * ID of the associated band.
      * Original field: BANDAINDICA_BANDA_ID
      */
-    //TODO: This should be a foreign key to the Band entity
-    @Column(name = "band_id", nullable = false)
-    @ColumnDefault("0")
+    @Column(name = "band_id", nullable = true)
     private Long bandId;
+
+    /**
+     * Band relationship.
+     */
+    @ManyToOne
+    @JoinColumn(
+            name = "band_id", 
+            insertable = false, 
+            updatable = false,
+            foreignKey = @ForeignKey(name = "fk_band_indicator_band")
+    )
+    private Band band;
 
     /**
      * ID of the associated indicator.
      * Original field: BANDAINDICA_INDICATIVO_ID
      */
-    //TODO: This should be a foreign key to the Indicator entity
-    @Column(name = "indicator_id", nullable = false)
-    @ColumnDefault("0")
+    @Column(name = "indicator_id", nullable = true)
     private Long indicatorId;
+
+    /**
+     * Indicator relationship.
+     */
+    @ManyToOne
+    @JoinColumn(
+            name = "indicator_id", 
+            insertable = false, 
+            updatable = false,
+            foreignKey = @ForeignKey(name = "fk_band_indicator_indicator")
+    )
+    private Indicator indicator;
 }

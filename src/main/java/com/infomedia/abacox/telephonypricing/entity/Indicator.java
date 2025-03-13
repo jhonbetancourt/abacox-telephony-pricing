@@ -8,8 +8,6 @@ import java.util.Set;
 
 import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.ColumnDefault;
-import org.hibernate.annotations.NotFound;
-import org.hibernate.annotations.NotFoundAction;
 
 /**
  * Entity representing telephone indicators/area codes.
@@ -43,17 +41,19 @@ public class Indicator extends AuditedEntity {
      * ID of the telephone type.
      * Original field: INDICATIVO_TIPOTELE_ID
      */
-    @Column(name = "telephony_type_id", nullable = false)
-    @ColumnDefault("0")
+    @Column(name = "telephony_type_id", nullable = true)
     private Long telephonyTypeId;
 
     /**
      * Telephone type relationship.
      */
     @ManyToOne
-    @NotFound(action = NotFoundAction.IGNORE)
-    @JoinColumn(name = "telephony_type_id", insertable = false, updatable = false,
-            foreignKey = @ForeignKey(value = ConstraintMode.NO_CONSTRAINT))
+    @JoinColumn(
+            name = "telephony_type_id",
+            insertable = false,
+            updatable = false,
+            foreignKey = @ForeignKey(name = "fk_indicator_telephony_type")
+    )
     private TelephonyType telephonyType;
 
     /**
@@ -85,17 +85,19 @@ public class Indicator extends AuditedEntity {
      * ID reference to a cities table.
      * Original field: INDICATIVO_CIUDADES_ID
      */
-    @Column(name = "city_id", nullable = false)
-    @ColumnDefault("0")
+    @Column(name = "city_id", nullable = true)
     private Long cityId;
 
     /**
      * City relationship.
      */
     @ManyToOne
-    @NotFound(action = NotFoundAction.IGNORE)
-    @JoinColumn(name = "city_id", insertable = false, updatable = false,
-            foreignKey = @ForeignKey(value = ConstraintMode.NO_CONSTRAINT))
+    @JoinColumn(
+            name = "city_id",
+            insertable = false,
+            updatable = false,
+            foreignKey = @ForeignKey(name = "fk_indicator_city")
+    )
     private City city;
 
     /**
@@ -110,33 +112,37 @@ public class Indicator extends AuditedEntity {
      * ID of the telecom operator.
      * Original field: INDICATIVO_OPERADOR_ID
      */
-    @Column(name = "operator_id", nullable = false)
-    @ColumnDefault("0")
+    @Column(name = "operator_id", nullable = true)
     private Long operatorId;
 
     /**
      * Operator relationship.
      */
     @ManyToOne
-    @NotFound(action = NotFoundAction.IGNORE)
-    @JoinColumn(name = "operator_id", insertable = false, updatable = false,
-            foreignKey = @ForeignKey(value = ConstraintMode.NO_CONSTRAINT))
+    @JoinColumn(
+            name = "operator_id",
+            insertable = false,
+            updatable = false,
+            foreignKey = @ForeignKey(name = "fk_indicator_operator")
+    )
     private Operator operator;
 
     /**
      * ID of the origin municipality.
      * Original field: INDICATIVO_MPORIGEN_ID
      */
-    @Column(name = "origin_country_id", nullable = false)
-    @ColumnDefault("1")
+    @Column(name = "origin_country_id", nullable = true)
     private Long originCountryId;
 
     /**
      * Origin country relationship.
      */
     @ManyToOne
-    @NotFound(action = NotFoundAction.IGNORE)
-    @JoinColumn(name = "origin_country_id", insertable = false, updatable = false,
-            foreignKey = @ForeignKey(value = ConstraintMode.NO_CONSTRAINT))
+    @JoinColumn(
+            name = "origin_country_id",
+            insertable = false,
+            updatable = false,
+            foreignKey = @ForeignKey(name = "fk_indicator_origin_country")
+    )
     private OriginCountry originCountry;
 }

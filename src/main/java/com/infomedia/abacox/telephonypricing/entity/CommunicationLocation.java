@@ -9,8 +9,6 @@ import java.util.Set;
 
 import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.ColumnDefault;
-import org.hibernate.annotations.NotFound;
-import org.hibernate.annotations.NotFoundAction;
 
 /**
  * Entity representing communication location/installation details.
@@ -52,17 +50,19 @@ public class CommunicationLocation extends ActivableEntity {
      * ID of the plant type.
      * Original field: COMUBICACION_TIPOPLANTA_ID
      */
-    @Column(name = "plant_type_id", nullable = false)
-    @ColumnDefault("0")
+    @Column(name = "plant_type_id", nullable = true)
     private Long plantTypeId;
 
     /**
      * Plant type relationship.
      */
     @ManyToOne
-    @NotFound(action = NotFoundAction.IGNORE)
-    @JoinColumn(name = "plant_type_id", insertable = false, updatable = false,
-            foreignKey = @ForeignKey(value = ConstraintMode.NO_CONSTRAINT))
+    @JoinColumn(
+            name = "plant_type_id", 
+            insertable = false, 
+            updatable = false,
+            foreignKey = @ForeignKey(name = "fk_communication_location_plant_type")
+    )
     private PlantType plantType;
 
     /**
@@ -77,17 +77,19 @@ public class CommunicationLocation extends ActivableEntity {
      * ID of the indicator/area code.
      * Original field: COMUBICACION_INDICATIVO_ID
      */
-    @Column(name = "indicator_id", nullable = false)
-    @ColumnDefault("0")
+    @Column(name = "indicator_id", nullable = true)
     private Long indicatorId;
 
     /**
      * Indicator relationship.
      */
     @ManyToOne
-    @NotFound(action = NotFoundAction.IGNORE)
-    @JoinColumn(name = "indicator_id", insertable = false, updatable = false,
-            foreignKey = @ForeignKey(value = ConstraintMode.NO_CONSTRAINT))
+    @JoinColumn(
+            name = "indicator_id", 
+            insertable = false, 
+            updatable = false,
+            foreignKey = @ForeignKey(name = "fk_communication_location_indicator")
+    )
     private Indicator indicator;
 
     /**
@@ -135,25 +137,26 @@ public class CommunicationLocation extends ActivableEntity {
      * ID of the band group.
      * Original field: COMUBICACION_BANDAGRUPO_ID
      */
-    @Column(name = "band_group_id", nullable = false)
-    @ColumnDefault("0")
+    @Column(name = "band_group_id", nullable = true)
     private Long bandGroupId;
 
     /**
      * Band group relationship.
      */
     @ManyToOne
-    @NotFound(action = NotFoundAction.IGNORE)
-    @JoinColumn(name = "band_group_id", insertable = false, updatable = false,
-            foreignKey = @ForeignKey(value = ConstraintMode.NO_CONSTRAINT))
+    @JoinColumn(
+            name = "band_group_id", 
+            insertable = false, 
+            updatable = false,
+            foreignKey = @ForeignKey(name = "fk_communication_location_band_group")
+    )
     private BandGroup bandGroup;
 
     /**
      * ID of the header.
      * Original field: COMUBICACION_CABECERA_ID
      */
-    @Column(name = "header_id", nullable = false)
-    @ColumnDefault("0")
+    @Column(name = "header_id", nullable = true)
     private Long headerId;
 
     /**
