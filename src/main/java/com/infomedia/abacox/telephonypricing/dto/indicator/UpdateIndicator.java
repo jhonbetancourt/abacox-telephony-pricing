@@ -19,9 +19,6 @@ import org.openapitools.jackson.nullable.JsonNullable;
 public class UpdateIndicator {
     private JsonNullable<Long> telephonyTypeId = JsonNullable.undefined();
     
-    @NotNull
-    private JsonNullable<Integer> code = JsonNullable.undefined();
-    
     @NotBlank
     @Size(max = 80)
     private JsonNullable<String> departmentCountry = JsonNullable.undefined();

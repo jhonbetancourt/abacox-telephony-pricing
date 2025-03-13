@@ -20,7 +20,6 @@ import lombok.NoArgsConstructor;
 public class IndicatorDto extends AuditedDto {
     private Long id;
     private Long telephoneTypeId;
-    private Integer code;
     private String departmentCountry;
     private Long cityId;
     private String cityName;

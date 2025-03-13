@@ -57,15 +57,6 @@ public class Indicator extends AuditedEntity {
     private TelephonyType telephonyType;
 
     /**
-     * The actual indicator/area code value.
-     * Original field: INDICATIVO_INDICATIVO
-     * Note: This field was commented in the original schema with a semicolon.
-     */
-    @Column(name = "code", nullable = false)
-    @ColumnDefault("0")
-    private Integer code;
-
-    /**
      * Department or country associated with this indicator.
      * Original field: INDICATIVO_DPTO_PAIS
      */

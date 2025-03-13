@@ -16,7 +16,6 @@ public class IndicatorService extends CrudService<Indicator, Long, IndicatorRepo
     public Indicator create(CreateIndicator cDto){
         Indicator indicator = Indicator.builder()
                 .telephonyTypeId(cDto.getTelephonyTypeId())
-                .code(cDto.getCode())
                 .departmentCountry(cDto.getDepartmentCountry())
                 .cityName(cDto.getCityName())
                 .cityId(cDto.getCityId())
@@ -31,7 +30,6 @@ public class IndicatorService extends CrudService<Indicator, Long, IndicatorRepo
     public Indicator update(Long id, UpdateIndicator uDto){
         Indicator indicator = get(id);
         uDto.getTelephonyTypeId().ifPresent(indicator::setTelephonyTypeId);
-        uDto.getCode().ifPresent(indicator::setCode);
         uDto.getDepartmentCountry().ifPresent(indicator::setDepartmentCountry);
         uDto.getCityName().ifPresent(indicator::setCityName);
         uDto.getCityId().ifPresent(indicator::setCityId);

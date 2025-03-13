@@ -81,25 +81,6 @@ public class Band extends AuditedEntity {
     private boolean vatIncluded;
 
     /**
-     * ID indicating the origin of the band.
-     * Original field: BANDA_INDICAORIGEN_ID
-     */
-    @Column(name = "origin_indicator_id", nullable = true)
-    private Long originIndicatorId;
-
-    /**
-     * Origin indicator relationship.
-     */
-    @ManyToOne
-    @JoinColumn(
-            name = "origin_indicator_id", 
-            insertable = false, 
-            updatable = false,
-            foreignKey = @ForeignKey(name = "fk_band_origin_indicator")
-    )
-    private Indicator originIndicator;
-
-    /**
      * Minimum distance for this band.
      * Original field: BANDA_DISTMIN
      */

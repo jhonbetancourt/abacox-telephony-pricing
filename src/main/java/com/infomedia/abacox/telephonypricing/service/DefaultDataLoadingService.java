@@ -31,16 +31,16 @@ public class DefaultDataLoadingService {
 
     @EventListener(ApplicationReadyEvent.class)
     public void init() {
-        loadTelephonyType();
-        loadBand();
-        loadBandGroup();
-        loadCity();
-        loadOperator();
-        loadIndicator();
         loadOriginCountry();
-        loadBandIndicator();
         loadCallCategory();
+        loadTelephonyType();
+        loadOperator();
+        loadCity();
         loadPrefix();
+        loadBandGroup();
+        loadBand();
+        loadIndicator();
+        loadBandIndicator();
         loadSeries();
     }
 

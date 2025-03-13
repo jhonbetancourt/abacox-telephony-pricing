@@ -18,9 +18,6 @@ import lombok.NoArgsConstructor;
 public class CreateIndicator {
     private Long telephonyTypeId;
     
-    @NotNull
-    private Integer code;
-    
     @NotBlank
     @Size(max = 80)
     private String departmentCountry;
