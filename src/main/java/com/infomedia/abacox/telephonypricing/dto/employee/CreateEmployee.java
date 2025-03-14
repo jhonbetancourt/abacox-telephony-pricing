@@ -23,9 +23,9 @@ public class CreateEmployee {
 
     private Long costCenterId;
 
-    @NotBlank
+   /* @NotBlank
     @Size(max = 50)
-    private String accessKey;
+    private String accessKey;*/
 
     @NotBlank
     @Size(max = 50)

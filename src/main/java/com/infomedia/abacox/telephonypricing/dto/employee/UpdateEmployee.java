@@ -25,9 +25,9 @@ public class UpdateEmployee {
     
     private JsonNullable<Long> costCenterId = JsonNullable.undefined();
     
-    @NotBlank
+   /* @NotBlank
     @Size(max = 50)
-    private JsonNullable<String> accessKey = JsonNullable.undefined();
+    private JsonNullable<String> accessKey = JsonNullable.undefined();*/
     
     @NotBlank
     @Size(max = 50)

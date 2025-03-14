@@ -85,9 +85,9 @@ public class Employee extends ActivableEntity {
      * Access key or password.
      * Original field: FUNCIONARIO_CLAVE
      */
-    @Column(name = "access_key", length = 50, nullable = false)
+  /*  @Column(name = "access_key", length = 50, nullable = false)
     @ColumnDefault("")
-    private String accessKey;
+    private String accessKey;*/
 
     /**
      * Telephone extension.

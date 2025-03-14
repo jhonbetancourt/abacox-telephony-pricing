@@ -62,7 +62,22 @@ public class CsvToDatabaseLoader {
     public <T> void loadFromCsvFile(String csvFilePath, Class<T> entityClass) throws Exception {
         log.info("Loading CSV data from file: {} into entity: {}", csvFilePath, entityClass.getName());
         try (FileReader reader = new FileReader(csvFilePath)) {
-            loadFromReader(reader, entityClass, false);
+            loadFromReader(reader, entityClass, false, null);
+        }
+    }
+    
+    /**
+     * Loads data from a CSV file into a database table mapped to the entity class with custom column mappings
+     * 
+     * @param csvFilePath Path to the CSV file
+     * @param entityClass The entity class that maps to the database table
+     * @param columnToFieldMapping Map of CSV column names to entity field names
+     * @throws Exception If any error occurs during processing
+     */
+    public <T> void loadFromCsvFile(String csvFilePath, Class<T> entityClass, Map<String, String> columnToFieldMapping) throws Exception {
+        log.info("Loading CSV data from file: {} into entity: {} with custom mapping", csvFilePath, entityClass.getName());
+        try (FileReader reader = new FileReader(csvFilePath)) {
+            loadFromReader(reader, entityClass, false, columnToFieldMapping);
         }
     }
     
@@ -76,7 +91,22 @@ public class CsvToDatabaseLoader {
     public <T> void loadFromInputStream(InputStream inputStream, Class<T> entityClass) throws Exception {
         log.info("Loading CSV data from input stream into entity: {}", entityClass.getName());
         try (InputStreamReader reader = new InputStreamReader(inputStream)) {
-            loadFromReader(reader, entityClass, false);
+            loadFromReader(reader, entityClass, false, null);
+        }
+    }
+    
+    /**
+     * Loads data from a CSV input stream into a database table mapped to the entity class with custom column mappings
+     * 
+     * @param inputStream InputStream containing CSV data
+     * @param entityClass The entity class that maps to the database table
+     * @param columnToFieldMapping Map of CSV column names to entity field names
+     * @throws Exception If any error occurs during processing
+     */
+    public <T> void loadFromInputStream(InputStream inputStream, Class<T> entityClass, Map<String, String> columnToFieldMapping) throws Exception {
+        log.info("Loading CSV data from input stream into entity: {} with custom mapping", entityClass.getName());
+        try (InputStreamReader reader = new InputStreamReader(inputStream)) {
+            loadFromReader(reader, entityClass, false, columnToFieldMapping);
         }
     }
     
@@ -91,7 +121,23 @@ public class CsvToDatabaseLoader {
     public <T> void loadFromInputStreamForceIds(InputStream inputStream, Class<T> entityClass) throws Exception {
         log.info("Loading CSV data from input stream into entity: {} (Forcing IDs from CSV)", entityClass.getName());
         try (InputStreamReader reader = new InputStreamReader(inputStream)) {
-            loadFromReader(reader, entityClass, true);
+            loadFromReader(reader, entityClass, true, null);
+        }
+    }
+    
+    /**
+     * Loads data from a CSV input stream into a database table mapped to the entity class,
+     * forcing the use of IDs from the CSV even if the entity has auto-generated IDs.
+     * 
+     * @param inputStream InputStream containing CSV data
+     * @param entityClass The entity class that maps to the database table
+     * @param columnToFieldMapping Map of CSV column names to entity field names
+     * @throws Exception If any error occurs during processing
+     */
+    public <T> void loadFromInputStreamForceIds(InputStream inputStream, Class<T> entityClass, Map<String, String> columnToFieldMapping) throws Exception {
+        log.info("Loading CSV data from input stream into entity: {} (Forcing IDs from CSV) with custom mapping", entityClass.getName());
+        try (InputStreamReader reader = new InputStreamReader(inputStream)) {
+            loadFromReader(reader, entityClass, true, columnToFieldMapping);
         }
     }
     
@@ -101,9 +147,10 @@ public class CsvToDatabaseLoader {
      * @param reader Reader providing CSV data
      * @param entityClass The entity class that maps to the database table
      * @param forceIdsFromCsv If true, forces the use of IDs from the CSV, even for auto-generated IDs
+     * @param customColumnMapping Optional map of CSV column names to entity field names
      * @throws Exception If any error occurs during processing
      */
-    private <T> void loadFromReader(Reader reader, Class<T> entityClass, boolean forceIdsFromCsv) throws Exception {
+    private <T> void loadFromReader(Reader reader, Class<T> entityClass, boolean forceIdsFromCsv, Map<String, String> customColumnMapping) throws Exception {
         try (CSVReader csvReader = new CSVReader(reader)) {
             // Read header row to get column names
             final String[] headers = csvReader.readNext();
@@ -143,15 +190,24 @@ public class CsvToDatabaseLoader {
                 }
             }
             
-            // Map fields to columns
+            // Map fields to columns based on either custom mapping or field name matching
             Map<String, String> dbColumnNames = new HashMap<>();
             List<String> fieldNames = new ArrayList<>();
             
+            Map<String, Field> fieldsByName = new HashMap<>();
+            for (Field field : fields) {
+                field.setAccessible(true);
+                fieldsByName.put(field.getName(), field);
+            }
+            
             for (String header : headers) {
                 String normalizedHeader = header.trim();
-                for (Field field : fields) {
-                    field.setAccessible(true);
-                    if (field.getName().equalsIgnoreCase(normalizedHeader)) {
+                
+                if (customColumnMapping != null && customColumnMapping.containsKey(normalizedHeader)) {
+                    // Use custom mapping if provided
+                    String fieldName = customColumnMapping.get(normalizedHeader);
+                    if (fieldsByName.containsKey(fieldName)) {
+                        Field field = fieldsByName.get(fieldName);
                         columnToFieldMap.put(header, field);
                         
                         // Get the database column name (needed for native SQL)
@@ -166,9 +222,34 @@ public class CsvToDatabaseLoader {
                         dbColumnNames.put(header, dbColumnName);
                         fieldNames.add(field.getName());
                         
-                        log.debug("Mapped CSV column '{}' to entity field '{}' (DB column: '{}')", 
+                        log.debug("Mapped CSV column '{}' to entity field '{}' using custom mapping (DB column: '{}')", 
                                  header, field.getName(), dbColumnName);
-                        break;
+                    } else {
+                        log.warn("Custom mapping for CSV column '{}' specified field '{}' which does not exist in entity",
+                                normalizedHeader, fieldName);
+                    }
+                } else {
+                    // Try direct matching when no custom mapping is provided
+                    for (Field field : fields) {
+                        if (field.getName().equalsIgnoreCase(normalizedHeader)) {
+                            columnToFieldMap.put(header, field);
+                            
+                            // Get the database column name (needed for native SQL)
+                            String dbColumnName = field.getName();
+                            if (field.isAnnotationPresent(jakarta.persistence.Column.class)) {
+                                jakarta.persistence.Column columnAnn = field.getAnnotation(jakarta.persistence.Column.class);
+                                if (!columnAnn.name().isEmpty()) {
+                                    dbColumnName = columnAnn.name();
+                                }
+                            }
+                            
+                            dbColumnNames.put(header, dbColumnName);
+                            fieldNames.add(field.getName());
+                            
+                            log.debug("Mapped CSV column '{}' to entity field '{}' (DB column: '{}')", 
+                                     header, field.getName(), dbColumnName);
+                            break;
+                        }
                     }
                 }
             }
