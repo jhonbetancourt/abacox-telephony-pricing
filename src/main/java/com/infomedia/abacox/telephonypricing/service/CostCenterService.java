@@ -15,7 +15,7 @@ public class CostCenterService extends CrudService<CostCenter,Long,CostCenterRep
 
     public CostCenter create(CreateCostCenter uDto){
         CostCenter costCenter = CostCenter.builder()
-                .costCenterName(uDto.getCostCenterName())
+                .name(uDto.getName())
                 .workOrder(uDto.getWorkOrder())
                 .parentCostCenterId(uDto.getParentCostCenterId())
                 .originCountryId(uDto.getOriginCountryId())
@@ -26,7 +26,7 @@ public class CostCenterService extends CrudService<CostCenter,Long,CostCenterRep
 
     public CostCenter update(Long id, UpdateCostCenter uDto){
         CostCenter costCenter = get(id);
-        uDto.getCostCenterName().ifPresent(costCenter::setCostCenterName);
+        uDto.getName().ifPresent(costCenter::setName);
         uDto.getWorkOrder().ifPresent(costCenter::setWorkOrder);
         uDto.getParentCostCenterId().ifPresent(costCenter::setParentCostCenterId);
         uDto.getOriginCountryId().ifPresent(costCenter::setOriginCountryId);

@@ -17,7 +17,7 @@ import lombok.NoArgsConstructor;
 public class CreateCostCenter {
     @NotBlank
     @Size(max = 100)
-    private String costCenterName;
+    private String name;
     
     @NotBlank
     @Size(max = 50)

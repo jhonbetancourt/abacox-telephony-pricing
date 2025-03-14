@@ -39,9 +39,9 @@ public class CostCenter extends AuditedEntity {
      * Name or identifier of the cost center.
      * Original field: CENTROCOSTOS_CENTRO_COSTO
      */
-    @Column(name = "cost_center_name", length = 100, nullable = false)
+    @Column(name = "name", length = 100, nullable = false)
     @ColumnDefault("")
-    private String costCenterName;
+    private String name;
 
     /**
      * Work order code.

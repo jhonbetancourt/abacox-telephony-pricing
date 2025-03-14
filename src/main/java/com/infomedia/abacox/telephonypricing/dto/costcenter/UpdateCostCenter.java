@@ -18,7 +18,7 @@ import org.openapitools.jackson.nullable.JsonNullable;
 public class UpdateCostCenter {
     @NotBlank
     @Size(max = 100)
-    private JsonNullable<String> costCenterName = JsonNullable.undefined();
+    private JsonNullable<String> name = JsonNullable.undefined();
     
     @NotBlank
     @Size(max = 50)

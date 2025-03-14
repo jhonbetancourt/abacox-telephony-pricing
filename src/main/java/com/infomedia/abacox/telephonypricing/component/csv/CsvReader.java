@@ -8,9 +8,7 @@ import com.opencsv.exceptions.CsvValidationException;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
 import java.util.function.Consumer;
 import lombok.extern.log4j.Log4j2;
 
@@ -258,6 +256,83 @@ public class CsvReader implements Closeable {
          */
         public String[] getValues() {
             return values.clone();
+        }
+    }
+
+
+    /**
+     * Reads all rows from the CSV file and returns them as a list of CsvRow objects.
+     * Note: This loads the entire file into memory, so it's not recommended for very large files.
+     * Empty string values are converted to null.
+     *
+     * @return a list containing all rows as CsvRow objects
+     * @throws IOException if an error occurs while reading the file
+     * @throws IllegalStateException if the CSV does not have headers and requireHeaders is true
+     */
+    public List<CsvRow> readAllRows() throws IOException {
+        log.info("Reading all rows from {} into memory", sourceIdentifier);
+        List<CsvRow> allRows = new ArrayList<>();
+        rowsProcessed = 0;
+        String[] fields;
+
+        try {
+            // Create default headers if needed (Column_1, Column_2, etc.)
+            List<String> rowHeaders = headers;
+            if (!hasHeader || headers.isEmpty()) {
+                log.warn("No headers available, using positional headers");
+                // We'll determine the column count from the first row
+                fields = csvReader.readNext();
+                if (fields == null) {
+                    log.warn("CSV file is empty");
+                    return allRows;
+                }
+
+                rowHeaders = new ArrayList<>(fields.length);
+                for (int i = 0; i < fields.length; i++) {
+                    rowHeaders.add("Column_" + (i + 1));
+                }
+
+                // Process the first row
+                // Convert empty strings to null
+                for (int i = 0; i < fields.length; i++) {
+                    if (fields[i] != null && fields[i].trim().isEmpty()) {
+                        fields[i] = null;
+                    }
+                }
+
+                CsvRow row = new CsvRow(rowHeaders, fields);
+                allRows.add(row);
+                rowsProcessed++;
+            }
+
+            // Process remaining rows
+            while ((fields = csvReader.readNext()) != null) {
+                // Convert empty strings to null
+                for (int i = 0; i < fields.length; i++) {
+                    if (fields[i] != null && fields[i].trim().isEmpty()) {
+                        fields[i] = null;
+                    }
+                }
+
+                CsvRow row = new CsvRow(rowHeaders, fields);
+                allRows.add(row);
+                rowsProcessed++;
+
+                if (rowsProcessed % 10000 == 0) {
+                    log.info("Read {} rows from {}", rowsProcessed, sourceIdentifier);
+                }
+            }
+
+            log.info("All rows read. Total rows: {}", rowsProcessed);
+            return allRows;
+        } catch (CsvValidationException e) {
+            log.error("Error validating CSV row #{} from {}: {}", rowsProcessed + 1,
+                    sourceIdentifier, e.getMessage(), e);
+            throw new IOException("CSV validation error", e);
+        } catch (Exception e) {
+            log.error("Error reading CSV row #{} from {}: {}", rowsProcessed + 1,
+                    sourceIdentifier, e.getMessage(), e);
+            throw e;
         }
     }
 }
