@@ -41,15 +41,11 @@ public class CreateEmployee {
 
     @NotBlank
     @Size(max = 100)
-    private String telephone;
+    private String phone;
 
     @NotBlank
     @Size(max = 255)
     private String address;
-
-    @NotBlank
-    @Size(max = 20)
-    private String cellPhone;
 
     @NotBlank
     @Size(max = 20)

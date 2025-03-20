@@ -27,9 +27,8 @@ public class EmployeeDto extends ActivableDto {
     private Long communicationLocationId;
     private Long jobPositionId;
     private String email;
-    private String telephone;
+    private String phone;
     private String address;
-    private String cellPhone;
     private String idNumber;
     private SubdivisionDto subdivision;
     private CostCenterDto costCenter;

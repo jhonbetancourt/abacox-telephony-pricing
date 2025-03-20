@@ -63,7 +63,7 @@ public class CallRecord extends AuditedEntity {
         updatable = false,
         foreignKey = @ForeignKey(name = "fk_call_record_comm_location")
     )
-    private CommunicationLocation communicationLocation;
+    private CommunicationLocation commLocation;
 
     /**
      * Date and time of the service.
@@ -334,8 +334,8 @@ public class CallRecord extends AuditedEntity {
      * Original field: ACUMTOTAL_REPROXMAN
      * Note: This field was nullable in the original schema.
      */
-    @Column(name = "manual_reproduction")
-    private Byte manualReproduction;
+  /*  @Column(name = "manual_reproduction")
+    private Byte manualReproduction;*/
 
     /**
      * Additional information (commented out in original schema).

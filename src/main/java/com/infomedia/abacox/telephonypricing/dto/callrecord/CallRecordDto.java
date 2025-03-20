@@ -25,7 +25,7 @@ public class CallRecordDto extends AuditedDto {
     private Long id;
     private String dial;
     private Long commLocationId;
-    private CommLocationDto communicationLocation;
+    private CommLocationDto commLocation;
     private LocalDateTime serviceDate;
     private Long operatorId;
     private OperatorDto operator;
@@ -54,5 +54,4 @@ public class CallRecordDto extends AuditedDto {
     private Long fileInfoId;
     private Long centralizedId;
     private String originIp;
-    private Byte manualReproduction;
 }

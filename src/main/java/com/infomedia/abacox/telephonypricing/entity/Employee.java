@@ -147,9 +147,9 @@ public class Employee extends ActivableEntity {
      * Telephone number.
      * Original field: FUNCIONARIO_TELEFONO
      */
-    @Column(name = "telephone", length = 100, nullable = false)
+    @Column(name = "phone", length = 50, nullable = false)
     @ColumnDefault("")
-    private String telephone;
+    private String phone;
 
     /**
      * Address.
@@ -158,14 +158,6 @@ public class Employee extends ActivableEntity {
     @Column(name = "address", length = 255, nullable = false)
     @ColumnDefault("")
     private String address;
-
-    /**
-     * Cell phone number.
-     * Original field: FUNCIONARIO_CELULAR
-     */
-    @Column(name = "cell_phone", length = 20, nullable = false)
-    @ColumnDefault("")
-    private String cellPhone;
 
     /**
      * ID number/document.

@@ -1,4 +1,4 @@
-package com.infomedia.abacox.telephonypricing.dto.costcenter;
+package com.infomedia.abacox.telephonypricing.dto.generic;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -11,11 +11,11 @@ import lombok.NoArgsConstructor;
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-public class CostCenterLegacyLoad {
+public class LegacyLoadDto<T> {
     @NotBlank
     private String csvFileBase64;
 
     @Valid
     @NotNull
-    private CostCenterLegacyMapping legacyMapping;
+    private T legacyMapping;
 }

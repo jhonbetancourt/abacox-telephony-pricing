@@ -24,9 +24,8 @@ public class EmployeeService extends CrudService<Employee, Long, EmployeeReposit
                 .communicationLocationId(cDto.getCommunicationLocationId())
                 .jobPositionId(cDto.getJobPositionId())
                 .email(cDto.getEmail())
-                .telephone(cDto.getTelephone())
+                .phone(cDto.getPhone())
                 .address(cDto.getAddress())
-                .cellPhone(cDto.getCellPhone())
                 .idNumber(cDto.getIdNumber())
                 .build();
 
@@ -43,9 +42,8 @@ public class EmployeeService extends CrudService<Employee, Long, EmployeeReposit
         uDto.getCommunicationLocationId().ifPresent(employee::setCommunicationLocationId);
         uDto.getJobPositionId().ifPresent(employee::setJobPositionId);
         uDto.getEmail().ifPresent(employee::setEmail);
-        uDto.getTelephone().ifPresent(employee::setTelephone);
+        uDto.getPhone().ifPresent(employee::setPhone);
         uDto.getAddress().ifPresent(employee::setAddress);
-        uDto.getCellPhone().ifPresent(employee::setCellPhone);
         uDto.getIdNumber().ifPresent(employee::setIdNumber);
         return save(employee);
     }

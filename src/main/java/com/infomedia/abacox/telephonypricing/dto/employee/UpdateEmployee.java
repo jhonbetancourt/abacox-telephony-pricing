@@ -43,15 +43,11 @@ public class UpdateEmployee {
     
     @NotBlank
     @Size(max = 100)
-    private JsonNullable<String> telephone = JsonNullable.undefined();
+    private JsonNullable<String> phone = JsonNullable.undefined();
     
     @NotBlank
     @Size(max = 255)
     private JsonNullable<String> address = JsonNullable.undefined();
-    
-    @NotBlank
-    @Size(max = 20)
-    private JsonNullable<String> cellPhone = JsonNullable.undefined();
     
     @NotBlank
     @Size(max = 20)
