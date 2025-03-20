@@ -47,8 +47,8 @@ public class CallRecordDto extends AuditedDto {
     private Long employeeId;
     private EmployeeDto employee;
     private String employeeTransfer;
-    private boolean transferCause;
-    private boolean assignmentCause;
+    private Integer transferCause;
+    private Integer assignmentCause;
     private Long destinationEmployeeId;
     private EmployeeDto destinationEmployee;
     private Long fileInfoId;

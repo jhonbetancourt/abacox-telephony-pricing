@@ -6,9 +6,12 @@ import com.infomedia.abacox.telephonypricing.dto.callrecord.CallRecordLegacyMapp
 import com.infomedia.abacox.telephonypricing.dto.commlocation.CommLocationLegacyMapping;
 import com.infomedia.abacox.telephonypricing.dto.costcenter.CostCenterLegacyMapping;
 import com.infomedia.abacox.telephonypricing.dto.employee.EmployeeLegacyMapping;
+import com.infomedia.abacox.telephonypricing.dto.indicator.IndicatorLegacyMapping;
 import com.infomedia.abacox.telephonypricing.dto.jobposition.JobPositionLegacyMapping;
+import com.infomedia.abacox.telephonypricing.dto.operator.OperatorLegacyMapping;
 import com.infomedia.abacox.telephonypricing.dto.planttype.PlantTypeLegacyMapping;
 import com.infomedia.abacox.telephonypricing.dto.subdivision.SubdivisionLegacyMapping;
+import com.infomedia.abacox.telephonypricing.dto.telephonytype.TelephonyTypeLegacyMapping;
 import com.infomedia.abacox.telephonypricing.entity.*;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +36,91 @@ public class LegacyDataLoadingService {
     private final EntityManager entityManager;
     private final DateTimeFormatter dateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS");
 
+    public void loadIndicatorData(InputStream csvInputStream, IndicatorLegacyMapping legacyMapping) {
+        try (CsvReader csvReader = new CsvReader(csvInputStream, ",", true)) {
+            csvReader.processRowsAsMap(csvRow -> {
+                Long id = Long.parseLong(csvRow.get(legacyMapping.getId()));
+                if(!JpaUtils.entityExists(Indicator.class, id, entityManager)){
+                    String departmentCountry = csvRow.get(legacyMapping.getDepartmentCountry());
+                    Long cityId = parseLongId(csvRow.get(legacyMapping.getCityId()));
+                    String cityName = csvRow.get(legacyMapping.getCityName());
+                    Boolean isAssociated = parseBoolean(csvRow.get(legacyMapping.getIsAssociated()));
+                    Long operatorId = parseLongId(csvRow.get(legacyMapping.getOperatorId()));
+                    Long originCountryId = parseLongId(csvRow.get(legacyMapping.getOriginCountryId()));
+                    Long telephonyTypeId = parseLongId(csvRow.get(legacyMapping.getTelephonyTypeId()));
+                    Indicator indicator = Indicator.builder()
+                            .id(id)
+                            .telephonyTypeId(telephonyTypeId)
+                            .departmentCountry(departmentCountry)
+                            .cityId(cityId)
+                            .cityName(cityName)
+                            .isAssociated(isAssociated)
+                            .operatorId(operatorId)
+                            .originCountryId(originCountryId)
+                            .telephonyTypeId(telephonyTypeId)
+                            .build();
+                    try {
+                        JpaUtils.saveEntityWithForcedId(indicator, entityManager);
+                    }catch (Exception e){
+                        log.error("Failed to save indicator data: {}", indicator);
+                    }
+                }
+            });
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void loadTelephonyTypeData(InputStream csvInputStream, TelephonyTypeLegacyMapping legacyMapping) {
+        try (CsvReader csvReader = new CsvReader(csvInputStream, ",", true)) {
+            csvReader.processRowsAsMap(csvRow -> {
+                Long id = Long.parseLong(csvRow.get(legacyMapping.getId()));
+                if(!JpaUtils.entityExists(TelephonyType.class, id, entityManager)){
+                    String name = csvRow.get(legacyMapping.getName());
+                    Long callCategoryId = parseLongId(csvRow.get(legacyMapping.getCallCategoryId()));
+                    Boolean usesTrunks = parseBoolean(csvRow.get(legacyMapping.getUsesTrunks()));
+                    TelephonyType telephonyType = TelephonyType.builder()
+                            .id(id)
+                            .name(name)
+                            .callCategoryId(callCategoryId)
+                            .usesTrunks(usesTrunks)
+                            .build();
+                    try {
+                        JpaUtils.saveEntityWithForcedId(telephonyType, entityManager);
+                    }catch (Exception e){
+                        log.error("Failed to save telephony type data: {}", telephonyType);
+                    }
+                }
+            });
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void loadOperatorData(InputStream csvInputStream, OperatorLegacyMapping legacyMapping) {
+        try (CsvReader csvReader = new CsvReader(csvInputStream, ",", true)) {
+            csvReader.processRowsAsMap(csvRow -> {
+                Long id = Long.parseLong(csvRow.get(legacyMapping.getId()));
+                if(!JpaUtils.entityExists(Operator.class, id, entityManager)){
+                    String name = csvRow.get(legacyMapping.getName());
+                    Long originCountryId = parseLongId(csvRow.get(legacyMapping.getOriginCountryId()));
+                    Operator operator = Operator.builder()
+                            .id(id)
+                            .name(name)
+                            .originCountryId(originCountryId)
+                            .build();
+                    try {
+                        JpaUtils.saveEntityWithForcedId(operator, entityManager);
+                    }catch (Exception e){
+                        log.error("Failed to save operator data: {}", operator);
+                    }
+                }
+            });
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     public void loadCallRecordData(InputStream csvInputStream, CallRecordLegacyMapping legacyMapping){
         try (CsvReader csvReader = new CsvReader(csvInputStream, ",", true)) {
             csvReader.processRowsAsMap(csvRow -> {
@@ -52,13 +140,13 @@ public class LegacyDataLoadingService {
                     BigDecimal billedAmount = new BigDecimal(csvRow.get(legacyMapping.getBilledAmount()));
                     BigDecimal pricePerMinute = new BigDecimal(csvRow.get(legacyMapping.getPricePerMinute()));
                     BigDecimal initialPrice = new BigDecimal(csvRow.get(legacyMapping.getInitialPrice()));
-                    Boolean isIncoming = Boolean.parseBoolean(csvRow.get(legacyMapping.getIsIncoming()));
+                    Boolean isIncoming = parseBoolean(csvRow.get(legacyMapping.getIsIncoming()));
                     String trunk = csvRow.get(legacyMapping.getTrunk());
                     String initialTrunk = csvRow.get(legacyMapping.getInitialTrunk());
                     Long employeeId = parseLongId(csvRow.get(legacyMapping.getEmployeeId()));
                     String employeeTransfer = csvRow.get(legacyMapping.getEmployeeTransfer());
-                    Boolean transferCause = Boolean.parseBoolean(csvRow.get(legacyMapping.getTransferCause()));
-                    Boolean assignmentCause = Boolean.parseBoolean(csvRow.get(legacyMapping.getAssignmentCause()));
+                    Integer transferCause = Integer.parseInt(csvRow.get(legacyMapping.getTransferCause()));
+                    Integer assignmentCause = Integer.parseInt(csvRow.get(legacyMapping.getAssignmentCause()));
                     Long destinationEmployeeId = parseLongId(csvRow.get(legacyMapping.getDestinationEmployeeId()));
                     Long fileInfoId = parseLongId(csvRow.get(legacyMapping.getFileInfoId()));
                     Long centralizedId = parseLongId(csvRow.get(legacyMapping.getCentralizedId()));
@@ -404,5 +492,9 @@ public class LegacyDataLoadingService {
         } catch (Exception e) {
             log.error("Failed to save entity: {}", entity, e);
         }
+    }
+    
+    public boolean parseBoolean(String value) {
+        return value != null && (value.equalsIgnoreCase("true") || value.equalsIgnoreCase("1"));
     }
 }
