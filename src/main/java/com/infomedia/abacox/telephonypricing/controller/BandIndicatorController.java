@@ -27,7 +27,7 @@ import org.springframework.web.bind.annotation.*;
         @SecurityRequirement(name = "JWT_Token"),
         @SecurityRequirement(name = "Username")
 })
-@RequestMapping("/api/band-indicator")
+@RequestMapping("/api/bandIndicator")
 public class BandIndicatorController {
 
     private final BandIndicatorService bandIndicatorService;

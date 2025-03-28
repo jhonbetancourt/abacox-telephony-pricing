@@ -26,7 +26,7 @@ import org.springframework.web.bind.annotation.*;
         @SecurityRequirement(name = "JWT_Token"),
         @SecurityRequirement(name = "Username")
 })
-@RequestMapping("/api/call-category")
+@RequestMapping("/api/callCategory")
 public class CallCategoryController {
 
     private final CallCategoryService callCategoryService;

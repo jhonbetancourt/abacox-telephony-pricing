@@ -27,7 +27,7 @@ import org.springframework.web.bind.annotation.*;
         @SecurityRequirement(name = "JWT_Token"),
         @SecurityRequirement(name = "Username")
 })
-@RequestMapping("/api/telephony-type")
+@RequestMapping("/api/telephonyType")
 public class TelephonyTypeController {
 
     private final TelephonyTypeService telephonyTypeService;

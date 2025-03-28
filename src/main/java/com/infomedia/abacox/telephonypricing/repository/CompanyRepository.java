@@ -7,15 +7,4 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
 public interface CompanyRepository extends JpaRepository<Company, Long>, JpaSpecificationExecutor<Company> {
 
-  public Company create(CreateCompany cDto) {
-    Company company = Company.builder()
-        .name(cDto.getName())
-        .address(cDto.getAddress())
-        .phone(cDto.getPhone())
-        .email(cDto.getEmail())
-        .website(cDto.getWebsite())
-        .build();
-
-    return save(company);
-  }
 }
