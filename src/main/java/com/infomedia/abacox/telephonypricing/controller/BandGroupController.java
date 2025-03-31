@@ -55,4 +55,9 @@ public class BandGroupController {
     private BandGroupDto get(@PathVariable("id") Long id) {
         return modelConverter.map(bandGroupService.get(id), BandGroupDto.class);
     }
+
+    @PatchMapping(value = "/status/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
+    public BandGroupDto activate(@PathVariable("id") Long id, @Valid @RequestBody ActivationDto activationDto) {
+        return modelConverter.map(bandGroupService.changeActivation(id, activationDto.getActive()), BandGroupDto.class);
+    }
 }

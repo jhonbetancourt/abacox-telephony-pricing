@@ -1,6 +1,6 @@
 package com.infomedia.abacox.telephonypricing.dto.company;
 
-import com.infomedia.abacox.telephonypricing.dto.superclass.AuditedLegacyMapping;
+import com.infomedia.abacox.telephonypricing.dto.superclass.ActivableLegacyMapping;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -10,7 +10,7 @@ import lombok.NoArgsConstructor;
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-public class CompanyLegacyMapping extends AuditedLegacyMapping {
+public class CompanyLegacyMapping extends ActivableLegacyMapping {
     private String id;
     private String additionalInfo;
     private String address;

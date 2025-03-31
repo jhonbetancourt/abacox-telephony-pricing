@@ -55,4 +55,9 @@ public class CostCenterController {
     private CostCenterDto get(@PathVariable("id") Long id) {
         return modelConverter.map(costCenterService.get(id), CostCenterDto.class);
     }
+
+    @PatchMapping(value = "/status/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
+    public CostCenterDto activate(@PathVariable("id") Long id, @Valid @RequestBody ActivationDto activationDto) {
+        return modelConverter.map(costCenterService.changeActivation(id, activationDto.getActive()), CostCenterDto.class);
+    }
 }

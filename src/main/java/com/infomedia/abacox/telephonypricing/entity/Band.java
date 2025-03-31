@@ -1,5 +1,6 @@
 package com.infomedia.abacox.telephonypricing.entity;
 
+import com.infomedia.abacox.telephonypricing.entity.superclass.ActivableEntity;
 import com.infomedia.abacox.telephonypricing.entity.superclass.AuditedEntity;
 import jakarta.persistence.*;
 import lombok.*;
@@ -20,7 +21,7 @@ import org.hibernate.annotations.ColumnDefault;
 @NoArgsConstructor
 @AllArgsConstructor
 @SuperBuilder(toBuilder = true)
-public class Band extends AuditedEntity {
+public class Band extends ActivableEntity {
 
     /**
      * Primary key for the band.

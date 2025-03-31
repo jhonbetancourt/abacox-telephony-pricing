@@ -55,4 +55,9 @@ public class TelephonyTypeController {
     public TelephonyTypeDto get(@PathVariable("id") Long id) {
         return modelConverter.map(telephonyTypeService.get(id), TelephonyTypeDto.class);
     }
+
+    @PatchMapping(value = "/status/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
+    public TelephonyTypeDto activate(@PathVariable("id") Long id, @Valid @RequestBody ActivationDto activationDto) {
+        return modelConverter.map(telephonyTypeService.changeActivation(id, activationDto.getActive()), TelephonyTypeDto.class);
+    }
 }

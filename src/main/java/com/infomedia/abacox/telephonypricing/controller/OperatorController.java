@@ -55,4 +55,9 @@ public class OperatorController {
     public OperatorDto get(@PathVariable("id") Long id) {
         return modelConverter.map(operatorService.get(id), OperatorDto.class);
     }
+
+    @PatchMapping(value = "/status/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
+    public OperatorDto activate(@PathVariable("id") Long id, @Valid @RequestBody ActivationDto activationDto) {
+        return modelConverter.map(operatorService.changeActivation(id, activationDto.getActive()), OperatorDto.class);
+    }
 }

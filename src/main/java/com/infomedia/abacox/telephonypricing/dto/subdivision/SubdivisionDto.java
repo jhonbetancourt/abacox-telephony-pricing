@@ -1,7 +1,7 @@
 package com.infomedia.abacox.telephonypricing.dto.subdivision;
 
+import com.infomedia.abacox.telephonypricing.dto.superclass.ActivableDto;
 import com.infomedia.abacox.telephonypricing.entity.Subdivision;
-import com.infomedia.abacox.telephonypricing.entity.superclass.AuditedEntity;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -14,7 +14,7 @@ import lombok.NoArgsConstructor;
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-public class SubdivisionDto extends AuditedEntity {
+public class SubdivisionDto extends ActivableDto {
     private Long id;
     private Long parentSubdivisionId;
     private Subdivision parentSubdivision;

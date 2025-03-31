@@ -1,7 +1,7 @@
 package com.infomedia.abacox.telephonypricing.dto.operator;
 
 import com.infomedia.abacox.telephonypricing.dto.origincountry.OriginCountryDto;
-import com.infomedia.abacox.telephonypricing.dto.superclass.AuditedDto;
+import com.infomedia.abacox.telephonypricing.dto.superclass.ActivableDto;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -14,7 +14,7 @@ import lombok.NoArgsConstructor;
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-public class OperatorDto extends AuditedDto {
+public class OperatorDto extends ActivableDto {
     private Long id;
     private String name;
     private Long originCountryId;

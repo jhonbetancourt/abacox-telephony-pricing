@@ -55,4 +55,9 @@ public class JobPositionController {
     private JobPositionDto get(@PathVariable("id") Long id) {
         return modelConverter.map(jobPositionService.get(id), JobPositionDto.class);
     }
+
+    @PatchMapping(value = "/status/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
+    public JobPositionDto activate(@PathVariable("id") Long id, @Valid @RequestBody ActivationDto activationDto) {
+        return modelConverter.map(jobPositionService.changeActivation(id, activationDto.getActive()), JobPositionDto.class);
+    }
 }

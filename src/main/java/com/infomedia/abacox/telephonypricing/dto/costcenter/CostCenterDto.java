@@ -1,8 +1,8 @@
 package com.infomedia.abacox.telephonypricing.dto.costcenter;
 
 import com.infomedia.abacox.telephonypricing.dto.origincountry.OriginCountryDto;
+import com.infomedia.abacox.telephonypricing.dto.superclass.ActivableDto;
 import com.infomedia.abacox.telephonypricing.entity.CostCenter;
-import com.infomedia.abacox.telephonypricing.entity.superclass.AuditedEntity;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -15,9 +15,9 @@ import lombok.NoArgsConstructor;
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-public class CostCenterDto extends AuditedEntity {
+public class CostCenterDto extends ActivableDto {
     private Long id;
-    private String costCenterName;
+    private String name;
     private String workOrder;
     private Long parentCostCenterId;
     private CostCenter parentCostCenter;

@@ -55,4 +55,9 @@ public class SubdivisionController {
     private SubdivisionDto get(@PathVariable("id") Long id) {
         return modelConverter.map(subdivisionService.get(id), SubdivisionDto.class);
     }
+
+    @PatchMapping(value = "/status/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
+    public SubdivisionDto activate(@PathVariable("id") Long id, @Valid @RequestBody ActivationDto activationDto) {
+        return modelConverter.map(subdivisionService.changeActivation(id, activationDto.getActive()), SubdivisionDto.class);
+    }
 }

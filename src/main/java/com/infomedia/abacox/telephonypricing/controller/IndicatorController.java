@@ -55,4 +55,9 @@ public class IndicatorController {
     private IndicatorDto get(@PathVariable("id") Long id) {
         return modelConverter.map(indicatorService.get(id), IndicatorDto.class);
     }
+
+    @PatchMapping(value = "/status/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
+    public IndicatorDto activate(@PathVariable("id") Long id, @Valid @RequestBody ActivationDto activationDto) {
+        return modelConverter.map(indicatorService.changeActivation(id, activationDto.getActive()), IndicatorDto.class);
+    }
 }

@@ -51,11 +51,6 @@ public class BandIndicatorController {
         return modelConverter.map(bandIndicatorService.update(id, uDto), BandIndicatorDto.class);
     }
 
-    @PatchMapping(value = "/status/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
-    public BandIndicatorDto activate(@PathVariable("id") Long id, @Valid @RequestBody ActivationDto activationDto) {
-        return modelConverter.map(bandIndicatorService.changeActivation(id, activationDto.getActive()), BandIndicatorDto.class);
-    }
-
     @GetMapping(value = "{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public BandIndicatorDto get(@PathVariable("id") Long id) {
         return modelConverter.map(bandIndicatorService.get(id), BandIndicatorDto.class);

@@ -55,4 +55,9 @@ public class PlantTypeController {
     private PlantTypeDto get(@PathVariable("id") Long id) {
         return modelConverter.map(plantTypeService.get(id), PlantTypeDto.class);
     }
+
+    @PatchMapping(value = "/status/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
+    public PlantTypeDto activate(@PathVariable("id") Long id, @Valid @RequestBody ActivationDto activationDto) {
+        return modelConverter.map(plantTypeService.changeActivation(id, activationDto.getActive()), PlantTypeDto.class);
+    }
 }

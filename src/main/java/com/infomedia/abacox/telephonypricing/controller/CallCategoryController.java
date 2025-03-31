@@ -4,6 +4,7 @@ import com.infomedia.abacox.telephonypricing.component.modeltools.ModelConverter
 import com.infomedia.abacox.telephonypricing.dto.callcategory.CallCategoryDto;
 import com.infomedia.abacox.telephonypricing.dto.callcategory.CreateCallCategory;
 import com.infomedia.abacox.telephonypricing.dto.callcategory.UpdateCallCategory;
+import com.infomedia.abacox.telephonypricing.dto.superclass.ActivationDto;
 import com.infomedia.abacox.telephonypricing.entity.CallCategory;
 import com.infomedia.abacox.telephonypricing.service.CallCategoryService;
 import com.turkraft.springfilter.boot.Filter;
@@ -53,5 +54,10 @@ public class CallCategoryController {
     @GetMapping(value = "{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public CallCategoryDto get(@PathVariable("id") Long id) {
         return modelConverter.map(callCategoryService.get(id), CallCategoryDto.class);
+    }
+
+    @PatchMapping(value = "/status/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
+    public CallCategoryDto activate(@PathVariable("id") Long id, @Valid @RequestBody ActivationDto activationDto) {
+        return modelConverter.map(callCategoryService.changeActivation(id, activationDto.getActive()), CallCategoryDto.class);
     }
 }

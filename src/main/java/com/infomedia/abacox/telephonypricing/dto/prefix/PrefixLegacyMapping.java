@@ -1,6 +1,6 @@
 package com.infomedia.abacox.telephonypricing.dto.prefix;
 
-import com.infomedia.abacox.telephonypricing.dto.superclass.AuditedLegacyMapping;
+import com.infomedia.abacox.telephonypricing.dto.superclass.ActivableLegacyMapping;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -10,7 +10,7 @@ import lombok.NoArgsConstructor;
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-public class PrefixLegacyMapping extends AuditedLegacyMapping {
+public class PrefixLegacyMapping extends ActivableLegacyMapping {
     private String id;
     private String operatorId;
     private String telephoneTypeId;

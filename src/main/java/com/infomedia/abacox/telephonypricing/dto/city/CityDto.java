@@ -1,7 +1,7 @@
 package com.infomedia.abacox.telephonypricing.dto.city;
 
+import com.infomedia.abacox.telephonypricing.dto.superclass.ActivableDto;
 import com.infomedia.abacox.telephonypricing.entity.City;
-import com.infomedia.abacox.telephonypricing.entity.superclass.AuditedEntity;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -14,7 +14,7 @@ import lombok.NoArgsConstructor;
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-public class CityDto extends AuditedEntity {
+public class CityDto extends ActivableDto {
     private Long id;
     private String department;
     private String classification;

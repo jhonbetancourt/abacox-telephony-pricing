@@ -55,4 +55,9 @@ public class CityController {
     public CityDto get(@PathVariable("id") Long id) {
         return modelConverter.map(cityService.get(id), CityDto.class);
     }
+
+    @PatchMapping(value = "/status/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
+    public CityDto activate(@PathVariable("id") Long id, @Valid @RequestBody ActivationDto activationDto) {
+        return modelConverter.map(cityService.changeActivation(id, activationDto.getActive()), CityDto.class);
+    }
 }

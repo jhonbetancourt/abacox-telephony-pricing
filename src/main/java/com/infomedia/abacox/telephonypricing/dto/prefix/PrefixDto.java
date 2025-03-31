@@ -1,6 +1,7 @@
 package com.infomedia.abacox.telephonypricing.dto.prefix;
 
 import com.infomedia.abacox.telephonypricing.dto.operator.OperatorDto;
+import com.infomedia.abacox.telephonypricing.dto.superclass.ActivableDto;
 import com.infomedia.abacox.telephonypricing.dto.telephonytype.TelephonyTypeDto;
 import com.infomedia.abacox.telephonypricing.dto.superclass.AuditedDto;
 import lombok.AllArgsConstructor;
@@ -17,7 +18,7 @@ import java.math.BigDecimal;
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-public class PrefixDto extends AuditedDto {
+public class PrefixDto extends ActivableDto {
     private Long id;
     private Long operatorId;
     private Long telephoneTypeId;

@@ -55,4 +55,9 @@ public class PrefixController {
     public PrefixDto get(@PathVariable("id") Long id) {
         return modelConverter.map(prefixService.get(id), PrefixDto.class);
     }
+
+    @PatchMapping(value = "/status/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
+    public PrefixDto activate(@PathVariable("id") Long id, @Valid @RequestBody ActivationDto activationDto) {
+        return modelConverter.map(prefixService.changeActivation(id, activationDto.getActive()), PrefixDto.class);
+    }
 }

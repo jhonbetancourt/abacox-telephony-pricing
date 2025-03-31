@@ -1,6 +1,6 @@
 package com.infomedia.abacox.telephonypricing.dto.jobposition;
 
-import com.infomedia.abacox.telephonypricing.dto.superclass.AuditedDto;
+import com.infomedia.abacox.telephonypricing.dto.superclass.ActivableDto;
 import com.infomedia.abacox.telephonypricing.entity.JobPosition;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -14,7 +14,7 @@ import lombok.NoArgsConstructor;
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-public class JobPositionDto extends AuditedDto {
+public class JobPositionDto extends ActivableDto {
     private Long id;
     private String name;
 }

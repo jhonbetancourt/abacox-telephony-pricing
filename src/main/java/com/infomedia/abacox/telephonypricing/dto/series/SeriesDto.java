@@ -1,7 +1,7 @@
 package com.infomedia.abacox.telephonypricing.dto.series;
 
 import com.infomedia.abacox.telephonypricing.dto.indicator.IndicatorDto;
-import com.infomedia.abacox.telephonypricing.dto.superclass.AuditedDto;
+import com.infomedia.abacox.telephonypricing.dto.superclass.ActivableDto;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -14,7 +14,7 @@ import lombok.NoArgsConstructor;
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-public class SeriesDto extends AuditedDto {
+public class SeriesDto extends ActivableDto {
     private Long id;
     private Long indicatorId;
     private Integer ndc;

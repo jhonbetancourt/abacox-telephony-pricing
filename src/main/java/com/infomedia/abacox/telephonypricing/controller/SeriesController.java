@@ -55,4 +55,9 @@ public class SeriesController {
     public SeriesDto get(@PathVariable("id") Long id) {
         return modelConverter.map(seriesService.get(id), SeriesDto.class);
     }
+
+    @PatchMapping(value = "/status/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
+    public SeriesDto activate(@PathVariable("id") Long id, @Valid @RequestBody ActivationDto activationDto) {
+        return modelConverter.map(seriesService.changeActivation(id, activationDto.getActive()), SeriesDto.class);
+    }
 }

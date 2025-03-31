@@ -1,6 +1,6 @@
 package com.infomedia.abacox.telephonypricing.dto.bandgroup;
 
-import com.infomedia.abacox.telephonypricing.dto.superclass.AuditedDto;
+import com.infomedia.abacox.telephonypricing.dto.superclass.ActivableDto;
 import com.infomedia.abacox.telephonypricing.entity.BandGroup;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -14,7 +14,7 @@ import lombok.NoArgsConstructor;
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-public class BandGroupDto extends AuditedDto {
+public class BandGroupDto extends ActivableDto {
     private Long id;
     private String name;
 }

@@ -4,6 +4,7 @@ import com.infomedia.abacox.telephonypricing.component.modeltools.ModelConverter
 import com.infomedia.abacox.telephonypricing.dto.band.BandDto;
 import com.infomedia.abacox.telephonypricing.dto.band.CreateBand;
 import com.infomedia.abacox.telephonypricing.dto.band.UpdateBand;
+import com.infomedia.abacox.telephonypricing.dto.employee.EmployeeDto;
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivationDto;
 import com.infomedia.abacox.telephonypricing.entity.Band;
 import com.infomedia.abacox.telephonypricing.service.BandService;
@@ -54,5 +55,10 @@ public class BandController {
     @GetMapping(value = "{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public BandDto get(@PathVariable("id") Long id) {
         return modelConverter.map(bandService.get(id), BandDto.class);
+    }
+
+    @PatchMapping(value = "/status/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
+    public BandDto activate(@PathVariable("id") Long id, @Valid @RequestBody ActivationDto activationDto) {
+        return modelConverter.map(bandService.changeActivation(id, activationDto.getActive()), BandDto.class);
     }
 }
