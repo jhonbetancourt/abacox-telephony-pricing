@@ -1,11 +1,21 @@
 package com.infomedia.abacox.telephonypricing.service;
 
+import com.infomedia.abacox.telephonypricing.component.export.excel.GenericExcelGenerator;
 import com.infomedia.abacox.telephonypricing.dto.commlocation.CreateCommLocation;
 import com.infomedia.abacox.telephonypricing.dto.commlocation.UpdateCommLocation;
 import com.infomedia.abacox.telephonypricing.entity.CommunicationLocation;
 import com.infomedia.abacox.telephonypricing.repository.CommunicationLocationRepository;
 import com.infomedia.abacox.telephonypricing.service.common.CrudService;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Map;
+import java.util.Set;
 
 @Service
 public class CommLocationService extends CrudService<CommunicationLocation, Long, CommunicationLocationRepository> {
@@ -47,5 +57,16 @@ public class CommLocationService extends CrudService<CommunicationLocation, Long
         cDto.getHeaderId().ifPresent(communicationLocation::setHeaderId);
         cDto.getWithoutCaptures().ifPresent(communicationLocation::setWithoutCaptures);
         return save(communicationLocation);
+    }
+
+    public ByteArrayResource exportExcel(Specification<CommunicationLocation> specification, Pageable pageable, Map<String, String> alternativeHeaders, Set<String> excludeColumns) {
+        Page<CommunicationLocation> collection = find(specification, pageable);
+        try {
+            InputStream inputStream = GenericExcelGenerator.generateExcelInputStream(collection.toList()
+                    , Set.of(), alternativeHeaders, excludeColumns);
+            return new ByteArrayResource(inputStream.readAllBytes());
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 }

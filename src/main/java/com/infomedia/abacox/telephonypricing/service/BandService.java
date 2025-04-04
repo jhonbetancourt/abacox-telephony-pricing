@@ -1,11 +1,21 @@
 package com.infomedia.abacox.telephonypricing.service;
 
+import com.infomedia.abacox.telephonypricing.component.export.excel.GenericExcelGenerator;
 import com.infomedia.abacox.telephonypricing.dto.band.CreateBand;
 import com.infomedia.abacox.telephonypricing.dto.band.UpdateBand;
 import com.infomedia.abacox.telephonypricing.entity.Band;
 import com.infomedia.abacox.telephonypricing.repository.BandRepository;
 import com.infomedia.abacox.telephonypricing.service.common.CrudService;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.Map;
+import java.util.Set;
 
 @Service
 public class BandService extends CrudService<Band, Long, BandRepository> {
@@ -38,5 +48,16 @@ public class BandService extends CrudService<Band, Long, BandRepository> {
         uDto.getMaxDistance().ifPresent(band::setMaxDistance);
         uDto.getBandGroupId().ifPresent(band::setBandGroupId);
         return save(band);
+    }
+
+    public ByteArrayResource exportExcel(Specification<Band> specification, Pageable pageable, Map<String, String> alternativeHeaders, Set<String> excludeColumns) {
+        Page<Band> collection = find(specification, pageable);
+        try {
+            InputStream inputStream = GenericExcelGenerator.generateExcelInputStream(collection.toList()
+                    , Set.of(), alternativeHeaders, excludeColumns);
+            return new ByteArrayResource(inputStream.readAllBytes());
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 }
