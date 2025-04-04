@@ -1063,6 +1063,8 @@ public class LegacyDataLoadingService {
                 // Check if mapping keys are present before accessing them
                 if (activableMapping.getActive() != null) {
                     entity.setActive(parseBoolean(csvRow.get(activableMapping.getActive())));
+                }else{
+                    entity.setActive(true); // Default to true if not specified
                 }
                 if (activableMapping.getCreatedBy() != null) {
                     entity.setCreatedBy(csvRow.get(activableMapping.getCreatedBy()));
