@@ -5,7 +5,6 @@ import com.infomedia.abacox.telephonypricing.component.modeltools.ModelConverter
 import com.infomedia.abacox.telephonypricing.dto.band.BandDto;
 import com.infomedia.abacox.telephonypricing.dto.band.CreateBand;
 import com.infomedia.abacox.telephonypricing.dto.band.UpdateBand;
-import com.infomedia.abacox.telephonypricing.dto.employee.EmployeeDto;
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivationDto;
 import com.infomedia.abacox.telephonypricing.entity.Band;
 import com.infomedia.abacox.telephonypricing.service.BandService;
