@@ -90,7 +90,7 @@ public class ExtensionRange extends AuditedEntity {
      */
     @Column(name = "range_start", length = 50, nullable = false)
     @ColumnDefault("''")
-    private String rangeStart;
+    private Long rangeStart;
 
     /**
      * Ending extension in the range.
@@ -98,7 +98,7 @@ public class ExtensionRange extends AuditedEntity {
      */
     @Column(name = "range_end", length = 50, nullable = false)
     @ColumnDefault("''")
-    private String rangeEnd;
+    private Long rangeEnd;
 
     /**
      * ID of the cost center.

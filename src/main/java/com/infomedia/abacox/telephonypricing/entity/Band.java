@@ -1,7 +1,6 @@
 package com.infomedia.abacox.telephonypricing.entity;
 
 import com.infomedia.abacox.telephonypricing.entity.superclass.ActivableEntity;
-import com.infomedia.abacox.telephonypricing.entity.superclass.AuditedEntity;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -69,17 +68,29 @@ public class Band extends ActivableEntity {
      * Value/cost associated with the band.
      * Original field: BANDA_VALOR
      */
-    @Column(name = "value", nullable = false)
+    @Column(name = "value", nullable = false, precision = 10, scale = 4)
     @ColumnDefault("0")
     private BigDecimal value;
 
     /**
-     * Flag indicating if VAT is included in the price.
-     * Original field: BANDA_IVAINC
+     * ID of the origin indicator.
+     * Original field: BANDA_INDICAORIGEN_ID
      */
-    @Column(name = "vat_included", nullable = false)
-    @ColumnDefault("false")
-    private boolean vatIncluded;
+    @Column(name = "origin_indicator_id", nullable = false)
+    @ColumnDefault("0")
+    private Long originIndicatorId;
+
+    /**
+     * Origin indicator relationship.
+     */
+    @ManyToOne
+    @JoinColumn(
+            name = "origin_indicator_id",
+            insertable = false,
+            updatable = false,
+            foreignKey = @ForeignKey(name = "fk_band_origin_indicator")
+    )
+    private Indicator originIndicator;
 
     /**
      * Minimum distance for this band.
@@ -96,6 +107,14 @@ public class Band extends ActivableEntity {
     @Column(name = "max_distance", nullable = false)
     @ColumnDefault("0")
     private Integer maxDistance;
+
+    /**
+     * Flag indicating if VAT is included in the price.
+     * Original field: BANDA_IVAINC
+     */
+    @Column(name = "vat_included", nullable = false)
+    @ColumnDefault("false")
+    private Boolean vatIncluded;
 
     /**
      * ID of the band group this band belongs to.
