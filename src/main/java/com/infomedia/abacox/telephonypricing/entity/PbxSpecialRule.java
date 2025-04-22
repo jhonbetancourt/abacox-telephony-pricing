@@ -5,6 +5,7 @@ import com.infomedia.abacox.telephonypricing.entity.superclass.AuditedEntity;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
+import lombok.extern.log4j.Log4j2;
 import org.hibernate.annotations.ColumnDefault;
 
 /**
@@ -98,7 +99,7 @@ public class PbxSpecialRule extends ActivableEntity {
     /**
      * Flag for incoming/outgoing/both direction.
      * Original field: PBXESPECIAL_IO
-     * Note: 0=incoming, 1=outgoing, 2=both
+     * Note: 0=both, 1=incoming, 2=outgoing
      */
     @Column(name = "direction", nullable = false)
     @ColumnDefault("2") 
