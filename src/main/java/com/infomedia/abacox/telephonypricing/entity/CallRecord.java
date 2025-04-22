@@ -103,9 +103,9 @@ public class CallRecord extends AuditedEntity {
      * Key or code of the employee/user.
      * Original field: ACUMTOTAL_FUN_CLAVE
      */
-    @Column(name = "employee_key", length = 50, nullable = false)
+    @Column(name = "employee_auth_code", length = 50, nullable = false)
     @ColumnDefault("")
-    private String employeeKey;
+    private String employeeAuthCode;
 
     /**
      * ID of the indicator/area code.
@@ -305,21 +305,6 @@ public class CallRecord extends AuditedEntity {
      */
     @Column(name = "centralized_id")
     private Long centralizedId;
-    
-    /**
-     * Centralized system relationship.
-     * Uncomment when CentralizedSystem entity is available
-     */
-    /*
-    @ManyToOne
-    @JoinColumn(
-        name = "centralized_id", 
-        insertable = false, 
-        updatable = false,
-        foreignKey = @ForeignKey(name = "fk_call_record_centralized_system")
-    )
-    private CentralizedSystem centralizedSystem;
-    */
 
     /**
      * IP address of origin.
@@ -328,34 +313,4 @@ public class CallRecord extends AuditedEntity {
      */
     @Column(name = "origin_ip", length = 64)
     private String originIp;
-
-    /**
-     * Manual reproduction flag.
-     * Original field: ACUMTOTAL_REPROXMAN
-     * Note: This field was nullable in the original schema.
-     */
-  /*  @Column(name = "manual_reproduction")
-    private Byte manualReproduction;*/
-
-    /**
-     * Additional information (commented out in original schema).
-     * Original field: ACUMTOTAL_ADICIONALES
-     */
-    // @Column(name = "additional_info", columnDefinition = "TEXT")
-    // private String additionalInfo;
-
-    /**
-     * Original field: ACUMTOTAL_REPROX_ID
-     * Note: This field was commented out in the original schema.
-     */
-    // @Column(name = "reproduction_id")
-    // private Integer reproductionId;
-
-    /**
-     * Original field: ACUMTOTAL_DIRECTORIO_ID
-     * Note: This field was commented out in the original schema.
-     */
-    // @Column(name = "directory_id", nullable = false)
-    // @ColumnDefault("0")
-    // private Integer directoryId;
 }

@@ -82,12 +82,12 @@ public class Employee extends ActivableEntity {
     private CostCenter costCenter;
 
     /**
-     * Access key or password.
+     * Represents an Authorization Code or Account Code entered by a user when making a call
      * Original field: FUNCIONARIO_CLAVE
      */
-  /*  @Column(name = "access_key", length = 50, nullable = false)
+    @Column(name = "auth_code", length = 50, nullable = false)
     @ColumnDefault("")
-    private String accessKey;*/
+    private String authCode;
 
     /**
      * Telephone extension.
