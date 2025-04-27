@@ -1,6 +1,5 @@
 package com.infomedia.abacox.telephonypricing.dto.commlocation;
 
-import com.infomedia.abacox.telephonypricing.dto.bandgroup.BandGroupDto;
 import com.infomedia.abacox.telephonypricing.dto.planttype.PlantTypeDto;
 import com.infomedia.abacox.telephonypricing.dto.indicator.IndicatorDto;
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivableDto;
@@ -28,12 +27,8 @@ public class CommLocationDto extends ActivableDto {
     private Long indicatorId;
     private IndicatorDto indicator;
     private String pbxPrefix;
-    private String address;
     private LocalDateTime captureDate;
     private Integer cdrCount;
     private String fileName;
-    private Long bandGroupId;
-    private BandGroupDto bandGroup;
     private Long headerId;
-    private Integer withoutCaptures;
 }

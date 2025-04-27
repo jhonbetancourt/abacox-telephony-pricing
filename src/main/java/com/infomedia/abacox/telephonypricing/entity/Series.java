@@ -31,7 +31,7 @@ public class Series extends ActivableEntity {
             name = "series_id_seq",
             sequenceName = "series_id_seq",
             allocationSize = 1,
-            initialValue = 1000000
+            initialValue = 10000000
     )
     @Column(name = "id", nullable = false)
     private Long id;

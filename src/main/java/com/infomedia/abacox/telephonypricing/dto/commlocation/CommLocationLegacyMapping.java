@@ -17,11 +17,8 @@ public class CommLocationLegacyMapping extends ActivableLegacyMapping {
     private String serial;
     private String indicatorId;
     private String pbxPrefix;
-    private String address;
     private String captureDate;
     private String cdrCount;
     private String fileName;
-    private String bandGroupId;
     private String headerId;
-    private String withoutCaptures;
 }

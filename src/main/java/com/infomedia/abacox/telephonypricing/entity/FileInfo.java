@@ -30,7 +30,7 @@ public class FileInfo {
             name = "file_info_id_seq",
             sequenceName = "file_info_id_seq",
             allocationSize = 1,
-            initialValue = 1000000
+            initialValue = 10000000
     )
     @Column(name = "id", nullable = false)
     private Integer id;

@@ -23,16 +23,14 @@ public class BandService extends CrudService<Band, Long, BandRepository> {
         super(repository);
     }
 
-
     public Band create(CreateBand cDto){
         Band band = Band.builder()
                 .prefixId(cDto.getPrefixId())
                 .name(cDto.getName())
                 .value(cDto.getValue())
+                .originIndicatorId(cDto.getOriginIndicatorId())
                 .vatIncluded(cDto.getVatIncluded())
-                .minDistance(cDto.getMinDistance())
-                .maxDistance(cDto.getMaxDistance())
-                .bandGroupId(cDto.getBandGroupId())
+                .reference(cDto.getReference())
                 .build();
 
         return save(band);
@@ -43,10 +41,9 @@ public class BandService extends CrudService<Band, Long, BandRepository> {
         uDto.getPrefixId().ifPresent(band::setPrefixId);
         uDto.getName().ifPresent(band::setName);
         uDto.getValue().ifPresent(band::setValue);
+        uDto.getOriginIndicatorId().ifPresent(band::setOriginIndicatorId);
         uDto.getVatIncluded().ifPresent(band::setVatIncluded);
-        uDto.getMinDistance().ifPresent(band::setMinDistance);
-        uDto.getMaxDistance().ifPresent(band::setMaxDistance);
-        uDto.getBandGroupId().ifPresent(band::setBandGroupId);
+        uDto.getReference().ifPresent(band::setReference);
         return save(band);
     }
 

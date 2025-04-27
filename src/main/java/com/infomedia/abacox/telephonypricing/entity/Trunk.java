@@ -29,7 +29,7 @@ public class Trunk extends ActivableEntity {
             name = "trunk_id_seq",
             sequenceName = "trunk_id_seq",
             allocationSize = 1,
-            initialValue = 1000000
+            initialValue = 10000000
     )
     @Column(name = "id", nullable = false)
     private Long id;

@@ -16,7 +16,6 @@ public class BandLegacyMapping extends ActivableLegacyMapping {
     private String name;
     private String value;
     private String vatIncluded;
-    private String minDistance;
-    private String maxDistance;
-    private String bandGroupId;
+    private String originIndicatorId;
+    private String reference;
 }

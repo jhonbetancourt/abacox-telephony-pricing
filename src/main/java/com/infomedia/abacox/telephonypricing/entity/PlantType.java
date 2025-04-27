@@ -31,7 +31,7 @@ public class PlantType extends ActivableEntity {
             name = "plant_type_id_seq",
             sequenceName = "plant_type_id_seq",
             allocationSize = 1,
-            initialValue = 1000000
+            initialValue = 10000000
     )
     @Column(name = "id", nullable = false)
     private Long id;

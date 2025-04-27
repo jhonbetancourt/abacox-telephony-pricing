@@ -33,7 +33,7 @@ public class CommunicationLocation extends ActivableEntity {
             name = "communication_location_id_seq",
             sequenceName = "communication_location_id_seq",
             allocationSize = 1,
-            initialValue = 1000000
+            initialValue = 10000000
     )
     @Column(name = "id", nullable = false)
     private Long id;
@@ -101,15 +101,6 @@ public class CommunicationLocation extends ActivableEntity {
     private String pbxPrefix;
 
     /**
-     * Address information.
-     * Original field: COMUBICACION_DIRECCION
-     * Note: The original schema noted this is used in BBVA.
-     */
-    @Column(name = "address", length = 100, nullable = false)
-    @ColumnDefault("")
-    private String address;
-
-    /**
      * Date of capture/recording.
      * Original field: COMUBICACION_FECHACAPTURA
      * Note: This field was nullable in the original schema.
@@ -134,84 +125,9 @@ public class CommunicationLocation extends ActivableEntity {
     private String fileName;
 
     /**
-     * ID of the band group.
-     * Original field: COMUBICACION_BANDAGRUPO_ID
-     */
-    @Column(name = "band_group_id", nullable = true)
-    private Long bandGroupId;
-
-    /**
-     * Band group relationship.
-     */
-    @ManyToOne
-    @JoinColumn(
-            name = "band_group_id", 
-            insertable = false, 
-            updatable = false,
-            foreignKey = @ForeignKey(name = "fk_communication_location_band_group")
-    )
-    private BandGroup bandGroup;
-
-    /**
      * ID of the header.
      * Original field: COMUBICACION_CABECERA_ID
      */
     @Column(name = "header_id", nullable = true)
     private Long headerId;
-
-    /**
-     * Without captures flag.
-     * Original field: COMUBICACION_SINCAPTURAS
-     */
-    @Column(name = "without_captures", nullable = false)
-    @ColumnDefault("0")
-    private Integer withoutCaptures;
-
-    // The following fields were commented out in the original schema:
-
-    /**
-     * Internal prefix (commented out in original schema).
-     * Original field: COMUBICACION_PREFIJOINTERNO
-     */
-    // @Column(name = "internal_prefix", length = 32, nullable = false)
-    // @ColumnDefault("''")
-    // private String internalPrefix;
-
-    /**
-     * Revision date (commented out in original schema).
-     * Original field: COMUBICACION_FECHAREVISION
-     */
-    // @Column(name = "revision_date")
-    // private LocalDateTime revisionDate;
-
-    /**
-     * Responsible person (commented out in original schema).
-     * Original field: COMUBICACION_RESPONSABLE
-     */
-    // @Column(name = "responsible_person", length = 80, nullable = false)
-    // @ColumnDefault("''")
-    // private String responsiblePerson;
-
-    /**
-     * Contact telephone (commented out in original schema).
-     * Original field: COMUBICACION_TELEFONO
-     */
-    // @Column(name = "telephone", length = 20, nullable = false)
-    // @ColumnDefault("''")
-    // private String telephone;
-
-    /**
-     * Message date (commented out in original schema).
-     * Original field: COMUBICACION_FMENSAJE
-     */
-    // @Column(name = "message_date")
-    // private LocalDateTime messageDate;
-
-    /**
-     * In transit flag (commented out in original schema).
-     * Original field: COMUBICACION_DEPASO
-     */
-    // @Column(name = "in_transit", nullable = false)
-    // @ColumnDefault("false")
-    // private boolean inTransit;
 }

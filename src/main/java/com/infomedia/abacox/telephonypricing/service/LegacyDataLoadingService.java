@@ -13,7 +13,6 @@ import com.infomedia.abacox.telephonypricing.dto.planttype.PlantTypeLegacyMappin
 import com.infomedia.abacox.telephonypricing.dto.subdivision.SubdivisionLegacyMapping;
 import com.infomedia.abacox.telephonypricing.dto.telephonytype.TelephonyTypeLegacyMapping;
 import com.infomedia.abacox.telephonypricing.dto.band.BandLegacyMapping;
-import com.infomedia.abacox.telephonypricing.dto.bandgroup.BandGroupLegacyMapping;
 import com.infomedia.abacox.telephonypricing.dto.bandindicator.BandIndicatorLegacyMapping;
 import com.infomedia.abacox.telephonypricing.dto.callcategory.CallCategoryLegacyMapping;
 import com.infomedia.abacox.telephonypricing.dto.city.CityLegacyMapping;
@@ -170,7 +169,7 @@ public class LegacyDataLoadingService {
                     LocalDateTime serviceDate = parseDateTime(csvRow.get(legacyMapping.getServiceDate()));
                     Long operatorId = parseLongId(csvRow.get(legacyMapping.getOperatorId()));
                     String employeeExtension = csvRow.get(legacyMapping.getEmployeeExtension());
-                    String employeeKey = csvRow.get(legacyMapping.getEmployeeKey());
+                    String employeeKey = csvRow.get(legacyMapping.getEmployeeAuthCode());
                     Long indicatorId = parseLongId(csvRow.get(legacyMapping.getIndicatorId()));
                     String destinationPhone = csvRow.get(legacyMapping.getDestinationPhone());
                     Integer duration = parseInteger(csvRow.get(legacyMapping.getDuration()));
@@ -197,7 +196,7 @@ public class LegacyDataLoadingService {
                             .serviceDate(serviceDate)
                             .operatorId(operatorId)
                             .employeeExtension(employeeExtension)
-                            .employeeKey(employeeKey)
+                            .employeeAuthCode(employeeKey)
                             .indicatorId(indicatorId)
                             .destinationPhone(destinationPhone)
                             .duration(duration)
@@ -293,13 +292,10 @@ public class LegacyDataLoadingService {
                     String serial = csvRow.get(legacyMapping.getSerial());
                     Long indicatorId = parseLongId(csvRow.get(legacyMapping.getIndicatorId()));
                     String pbxPrefix = csvRow.get(legacyMapping.getPbxPrefix());
-                    String address = csvRow.get(legacyMapping.getAddress());
                     LocalDateTime captureDate = parseDateTime(csvRow.get(legacyMapping.getCaptureDate()));
                     Integer cdrCount = parseInteger(csvRow.get(legacyMapping.getCdrCount()));
                     String fileName = csvRow.get(legacyMapping.getFileName());
-                    Long bandGroupId = parseLongId(csvRow.get(legacyMapping.getBandGroupId()));
                     Long headerId = parseLongId(csvRow.get(legacyMapping.getHeaderId()));
-                    Integer withoutCaptures = parseInteger(csvRow.get(legacyMapping.getWithoutCaptures()));
                     CommunicationLocation commLocation = CommunicationLocation.builder()
                             .id(id)
                             .directory(directory)
@@ -307,13 +303,10 @@ public class LegacyDataLoadingService {
                             .serial(serial)
                             .indicatorId(indicatorId)
                             .pbxPrefix(pbxPrefix)
-                            .address(address)
                             .captureDate(captureDate)
                             .cdrCount(cdrCount)
                             .fileName(fileName)
-                            .bandGroupId(bandGroupId)
                             .headerId(headerId)
-                            .withoutCaptures(withoutCaptures)
                             .build();
                     setActivableFields(commLocation, csvRow, legacyMapping, id); // Pass ID
                     try {
@@ -530,19 +523,16 @@ public class LegacyDataLoadingService {
                     String name = csvRow.get(legacyMapping.getName());
                     BigDecimal value = parseBigDecimal(csvRow.get(legacyMapping.getValue()));
                     Boolean vatIncluded = parseBoolean(csvRow.get(legacyMapping.getVatIncluded()));
-                    Integer minDistance = parseInteger(csvRow.get(legacyMapping.getMinDistance()));
-                    Integer maxDistance = parseInteger(csvRow.get(legacyMapping.getMaxDistance()));
-                    Long bandGroupId = parseLongId(csvRow.get(legacyMapping.getBandGroupId()));
-
+                    Long originIndicatorId = parseLongId(csvRow.get(legacyMapping.getOriginIndicatorId()));
+                    Long reference = parseLongId(csvRow.get(legacyMapping.getReference()));
                     Band band = Band.builder()
                             .id(id)
                             .prefixId(prefixId)
                             .name(name)
                             .value(value)
+                            .originIndicatorId(originIndicatorId)
+                            .reference(reference)
                             .vatIncluded(vatIncluded)
-                            .minDistance(minDistance)
-                            .maxDistance(maxDistance)
-                            .bandGroupId(bandGroupId)
                             .build();
                     setActivableFields(band, csvRow, legacyMapping, id); // Pass ID
                     try {
@@ -554,35 +544,6 @@ public class LegacyDataLoadingService {
             });
         } catch (IOException e) {
             log.error("Error reading Band CSV data", e);
-            throw new RuntimeException(e);
-        }
-    }
-
-    public void loadBandGroupData(InputStream csvInputStream, BandGroupLegacyMapping legacyMapping) {
-        try (CsvReader csvReader = new CsvReader(csvInputStream, ",", true)) {
-            csvReader.processRowsAsMap(csvRow -> {
-                Long id = parseLongId(csvRow.get(legacyMapping.getId()));
-                if (id == null) {
-                    log.warn("Skipping row due to invalid or missing ID: {}", csvRow);
-                    return;
-                }
-                if (!JpaUtils.entityExists(BandGroup.class, id, entityManager)) {
-                    String name = csvRow.get(legacyMapping.getName());
-
-                    BandGroup bandGroup = BandGroup.builder()
-                            .id(id)
-                            .name(name)
-                            .build();
-                    setActivableFields(bandGroup, csvRow, legacyMapping, id); // Pass ID
-                    try {
-                        JpaUtils.saveEntityWithForcedId(bandGroup, entityManager);
-                    } catch (Exception e) {
-                        log.error("Failed to save band group data with ID {}: {}", id, bandGroup, e);
-                    }
-                }
-            });
-        } catch (IOException e) {
-            log.error("Error reading BandGroup CSV data", e);
             throw new RuntimeException(e);
         }
     }

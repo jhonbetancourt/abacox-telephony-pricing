@@ -29,7 +29,7 @@ public class TelephonyTypeConfig extends AuditedEntity {
             name = "telephony_type_config_id_seq",
             sequenceName = "telephony_type_config_id_seq",
             allocationSize = 1,
-            initialValue = 1000000
+            initialValue = 10000000
     )
     @Column(name = "id", nullable = false)
     private Long id;

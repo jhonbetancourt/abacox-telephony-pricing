@@ -29,13 +29,11 @@ public class UpdateBand {
     private JsonNullable<BigDecimal> value = JsonNullable.undefined();
     
     @NotNull
+    private JsonNullable<Long> originIndicatorId = JsonNullable.undefined();
+    
+    @NotNull
     private JsonNullable<Boolean> vatIncluded = JsonNullable.undefined();
     
     @NotNull
-    private JsonNullable<Integer> minDistance = JsonNullable.undefined();
-    
-    @NotNull
-    private JsonNullable<Integer> maxDistance = JsonNullable.undefined();
-    
-    private JsonNullable<Long> bandGroupId = JsonNullable.undefined();
+    private JsonNullable<Long> reference = JsonNullable.undefined();
 }

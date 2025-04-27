@@ -34,10 +34,6 @@ public class CreateCommLocation {
     @Size(max = 32)
     private String pbxPrefix;
     
-    @NotBlank
-    @Size(max = 100)
-    private String address;
-    
     private LocalDateTime captureDate;
     
     @NotNull
@@ -47,10 +43,5 @@ public class CreateCommLocation {
     @Size(max = 80)
     private String fileName;
     
-    private Long bandGroupId;
-    
     private Long headerId;
-    
-    @NotNull
-    private Integer withoutCaptures = 0;
 }

@@ -1,6 +1,6 @@
 package com.infomedia.abacox.telephonypricing.dto.band;
 
-import com.infomedia.abacox.telephonypricing.dto.bandgroup.BandGroupDto;
+import com.infomedia.abacox.telephonypricing.dto.indicator.IndicatorDto;
 import com.infomedia.abacox.telephonypricing.dto.prefix.PrefixDto;
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivableDto;
 import com.infomedia.abacox.telephonypricing.entity.Band;
@@ -22,12 +22,11 @@ import java.math.BigDecimal;
 public class BandDto extends ActivableDto {
     private Long id;
     private Long prefixId;
+    private PrefixDto prefix;
     private String name;
     private BigDecimal value;
     private boolean vatIncluded;
-    private Integer minDistance;
-    private Integer maxDistance;
-    private Long bandGroupId;
-    private PrefixDto prefix;
-    private BandGroupDto bandGroup;
+    private Long originIndicatorId;
+    private IndicatorDto originIndicator;
+    private Long reference;
 }

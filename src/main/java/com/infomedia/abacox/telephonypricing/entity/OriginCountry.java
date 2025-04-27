@@ -30,7 +30,7 @@ public class OriginCountry extends ActivableEntity {
             name = "origin_country_id_seq",
             sequenceName = "origin_country_id_seq",
             allocationSize = 1,
-            initialValue = 1000000
+            initialValue = 10000000
     )
     @Column(name = "id", nullable = false)
     private Long id;

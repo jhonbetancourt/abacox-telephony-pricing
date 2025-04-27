@@ -16,14 +16,11 @@ import org.springframework.stereotype.Service;
 public class DefaultDataLoadingService {
 
     private final CsvToDatabaseLoader csvToDatabaseLoader;
-    private final BandRepository bandRepository;
     private final TelephonyTypeRepository telephonyTypeRepository;
-    private final BandGroupRepository bandGroupRepository;
     private final CityRepository cityRepository;
     private final OperatorRepository operatorRepository;
     private final IndicatorRepository indicatorRepository;
     private final OriginCountryRepository originCountryRepository;
-    private final BandIndicatorRepository bandIndicatorRepository;
     private final CallCategoryRepository callCategoryRepository;
     private final PrefixRepository prefixRepository;
     private final SeriesRepository seriesRepository;
@@ -37,10 +34,7 @@ public class DefaultDataLoadingService {
         loadOperator();
         loadCity();
         loadPrefix();
-        loadBandGroup();
-        loadBand();
         loadIndicator();
-        loadBandIndicator();
         loadSeries();
     }
 
@@ -52,30 +46,6 @@ public class DefaultDataLoadingService {
                 csvToDatabaseLoader.loadFromInputStreamForceIds(bandIndicatorCsv.getInputStream(), TelephonyType.class);
             } catch (Exception e) {
                 log.error("Error loading telephony type data into database", e);
-            }
-        }
-    }
-
-    private void loadBand() {
-        if (bandRepository.count() == 0) {
-            log.info("Loading bands");
-            ClassPathResource bandCsv = new ClassPathResource("csv/band.csv");
-            try {
-                csvToDatabaseLoader.loadFromInputStreamForceIds(bandCsv.getInputStream(), Band.class);
-            } catch (Exception e) {
-                log.error("Error loading band data into database", e);
-            }
-        }
-    }
-
-    private void loadBandGroup() {
-        if (bandGroupRepository.count() == 0) {
-            log.info("Loading band groups");
-            ClassPathResource bandGroupCsv = new ClassPathResource("csv/band_group.csv");
-            try {
-                csvToDatabaseLoader.loadFromInputStreamForceIds(bandGroupCsv.getInputStream(), BandGroup.class);
-            } catch (Exception e) {
-                log.error("Error loading band group data into database", e);
             }
         }
     }
@@ -124,18 +94,6 @@ public class DefaultDataLoadingService {
                 csvToDatabaseLoader.loadFromInputStreamForceIds(originCountryCsv.getInputStream(), OriginCountry.class);
             } catch (Exception e) {
                 log.error("Error loading origin country data into database", e);
-            }
-        }
-    }
-
-    private void loadBandIndicator() {
-        if (bandIndicatorRepository.count() == 0) {
-            log.info("Loading band indicators");
-            ClassPathResource bandIndicatorCsv = new ClassPathResource("csv/band_indicator.csv");
-            try {
-                csvToDatabaseLoader.loadFromInputStreamForceIds(bandIndicatorCsv.getInputStream(), BandIndicator.class);
-            } catch (Exception e) {
-                log.error("Error loading band indicator data into database", e);
             }
         }
     }

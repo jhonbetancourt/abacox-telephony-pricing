@@ -32,7 +32,7 @@ public class Band extends ActivableEntity {
             name = "band_id_seq",
             sequenceName = "band_id_seq",
             allocationSize = 1,
-            initialValue = 1000000
+            initialValue = 10000000
     )
     @Column(name = "id", nullable = false)
     private Long id;
@@ -49,8 +49,8 @@ public class Band extends ActivableEntity {
      */
     @ManyToOne
     @JoinColumn(
-            name = "prefix_id", 
-            insertable = false, 
+            name = "prefix_id",
+            insertable = false,
             updatable = false,
             foreignKey = @ForeignKey(name = "fk_band_prefix")
     )
@@ -93,22 +93,6 @@ public class Band extends ActivableEntity {
     private Indicator originIndicator;
 
     /**
-     * Minimum distance for this band.
-     * Original field: BANDA_DISTMIN
-     */
-    @Column(name = "min_distance", nullable = false)
-    @ColumnDefault("0")
-    private Integer minDistance;
-
-    /**
-     * Maximum distance for this band.
-     * Original field: BANDA_DISTMAX
-     */
-    @Column(name = "max_distance", nullable = false)
-    @ColumnDefault("0")
-    private Integer maxDistance;
-
-    /**
      * Flag indicating if VAT is included in the price.
      * Original field: BANDA_IVAINC
      */
@@ -116,22 +100,12 @@ public class Band extends ActivableEntity {
     @ColumnDefault("false")
     private Boolean vatIncluded;
 
-    /**
-     * ID of the band group this band belongs to.
-     * Original field: BANDA_BANDAGRUPO_ID
-     */
-    @Column(name = "band_group_id", nullable = true)
-    private Long bandGroupId;
 
     /**
-     * Band group relationship.
+     * Reference number.
+     * Original field: BANDA_REF
      */
-    @ManyToOne
-    @JoinColumn(
-            name = "band_group_id", 
-            insertable = false, 
-            updatable = false,
-            foreignKey = @ForeignKey(name = "fk_band_band_group")
-    )
-    private BandGroup bandGroup;
+    @Column(name = "reference", nullable = false)
+    @ColumnDefault("0")
+    private Long reference;
 }

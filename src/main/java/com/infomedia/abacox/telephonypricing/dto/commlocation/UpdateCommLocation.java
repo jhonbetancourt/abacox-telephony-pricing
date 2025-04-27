@@ -35,10 +35,6 @@ public class UpdateCommLocation {
     @Size(max = 32)
     private JsonNullable<String> pbxPrefix = JsonNullable.undefined();
     
-    @NotBlank
-    @Size(max = 100)
-    private JsonNullable<String> address = JsonNullable.undefined();
-    
     private JsonNullable<LocalDateTime> captureDate = JsonNullable.undefined();
     
     @NotNull
@@ -48,10 +44,5 @@ public class UpdateCommLocation {
     @Size(max = 80)
     private JsonNullable<String> fileName = JsonNullable.undefined();
     
-    private JsonNullable<Long> bandGroupId = JsonNullable.undefined();
-    
     private JsonNullable<Long> headerId = JsonNullable.undefined();
-    
-    @NotNull
-    private JsonNullable<Integer> withoutCaptures = JsonNullable.undefined();
 }

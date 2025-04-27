@@ -28,13 +28,11 @@ public class CreateBand {
     private BigDecimal value;
 
     @NotNull
-    private Boolean vatIncluded;  // Changed from boolean to Boolean
+    private Long originIndicatorId;
 
     @NotNull
-    private Integer minDistance;
+    private Boolean vatIncluded;
 
     @NotNull
-    private Integer maxDistance;
-
-    private Long bandGroupId;
+    private Long reference;
 }

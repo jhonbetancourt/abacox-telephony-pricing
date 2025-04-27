@@ -33,7 +33,7 @@ public class SpecialRateValue extends ActivableEntity {
             name = "special_rate_value_id_seq",
             sequenceName = "special_rate_value_id_seq",
             allocationSize = 1,
-            initialValue = 1000000
+            initialValue = 10000000
     )
     @Column(name = "id", nullable = false)
     private Long id;

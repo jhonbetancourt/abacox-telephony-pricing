@@ -17,7 +17,7 @@ public class CallRecordLegacyMapping extends AuditedLegacyMapping {
     private String serviceDate;
     private String operatorId;
     private String employeeExtension;
-    private String employeeKey;
+    private String employeeAuthCode;
     private String indicatorId;
     private String destinationPhone;
     private String duration;
