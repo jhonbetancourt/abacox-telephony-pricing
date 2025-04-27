@@ -13,7 +13,6 @@ import com.infomedia.abacox.telephonypricing.dto.planttype.PlantTypeLegacyMappin
 import com.infomedia.abacox.telephonypricing.dto.subdivision.SubdivisionLegacyMapping;
 import com.infomedia.abacox.telephonypricing.dto.telephonytype.TelephonyTypeLegacyMapping;
 import com.infomedia.abacox.telephonypricing.dto.band.BandLegacyMapping;
-import com.infomedia.abacox.telephonypricing.dto.bandgroup.BandGroupLegacyMapping;
 import com.infomedia.abacox.telephonypricing.dto.bandindicator.BandIndicatorLegacyMapping;
 import com.infomedia.abacox.telephonypricing.dto.callcategory.CallCategoryLegacyMapping;
 import com.infomedia.abacox.telephonypricing.dto.city.CityLegacyMapping;
@@ -122,13 +121,6 @@ public class LegacyDataLoadingController {
             , @RequestPart("mapping") @Schema(implementation = BandLegacyMapping.class) String mappingJson) throws IOException {
         BandLegacyMapping mapping = objectMapper.readValue(mappingJson, BandLegacyMapping.class);
         legacyDataLoadingService.loadBandData(file.getInputStream(), mapping);
-    }
-
-    @PostMapping(value = "csv/bandGroup", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public void csvBandGroup(@RequestPart("file") MultipartFile file
-            , @RequestPart("mapping") @Schema(implementation = BandGroupLegacyMapping.class) String mappingJson) throws IOException {
-        BandGroupLegacyMapping mapping = objectMapper.readValue(mappingJson, BandGroupLegacyMapping.class);
-        legacyDataLoadingService.loadBandGroupData(file.getInputStream(), mapping);
     }
 
     @PostMapping(value = "csv/bandIndicator", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

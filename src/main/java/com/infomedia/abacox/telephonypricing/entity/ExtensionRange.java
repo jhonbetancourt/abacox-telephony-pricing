@@ -89,7 +89,7 @@ public class ExtensionRange extends AuditedEntity {
      * Original field: RANGOEXT_DESDE
      */
     @Column(name = "range_start", length = 50, nullable = false)
-    @ColumnDefault("''")
+    @ColumnDefault("0")
     private Long rangeStart;
 
     /**
@@ -97,7 +97,7 @@ public class ExtensionRange extends AuditedEntity {
      * Original field: RANGOEXT_HASTA
      */
     @Column(name = "range_end", length = 50, nullable = false)
-    @ColumnDefault("''")
+    @ColumnDefault("0")
     private Long rangeEnd;
 
     /**

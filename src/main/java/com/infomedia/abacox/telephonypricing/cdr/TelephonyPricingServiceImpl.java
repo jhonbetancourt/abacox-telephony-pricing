@@ -15,7 +15,7 @@ import java.util.regex.Pattern;
 public class TelephonyPricingServiceImpl implements TelephonyPricingService {
 
     private final LookupService lookupService;
-    private final ConfigurationService configService;
+    private final TPConfigService configService;
     
     // Cache for PBX special rules - now cached in lookupService
     private Map<String, Map<Long, LookupService.SpecialServiceInfo>> servEspeciales = null;

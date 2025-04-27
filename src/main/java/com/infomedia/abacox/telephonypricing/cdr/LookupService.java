@@ -23,7 +23,7 @@ public class LookupService {
     @PersistenceContext
     private EntityManager entityManager;
 
-    private final ConfigurationService configService;
+    private final TPConfigService configService;
 
 
     @Cacheable(value = "prefixes", key = "#mporigenId")

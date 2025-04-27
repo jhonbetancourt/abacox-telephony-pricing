@@ -4,7 +4,7 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 @Service
-public class ConfigurationService {
+public class TPConfigService {
 
     // These constants are based on the PHP defines
     private static final Long TIPOTELE_LOCAL = 1L;
