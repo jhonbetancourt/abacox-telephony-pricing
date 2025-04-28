@@ -15,6 +15,7 @@ public class EmployeeLegacyMapping extends ActivableLegacyMapping {
     private String name;
     private String subdivisionId;
     private String costCenterId;
+    private String authCode;
     private String extension;
     private String communicationLocationId;
     private String jobPositionId;

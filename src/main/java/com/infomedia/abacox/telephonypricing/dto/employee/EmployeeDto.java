@@ -22,7 +22,7 @@ public class EmployeeDto extends ActivableDto {
     private String name;
     private Long subdivisionId;
     private Long costCenterId;
-   // private String accessKey;
+    private String authCode;
     private String extension;
     private Long communicationLocationId;
     private Long jobPositionId;

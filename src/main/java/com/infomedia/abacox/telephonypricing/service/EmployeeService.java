@@ -29,6 +29,7 @@ public class EmployeeService extends CrudService<Employee, Long, EmployeeReposit
                 .name(cDto.getName())
                 .subdivisionId(cDto.getSubdivisionId())
                 .costCenterId(cDto.getCostCenterId())
+                .authCode(cDto.getAuthCode())
                 .extension(cDto.getExtension())
                 .communicationLocationId(cDto.getCommunicationLocationId())
                 .jobPositionId(cDto.getJobPositionId())
@@ -46,6 +47,7 @@ public class EmployeeService extends CrudService<Employee, Long, EmployeeReposit
         uDto.getName().ifPresent(employee::setName);
         uDto.getSubdivisionId().ifPresent(employee::setSubdivisionId);
         uDto.getCostCenterId().ifPresent(employee::setCostCenterId);
+        uDto.getAuthCode().ifPresent(employee::setAuthCode);
         uDto.getExtension().ifPresent(employee::setExtension);
         uDto.getCommunicationLocationId().ifPresent(employee::setCommunicationLocationId);
         uDto.getJobPositionId().ifPresent(employee::setJobPositionId);

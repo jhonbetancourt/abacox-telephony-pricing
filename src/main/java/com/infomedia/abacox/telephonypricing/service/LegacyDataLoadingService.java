@@ -247,6 +247,7 @@ public class LegacyDataLoadingService {
                     String name = csvRow.get(legacyMapping.getName());
                     Long subdivisionId = parseLongId(csvRow.get(legacyMapping.getSubdivisionId()));
                     Long costCenterId = parseLongId(csvRow.get(legacyMapping.getCostCenterId()));
+                    String authCode = csvRow.get(legacyMapping.getAuthCode());
                     String extension = csvRow.get(legacyMapping.getExtension());
                     Long communicationLocationId = parseLongId(csvRow.get(legacyMapping.getCommunicationLocationId()));
                     Long jobPositionId = parseLongId(csvRow.get(legacyMapping.getJobPositionId()));
@@ -259,6 +260,7 @@ public class LegacyDataLoadingService {
                             .name(name)
                             .subdivisionId(subdivisionId)
                             .costCenterId(costCenterId)
+                            .authCode(authCode)
                             .extension(extension)
                             .communicationLocationId(communicationLocationId)
                             .jobPositionId(jobPositionId)
