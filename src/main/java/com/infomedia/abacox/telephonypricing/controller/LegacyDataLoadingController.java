@@ -6,10 +6,12 @@ import com.infomedia.abacox.telephonypricing.dto.callrecord.CallRecordLegacyMapp
 import com.infomedia.abacox.telephonypricing.dto.commlocation.CommLocationLegacyMapping;
 import com.infomedia.abacox.telephonypricing.dto.costcenter.CostCenterLegacyMapping;
 import com.infomedia.abacox.telephonypricing.dto.employee.EmployeeLegacyMapping;
+import com.infomedia.abacox.telephonypricing.dto.extensionrange.ExtensionRangeLegacyMapping;
 import com.infomedia.abacox.telephonypricing.dto.indicator.IndicatorLegacyMapping;
 import com.infomedia.abacox.telephonypricing.dto.jobposition.JobPositionLegacyMapping;
 import com.infomedia.abacox.telephonypricing.dto.operator.OperatorLegacyMapping;
 import com.infomedia.abacox.telephonypricing.dto.planttype.PlantTypeLegacyMapping;
+import com.infomedia.abacox.telephonypricing.dto.specialservice.SpecialServiceLegacyMapping;
 import com.infomedia.abacox.telephonypricing.dto.subdivision.SubdivisionLegacyMapping;
 import com.infomedia.abacox.telephonypricing.dto.telephonytype.TelephonyTypeLegacyMapping;
 import com.infomedia.abacox.telephonypricing.dto.band.BandLegacyMapping;
@@ -21,6 +23,7 @@ import com.infomedia.abacox.telephonypricing.dto.contact.ContactLegacyMapping;
 import com.infomedia.abacox.telephonypricing.dto.origincountry.OriginCountryLegacyMapping;
 import com.infomedia.abacox.telephonypricing.dto.prefix.PrefixLegacyMapping;
 import com.infomedia.abacox.telephonypricing.dto.series.SeriesLegacyMapping;
+import com.infomedia.abacox.telephonypricing.dto.trunk.TrunkLegacyMapping;
 import com.infomedia.abacox.telephonypricing.service.LegacyDataLoadingService;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -177,5 +180,26 @@ public class LegacyDataLoadingController {
             , @RequestPart("mapping") @Schema(implementation = SeriesLegacyMapping.class) String mappingJson) throws IOException {
         SeriesLegacyMapping mapping = objectMapper.readValue(mappingJson, SeriesLegacyMapping.class);
         legacyDataLoadingService.loadSeriesData(file.getInputStream(), mapping);
+    }
+
+    @PostMapping(value = "csv/extensionRange", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public void csvExtensionRange(@RequestPart("file") MultipartFile file
+            , @RequestPart("mapping") @Schema(implementation = ExtensionRangeLegacyMapping.class) String mappingJson) throws IOException {
+        com.infomedia.abacox.telephonypricing.dto.extensionrange.ExtensionRangeLegacyMapping mapping = objectMapper.readValue(mappingJson, ExtensionRangeLegacyMapping.class);
+        legacyDataLoadingService.loadExtensionRangeData(file.getInputStream(), mapping);
+    }
+
+    @PostMapping(value = "csv/trunk", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public void csvTrunk(@RequestPart("file") MultipartFile file
+            , @RequestPart("mapping") @Schema(implementation = TrunkLegacyMapping.class) String mappingJson) throws IOException {
+        com.infomedia.abacox.telephonypricing.dto.trunk.TrunkLegacyMapping mapping = objectMapper.readValue(mappingJson, TrunkLegacyMapping.class);
+        legacyDataLoadingService.loadTrunkData(file.getInputStream(), mapping);
+    }
+
+    @PostMapping(value = "csv/specialService", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public void csvSpecialService(@RequestPart("file") MultipartFile file
+            , @RequestPart("mapping") @Schema(implementation = SpecialServiceLegacyMapping.class) String mappingJson) throws IOException {
+        com.infomedia.abacox.telephonypricing.dto.specialservice.SpecialServiceLegacyMapping mapping = objectMapper.readValue(mappingJson, SpecialServiceLegacyMapping.class);
+        legacyDataLoadingService.loadSpecialServiceData(file.getInputStream(), mapping);
     }
 }

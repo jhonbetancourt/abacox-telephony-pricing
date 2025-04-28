@@ -50,7 +50,7 @@ public class Trunk extends ActivableEntity {
             name = "comm_location_id",
             insertable = false,
             updatable = false,
-            foreignKey = @ForeignKey(name = "fk_cellular_link_comm_location")
+            foreignKey = @ForeignKey(name = "fk_trunk_comm_location")
     )
     private CommunicationLocation commLocation;
 
@@ -86,7 +86,7 @@ public class Trunk extends ActivableEntity {
             name = "operator_id",
             insertable = false,
             updatable = false,
-            foreignKey = @ForeignKey(name = "fk_cellular_link_operator")
+            foreignKey = @ForeignKey(name = "fk_trunk_operator")
     )
     private Operator operator;
 
@@ -95,8 +95,8 @@ public class Trunk extends ActivableEntity {
      * Original field: CELULINK_NOPREFIJOPBX
      */
     @Column(name = "no_pbx_prefix", nullable = false)
-    @ColumnDefault("1")
-    private Integer noPbxPrefix;
+    @ColumnDefault("true")
+    private Boolean noPbxPrefix;
 
     /**
      * Number of channels available.

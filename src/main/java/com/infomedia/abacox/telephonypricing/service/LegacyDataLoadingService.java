@@ -6,10 +6,12 @@ import com.infomedia.abacox.telephonypricing.dto.callrecord.CallRecordLegacyMapp
 import com.infomedia.abacox.telephonypricing.dto.commlocation.CommLocationLegacyMapping;
 import com.infomedia.abacox.telephonypricing.dto.costcenter.CostCenterLegacyMapping;
 import com.infomedia.abacox.telephonypricing.dto.employee.EmployeeLegacyMapping;
+import com.infomedia.abacox.telephonypricing.dto.extensionrange.ExtensionRangeLegacyMapping;
 import com.infomedia.abacox.telephonypricing.dto.indicator.IndicatorLegacyMapping;
 import com.infomedia.abacox.telephonypricing.dto.jobposition.JobPositionLegacyMapping;
 import com.infomedia.abacox.telephonypricing.dto.operator.OperatorLegacyMapping;
 import com.infomedia.abacox.telephonypricing.dto.planttype.PlantTypeLegacyMapping;
+import com.infomedia.abacox.telephonypricing.dto.specialservice.SpecialServiceLegacyMapping;
 import com.infomedia.abacox.telephonypricing.dto.subdivision.SubdivisionLegacyMapping;
 import com.infomedia.abacox.telephonypricing.dto.telephonytype.TelephonyTypeLegacyMapping;
 import com.infomedia.abacox.telephonypricing.dto.band.BandLegacyMapping;
@@ -21,6 +23,7 @@ import com.infomedia.abacox.telephonypricing.dto.contact.ContactLegacyMapping;
 import com.infomedia.abacox.telephonypricing.dto.origincountry.OriginCountryLegacyMapping;
 import com.infomedia.abacox.telephonypricing.dto.prefix.PrefixLegacyMapping;
 import com.infomedia.abacox.telephonypricing.dto.series.SeriesLegacyMapping;
+import com.infomedia.abacox.telephonypricing.dto.trunk.TrunkLegacyMapping;
 import com.infomedia.abacox.telephonypricing.entity.*;
 import com.infomedia.abacox.telephonypricing.entity.superclass.ActivableEntity;
 import com.infomedia.abacox.telephonypricing.entity.superclass.AuditedEntity;
@@ -848,6 +851,125 @@ public class LegacyDataLoadingService {
         }
     }
 
+    public void loadExtensionRangeData(InputStream csvInputStream, ExtensionRangeLegacyMapping legacyMapping) {
+        try (CsvReader csvReader = new CsvReader(csvInputStream, ",", true)) {
+            csvReader.processRowsAsMap(csvRow -> {
+                Long id = parseLongId(csvRow.get(legacyMapping.getId()));
+                if (id == null) {
+                    log.warn("Skipping row due to invalid or missing ID: {}", csvRow);
+                    return;
+                }
+                if (!JpaUtils.entityExists(ExtensionRange.class, id, entityManager)) {
+                    Long commLocationId = parseLongId(csvRow.get(legacyMapping.getCommLocationId()));
+                    Long subdivisionId = parseLongId(csvRow.get(legacyMapping.getSubdivisionId()));
+                    String prefix = csvRow.get(legacyMapping.getPrefix());
+                    Long rangeStart = parseLong(csvRow.get(legacyMapping.getRangeStart())); // Use parseLong for non-ID Longs
+                    Long rangeEnd = parseLong(csvRow.get(legacyMapping.getRangeEnd()));     // Use parseLong for non-ID Longs
+                    Long costCenterId = parseLongId(csvRow.get(legacyMapping.getCostCenterId()));
+
+                    ExtensionRange extensionRange = ExtensionRange.builder()
+                            .id(id)
+                            .commLocationId(commLocationId)
+                            .subdivisionId(subdivisionId)
+                            .prefix(prefix)
+                            .rangeStart(rangeStart)
+                            .rangeEnd(rangeEnd)
+                            .costCenterId(costCenterId)
+                            .build();
+                    setActivableFields(extensionRange, csvRow, legacyMapping, id); // Pass ID
+                    try {
+                        JpaUtils.saveEntityWithForcedId(extensionRange, entityManager);
+                    } catch (Exception e) {
+                        log.error("Failed to save extension range data with ID {}: {}", id, extensionRange, e);
+                    }
+                }
+            });
+        } catch (IOException e) {
+            log.error("Error reading ExtensionRange CSV data", e);
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void loadSpecialServiceData(InputStream csvInputStream, SpecialServiceLegacyMapping legacyMapping) {
+        try (CsvReader csvReader = new CsvReader(csvInputStream, ",", true)) {
+            csvReader.processRowsAsMap(csvRow -> {
+                Long id = parseLongId(csvRow.get(legacyMapping.getId()));
+                if (id == null) {
+                    log.warn("Skipping row due to invalid or missing ID: {}", csvRow);
+                    return;
+                }
+                if (!JpaUtils.entityExists(SpecialService.class, id, entityManager)) {
+                    Long indicatorId = parseLongId(csvRow.get(legacyMapping.getIndicatorId()));
+                    String phoneNumber = csvRow.get(legacyMapping.getPhoneNumber());
+                    BigDecimal value = parseBigDecimal(csvRow.get(legacyMapping.getValue()));
+                    BigDecimal vatAmount = parseBigDecimal(csvRow.get(legacyMapping.getVatAmount()));
+                    Boolean vatIncluded = parseBoolean(csvRow.get(legacyMapping.getVatIncluded()));
+                    String description = csvRow.get(legacyMapping.getDescription());
+                    Long originCountryId = parseLongId(csvRow.get(legacyMapping.getOriginCountryId()));
+
+                    SpecialService specialService = SpecialService.builder()
+                            .id(id)
+                            .indicatorId(indicatorId)
+                            .phoneNumber(phoneNumber)
+                            .value(value)
+                            .vatAmount(vatAmount)
+                            .vatIncluded(vatIncluded)
+                            .description(description)
+                            .originCountryId(originCountryId)
+                            .build();
+                    setActivableFields(specialService, csvRow, legacyMapping, id);
+                    try {
+                        JpaUtils.saveEntityWithForcedId(specialService, entityManager);
+                    } catch (Exception e) {
+                        log.error("Failed to save special service data with ID {}: {}", id, specialService, e);
+                    }
+                }
+            });
+        } catch (IOException e) {
+            log.error("Error reading SpecialService CSV data", e);
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void loadTrunkData(InputStream csvInputStream, TrunkLegacyMapping legacyMapping) {
+        try (CsvReader csvReader = new CsvReader(csvInputStream, ",", true)) {
+            csvReader.processRowsAsMap(csvRow -> {
+                Long id = parseLongId(csvRow.get(legacyMapping.getId()));
+                if (id == null) {
+                    log.warn("Skipping row due to invalid or missing ID: {}", csvRow);
+                    return;
+                }
+                if (!JpaUtils.entityExists(Trunk.class, id, entityManager)) {
+                    Long commLocationId = parseLongId(csvRow.get(legacyMapping.getCommLocationId()));
+                    String description = csvRow.get(legacyMapping.getDescription());
+                    String trunkValue = csvRow.get(legacyMapping.getTrunk()); // Renamed variable to avoid conflict with entity class name
+                    Long operatorId = parseLongId(csvRow.get(legacyMapping.getOperatorId()));
+                    Boolean noPbxPrefix = parseBoolean(csvRow.get(legacyMapping.getNoPbxPrefix()));
+                    Integer channels = parseInteger(csvRow.get(legacyMapping.getChannels()));
+
+                    Trunk trunk = Trunk.builder()
+                            .id(id)
+                            .commLocationId(commLocationId)
+                            .description(description)
+                            .trunk(trunkValue) // Use the renamed variable
+                            .operatorId(operatorId)
+                            .noPbxPrefix(noPbxPrefix)
+                            .channels(channels)
+                            .build();
+                    setActivableFields(trunk, csvRow, legacyMapping, id); // Pass ID
+                    try {
+                        JpaUtils.saveEntityWithForcedId(trunk, entityManager);
+                    } catch (Exception e) {
+                        log.error("Failed to save trunk data with ID {}: {}", id, trunk, e);
+                    }
+                }
+            });
+        } catch (IOException e) {
+            log.error("Error reading Trunk CSV data", e);
+            throw new RuntimeException(e);
+        }
+    }
+
 
     // --- Helper Methods ---
 
@@ -865,6 +987,21 @@ public class LegacyDataLoadingService {
         } catch (NumberFormatException e) {
             log.warn("Could not parse Long ID: '{}', returning null.", idString);
             return null;
+        }
+    }
+
+    private Long parseLong(String longString){
+        if (longString == null || longString.isEmpty() || longString.equalsIgnoreCase("null")) {
+            return null;
+        }
+        try {
+            if (longString.contains(".")) {
+                longString = longString.substring(0, longString.indexOf('.'));
+            }
+            return Long.parseLong(longString);
+        } catch (NumberFormatException e) {
+            log.warn("Could not parse Long: '{}', returning null.", longString);
+            return null; // Or return 0
         }
     }
 

@@ -1,5 +1,6 @@
 package com.infomedia.abacox.telephonypricing.entity;
 
+import com.infomedia.abacox.telephonypricing.entity.superclass.ActivableEntity;
 import com.infomedia.abacox.telephonypricing.entity.superclass.AuditedEntity;
 import jakarta.persistence.*;
 import lombok.*;
@@ -19,7 +20,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @SuperBuilder(toBuilder = true)
-public class ExtensionRange extends AuditedEntity {
+public class ExtensionRange extends ActivableEntity {
 
     /**
      * Primary key for the extension range.
