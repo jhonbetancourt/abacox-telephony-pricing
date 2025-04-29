@@ -23,7 +23,7 @@ public class UpdateTrunk {
 
     @NotBlank
     @Size(max = 50)
-    private JsonNullable<String> trunk = JsonNullable.undefined();
+    private JsonNullable<String> name = JsonNullable.undefined();
 
     private JsonNullable<Long> operatorId = JsonNullable.undefined();
 

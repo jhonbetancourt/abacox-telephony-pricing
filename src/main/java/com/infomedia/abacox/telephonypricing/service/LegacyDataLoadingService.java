@@ -944,7 +944,7 @@ public class LegacyDataLoadingService {
                 if (!JpaUtils.entityExists(Trunk.class, id, entityManager)) {
                     Long commLocationId = parseLongId(csvRow.get(legacyMapping.getCommLocationId()));
                     String description = csvRow.get(legacyMapping.getDescription());
-                    String trunkValue = csvRow.get(legacyMapping.getTrunk()); // Renamed variable to avoid conflict with entity class name
+                    String name = csvRow.get(legacyMapping.getName());
                     Long operatorId = parseLongId(csvRow.get(legacyMapping.getOperatorId()));
                     Boolean noPbxPrefix = parseBoolean(csvRow.get(legacyMapping.getNoPbxPrefix()));
                     Integer channels = parseInteger(csvRow.get(legacyMapping.getChannels()));
@@ -953,7 +953,7 @@ public class LegacyDataLoadingService {
                             .id(id)
                             .commLocationId(commLocationId)
                             .description(description)
-                            .trunk(trunkValue) // Use the renamed variable
+                            .name(name)
                             .operatorId(operatorId)
                             .noPbxPrefix(noPbxPrefix)
                             .channels(channels)

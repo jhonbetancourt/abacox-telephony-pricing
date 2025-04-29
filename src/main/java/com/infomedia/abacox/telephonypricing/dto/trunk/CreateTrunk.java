@@ -23,7 +23,7 @@ public class CreateTrunk {
 
     @NotBlank
     @Size(max = 50)
-    private String trunk;
+    private String name;
 
     @NotNull
     private Long operatorId;

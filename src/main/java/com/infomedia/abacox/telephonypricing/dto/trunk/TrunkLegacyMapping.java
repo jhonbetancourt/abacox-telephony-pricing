@@ -14,7 +14,7 @@ public class TrunkLegacyMapping extends ActivableLegacyMapping {
     private String id;
     private String commLocationId;
     private String description;
-    private String trunk;
+    private String name;
     private String operatorId;
     private String noPbxPrefix;
     private String channels;

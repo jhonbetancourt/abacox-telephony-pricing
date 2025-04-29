@@ -16,7 +16,7 @@ public class TrunkDto extends ActivableDto {
     private Long id;
     private Long commLocationId;
     private String description;
-    private String trunk;
+    private String name;
     private Long operatorId;
     private boolean noPbxPrefix;
     private Integer channels;

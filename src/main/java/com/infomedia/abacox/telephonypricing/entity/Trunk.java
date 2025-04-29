@@ -66,9 +66,9 @@ public class Trunk extends ActivableEntity {
      * Trunk identifier for the cellular link.
      * Original field: CELULINK_TRONCAL
      */
-    @Column(name = "trunk", length = 50, nullable = false)
+    @Column(name = "name", length = 50, nullable = false)
     @ColumnDefault("''")
-    private String trunk;
+    private String name;
 
     /**
      * ID of the operator.

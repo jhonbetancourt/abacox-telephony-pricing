@@ -28,7 +28,7 @@ public class TrunkService extends CrudService<Trunk, Long, TrunkRepository> {
         Trunk trunk = Trunk.builder()
                 .commLocationId(cDto.getCommLocationId())
                 .description(cDto.getDescription())
-                .trunk(cDto.getTrunk())
+                .name(cDto.getName())
                 .operatorId(cDto.getOperatorId())
                 .noPbxPrefix(cDto.getNoPbxPrefix())
                 .channels(cDto.getChannels())
@@ -41,7 +41,7 @@ public class TrunkService extends CrudService<Trunk, Long, TrunkRepository> {
         Trunk trunk = get(id);
         uDto.getCommLocationId().ifPresent(trunk::setCommLocationId);
         uDto.getDescription().ifPresent(trunk::setDescription);
-        uDto.getTrunk().ifPresent(trunk::setTrunk);
+        uDto.getName().ifPresent(trunk::setName);
         uDto.getOperatorId().ifPresent(trunk::setOperatorId);
         uDto.getNoPbxPrefix().ifPresent(trunk::setNoPbxPrefix);
         uDto.getChannels().ifPresent(trunk::setChannels);
