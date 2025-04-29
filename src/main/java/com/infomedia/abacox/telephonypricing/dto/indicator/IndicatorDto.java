@@ -1,6 +1,5 @@
 package com.infomedia.abacox.telephonypricing.dto.indicator;
 
-import com.infomedia.abacox.telephonypricing.dto.city.CityDto;
 import com.infomedia.abacox.telephonypricing.dto.operator.OperatorDto;
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivableDto;
 import com.infomedia.abacox.telephonypricing.dto.telephonytype.TelephonyTypeDto;
@@ -20,10 +19,7 @@ import lombok.NoArgsConstructor;
 public class IndicatorDto extends ActivableDto {
     private Long id;
     private String departmentCountry;
-    private Long cityId;
     private String cityName;
-    private CityDto city;
-    private boolean isAssociated;
     private Long operatorId;
     private Long originCountryId;
     private Long telephonyTypeId;

@@ -1,7 +1,7 @@
 package com.infomedia.abacox.telephonypricing.service;
 
 import com.infomedia.abacox.telephonypricing.component.csv.CsvReader;
-import com.infomedia.abacox.telephonypricing.component.utils.JpaUtils;
+import com.infomedia.abacox.telephonypricing.component.utils.DBUtils;
 import com.infomedia.abacox.telephonypricing.dto.callrecord.CallRecordLegacyMapping;
 import com.infomedia.abacox.telephonypricing.dto.commlocation.CommLocationLegacyMapping;
 import com.infomedia.abacox.telephonypricing.dto.costcenter.CostCenterLegacyMapping;
@@ -63,11 +63,9 @@ public class LegacyDataLoadingService {
                     log.warn("Skipping row due to invalid or missing ID: {}", csvRow);
                     return;
                 }
-                if(!JpaUtils.entityExists(Indicator.class, id, entityManager)){
+                if(!DBUtils.entityExists(Indicator.class, id, entityManager)){
                     String departmentCountry = csvRow.get(legacyMapping.getDepartmentCountry());
-                    Long cityId = parseLongId(csvRow.get(legacyMapping.getCityId()));
                     String cityName = csvRow.get(legacyMapping.getCityName());
-                    Boolean isAssociated = parseBoolean(csvRow.get(legacyMapping.getIsAssociated()));
                     Long operatorId = parseLongId(csvRow.get(legacyMapping.getOperatorId()));
                     Long originCountryId = parseLongId(csvRow.get(legacyMapping.getOriginCountryId()));
                     Long telephonyTypeId = parseLongId(csvRow.get(legacyMapping.getTelephonyTypeId()));
@@ -75,16 +73,14 @@ public class LegacyDataLoadingService {
                             .id(id) // Set the parsed ID
                             .telephonyTypeId(telephonyTypeId)
                             .departmentCountry(departmentCountry)
-                            .cityId(cityId)
                             .cityName(cityName)
-                            .isAssociated(isAssociated)
                             .operatorId(operatorId)
                             .originCountryId(originCountryId)
                             .build();
                     // Set activable fields if they exist in the mapping
                     setActivableFields(indicator, csvRow, legacyMapping, id); // Pass ID for logging
                     try {
-                        JpaUtils.saveEntityWithForcedId(indicator, entityManager);
+                        DBUtils.saveEntityWithForcedId(indicator, entityManager);
                     }catch (Exception e){
                         log.error("Failed to save indicator data with ID {}: {}", id, indicator, e);
                     }
@@ -104,7 +100,7 @@ public class LegacyDataLoadingService {
                     log.warn("Skipping row due to invalid or missing ID: {}", csvRow);
                     return;
                 }
-                if(!JpaUtils.entityExists(TelephonyType.class, id, entityManager)){
+                if(!DBUtils.entityExists(TelephonyType.class, id, entityManager)){
                     String name = csvRow.get(legacyMapping.getName());
                     Long callCategoryId = parseLongId(csvRow.get(legacyMapping.getCallCategoryId()));
                     Boolean usesTrunks = parseBoolean(csvRow.get(legacyMapping.getUsesTrunks()));
@@ -116,7 +112,7 @@ public class LegacyDataLoadingService {
                             .build();
                     setActivableFields(telephonyType, csvRow, legacyMapping, id); // Pass ID
                     try {
-                        JpaUtils.saveEntityWithForcedId(telephonyType, entityManager);
+                        DBUtils.saveEntityWithForcedId(telephonyType, entityManager);
                     }catch (Exception e){
                         log.error("Failed to save telephony type data with ID {}: {}", id, telephonyType, e);
                     }
@@ -136,7 +132,7 @@ public class LegacyDataLoadingService {
                     log.warn("Skipping row due to invalid or missing ID: {}", csvRow);
                     return;
                 }
-                if(!JpaUtils.entityExists(Operator.class, id, entityManager)){
+                if(!DBUtils.entityExists(Operator.class, id, entityManager)){
                     String name = csvRow.get(legacyMapping.getName());
                     Long originCountryId = parseLongId(csvRow.get(legacyMapping.getOriginCountryId()));
                     Operator operator = Operator.builder()
@@ -146,7 +142,7 @@ public class LegacyDataLoadingService {
                             .build();
                     setActivableFields(operator, csvRow, legacyMapping, id); // Pass ID
                     try {
-                        JpaUtils.saveEntityWithForcedId(operator, entityManager);
+                        DBUtils.saveEntityWithForcedId(operator, entityManager);
                     }catch (Exception e){
                         log.error("Failed to save operator data with ID {}: {}", id, operator, e);
                     }
@@ -166,7 +162,7 @@ public class LegacyDataLoadingService {
                     log.warn("Skipping row due to invalid or missing ID: {}", csvRow);
                     return;
                 }
-                if(!JpaUtils.entityExists(CallRecord.class, id, entityManager)){
+                if(!DBUtils.entityExists(CallRecord.class, id, entityManager)){
                     String dial = csvRow.get(legacyMapping.getDial());
                     Long commLocationId = parseLongId(csvRow.get(legacyMapping.getCommLocationId()));
                     LocalDateTime serviceDate = parseDateTime(csvRow.get(legacyMapping.getServiceDate()));
@@ -222,7 +218,7 @@ public class LegacyDataLoadingService {
                             .build();
                     setAuditedFields(callRecord, csvRow, legacyMapping, id); // Pass ID
                     try {
-                        JpaUtils.saveEntityWithForcedId(callRecord, entityManager);
+                        DBUtils.saveEntityWithForcedId(callRecord, entityManager);
                     }
                     catch (Exception e){
                         log.error("Failed to save call record data with ID {}: {}", id, callRecord, e);
@@ -243,7 +239,7 @@ public class LegacyDataLoadingService {
                     log.warn("Skipping row due to invalid or missing ID: {}", csvRow);
                     return;
                 }
-                if(!JpaUtils.entityExists(Employee.class, id, entityManager)){
+                if(!DBUtils.entityExists(Employee.class, id, entityManager)){
                     String name = csvRow.get(legacyMapping.getName());
                     Long subdivisionId = parseLongId(csvRow.get(legacyMapping.getSubdivisionId()));
                     Long costCenterId = parseLongId(csvRow.get(legacyMapping.getCostCenterId()));
@@ -271,7 +267,7 @@ public class LegacyDataLoadingService {
                             .build();
                     setActivableFields(employee, csvRow, legacyMapping, id); // Pass ID
                     try {
-                        JpaUtils.saveEntityWithForcedId(employee, entityManager);
+                        DBUtils.saveEntityWithForcedId(employee, entityManager);
                     }catch (Exception e){
                         log.error("Failed to save employee data with ID {}: {}", id, employee, e);
                     }
@@ -291,7 +287,7 @@ public class LegacyDataLoadingService {
                     log.warn("Skipping row due to invalid or missing ID: {}", csvRow);
                     return;
                 }
-                if(!JpaUtils.entityExists(CommunicationLocation.class, id, entityManager)){
+                if(!DBUtils.entityExists(CommunicationLocation.class, id, entityManager)){
                     String directory = csvRow.get(legacyMapping.getDirectory());
                     Long plantTypeId = parseLongId(csvRow.get(legacyMapping.getPlantTypeId()));
                     String serial = csvRow.get(legacyMapping.getSerial());
@@ -315,7 +311,7 @@ public class LegacyDataLoadingService {
                             .build();
                     setActivableFields(commLocation, csvRow, legacyMapping, id); // Pass ID
                     try {
-                        JpaUtils.saveEntityWithForcedId(commLocation, entityManager);
+                        DBUtils.saveEntityWithForcedId(commLocation, entityManager);
                     }catch (Exception e){
                         log.error("Failed to save comm location data with ID {}: {}", id, commLocation, e);
                     }
@@ -335,7 +331,7 @@ public class LegacyDataLoadingService {
                     log.warn("Skipping row due to invalid or missing ID: {}", csvRow);
                     return;
                 }
-                if(!JpaUtils.entityExists(PlantType.class, id, entityManager)){
+                if(!DBUtils.entityExists(PlantType.class, id, entityManager)){
                     String name = csvRow.get(legacyMapping.getName());
                     PlantType plantType = PlantType.builder()
                             .id(id)
@@ -343,7 +339,7 @@ public class LegacyDataLoadingService {
                             .build();
                     setActivableFields(plantType, csvRow, legacyMapping, id); // Pass ID
                     try {
-                        JpaUtils.saveEntityWithForcedId(plantType, entityManager);
+                        DBUtils.saveEntityWithForcedId(plantType, entityManager);
                     }catch (Exception e){
                         log.error("Failed to save plant type data with ID {}: {}", id, plantType, e);
                     }
@@ -363,7 +359,7 @@ public class LegacyDataLoadingService {
                     log.warn("Skipping row due to invalid or missing ID: {}", csvRow);
                     return;
                 }
-                if(!JpaUtils.entityExists(JobPosition.class, id, entityManager)){
+                if(!DBUtils.entityExists(JobPosition.class, id, entityManager)){
                     String name = csvRow.get(legacyMapping.getName());
                     JobPosition jobPosition = JobPosition.builder()
                             .id(id)
@@ -371,7 +367,7 @@ public class LegacyDataLoadingService {
                             .build();
                     setActivableFields(jobPosition, csvRow, legacyMapping, id); // Pass ID
                     try {
-                        JpaUtils.saveEntityWithForcedId(jobPosition, entityManager);
+                        DBUtils.saveEntityWithForcedId(jobPosition, entityManager);
                     }catch (Exception e){
                         log.error("Failed to save job position data with ID {}: {}", id, jobPosition, e);
                     }
@@ -393,7 +389,7 @@ public class LegacyDataLoadingService {
                                 log.warn("Skipping CostCenter row due to invalid or missing ID: {}", csvRow);
                                 return false;
                             }
-                            return !JpaUtils.entityExists(CostCenter.class, id, entityManager);
+                            return !DBUtils.entityExists(CostCenter.class, id, entityManager);
                         } catch (Exception e) { // Catch broader exceptions during filtering
                             log.warn("Skipping CostCenter row due to error during ID check: {}", csvRow, e);
                             return false;
@@ -461,7 +457,7 @@ public class LegacyDataLoadingService {
                                 log.warn("Skipping Subdivision row due to invalid or missing ID: {}", csvRow);
                                 return false;
                             }
-                            return !JpaUtils.entityExists(Subdivision.class, id, entityManager);
+                            return !DBUtils.entityExists(Subdivision.class, id, entityManager);
                         } catch (Exception e) {
                             log.warn("Skipping Subdivision row due to error during ID check: {}", csvRow, e);
                             return false;
@@ -523,7 +519,7 @@ public class LegacyDataLoadingService {
                     log.warn("Skipping row due to invalid or missing ID: {}", csvRow);
                     return;
                 }
-                if (!JpaUtils.entityExists(Band.class, id, entityManager)) {
+                if (!DBUtils.entityExists(Band.class, id, entityManager)) {
                     Long prefixId = parseLongId(csvRow.get(legacyMapping.getPrefixId()));
                     String name = csvRow.get(legacyMapping.getName());
                     BigDecimal value = parseBigDecimal(csvRow.get(legacyMapping.getValue()));
@@ -541,7 +537,7 @@ public class LegacyDataLoadingService {
                             .build();
                     setActivableFields(band, csvRow, legacyMapping, id); // Pass ID
                     try {
-                        JpaUtils.saveEntityWithForcedId(band, entityManager);
+                        DBUtils.saveEntityWithForcedId(band, entityManager);
                     } catch (Exception e) {
                         log.error("Failed to save band data with ID {}: {}", id, band, e);
                     }
@@ -561,7 +557,7 @@ public class LegacyDataLoadingService {
                     log.warn("Skipping row due to invalid or missing ID: {}", csvRow);
                     return;
                 }
-                if (!JpaUtils.entityExists(BandIndicator.class, id, entityManager)) {
+                if (!DBUtils.entityExists(BandIndicator.class, id, entityManager)) {
                     Long bandId = parseLongId(csvRow.get(legacyMapping.getBandId()));
                     Long indicatorId = parseLongId(csvRow.get(legacyMapping.getIndicatorId()));
 
@@ -572,7 +568,7 @@ public class LegacyDataLoadingService {
                             .build();
                     setAuditedFields(bandIndicator, csvRow, legacyMapping, id); // Pass ID
                     try {
-                        JpaUtils.saveEntityWithForcedId(bandIndicator, entityManager);
+                        DBUtils.saveEntityWithForcedId(bandIndicator, entityManager);
                     } catch (Exception e) {
                         log.error("Failed to save band indicator data with ID {}: {}", id, bandIndicator, e);
                     }
@@ -592,7 +588,7 @@ public class LegacyDataLoadingService {
                     log.warn("Skipping row due to invalid or missing ID: {}", csvRow);
                     return;
                 }
-                if (!JpaUtils.entityExists(CallCategory.class, id, entityManager)) {
+                if (!DBUtils.entityExists(CallCategory.class, id, entityManager)) {
                     String name = csvRow.get(legacyMapping.getName());
 
                     CallCategory callCategory = CallCategory.builder()
@@ -601,7 +597,7 @@ public class LegacyDataLoadingService {
                             .build();
                     setActivableFields(callCategory, csvRow, legacyMapping, id); // Pass ID
                     try {
-                        JpaUtils.saveEntityWithForcedId(callCategory, entityManager);
+                        DBUtils.saveEntityWithForcedId(callCategory, entityManager);
                     } catch (Exception e) {
                         log.error("Failed to save call category data with ID {}: {}", id, callCategory, e);
                     }
@@ -621,7 +617,7 @@ public class LegacyDataLoadingService {
                     log.warn("Skipping row due to invalid or missing ID: {}", csvRow);
                     return;
                 }
-                if (!JpaUtils.entityExists(City.class, id, entityManager)) {
+                if (!DBUtils.entityExists(City.class, id, entityManager)) {
                     String department = csvRow.get(legacyMapping.getDepartment());
                     String classification = csvRow.get(legacyMapping.getClassification());
                     String municipality = csvRow.get(legacyMapping.getMunicipality());
@@ -648,7 +644,7 @@ public class LegacyDataLoadingService {
                             .build();
                     setActivableFields(city, csvRow, legacyMapping, id); // Pass ID
                     try {
-                        JpaUtils.saveEntityWithForcedId(city, entityManager);
+                        DBUtils.saveEntityWithForcedId(city, entityManager);
                     } catch (Exception e) {
                         log.error("Failed to save city data with ID {}: {}", id, city, e);
                     }
@@ -668,7 +664,7 @@ public class LegacyDataLoadingService {
                     log.warn("Skipping row due to invalid or missing ID: {}", csvRow);
                     return;
                 }
-                if (!JpaUtils.entityExists(Company.class, id, entityManager)) {
+                if (!DBUtils.entityExists(Company.class, id, entityManager)) {
                     String additionalInfo = csvRow.get(legacyMapping.getAdditionalInfo());
                     String address = csvRow.get(legacyMapping.getAddress());
                     String name = csvRow.get(legacyMapping.getName());
@@ -689,7 +685,7 @@ public class LegacyDataLoadingService {
                             .build();
                     setActivableFields(company, csvRow, legacyMapping, id); // Pass ID
                     try {
-                        JpaUtils.saveEntityWithForcedId(company, entityManager);
+                        DBUtils.saveEntityWithForcedId(company, entityManager);
                     } catch (Exception e) {
                         log.error("Failed to save company data with ID {}: {}", id, company, e);
                     }
@@ -709,7 +705,7 @@ public class LegacyDataLoadingService {
                     log.warn("Skipping row due to invalid or missing ID: {}", csvRow);
                     return;
                 }
-                if (!JpaUtils.entityExists(Contact.class, id, entityManager)) {
+                if (!DBUtils.entityExists(Contact.class, id, entityManager)) {
                     Boolean contactType = parseBoolean(csvRow.get(legacyMapping.getContactType()));
                     Long employeeId = parseLongId(csvRow.get(legacyMapping.getEmployeeId()));
                     Long companyId = parseLongId(csvRow.get(legacyMapping.getCompanyId()));
@@ -730,7 +726,7 @@ public class LegacyDataLoadingService {
                             .build();
                     setActivableFields(contact, csvRow, legacyMapping, id); // Pass ID
                     try {
-                        JpaUtils.saveEntityWithForcedId(contact, entityManager);
+                        DBUtils.saveEntityWithForcedId(contact, entityManager);
                     } catch (Exception e) {
                         log.error("Failed to save contact data with ID {}: {}", id, contact, e);
                     }
@@ -750,7 +746,7 @@ public class LegacyDataLoadingService {
                     log.warn("Skipping row due to invalid or missing ID: {}", csvRow);
                     return;
                 }
-                if (!JpaUtils.entityExists(OriginCountry.class, id, entityManager)) {
+                if (!DBUtils.entityExists(OriginCountry.class, id, entityManager)) {
                     String currencySymbol = csvRow.get(legacyMapping.getCurrencySymbol());
                     String name = csvRow.get(legacyMapping.getName());
                     String code = csvRow.get(legacyMapping.getCode());
@@ -763,7 +759,7 @@ public class LegacyDataLoadingService {
                             .build();
                     setActivableFields(originCountry, csvRow, legacyMapping, id); // Pass ID
                     try {
-                        JpaUtils.saveEntityWithForcedId(originCountry, entityManager);
+                        DBUtils.saveEntityWithForcedId(originCountry, entityManager);
                     } catch (Exception e) {
                         log.error("Failed to save origin country data with ID {}: {}", id, originCountry, e);
                     }
@@ -783,7 +779,7 @@ public class LegacyDataLoadingService {
                     log.warn("Skipping row due to invalid or missing ID: {}", csvRow);
                     return;
                 }
-                if (!JpaUtils.entityExists(Prefix.class, id, entityManager)) {
+                if (!DBUtils.entityExists(Prefix.class, id, entityManager)) {
                     Long operatorId = parseLongId(csvRow.get(legacyMapping.getOperatorId()));
                     Long telephoneTypeId = parseLongId(csvRow.get(legacyMapping.getTelephoneTypeId()));
                     String code = csvRow.get(legacyMapping.getCode());
@@ -804,7 +800,7 @@ public class LegacyDataLoadingService {
                             .build();
                     setActivableFields(prefix, csvRow, legacyMapping, id); // Pass ID
                     try {
-                        JpaUtils.saveEntityWithForcedId(prefix, entityManager);
+                        DBUtils.saveEntityWithForcedId(prefix, entityManager);
                     } catch (Exception e) {
                         log.error("Failed to save prefix data with ID {}: {}", id, prefix, e);
                     }
@@ -824,7 +820,7 @@ public class LegacyDataLoadingService {
                     log.warn("Skipping row due to invalid or missing ID: {}", csvRow);
                     return;
                 }
-                if (!JpaUtils.entityExists(Series.class, id, entityManager)) {
+                if (!DBUtils.entityExists(Series.class, id, entityManager)) {
                     Long indicatorId = parseLongId(csvRow.get(legacyMapping.getIndicatorId()));
                     Integer ndc = parseInteger(csvRow.get(legacyMapping.getNdc()));
                     Integer initialNumber = parseInteger(csvRow.get(legacyMapping.getInitialNumber()));
@@ -841,7 +837,7 @@ public class LegacyDataLoadingService {
                             .build();
                     setActivableFields(series, csvRow, legacyMapping, id); // Pass ID
                     try {
-                        JpaUtils.saveEntityWithForcedId(series, entityManager);
+                        DBUtils.saveEntityWithForcedId(series, entityManager);
                     } catch (Exception e) {
                         log.error("Failed to save series data with ID {}: {}", id, series, e);
                     }
@@ -861,7 +857,7 @@ public class LegacyDataLoadingService {
                     log.warn("Skipping row due to invalid or missing ID: {}", csvRow);
                     return;
                 }
-                if (!JpaUtils.entityExists(ExtensionRange.class, id, entityManager)) {
+                if (!DBUtils.entityExists(ExtensionRange.class, id, entityManager)) {
                     Long commLocationId = parseLongId(csvRow.get(legacyMapping.getCommLocationId()));
                     Long subdivisionId = parseLongId(csvRow.get(legacyMapping.getSubdivisionId()));
                     String prefix = csvRow.get(legacyMapping.getPrefix());
@@ -880,7 +876,7 @@ public class LegacyDataLoadingService {
                             .build();
                     setActivableFields(extensionRange, csvRow, legacyMapping, id); // Pass ID
                     try {
-                        JpaUtils.saveEntityWithForcedId(extensionRange, entityManager);
+                        DBUtils.saveEntityWithForcedId(extensionRange, entityManager);
                     } catch (Exception e) {
                         log.error("Failed to save extension range data with ID {}: {}", id, extensionRange, e);
                     }
@@ -900,7 +896,7 @@ public class LegacyDataLoadingService {
                     log.warn("Skipping row due to invalid or missing ID: {}", csvRow);
                     return;
                 }
-                if (!JpaUtils.entityExists(SpecialService.class, id, entityManager)) {
+                if (!DBUtils.entityExists(SpecialService.class, id, entityManager)) {
                     Long indicatorId = parseLongId(csvRow.get(legacyMapping.getIndicatorId()));
                     String phoneNumber = csvRow.get(legacyMapping.getPhoneNumber());
                     BigDecimal value = parseBigDecimal(csvRow.get(legacyMapping.getValue()));
@@ -921,7 +917,7 @@ public class LegacyDataLoadingService {
                             .build();
                     setActivableFields(specialService, csvRow, legacyMapping, id);
                     try {
-                        JpaUtils.saveEntityWithForcedId(specialService, entityManager);
+                        DBUtils.saveEntityWithForcedId(specialService, entityManager);
                     } catch (Exception e) {
                         log.error("Failed to save special service data with ID {}: {}", id, specialService, e);
                     }
@@ -941,7 +937,7 @@ public class LegacyDataLoadingService {
                     log.warn("Skipping row due to invalid or missing ID: {}", csvRow);
                     return;
                 }
-                if (!JpaUtils.entityExists(Trunk.class, id, entityManager)) {
+                if (!DBUtils.entityExists(Trunk.class, id, entityManager)) {
                     Long commLocationId = parseLongId(csvRow.get(legacyMapping.getCommLocationId()));
                     String description = csvRow.get(legacyMapping.getDescription());
                     String name = csvRow.get(legacyMapping.getName());
@@ -960,7 +956,7 @@ public class LegacyDataLoadingService {
                             .build();
                     setActivableFields(trunk, csvRow, legacyMapping, id); // Pass ID
                     try {
-                        JpaUtils.saveEntityWithForcedId(trunk, entityManager);
+                        DBUtils.saveEntityWithForcedId(trunk, entityManager);
                     } catch (Exception e) {
                         log.error("Failed to save trunk data with ID {}: {}", id, trunk, e);
                     }
@@ -1099,7 +1095,7 @@ public class LegacyDataLoadingService {
         ID id = idGetter.apply(entity);
 
         // Skip if this ID has already been processed (prevents cycles) or exists in the database
-        if (processedIds.contains(id) || JpaUtils.entityExists(entityClass, id, entityManager)) {
+        if (processedIds.contains(id) || DBUtils.entityExists(entityClass, id, entityManager)) {
             if (processedIds.contains(id)) {
                 log.trace("Skipping already processed entity with ID: {}", id);
             } else {
@@ -1116,7 +1112,7 @@ public class LegacyDataLoadingService {
 
         if (parentId != null && !id.equals(parentId)) { // Check for self-reference
             // Check if parent exists in DB or is already processed
-            if (!JpaUtils.entityExists(entityClass, parentId, entityManager) && !processedIds.contains(parentId)) {
+            if (!DBUtils.entityExists(entityClass, parentId, entityManager) && !processedIds.contains(parentId)) {
                 // Parent doesn't exist and isn't processed yet - fetch and insert it first
                 log.trace("Parent ID {} for entity ID {} not found in DB or processed set. Attempting recursive insert.", parentId, id);
                 T parentEntity = parentGetter.apply(parentId); // Get parent data from the map
@@ -1137,7 +1133,7 @@ public class LegacyDataLoadingService {
 
 
         try {
-            JpaUtils.saveEntityWithForcedId(entity, entityManager);
+            DBUtils.saveEntityWithForcedId(entity, entityManager);
             log.debug("Successfully saved entity with ID {}: {}", id, entity);
         } catch (Exception e) {
             // Catch specific exceptions if possible (e.g., ConstraintViolationException)

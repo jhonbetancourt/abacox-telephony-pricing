@@ -14,9 +14,7 @@ public class IndicatorLegacyMapping extends ActivableLegacyMapping {
     private String id;
     private String telephonyTypeId;
     private String departmentCountry;
-    private String cityId;
     private String cityName;
-    private String isAssociated;
     private String operatorId;
     private String originCountryId;
 }

@@ -74,13 +74,6 @@ public class Indicator extends ActivableEntity {
     private String cityName;
 
     /**
-     * ID reference to a cities table.
-     * Original field: INDICATIVO_CIUDADES_ID
-     */
-    @Column(name = "city_id", nullable = true)
-    private Long cityId;
-
-    /**
      * City relationship.
      */
     @ManyToOne
@@ -91,14 +84,6 @@ public class Indicator extends ActivableEntity {
             foreignKey = @ForeignKey(name = "fk_indicator_city")
     )
     private City city;
-
-    /**
-     * Flag indicating if this indicator is associated with a partner/associate.
-     * Original field: INDICATIVO_ASOCIADO
-     */
-    @Column(name = "is_associated", nullable = false)
-    @ColumnDefault("false")
-    private boolean isAssociated;
 
     /**
      * ID of the telecom operator.

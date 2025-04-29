@@ -1,7 +1,6 @@
 package com.infomedia.abacox.telephonypricing.dto.indicator;
 
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -25,10 +24,6 @@ public class CreateIndicator {
     @NotBlank
     @Size(max = 80)
     private String cityName;
-    
-    private Long cityId;
-    
-    private boolean isAssociated = false;
     
     private Long operatorId;
     

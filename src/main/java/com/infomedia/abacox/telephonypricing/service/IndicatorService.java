@@ -28,8 +28,6 @@ public class IndicatorService extends CrudService<Indicator, Long, IndicatorRepo
                 .telephonyTypeId(cDto.getTelephonyTypeId())
                 .departmentCountry(cDto.getDepartmentCountry())
                 .cityName(cDto.getCityName())
-                .cityId(cDto.getCityId())
-                .isAssociated(cDto.isAssociated())
                 .operatorId(cDto.getOperatorId())
                 .originCountryId(cDto.getOriginCountryId())
                 .build();
@@ -42,8 +40,6 @@ public class IndicatorService extends CrudService<Indicator, Long, IndicatorRepo
         uDto.getTelephonyTypeId().ifPresent(indicator::setTelephonyTypeId);
         uDto.getDepartmentCountry().ifPresent(indicator::setDepartmentCountry);
         uDto.getCityName().ifPresent(indicator::setCityName);
-        uDto.getCityId().ifPresent(indicator::setCityId);
-        uDto.getIsAssociated().ifPresent(indicator::setAssociated);
         uDto.getOperatorId().ifPresent(indicator::setOperatorId);
         uDto.getOriginCountryId().ifPresent(indicator::setOriginCountryId);
         return save(indicator);

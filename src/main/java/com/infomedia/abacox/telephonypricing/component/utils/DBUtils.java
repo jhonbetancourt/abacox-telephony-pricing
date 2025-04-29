@@ -16,14 +16,14 @@ import java.util.List;
 /**
  * Utility class for JPA/database operations that extend beyond standard JPA functionality.
  */
-public class JpaUtils {
+public class DBUtils {
 
-    private static final Logger log = LoggerFactory.getLogger(JpaUtils.class);
+    private static final Logger log = LoggerFactory.getLogger(DBUtils.class);
 
     /**
      * Private constructor to prevent instantiation of utility class
      */
-    private JpaUtils() {
+    private DBUtils() {
         throw new UnsupportedOperationException("This is a utility class and cannot be instantiated");
     }
 

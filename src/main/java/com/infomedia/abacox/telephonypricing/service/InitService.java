@@ -1,17 +1,28 @@
 package com.infomedia.abacox.telephonypricing.service;
 
+import com.infomedia.abacox.telephonypricing.migration.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+import java.util.Map;
+
 @Service
 @RequiredArgsConstructor
 public class InitService {
 
+    private final MigrationRunner migrationRunner;
 
     @EventListener(ApplicationReadyEvent.class)
     public void init() {
+        SourceDbConfig sourceDbConfig = SourceDbConfig.builder()
+                .url("jdbc:sqlserver://172.16.4.71:1433;databaseName=abacox_infomedia;encrypt=false;trustServerCertificate=true;")
+                .username("sa")
+                .password("infomedia")
+                .build();
 
+        migrationRunner.run(sourceDbConfig);
     }
 }

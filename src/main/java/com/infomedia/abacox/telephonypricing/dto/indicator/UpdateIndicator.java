@@ -27,10 +27,6 @@ public class UpdateIndicator {
     @Size(max = 80)
     private JsonNullable<String> cityName = JsonNullable.undefined();
     
-    private JsonNullable<Long> cityId = JsonNullable.undefined();
-    
-    private JsonNullable<Boolean> isAssociated = JsonNullable.undefined();
-    
     private JsonNullable<Long> operatorId = JsonNullable.undefined();
     
     private JsonNullable<Long> originCountryId = JsonNullable.undefined();
