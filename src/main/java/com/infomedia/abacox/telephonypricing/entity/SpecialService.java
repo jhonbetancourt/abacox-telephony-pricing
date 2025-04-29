@@ -41,8 +41,7 @@ public class SpecialService extends ActivableEntity {
      * ID of the indicator.
      * Original field: SERVESPECIAL_INDICATIVO_ID
      */
-    @Column(name = "indicator_id", nullable = false)
-    @ColumnDefault("0")
+    @Column(name = "indicator_id")
     private Long indicatorId;
 
     /**

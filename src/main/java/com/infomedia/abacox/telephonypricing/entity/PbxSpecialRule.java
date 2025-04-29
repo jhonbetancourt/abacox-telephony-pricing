@@ -94,7 +94,7 @@ public class PbxSpecialRule extends ActivableEntity {
      */
     @Column(name = "min_length", nullable = false)
     @ColumnDefault("0")
-    private Short minLength;
+    private Integer minLength;
 
     /**
      * Flag for incoming/outgoing/both direction.
@@ -103,5 +103,5 @@ public class PbxSpecialRule extends ActivableEntity {
      */
     @Column(name = "direction", nullable = false)
     @ColumnDefault("2") 
-    private Short direction;
+    private Integer direction;
 }

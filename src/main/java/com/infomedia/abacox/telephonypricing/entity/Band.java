@@ -77,7 +77,6 @@ public class Band extends ActivableEntity {
      * Original field: BANDA_INDICAORIGEN_ID
      */
     @Column(name = "origin_indicator_id")
-    @ColumnDefault("0")
     private Long originIndicatorId;
 
     /**

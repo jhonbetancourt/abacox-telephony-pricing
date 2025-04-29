@@ -41,8 +41,7 @@ public class ExtensionRange extends ActivableEntity {
      * ID of the communication location.
      * Original field: RANGOEXT_COMUBICACION_ID
      */
-    @Column(name = "comm_location_id", nullable = false)
-    @ColumnDefault("0")
+    @Column(name = "comm_location_id")
     private Long commLocationId;
 
     /**
@@ -61,8 +60,7 @@ public class ExtensionRange extends ActivableEntity {
      * ID of the subdivision.
      * Original field: RANGOEXT_SUBDIRECCION_ID
      */
-    @Column(name = "subdivision_id", nullable = false)
-    @ColumnDefault("0")
+    @Column(name = "subdivision_id")
     private Long subdivisionId;
 
     /**
@@ -105,8 +103,7 @@ public class ExtensionRange extends ActivableEntity {
      * ID of the cost center.
      * Original field: RANGOEXT_CENTROCOSTOS_ID
      */
-    @Column(name = "cost_center_id", nullable = false)
-    @ColumnDefault("0")
+    @Column(name = "cost_center_id")
     private Long costCenterId;
 
     /**

@@ -485,7 +485,7 @@ public class MigrationRunner {
                 .build());
 
         // Level 7: Independent or depends on lower levels (FileInfo)
-        configs.add(TableMigrationConfig.builder()
+      /*  configs.add(TableMigrationConfig.builder()
                 .sourceTableName("fileinfo")
                 .targetEntityClassName("com.infomedia.abacox.telephonypricing.entity.FileInfo")
                 .sourceIdColumnName("FILEINFO_ID")
@@ -501,7 +501,7 @@ public class MigrationRunner {
                         entry("FILEINFO_DIRECTORIO", "directory"),
                         entry("FILEINFO_TIPO", "type")
                 ))
-                .build());
+                .build());*/
 
         return configs;
     }

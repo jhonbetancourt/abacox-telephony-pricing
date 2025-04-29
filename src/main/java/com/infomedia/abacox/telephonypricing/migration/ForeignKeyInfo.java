@@ -1,12 +1,13 @@
 package com.infomedia.abacox.telephonypricing.migration; // Use your actual package
 
-import lombok.Getter;
+import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import java.lang.reflect.Field;
 
-@Getter
+
+@Data
 @RequiredArgsConstructor // Creates constructor for final fields
-class ForeignKeyInfo {
+public class ForeignKeyInfo {
     private final Field foreignKeyField; // The field holding the FK value (e.g., parentSubdivisionId)
     private final String dbColumnName;   // The actual DB column name (e.g., parent_subdivision_id)
     private final Class<?> targetTypeId; // The type of the FK field (e.g., Long.class)

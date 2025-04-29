@@ -40,8 +40,7 @@ public class TrunkRate extends AuditedEntity {
      * ID of the trunk.
      * Original field: TARIFATRONCAL_TRONCAL_ID
      */
-    @Column(name = "trunk_id", nullable = false)
-    @ColumnDefault("0")
+    @Column(name = "trunk_id")
     private Long trunkId;
 
     /**
@@ -76,8 +75,7 @@ public class TrunkRate extends AuditedEntity {
      * ID of the operator.
      * Original field: TARIFATRONCAL_OPERADOR_ID
      */
-    @Column(name = "operator_id", nullable = false)
-    @ColumnDefault("0")
+    @Column(name = "operator_id")
     private Long operatorId;
 
     /**
@@ -96,8 +94,7 @@ public class TrunkRate extends AuditedEntity {
      * ID of the telephony type.
      * Original field: TARIFATRONCAL_TIPOTELE_ID
      */
-    @Column(name = "telephony_type_id", nullable = false)
-    @ColumnDefault("0")
+    @Column(name = "telephony_type_id")
     private Long telephonyTypeId;
 
     /**

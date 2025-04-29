@@ -38,8 +38,7 @@ public class Trunk extends ActivableEntity {
      * ID of the communication location.
      * Original field: CELULINK_COMUBICACION_ID
      */
-    @Column(name = "comm_location_id", nullable = false)
-    @ColumnDefault("0")
+    @Column(name = "comm_location_id")
     private Long commLocationId;
 
     /**
