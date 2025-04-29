@@ -100,8 +100,7 @@ public class SpecialService extends ActivableEntity {
      * ID of the origin municipality/country.
      * Original field: SERVESPECIAL_MPORIGEN_ID
      */
-    @Column(name = "origin_country_id", nullable = false)
-    @ColumnDefault("1")
+    @Column(name = "origin_country_id")
     private Long originCountryId;
 
     /**

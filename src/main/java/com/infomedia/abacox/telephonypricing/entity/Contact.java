@@ -48,7 +48,7 @@ public class Contact extends ActivableEntity {
      * ID of the associated employee.
      * Original field: DIRECTORIO_FUNCIONARIO_ID
      */
-    @Column(name = "employee_id", nullable = true)
+    @Column(name = "employee_id")
     private Long employeeId;
     
     /**
@@ -67,7 +67,7 @@ public class Contact extends ActivableEntity {
      * ID of the associated company.
      * Original field: DIRECTORIO_EMPRESA_ID
      */
-    @Column(name = "company_id", nullable = true)
+    @Column(name = "company_id")
     private Long companyId;
     
     /**
@@ -109,7 +109,7 @@ public class Contact extends ActivableEntity {
      * ID of the area code/indicator.
      * Original field: DIRECTORIO_INDICATIVO_ID
      */
-    @Column(name = "indicator_id", nullable = true)
+    @Column(name = "indicator_id")
     private Long indicatorId;
     
     /**

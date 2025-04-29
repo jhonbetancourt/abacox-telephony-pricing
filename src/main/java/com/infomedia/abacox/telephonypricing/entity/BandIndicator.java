@@ -47,7 +47,7 @@ public class BandIndicator extends AuditedEntity {
      * ID of the associated band.
      * Original field: BANDAINDICA_BANDA_ID
      */
-    @Column(name = "band_id", nullable = true)
+    @Column(name = "band_id")
     private Long bandId;
 
     /**
@@ -66,7 +66,7 @@ public class BandIndicator extends AuditedEntity {
      * ID of the associated indicator.
      * Original field: BANDAINDICA_INDICATIVO_ID
      */
-    @Column(name = "indicator_id", nullable = true)
+    @Column(name = "indicator_id")
     private Long indicatorId;
 
     /**

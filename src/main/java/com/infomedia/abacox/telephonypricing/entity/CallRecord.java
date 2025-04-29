@@ -50,7 +50,7 @@ public class CallRecord extends AuditedEntity {
      * ID of the communication location.
      * Original field: ACUMTOTAL_COMUBICACION_ID
      */
-    @Column(name = "comm_location_id", nullable = true)
+    @Column(name = "comm_location_id")
     private Long commLocationId;
     
     /**
@@ -76,7 +76,7 @@ public class CallRecord extends AuditedEntity {
      * ID of the operator.
      * Original field: ACUMTOTAL_OPERADOR_ID
      */
-    @Column(name = "operator_id", nullable = true)
+    @Column(name = "operator_id")
     private Long operatorId;
     
     /**
@@ -111,7 +111,7 @@ public class CallRecord extends AuditedEntity {
      * ID of the indicator/area code.
      * Original field: ACUMTOTAL_INDICATIVO_ID
      */
-    @Column(name = "indicator_id", nullable = true)
+    @Column(name = "indicator_id")
     private Long indicatorId;
     
     /**
@@ -154,7 +154,7 @@ public class CallRecord extends AuditedEntity {
      * ID of the telephone type.
      * Original field: ACUMTOTAL_TIPOTELE_ID
      */
-    @Column(name = "telephony_type_id", nullable = true)
+    @Column(name = "telephony_type_id")
     private Long telephonyTypeId;
     
     /**
@@ -221,7 +221,7 @@ public class CallRecord extends AuditedEntity {
      * ID of the employee/user.
      * Original field: ACUMTOTAL_FUNCIONARIO_ID
      */
-    @Column(name = "employee_id", nullable = true)
+    @Column(name = "employee_id")
     private Long employeeId;
     
     /**
@@ -264,7 +264,7 @@ public class CallRecord extends AuditedEntity {
      * ID of the destination employee.
      * Original field: ACUMTOTAL_FUNDESTINO_ID
      */
-    @Column(name = "destination_employee_id", nullable = true)
+    @Column(name = "destination_employee_id")
     private Long destinationEmployeeId;
     
     /**
@@ -283,7 +283,7 @@ public class CallRecord extends AuditedEntity {
      * ID of the file information.
      * Original field: ACUMTOTAL_FILEINFO_ID
      */
-    @Column(name = "file_info_id", nullable = true)
+    @Column(name = "file_info_id")
     private Long fileInfoId;
     
     /**

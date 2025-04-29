@@ -54,8 +54,7 @@ public class TelephonyTypeConfig extends AuditedEntity {
      * ID of the telephony type.
      * Original field: TIPOTELECFG_TIPOTELE_ID
      */
-    @Column(name = "telephony_type_id", nullable = false)
-    @ColumnDefault("0")
+    @Column(name = "telephony_type_id")
     private Long telephonyTypeId;
 
     /**
@@ -74,8 +73,7 @@ public class TelephonyTypeConfig extends AuditedEntity {
      * ID of the origin country.
      * Original field: TIPOTELECFG_MPORIGEN_ID
      */
-    @Column(name = "origin_country_id", nullable = false)
-    @ColumnDefault("1")
+    @Column(name = "origin_country_id")
     private Long originCountryId;
 
     /**

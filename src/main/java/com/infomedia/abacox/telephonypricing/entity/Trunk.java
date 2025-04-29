@@ -73,8 +73,7 @@ public class Trunk extends ActivableEntity {
      * ID of the operator.
      * Original field: CELULINK_OPERADOR_ID
      */
-    @Column(name = "operator_id", nullable = false)
-    @ColumnDefault("0")
+    @Column(name = "operator_id")
     private Long operatorId;
 
     /**

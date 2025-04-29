@@ -47,7 +47,7 @@ public class Employee extends ActivableEntity {
      * ID of the subdivision/department.
      * Original field: FUNCIONARIO_SUBDIRECCION_ID
      */
-    @Column(name = "subdivision_id", nullable = true)
+    @Column(name = "subdivision_id")
     private Long subdivisionId;
 
     /**
@@ -66,7 +66,7 @@ public class Employee extends ActivableEntity {
      * ID of the cost center.
      * Original field: FUNCIONARIO_CENTROCOSTOS_ID
      */
-    @Column(name = "cost_center_id", nullable = true)
+    @Column(name = "cost_center_id")
     private Long costCenterId;
 
     /**
@@ -101,7 +101,7 @@ public class Employee extends ActivableEntity {
      * ID of the communication location.
      * Original field: FUNCIONARIO_COMUBICACION_ID
      */
-    @Column(name = "communication_location_id", nullable = true)
+    @Column(name = "communication_location_id")
     private Long communicationLocationId;
 
     /**
@@ -120,7 +120,7 @@ public class Employee extends ActivableEntity {
      * ID of the employee's position/role.
      * Original field: FUNCIONARIO_FUNCARGO_ID
      */
-    @Column(name = "job_position_id", nullable = true)
+    @Column(name = "job_position_id")
     private Long jobPositionId;
 
     /**

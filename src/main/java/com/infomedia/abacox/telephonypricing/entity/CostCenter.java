@@ -57,7 +57,7 @@ public class CostCenter extends ActivableEntity {
      * ID of the parent cost center.
      * Original field: CENTROCOSTOS_PERTENECE
      */
-    @Column(name = "parent_cost_center_id", nullable = true)
+    @Column(name = "parent_cost_center_id")
     private Long parentCostCenterId;
 
     /**
@@ -76,7 +76,7 @@ public class CostCenter extends ActivableEntity {
      * ID of the origin municipality/country.
      * Original field: CENTROCOSTOS_MPORIGEN_ID
      */
-    @Column(name = "origin_country_id", nullable = true)
+    @Column(name = "origin_country_id")
     private Long originCountryId;
 
     /**

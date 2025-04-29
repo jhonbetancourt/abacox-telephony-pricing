@@ -86,7 +86,7 @@ public class Company extends ActivableEntity {
      * ID of the area code/indicator.
      * Original field: EMPRESA_INDICATIVO_ID
      */
-    @Column(name = "indicator_id", nullable = true)
+    @Column(name = "indicator_id")
     private Integer indicatorId;
     
     /**

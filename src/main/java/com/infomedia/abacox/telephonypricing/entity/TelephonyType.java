@@ -50,7 +50,7 @@ public class TelephonyType extends ActivableEntity {
      * ID of the call class/type.
      * Original field: TIPOTELE_CLASELLAMA_ID
      */
-    @Column(name = "call_category_id", nullable = true)
+    @Column(name = "call_category_id")
     private Long callCategoryId;
 
     /**

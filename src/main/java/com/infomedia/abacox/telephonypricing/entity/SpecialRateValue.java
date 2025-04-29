@@ -130,8 +130,7 @@ public class SpecialRateValue extends ActivableEntity {
      * ID of the telephony type.
      * Original field: VALORESPECIAL_TIPOTELE_ID
      */
-    @Column(name = "telephony_type_id", nullable = false)
-    @ColumnDefault("0")
+    @Column(name = "telephony_type_id")
     private Long telephonyTypeId;
 
     /**
@@ -150,8 +149,7 @@ public class SpecialRateValue extends ActivableEntity {
      * ID of the operator.
      * Original field: VALORESPECIAL_OPERADOR_ID
      */
-    @Column(name = "operator_id", nullable = false)
-    @ColumnDefault("0")
+    @Column(name = "operator_id")
     private Long operatorId;
 
     /**
@@ -170,8 +168,7 @@ public class SpecialRateValue extends ActivableEntity {
      * ID of the band.
      * Original field: VALORESPECIAL_BANDA_ID
      */
-    @Column(name = "band_id", nullable = false)
-    @ColumnDefault("0")
+    @Column(name = "band_id")
     private Long bandId;
 
     /**
@@ -204,8 +201,7 @@ public class SpecialRateValue extends ActivableEntity {
      * ID of the origin indicator.
      * Original field: VALORESPECIAL_INDICAORIGEN_ID
      */
-    @Column(name = "origin_indicator_id", nullable = false)
-    @ColumnDefault("0")
+    @Column(name = "origin_indicator_id")
     private Long originIndicatorId;
 
     /**

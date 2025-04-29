@@ -40,7 +40,7 @@ public class Series extends ActivableEntity {
      * ID of the associated indicator/area code.
      * Original field: SERIE_INDICATIVO_ID
      */
-    @Column(name = "indicator_id", nullable = true)
+    @Column(name = "indicator_id")
     private Long indicatorId;
 
     /**

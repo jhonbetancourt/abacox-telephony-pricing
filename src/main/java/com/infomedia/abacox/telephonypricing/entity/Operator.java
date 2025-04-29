@@ -48,7 +48,7 @@ public class Operator extends ActivableEntity {
      * ID of the origin municipality.
      * Original field: OPERADOR_MPORIGEN_ID
      */
-    @Column(name = "origin_country_id", nullable = true)
+    @Column(name = "origin_country_id")
     private Long originCountryId;
 
     /**

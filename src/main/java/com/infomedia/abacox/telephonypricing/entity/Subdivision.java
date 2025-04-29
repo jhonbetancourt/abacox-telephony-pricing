@@ -39,7 +39,7 @@ public class Subdivision extends ActivableEntity {
      * ID of the parent department.
      * Original field: SUBDIRECCION_PERTENECE
      */
-    @Column(name = "parent_subdivision_id", nullable = true)
+    @Column(name = "parent_subdivision_id")
     private Long parentSubdivisionId;
 
     /**

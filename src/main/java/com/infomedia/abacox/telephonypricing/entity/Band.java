@@ -41,7 +41,7 @@ public class Band extends ActivableEntity {
      * ID of the associated prefix.
      * Original field: BANDA_PREFIJO_ID
      */
-    @Column(name = "prefix_id", nullable = true)
+    @Column(name = "prefix_id")
     private Long prefixId;
 
     /**

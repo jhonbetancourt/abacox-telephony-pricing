@@ -50,7 +50,7 @@ public class CommunicationLocation extends ActivableEntity {
      * ID of the plant type.
      * Original field: COMUBICACION_TIPOPLANTA_ID
      */
-    @Column(name = "plant_type_id", nullable = true)
+    @Column(name = "plant_type_id")
     private Long plantTypeId;
 
     /**
@@ -77,7 +77,7 @@ public class CommunicationLocation extends ActivableEntity {
      * ID of the indicator/area code.
      * Original field: COMUBICACION_INDICATIVO_ID
      */
-    @Column(name = "indicator_id", nullable = true)
+    @Column(name = "indicator_id")
     private Long indicatorId;
 
     /**

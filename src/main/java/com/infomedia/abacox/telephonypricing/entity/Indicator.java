@@ -42,7 +42,7 @@ public class Indicator extends ActivableEntity {
      * ID of the telephone type.
      * Original field: INDICATIVO_TIPOTELE_ID
      */
-    @Column(name = "telephony_type_id", nullable = true)
+    @Column(name = "telephony_type_id")
     private Long telephonyTypeId;
 
     /**
@@ -74,22 +74,10 @@ public class Indicator extends ActivableEntity {
     private String cityName;
 
     /**
-     * City relationship.
-     */
-    @ManyToOne
-    @JoinColumn(
-            name = "city_id",
-            insertable = false,
-            updatable = false,
-            foreignKey = @ForeignKey(name = "fk_indicator_city")
-    )
-    private City city;
-
-    /**
      * ID of the telecom operator.
      * Original field: INDICATIVO_OPERADOR_ID
      */
-    @Column(name = "operator_id", nullable = true)
+    @Column(name = "operator_id")
     private Long operatorId;
 
     /**
@@ -108,7 +96,7 @@ public class Indicator extends ActivableEntity {
      * ID of the origin municipality.
      * Original field: INDICATIVO_MPORIGEN_ID
      */
-    @Column(name = "origin_country_id", nullable = true)
+    @Column(name = "origin_country_id")
     private Long originCountryId;
 
     /**

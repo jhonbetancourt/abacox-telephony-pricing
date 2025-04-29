@@ -42,7 +42,7 @@ public class Prefix extends ActivableEntity {
      * ID of the telecom operator.
      * Original field: PREFIJO_OPERADOR_ID
      */
-    @Column(name = "operator_id", nullable = true)
+    @Column(name = "operator_id")
     private Long operatorId;
 
     /**
@@ -61,7 +61,7 @@ public class Prefix extends ActivableEntity {
      * Type of telephone service.
      * Original field: PREFIJO_TIPOTELE_ID
      */
-    @Column(name = "telephone_type_id", nullable = true)
+    @Column(name = "telephone_type_id")
     private Long telephoneTypeId;
 
     /**

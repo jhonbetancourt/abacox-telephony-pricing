@@ -57,8 +57,7 @@ public class TrunkRule extends ActivableEntity {
      * ID of the telephony type.
      * Original field: REGLATRONCAL_TIPOTELE_ID
      */
-    @Column(name = "telephony_type_id", nullable = false)
-    @ColumnDefault("0")
+    @Column(name = "telephony_type_id")
     private Long telephonyTypeId;
 
     /**
@@ -85,8 +84,7 @@ public class TrunkRule extends ActivableEntity {
      * ID of the trunk.
      * Original field: REGLATRONCAL_TRONCAL_ID
      */
-    @Column(name = "trunk_id", nullable = false)
-    @ColumnDefault("0")
+    @Column(name = "trunk_id")
     private Long trunkId;
 
     /**
@@ -153,8 +151,7 @@ public class TrunkRule extends ActivableEntity {
      * ID of the origin indicator.
      * Original field: REGLATRONCAL_INDICAORIGEN_ID
      */
-    @Column(name = "origin_indicator_id", nullable = false)
-    @ColumnDefault("0")
+    @Column(name = "origin_indicator_id")
     private Long originIndicatorId;
 
     /**
