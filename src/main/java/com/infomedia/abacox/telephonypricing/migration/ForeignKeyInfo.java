@@ -6,7 +6,7 @@ import java.lang.reflect.Field;
 
 
 @Data
-@RequiredArgsConstructor // Creates constructor for final fields
+@RequiredArgsConstructor
 public class ForeignKeyInfo {
     private final Field foreignKeyField; // The field holding the FK value (e.g., parentSubdivisionId)
     private final String dbColumnName;   // The actual DB column name (e.g., parent_subdivision_id)

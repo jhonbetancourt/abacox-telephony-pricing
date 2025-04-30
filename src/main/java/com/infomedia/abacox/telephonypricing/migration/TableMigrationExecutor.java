@@ -1,235 +1,263 @@
 package com.infomedia.abacox.telephonypricing.migration;
 
+import jakarta.persistence.GeneratedValue; // Correct import for Jakarta EE
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 
 import java.lang.reflect.Field;
-import java.sql.SQLException; // Keep if needed for rethrowing from processor
+import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.HashSet;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
-
-@Service
+@Component
 @Log4j2
 @RequiredArgsConstructor
 public class TableMigrationExecutor {
 
     private final SourceDataFetcher sourceDataFetcher;
-    private final MigrationRowProcessor migrationRowProcessor; // Inject the new service
+    private final MigrationRowProcessor migrationRowProcessor;
 
-    // Optional: Keep EntityManager if used for tasks *outside* the row/batch processor
-    // @PersistenceContext
-    // private final EntityManager entityManager;
-
-    // Batch size for Pass 2 updates. Pass 1 uses row-by-row.
+    // Batch size hint for the fetcher (can be overridden by config if needed)
+    private static final int FETCH_BATCH_SIZE = 2000;
+    // Batch size for Pass 2 updates (can differ from fetch size, used by MigrationRowProcessor)
     private static final int UPDATE_BATCH_SIZE = 100;
 
-    // No @Transactional annotation on this orchestrator method
+    // No @Transactional on this orchestrator method
     public void executeTableMigration(TableMigrationConfig tableConfig, SourceDbConfig sourceDbConfig) throws Exception {
         long startTime = System.currentTimeMillis();
-        int processedCount = 0;
-        int skippedExistingCount = 0; // Count rows found already present
-        int failedInsertCount = 0;    // Count rows that failed insertion/processing in Pass 1
-        int insertedCount = 0;        // Count rows successfully inserted in Pass 1
-        int updatedFkCount = 0;       // Count FKs successfully updated in Pass 2
-        int failedUpdateBatchCount = 0; // Count failed batches in Pass 2
+        // Use AtomicIntegers for safe counting within lambdas/consumers
+        AtomicInteger processedCount = new AtomicInteger(0);
+        AtomicInteger failedInsertCount = new AtomicInteger(0); // Counts rows processor indicated failed/skipped
+        AtomicInteger updatedFkCount = new AtomicInteger(0);    // Counts FKs processor indicated updated
+        AtomicInteger failedUpdateBatchCount = new AtomicInteger(0); // Tracks failed *calls* to batch processor
 
         log.info("Executing migration for source table: {}", tableConfig.getSourceTableName());
 
-        // --- Get Target Entity Metadata (using MigrationUtils) ---
-        Class<?> targetEntityClass = Class.forName(tableConfig.getTargetEntityClassName());
-        Field idField = MigrationUtils.findIdField(targetEntityClass);
-        if (idField == null) {
-            throw new IllegalArgumentException("Entity class " + targetEntityClass.getName() + " does not have an @Id field");
+        // --- Get Target Entity Metadata ---
+        Class<?> targetEntityClass;
+        Field idField;
+        String idFieldName;
+        String idColumnName;
+        String targetTableName; // Renamed from tableName for clarity
+        boolean isGeneratedId;
+        Map<String, ForeignKeyInfo> foreignKeyInfoMap;
+        ForeignKeyInfo selfReferenceFkInfo;
+        boolean isSelfReferencing;
+
+        try {
+            targetEntityClass = Class.forName(tableConfig.getTargetEntityClassName());
+            idField = MigrationUtils.findIdField(targetEntityClass);
+            if (idField == null) throw new IllegalArgumentException("Entity class " + targetEntityClass.getName() + " does not have an @Id field");
+            idField.setAccessible(true); // Ensure accessible
+            idFieldName = idField.getName();
+            idColumnName = MigrationUtils.getIdColumnName(idField);
+            targetTableName = MigrationUtils.getTableName(targetEntityClass);
+            isGeneratedId = idField.isAnnotationPresent(GeneratedValue.class); // Use Jakarta annotation
+            foreignKeyInfoMap = MigrationUtils.inferForeignKeyInfo(targetEntityClass);
+            selfReferenceFkInfo = MigrationUtils.findSelfReference(foreignKeyInfoMap, targetEntityClass);
+            isSelfReferencing = selfReferenceFkInfo != null;
+
+            logMetadata(targetTableName, idFieldName, idColumnName, isGeneratedId, isSelfReferencing, foreignKeyInfoMap);
+        } catch (ClassNotFoundException | IllegalArgumentException e) {
+             log.error("Failed to load or analyze target entity class '{}': {}", tableConfig.getTargetEntityClassName(), e.getMessage(), e);
+             throw new RuntimeException("Migration failed due to target entity metadata error for " + tableConfig.getTargetEntityClassName(), e);
         }
-        idField.setAccessible(true);
-        String idFieldName = idField.getName();
-        String idColumnName = MigrationUtils.getIdColumnName(idField);
-        String tableName = MigrationUtils.getTableName(targetEntityClass);
-        boolean isGeneratedId = idField.isAnnotationPresent(jakarta.persistence.GeneratedValue.class);
+        // --- End Metadata ---
 
-        // Infer FK info (using MigrationUtils)
-        Map<String, ForeignKeyInfo> foreignKeyInfoMap = MigrationUtils.inferForeignKeyInfo(targetEntityClass);
-        ForeignKeyInfo selfReferenceFkInfo = MigrationUtils.findSelfReference(foreignKeyInfoMap, targetEntityClass);
-        boolean isSelfReferencing = selfReferenceFkInfo != null;
+        // --- Determine Columns to Fetch ---
+        Set<String> columnsToFetch = determineColumnsToFetch(tableConfig, foreignKeyInfoMap, selfReferenceFkInfo);
+        if (columnsToFetch.isEmpty()) {
+             log.warn("No source columns derived from mapping for {}. Skipping.", tableConfig.getSourceTableName());
+             return;
+        }
+        log.debug("Requesting source columns for {}: {}", tableConfig.getSourceTableName(), columnsToFetch);
+        // --- End Columns ---
 
+
+        // ==================================================
+        // Pass 1: Insert rows using batched fetching
+        // ==================================================
+        log.info("Starting Pass 1: Processing rows for table {} (Fetch Batch Size: {})", targetTableName, FETCH_BATCH_SIZE);
+
+        try {
+            // Define the processor for Pass 1 batches
+            Consumer<List<Map<String, Object>>> pass1BatchProcessor = batch -> {
+                log.debug("Processing Pass 1 batch of size {} for target table {}", batch.size(), targetTableName);
+                for (Map<String, Object> sourceRow : batch) {
+                    int currentProcessed = processedCount.incrementAndGet();
+                    boolean success = false;
+                    Object sourceId = sourceRow.get(tableConfig.getSourceIdColumnName()); // Get ID for logging
+                    try {
+                        // Call the transactional method in the other service for *each row*
+                        success = migrationRowProcessor.processSingleRowInsert(
+                                sourceRow, tableConfig, targetEntityClass, idField, idFieldName,
+                                idColumnName, targetTableName, isGeneratedId, foreignKeyInfoMap, selfReferenceFkInfo
+                        );
+                        if (!success) {
+                            // Row was processed but resulted in a handled failure (e.g., skipped duplicate, FK issue)
+                            failedInsertCount.incrementAndGet();
+                            log.debug("Pass 1: Row processing indicated failure/skip for Source ID: {}", sourceId != null ? sourceId : "UNKNOWN");
+                        }
+                    } catch (Exception e) {
+                        // Catch unexpected errors *calling* the transactional method or fatal errors bubbling up.
+                        log.error("Unexpected fatal error during Pass 1 processing for target table {} (Source ID: {}): {}. Row processing failed.",
+                                  targetTableName, sourceId != null ? sourceId : "UNKNOWN", e.getMessage(), e);
+                        failedInsertCount.incrementAndGet();
+                        // Decide whether to continue with the batch or stop (current loop continues)
+                    }
+                    // Log progress within the batch processing if needed
+                    // if (currentProcessed % 100 == 0) { log.trace(...)}
+                } // End loop through rows in batch
+                log.debug("Finished processing Pass 1 batch for target table {}", targetTableName);
+            }; // End lambda definition
+
+            // Execute the fetch, which calls the processor for each batch
+            sourceDataFetcher.fetchData(
+                    sourceDbConfig,
+                    tableConfig.getSourceTableName(),
+                    columnsToFetch,
+                    tableConfig.getSourceIdColumnName(), // Crucial for paging ORDER BY
+                    FETCH_BATCH_SIZE,
+                    pass1BatchProcessor
+            );
+
+        } catch (Exception e) {
+            // Catch errors during the fetchData setup or fatal errors from the processor rethrown by fetchData
+             log.error("Fatal error during Pass 1 fetch/process for table {}: {}. Aborting migration for this table.", targetTableName, e.getMessage(), e);
+             // Re-throw to stop the overall migration if desired
+             throw new RuntimeException("Fatal error during migration pass 1 for table " + targetTableName + ", stopping.", e);
+        }
+
+        log.info("Finished Pass 1 for {}. Total Processed Rows: {}, Failed/Skipped Rows: {}",
+                 targetTableName, processedCount.get(), failedInsertCount.get());
+
+
+        // ==================================================
+        // Pass 2: Update self-referencing FKs (only if needed)
+        // Re-fetches data using batching
+        // ==================================================
+        if (isSelfReferencing) {
+            log.info("Starting Pass 2: Updating self-reference FK '{}' for table {} (Fetch Batch Size: {})",
+                     selfReferenceFkInfo.getDbColumnName(), targetTableName, FETCH_BATCH_SIZE);
+
+            try {
+                 // Define the processor for Pass 2 batches
+                 Consumer<List<Map<String, Object>>> pass2BatchProcessor = batch -> {
+                     if (batch.isEmpty()) {
+                         log.trace("Skipping empty batch for Pass 2 self-ref update.");
+                         return;
+                     }
+                     log.debug("Processing Pass 2 batch of size {} for self-ref update on {}", batch.size(), targetTableName);
+                     try {
+                         // Call the transactional method for the *entire batch* update
+                         int updatedInBatch = migrationRowProcessor.processSelfRefUpdateBatch(
+                                 batch, tableConfig, targetEntityClass, targetTableName, idColumnName,
+                                 idFieldName, selfReferenceFkInfo, UPDATE_BATCH_SIZE // Pass configured update batch size
+                         );
+                         updatedFkCount.addAndGet(updatedInBatch);
+                         log.debug("Self-ref update batch completed for {}. Rows updated reported by processor: {}", targetTableName, updatedInBatch);
+                     } catch (SQLException sqle) {
+                         // Catch SQL errors specifically from the batch update transaction failure
+                         log.error("SQLException processing self-ref update batch for table {}: SQLState: {}, ErrorCode: {}, Message: {}. Skipping batch.",
+                                   targetTableName, sqle.getSQLState(), sqle.getErrorCode(), sqle.getMessage());
+                         failedUpdateBatchCount.incrementAndGet();
+                     } catch (Exception e) {
+                         // Catch other unexpected errors during the update batch call
+                         log.error("Unexpected error processing self-ref update batch for table {}: {}. Skipping batch.",
+                                   targetTableName, e.getMessage(), e);
+                         failedUpdateBatchCount.incrementAndGet();
+                     }
+                 }; // End lambda definition
+
+                 // Execute the fetch *again* for Pass 2, calling the Pass 2 processor
+                 sourceDataFetcher.fetchData(
+                         sourceDbConfig,
+                         tableConfig.getSourceTableName(),
+                         columnsToFetch, // Need the same columns, especially source ID and source FK column
+                         tableConfig.getSourceIdColumnName(), // Crucial for paging ORDER BY consistency
+                         FETCH_BATCH_SIZE, // Use fetch batch size for reading
+                         pass2BatchProcessor
+                 );
+
+            } catch (Exception e) {
+                 // Catch errors during the fetchData setup for Pass 2
+                 log.error("Fatal error during Pass 2 fetch setup for table {}: {}. Aborting self-ref updates for this table.", targetTableName, e.getMessage(), e);
+                 // Optionally re-throw if this is critical
+                 // throw new RuntimeException("Fatal error during migration pass 2 fetch for table " + targetTableName + ", stopping.", e);
+            }
+
+            log.info("Finished Pass 2 for {}. Total Updated FKs reported: {}. Failed Update Batch Calls: {}",
+                     targetTableName, updatedFkCount.get(), failedUpdateBatchCount.get());
+        } else {
+             log.info("Skipping Pass 2 for {}: No self-referencing FK detected.", targetTableName);
+        } // End if isSelfReferencing
+
+        long duration = System.currentTimeMillis() - startTime;
+        log.info("Finished migrating table {}. Summary: Total Processed (Pass 1): {}, Failed/Skipped Inserts (Pass 1): {}, Updated FKs (Pass 2): {}, Failed Update Batches (Pass 2): {}. Duration: {} ms",
+                targetTableName, processedCount.get(), failedInsertCount.get(), updatedFkCount.get(), failedUpdateBatchCount.get(), duration);
+    }
+
+
+    // --- Helper Methods ---
+
+    private void logMetadata(String targetTableName, String idFieldName, String idColumnName, boolean isGeneratedId, boolean isSelfReferencing, Map<String, ForeignKeyInfo> foreignKeyInfoMap) {
         log.debug("Target Table: {}, ID Field: {}, ID Column: {}, IsGenerated: {}, IsSelfReferencing: {}",
-                tableName, idFieldName, idColumnName, isGeneratedId, isSelfReferencing);
+                targetTableName, idFieldName, idColumnName, isGeneratedId, isSelfReferencing);
         if (!foreignKeyInfoMap.isEmpty()) {
             log.debug("Inferred Foreign Keys (TargetFieldName -> DBColumnName): {}",
                     foreignKeyInfoMap.entrySet().stream()
                             .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().getDbColumnName())));
+        } else {
+            log.debug("No foreign keys inferred for target table {}", targetTableName);
         }
-        // --- End Metadata ---
+    }
 
-        // --- Fetch Source Data ---
-        Set<String> columnsToFetch = new HashSet<>(tableConfig.getColumnMapping().keySet());
-        // Ensure source columns for *all* FKs are included if mapped
-        for (ForeignKeyInfo fkInfo : foreignKeyInfoMap.values()) {
-            tableConfig.getColumnMapping().entrySet().stream()
-                    .filter(entry -> entry.getValue().equals(fkInfo.getForeignKeyField().getName()))
-                    .map(Map.Entry::getKey)
-                    .findFirst()
-                    .ifPresent(columnsToFetch::add);
+    private Set<String> determineColumnsToFetch(TableMigrationConfig tableConfig, Map<String, ForeignKeyInfo> foreignKeyInfoMap, ForeignKeyInfo selfReferenceFkInfo) {
+        Set<String> columnsToFetch = new HashSet<>();
+
+        // Add columns directly mapped in the config
+        if (tableConfig.getColumnMapping() != null) {
+             columnsToFetch.addAll(tableConfig.getColumnMapping().keySet());
+        } else {
+             log.warn("Column mapping is null for source table {}", tableConfig.getSourceTableName());
         }
-        // Explicitly add self-ref source column if not already covered (might be redundant but safe)
-        if(selfReferenceFkInfo != null) {
+
+
+        // Ensure source columns for *all* mapped FKs are included
+        if (foreignKeyInfoMap != null && tableConfig.getColumnMapping() != null) {
+            for (ForeignKeyInfo fkInfo : foreignKeyInfoMap.values()) {
+                if (fkInfo != null && fkInfo.getForeignKeyField() != null) {
+                    tableConfig.getColumnMapping().entrySet().stream()
+                            .filter(entry -> entry.getValue().equals(fkInfo.getForeignKeyField().getName()))
+                            .map(Map.Entry::getKey)
+                            .findFirst()
+                            .ifPresent(columnsToFetch::add);
+                }
+            }
+        }
+
+        // Explicitly add self-ref source column if mapped and not already present
+        if (selfReferenceFkInfo != null && selfReferenceFkInfo.getForeignKeyField() != null && tableConfig.getColumnMapping() != null) {
              tableConfig.getColumnMapping().entrySet().stream()
                      .filter(entry -> entry.getValue().equals(selfReferenceFkInfo.getForeignKeyField().getName()))
                      .map(Map.Entry::getKey)
                      .findFirst()
                      .ifPresent(columnsToFetch::add);
         }
-        // Ensure the source ID column itself is always fetched
-        columnsToFetch.add(tableConfig.getSourceIdColumnName());
 
-        log.debug("Fetching source columns: {}", columnsToFetch);
-        List<Map<String, Object>> sourceData = sourceDataFetcher.fetchData(
-                sourceDbConfig,
-                tableConfig.getSourceTableName(),
-                columnsToFetch,
-                tableConfig.getSourceIdColumnName() // Ensure sorting by ID if needed for dependency order
-        );
-
-        if (sourceData == null || sourceData.isEmpty()) {
-            log.info("No source data found for table {}. Migration skipped.", tableConfig.getSourceTableName());
-            return;
-        }
-        log.info("Fetched {} rows from source table {}", sourceData.size(), tableConfig.getSourceTableName());
-        // --- End Fetch ---
-
-        // ==================================================
-        // Pass 1: Insert rows, row-by-row transactionally
-        // ==================================================
-        log.info("Starting Pass 1: Processing {} potential rows for table {} (row-by-row transactions)", sourceData.size(), tableName);
-        // List<Object> successfullyInsertedIds = new ArrayList<>(); // To track only truly inserted ones if needed
-
-        for (Map<String, Object> sourceRow : sourceData) {
-            processedCount++;
-            boolean success = false;
-            try {
-                // Call the transactional method in the other service
-                // This call is NOT itself transactional here.
-                success = migrationRowProcessor.processSingleRowInsert(
-                        sourceRow,
-                        tableConfig,
-                        targetEntityClass,
-                        idField,
-                        idFieldName,
-                        idColumnName,
-                        tableName,
-                        isGeneratedId,
-                        foreignKeyInfoMap,
-                        selfReferenceFkInfo
-                );
-
-                if (success) {
-                    // How to distinguish inserted vs skipped?
-                    // The processor currently returns true for both.
-                    // For accurate counts, processor needs to return more info (e.g., enum).
-                    // Let's assume for now 'success' means potentially inserted OR skipped.
-                    // We can refine counts later if needed.
-                    // To estimate inserted, we could re-check existence AFTER the call, but that's inefficient.
-                    // Let's just log progress based on processed count.
-                    // insertedCount++; // Incrementing this here is inaccurate.
-                } else {
-                    // The method returned false, indicating a handled error (e.g., FK violation) during processing.
-                    failedInsertCount++;
-                }
-
-            } catch (Exception e) {
-                // Catch unexpected errors *calling* the transactional method or fatal errors bubbling up.
-                Object sourceId = sourceRow.get(tableConfig.getSourceIdColumnName());
-                log.error("Unexpected fatal error during Pass 1 processing for table {} (Source ID: {}): {}. Row processing aborted.",
-                          tableName, sourceId != null ? sourceId : "UNKNOWN", e.getMessage(), e);
-                failedInsertCount++;
-                // Depending on requirements, you might want to:
-                // 1. Continue to the next row (current behavior)
-                // 2. Stop the entire migration for this table:
-                //    throw new RuntimeException("Fatal error during migration pass 1 for table " + tableName + ", stopping.", e);
-                // 3. Stop the entire application migration:
-                //    throw e; // Let the exception propagate further up.
-            }
-
-             // Log progress periodically
-             if (processedCount % 500 == 0 || processedCount == sourceData.size()) {
-                 log.info("Pass 1 Progress for {}: Processed {} / {} rows...", tableName, processedCount, sourceData.size());
-             }
-
-        } // End Pass 1 loop
-
-        // Note: insertedCount and skippedExistingCount cannot be accurately determined
-        // without changing the return type of processSingleRowInsert.
-        log.info("Finished Pass 1 for {}. Total Processed: {}, Failed Rows: {}",
-                 tableName, processedCount, failedInsertCount);
-
-
-        // ==================================================
-        // Pass 2: Update self-referencing FKs (only if needed)
-        // Batched Transactions for Updates
-        // ==================================================
-        if (isSelfReferencing) {
-            log.info("Starting Pass 2: Updating self-reference FK '{}' for table {} (using batched transactions)",
-                     selfReferenceFkInfo.getDbColumnName(), tableName);
-
-            // Partition the original source data for batching updates
-            // Process ALL source rows again, the processor will handle skipping those without parent FKs
-            List<List<Map<String, Object>>> updateBatches = IntStream.range(0, (sourceData.size() + UPDATE_BATCH_SIZE - 1) / UPDATE_BATCH_SIZE)
-                    .mapToObj(i -> sourceData.subList(i * UPDATE_BATCH_SIZE, Math.min((i + 1) * UPDATE_BATCH_SIZE, sourceData.size())))
-                    .toList(); // Use toList() for Java 16+
-
-            log.info("Processing {} update batches for self-reference FK.", updateBatches.size());
-            int currentBatchNum = 0;
-
-            for (List<Map<String, Object>> batch : updateBatches) {
-                currentBatchNum++;
-                log.info("Processing update batch {}/{} (Size: {})", currentBatchNum, updateBatches.size(), batch.size());
-                try {
-                    // Call the transactional method for the batch update
-                    // This call is NOT itself transactional here.
-                    int updatedInBatch = migrationRowProcessor.processSelfRefUpdateBatch(
-                            batch,
-                            tableConfig,
-                            targetEntityClass,
-                            tableName,
-                            idColumnName,
-                            idFieldName,
-                            selfReferenceFkInfo,
-                            UPDATE_BATCH_SIZE
-                    );
-                    updatedFkCount += updatedInBatch;
-                    log.info("Update batch {} completed. Rows updated reported by driver in batch: {}", currentBatchNum, updatedInBatch);
-
-                } catch (SQLException e) {
-                    // Catch SQL errors specifically from the batch update transaction failure
-                    log.error("SQLException processing self-ref update batch {} for table {}: SQLState: {}, ErrorCode: {}, Message: {}. Skipping batch.",
-                              currentBatchNum, tableName, e.getSQLState(), e.getErrorCode(), e.getMessage());
-                    failedUpdateBatchCount++;
-                    // Continue to the next batch
-                } catch (Exception e) {
-                     // Catch other unexpected errors during the update batch call
-                     log.error("Unexpected error processing self-ref update batch {} for table {}: {}. Skipping batch.",
-                               currentBatchNum, tableName, e.getMessage(), e);
-                     failedUpdateBatchCount++;
-                     // Continue to the next batch
-                 }
-            } // End Pass 2 batch loop
-
-            log.info("Finished Pass 2 for {}. Total Updated FKs reported: {}. Failed Batches: {}",
-                     tableName, updatedFkCount, failedUpdateBatchCount);
+        // Ensure the source ID column itself is always fetched (needed for paging and processing)
+        if (tableConfig.getSourceIdColumnName() != null && !tableConfig.getSourceIdColumnName().trim().isEmpty()) {
+             columnsToFetch.add(tableConfig.getSourceIdColumnName());
         } else {
-             log.info("Skipping Pass 2 for {}: No self-referencing FK detected.", tableName);
-        } // End if isSelfReferencing
+             log.warn("Source ID column name is missing or empty in configuration for source table {}. This might cause issues if paging is attempted.", tableConfig.getSourceTableName());
+        }
 
-        long duration = System.currentTimeMillis() - startTime;
-        // Provide a summary. Note the counts for Pass 1 are estimates without more detailed return status.
-        log.info("Finished migrating table {}. Summary: Total Processed: {}, Failed Inserts (Pass 1): {}, Updated FKs (Pass 2): {}, Failed Update Batches (Pass 2): {}. Duration: {} ms",
-                tableName, processedCount, failedInsertCount, updatedFkCount, failedUpdateBatchCount, duration);
+        return columnsToFetch;
     }
-
 }

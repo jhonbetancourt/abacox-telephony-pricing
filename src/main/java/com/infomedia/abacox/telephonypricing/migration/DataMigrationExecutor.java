@@ -1,15 +1,13 @@
 package com.infomedia.abacox.telephonypricing.migration;
 
-// Remove EntityManager and batchSize imports/fields if no longer needed here
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
-import org.springframework.stereotype.Service;
-// Remove Transactional imports if no methods use it here anymore
+import org.springframework.stereotype.Component;
 
-@Service
+@Component
 @Log4j2
 @RequiredArgsConstructor // Injects final fields
-public class DataMigrationService {
+public class DataMigrationExecutor {
 
     private final TableMigrationExecutor tableExecutor;
 
@@ -37,11 +35,4 @@ public class DataMigrationService {
 
         log.info("Data migration process finished.");
     }
-
-    // Remove the old migrateTable method entirely from this class
-    // protected void migrateTable(...) { ... }
-
-    // Remove helper methods (setProperty, convertToFieldType) if they moved entirely
-    // private void setProperty(...) { ... }
-    // private Object convertToFieldType(...) { ... }
 }

@@ -21,7 +21,7 @@ import java.util.*;
 public class MigrationRowProcessor {
 
     @PersistenceContext
-    private final EntityManager entityManager; // Inject EntityManager here
+    private final EntityManager entityManager;
 
     /**
      * Processes a single row insertion in its own transaction.

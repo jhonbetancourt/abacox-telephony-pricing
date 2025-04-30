@@ -14,18 +14,18 @@ import static java.util.Map.entry;
 @RequiredArgsConstructor
 public class MigrationRunner {
 
-    private final DataMigrationService dataMigrationService;
+    private final DataMigrationExecutor dataMigrationExecutor;
 
     public void run(SourceDbConfig sourceDbConfig) {
-        log.info("<<<<<<<<<< STARTING Full Data Migration via CommandLineRunner >>>>>>>>>>");
+        log.info("<<<<<<<<<< STARTING Full Data Migration >>>>>>>>>>");
         try {
             List<TableMigrationConfig> tablesToMigrate = defineMigrationOrderAndMappings();
             MigrationRequest request = new MigrationRequest(sourceDbConfig, tablesToMigrate);
             log.info("Constructed migration request with {} tables.", tablesToMigrate.size());
-            dataMigrationService.runMigration(request);
-            log.info("<<<<<<<<<< Full Data Migration via CommandLineRunner Finished Successfully >>>>>>>>>>");
+            dataMigrationExecutor.runMigration(request);
+            log.info("<<<<<<<<<< Full Data Migration Finished Successfully >>>>>>>>>>");
         } catch (Exception e) {
-            log.error("<<<<<<<<<< Full Data Migration via CommandLineRunner FAILED >>>>>>>>>>", e);
+            log.error("<<<<<<<<<< Full Data Migration FAILED >>>>>>>>>>", e);
             // throw e; // Optional: Stop application startup on failure
         }
     }
@@ -485,7 +485,7 @@ public class MigrationRunner {
                 .build());
 
         // Level 7: Independent or depends on lower levels (FileInfo)
-      /*  configs.add(TableMigrationConfig.builder()
+        configs.add(TableMigrationConfig.builder()
                 .sourceTableName("fileinfo")
                 .targetEntityClassName("com.infomedia.abacox.telephonypricing.entity.FileInfo")
                 .sourceIdColumnName("FILEINFO_ID")
@@ -501,7 +501,7 @@ public class MigrationRunner {
                         entry("FILEINFO_DIRECTORIO", "directory"),
                         entry("FILEINFO_TIPO", "type")
                 ))
-                .build());*/
+                .build());
 
         return configs;
     }
