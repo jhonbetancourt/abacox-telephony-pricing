@@ -1,4 +1,4 @@
-package com.infomedia.abacox.telephonypricing.migration;
+package com.infomedia.abacox.telephonypricing.component.migration;
 
 import jakarta.persistence.*;
 import jakarta.persistence.Table;

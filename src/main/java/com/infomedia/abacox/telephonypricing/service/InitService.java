@@ -1,13 +1,10 @@
 package com.infomedia.abacox.telephonypricing.service;
 
-import com.infomedia.abacox.telephonypricing.migration.*;
+import com.infomedia.abacox.telephonypricing.component.migration.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
-
-import java.util.List;
-import java.util.Map;
 
 @Service
 @RequiredArgsConstructor

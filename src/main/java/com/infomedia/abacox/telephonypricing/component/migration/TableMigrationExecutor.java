@@ -1,4 +1,4 @@
-package com.infomedia.abacox.telephonypricing.migration;
+package com.infomedia.abacox.telephonypricing.component.migration;
 
 import jakarta.persistence.GeneratedValue; // Correct import for Jakarta EE
 import lombok.RequiredArgsConstructor;

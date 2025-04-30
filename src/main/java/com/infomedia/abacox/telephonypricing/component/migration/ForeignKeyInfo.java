@@ -1,4 +1,4 @@
-package com.infomedia.abacox.telephonypricing.migration; // Use your actual package
+package com.infomedia.abacox.telephonypricing.component.migration; // Use your actual package
 
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
