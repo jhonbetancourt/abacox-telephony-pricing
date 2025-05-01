@@ -29,7 +29,8 @@ public class RawCdrDto {
     private String origDeviceName; // troncal-ini
     private String destDeviceName; // troncal
     private int lastRedirectRedirectReason; // code_transfer
-    private int disconnectCause; // Example: origCause_value / destCause_value (choose one or combine)
+    // Mapped from destCallTerminationOnBehalfOf - provides reason for call end
+    private Integer disconnectCause;
     private int ringDuration; // Calculated ring duration
 
     // Video fields (optional, based on CM version/config)
@@ -42,7 +43,7 @@ public class RawCdrDto {
 
     // Conference/Join fields
     private Integer joinOnBehalfOf;
-    private Integer destCallTerminationOnBehalfOf;
+    private Integer destCallTerminationOnBehalfOf; // Keep original field too
     private Integer destConversationId;
 
     // Calculated fields

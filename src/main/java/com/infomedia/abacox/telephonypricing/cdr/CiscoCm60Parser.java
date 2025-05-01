@@ -166,7 +166,8 @@ public class CiscoCm60Parser implements CdrParser {
             builder.destDeviceName(destDeviceName);
             builder.lastRedirectRedirectReason(lastRedirectRedirectReason);
             builder.joinOnBehalfOf(joinOnBehalfOf);
-            builder.destCallTerminationOnBehalfOf(destCallTerminationOnBehalfOf);
+            builder.destCallTerminationOnBehalfOf(destCallTerminationOnBehalfOf); // Keep original
+            builder.disconnectCause(destCallTerminationOnBehalfOf); // Map to new field
             builder.destConversationId(destConversationId);
 
             // Video fields
