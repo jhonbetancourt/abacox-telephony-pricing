@@ -71,6 +71,16 @@ public class LookupService {
         }
     }
 
+     @Cacheable(value = "employeeById", key = "#id")
+     public Optional<Employee> findEmployeeById(Long id) {
+        if (id == null || id <= 0) return Optional.empty();
+        String sql = "SELECT e.* FROM employee e WHERE e.id = :id AND e.active = true";
+        Query query = entityManager.createNativeQuery(sql, Employee.class);
+        query.setParameter("id", id);
+        try { return Optional.of((Employee) query.getSingleResult()); }
+        catch (NoResultException e) { return Optional.empty(); }
+     }
+
      // --- Prefix & Related Lookups ---
 
     @Cacheable(value = "prefixLookup", key = "{#number, #originCountryId}")

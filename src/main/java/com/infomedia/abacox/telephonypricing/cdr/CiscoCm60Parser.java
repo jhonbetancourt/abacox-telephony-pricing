@@ -1,12 +1,10 @@
 package com.infomedia.abacox.telephonypricing.cdr;
 
-import com.infomedia.abacox.telephonypricing.service.ConfigurationService; // Import for ExtensionLengthConfig
-import lombok.RequiredArgsConstructor; // Added for ConfigurationService injection
+import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Component;
 import org.apache.logging.log4j.util.Strings;
-import org.springframework.util.StringUtils; // Use Spring's StringUtils
-
+import org.springframework.util.StringUtils;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -18,13 +16,8 @@ import java.util.regex.Pattern;
 
 @Component("ciscoCm60Parser")
 @Log4j2
-@RequiredArgsConstructor // Added for ConfigurationService injection
+@RequiredArgsConstructor
 public class CiscoCm60Parser implements CdrParser {
-
-    // Inject ConfigurationService to get extension length config for isLikelyExtension
-    // Note: Using configurationService here might be too early if config depends on dynamic context.
-    // Basic checks are done here, full validation in EnrichmentService.
-    // private final ConfigurationService configurationService; // Removed injection here, basic check is sufficient
 
     // --- Constants based on CM_TipoPlanta ---
     // Header names should be lowercase for consistent map lookup
@@ -73,24 +66,30 @@ public class CiscoCm60Parser implements CdrParser {
             return Optional.empty();
         }
 
+        if (headerMap == null || headerMap.isEmpty()) {
+             log.warn("Header map is missing or empty, cannot parse line accurately: {}", line);
+             return Optional.empty(); // Cannot parse without headers
+        }
+
         if (!line.contains(DELIMITER)) {
             log.warn("Line does not contain delimiter '{}': {}", DELIMITER, line);
             return Optional.empty();
         }
 
+        // Split using the delimiter, preserving trailing empty fields
         String[] fields = line.split(DELIMITER, -1);
 
-        // Clean fields
+        // Clean fields (remove quotes, trim whitespace)
         for (int i = 0; i < fields.length; i++) {
             fields[i] = cleanCsvField(fields[i]);
         }
 
         try {
             RawCdrDto.RawCdrDtoBuilder builder = RawCdrDto.builder();
-            builder.cdrLine(line);
+            builder.cdrLine(line); // Store original line
 
             // --- Extract Core Fields using headerMap ---
-            String globalCallId = getField(fields, headerMap, "globalcallid_callid"); // Use lowercase key
+            String globalCallId = getField(fields, headerMap, "globalcallid_callid");
             LocalDateTime dateTimeOrigination = parseTimestamp(getField(fields, headerMap, "datetimeorigination"));
             LocalDateTime dateTimeConnect = parseTimestamp(getField(fields, headerMap, "datetimeconnect"));
             LocalDateTime dateTimeDisconnect = parseTimestamp(getField(fields, headerMap, "datetimedisconnect"));
@@ -201,12 +200,25 @@ public class CiscoCm60Parser implements CdrParser {
             String cleanedHeader = cleanCsvField(headers[i].trim()).toLowerCase();
             if (!cleanedHeader.isEmpty()) {
                 // Use the standard key from HEADER_MAPPING if available, otherwise use the cleaned header
-                String standardKey = HEADER_MAPPING.getOrDefault(cleanedHeader, cleanedHeader);
+                // Ensure the key stored in the map is the standard one used by getField
+                String standardKey = findStandardKey(cleanedHeader);
                 headerMap.put(standardKey, i);
             }
         }
-        log.debug("Parsed header: {}", headerMap);
+        log.debug("Parsed header map: {}", headerMap);
         return headerMap;
+    }
+
+    // Helper to find the standard key (value in HEADER_MAPPING) for a given cleaned header
+    private String findStandardKey(String cleanedHeader) {
+        // Iterate through the mapping to find the standard key associated with the cleaned header
+        for (Map.Entry<String, String> entry : HEADER_MAPPING.entrySet()) {
+            if (entry.getKey().equals(cleanedHeader)) {
+                return entry.getValue().toLowerCase(); // Return the standard key (value from map), lowercased
+            }
+        }
+        // If no mapping found, return the cleaned header itself (lowercased)
+        return cleanedHeader;
     }
 
 

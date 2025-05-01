@@ -8,7 +8,6 @@ import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
-
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
@@ -34,7 +33,7 @@ public class CdrEnrichmentService {
 
     // --- Main Enrichment Method ---
     public Optional<CallRecord> enrichCdr(RawCdrDto rawCdr, CommunicationLocation commLocation) {
-        log.debug("Enriching CDR: {}", rawCdr.getGlobalCallId());
+        log.info("Enriching CDR: {}", rawCdr.getGlobalCallId());
 
         CallRecord.CallRecordBuilder callBuilder = CallRecord.builder();
         // Initial field setting from DTO
@@ -82,6 +81,7 @@ public class CdrEnrichmentService {
 
         // --- Conference Handling & Field Adjustment (PHP: CM_FormatoCDR conference logic) ---
         boolean isConference = isConferenceCall(rawCdr);
+        boolean isPostConference = false; // Flag for post-conference cleanup calls
         // Use wrappers to easily manage effective values after potential swaps
         FieldWrapper<String> effectiveCallingNumber = new FieldWrapper<>(rawCdr.getCallingPartyNumber());
         FieldWrapper<String> effectiveDialedNumber = new FieldWrapper<>(rawCdr.getFinalCalledPartyNumber());
@@ -109,9 +109,7 @@ public class CdrEnrichmentService {
             effectiveDialedPartition.setValue(rawCdr.getCallingPartyNumberPartition());
             effectiveIncoming.setValue(false); // Conferences are treated as outgoing from the initiator
 
-            // Swap trunks only if it wasn't a CONFERENCE_NOW (PHP logic didn't explicitly check this, but seems logical)
-            // PHP logic: if ($es_entrante) { // do nothing } elseif ($invertir_troncales) { swap(); }
-            // Since we force outgoing, we check the original incoming status before swapping.
+            // Swap trunks only if the original call direction was *outgoing*
             if (!rawCdr.isIncoming()) {
                  swapFields(effectiveTrunk, effectiveInitialTrunk);
             }
@@ -140,8 +138,8 @@ public class CdrEnrichmentService {
                  // Keep assignment cause as CONFERENCE even if lookup fails, as we know it's a conference CDR type
              }
         } else {
-            // Handle potential post-conference calls (PHP: IMDEX_TRANSFER_CONFERE_FIN)
-            boolean isPostConference = isConferenceCallIndicator(rawCdr.getLastRedirectDn());
+            // Check for post-conference calls only if it wasn't identified as an active conference
+            isPostConference = isConferenceCallIndicator(rawCdr.getLastRedirectDn());
             if (isPostConference) {
                 log.debug("CDR {} identified as post-conference.", rawCdr.getGlobalCallId());
                 callBuilder.transferCause(CallTransferCause.CONFERENCE_END.getValue());
@@ -168,16 +166,16 @@ public class CdrEnrichmentService {
         }
 
         // --- Final Adjustments ---
-        // Set transfer cause enum value only if it wasn't overridden by conference logic
+        // Set transfer cause enum value only if it wasn't overridden by conference/post-conference logic
         Integer currentTransferCause = callBuilder.build().getTransferCause();
-        if (currentTransferCause == null || currentTransferCause == 0) { // Check if null or default (0)
+        if (currentTransferCause == null || currentTransferCause == CallTransferCause.NONE.getValue()) { // Check if null or default (0)
              callBuilder.transferCause(CallTransferCause.fromValue(rawCdr.getLastRedirectRedirectReason()).getValue());
         }
         // Link associated entities based on IDs set during enrichment
         linkAssociatedEntities(callBuilder);
 
         CallRecord finalRecord = callBuilder.build();
-        log.debug("Successfully enriched CDR {}: Type={}, Billed={}",
+        log.info("Successfully enriched CDR {}: Type={}, Billed={}",
                 rawCdr.getGlobalCallId(), finalRecord.getTelephonyTypeId(), finalRecord.getBilledAmount());
         return Optional.of(finalRecord);
     }
@@ -200,6 +198,8 @@ public class CdrEnrichmentService {
             // Check if preprocessing resulted in a mobile number format
             if (preprocessedNumber.startsWith("03") && preprocessedNumber.length() == 12) { // 03 + 10 digits
                 forcedTelephonyType.setValue(ConfigurationService.TIPOTELE_CELULAR);
+            } else if (preprocessedNumber.matches("^\\d{7,8}$")) { // 7 or 8 digits after preprocessing might indicate LOCAL
+                forcedTelephonyType.setValue(ConfigurationService.TIPOTELE_LOCAL);
             }
             // Add checks for fixed line if needed based on _esNacional logic results
         }
@@ -229,8 +229,12 @@ public class CdrEnrichmentService {
                  // Re-preprocess and re-clean the number *after* applying the rule
                  preprocessedNumber = preprocessNumberForLookup(modifiedNumber, originCountryId);
                  forcedTelephonyType.setValue(null); // Reset forced type
-                 if (!preprocessedNumber.equals(modifiedNumber) && preprocessedNumber.startsWith("03") && preprocessedNumber.length() == 12) {
-                     forcedTelephonyType.setValue(ConfigurationService.TIPOTELE_CELULAR);
+                 if (!preprocessedNumber.equals(modifiedNumber)) {
+                    if (preprocessedNumber.startsWith("03") && preprocessedNumber.length() == 12) {
+                        forcedTelephonyType.setValue(ConfigurationService.TIPOTELE_CELULAR);
+                    } else if (preprocessedNumber.matches("^\\d{7,8}$")) {
+                        forcedTelephonyType.setValue(ConfigurationService.TIPOTELE_LOCAL);
+                    }
                  }
                  // Clean again, deciding prefix removal based on the *modified* number
                  shouldRemovePrefix = getPrefixLength(modifiedNumber, pbxPrefixes) > 0;
@@ -275,6 +279,8 @@ public class CdrEnrichmentService {
             log.debug("Incoming number preprocessed for lookup: {} -> {}", effectiveCallingNumber, preprocessedNumber);
             if (preprocessedNumber.startsWith("03") && preprocessedNumber.length() == 12) {
                 forcedTelephonyType.setValue(ConfigurationService.TIPOTELE_CELULAR);
+            } else if (preprocessedNumber.matches("^\\d{7,8}$")) { // 7 or 8 digits might indicate LOCAL
+                forcedTelephonyType.setValue(ConfigurationService.TIPOTELE_LOCAL);
             }
             // Add checks for fixed line if needed based on _esNacional logic results
         }
@@ -300,8 +306,12 @@ public class CdrEnrichmentService {
                  // Re-preprocess and re-clean the number *after* applying the rule
                  preprocessedNumber = preprocessNumberForLookup(modifiedNumber, originCountryId);
                  forcedTelephonyType.setValue(null); // Reset forced type
-                 if (!preprocessedNumber.equals(modifiedNumber) && preprocessedNumber.startsWith("03") && preprocessedNumber.length() == 12) {
-                     forcedTelephonyType.setValue(ConfigurationService.TIPOTELE_CELULAR);
+                 if (!preprocessedNumber.equals(modifiedNumber)) {
+                     if (preprocessedNumber.startsWith("03") && preprocessedNumber.length() == 12) {
+                         forcedTelephonyType.setValue(ConfigurationService.TIPOTELE_CELULAR);
+                     } else if (preprocessedNumber.matches("^\\d{7,8}$")) {
+                         forcedTelephonyType.setValue(ConfigurationService.TIPOTELE_LOCAL);
+                     }
                  }
                  cleanedCallingNumber = cleanNumber(preprocessedNumber, Collections.emptyList(), false);
                  callBuilder.dial(cleanedCallingNumber); // Update dial field
@@ -327,10 +337,11 @@ public class CdrEnrichmentService {
             List<Map<String, Object>> prefixes = lookupService.findPrefixesByNumber(numberForLookup, originCountryId);
             // Filter if type was forced by preprocessing
             if(forcedTelephonyType.getValue() != null) {
+                Long forcedType = forcedTelephonyType.getValue();
                 prefixes = prefixes.stream()
-                                   .filter(p -> forcedTelephonyType.getValue().equals(p.get("telephony_type_id")))
+                                   .filter(p -> forcedType.equals(p.get("telephony_type_id")))
                                    .collect(Collectors.toList());
-                if(prefixes.isEmpty()) log.warn("Forced TelephonyType ID {} has no matching prefixes for incoming number {}", forcedTelephonyType.getValue(), numberForLookup);
+                if(prefixes.isEmpty()) log.warn("Forced TelephonyType ID {} has no matching prefixes for incoming number {}", forcedType, numberForLookup);
             }
             Optional<Map<String, Object>> bestPrefix = prefixes.stream().findFirst();
 
@@ -964,11 +975,11 @@ public class CdrEnrichmentService {
 
         // Link Destination Employee (if ID exists and entity is not already set)
          if (record.getDestinationEmployeeId() != null && record.getDestinationEmployee() == null) {
-             // Assuming a findEmployeeById method exists in LookupService or an EmployeeRepository
-             // Since it wasn't explicitly requested, we log a warning.
-             // If you have an employeeRepository.findById(id), you'd use it here:
-             // employeeRepository.findById(record.getDestinationEmployeeId()).ifPresent(callBuilder::destinationEmployee);
-             log.warn("Cannot link destination employee entity without a findById method for ID: {}", record.getDestinationEmployeeId());
+             lookupService.findEmployeeById(record.getDestinationEmployeeId())
+                          .ifPresentOrElse(
+                              callBuilder::destinationEmployee,
+                              () -> log.warn("Could not link destination employee entity for ID: {}", record.getDestinationEmployeeId())
+                          );
          }
 
         // Note: Source Employee and CommunicationLocation are typically linked earlier or passed in.
@@ -1085,6 +1096,7 @@ public class CdrEnrichmentService {
         Long telephonyTypeId = (Long) baseRateInfo.get("telephony_type_id");
         Long operatorId = (Long) baseRateInfo.get("operator_id");
         Long indicatorId = (Long) baseRateInfo.get("indicator_id");
+        Long originCountryId = getOriginCountryId(trunk.getCommLocation()); // Get country from trunk's location
 
         // 1. Check for specific TrunkRate
         Optional<TrunkRate> trunkRateOpt = lookupService.findTrunkRate(trunk.getId(), operatorId, telephonyTypeId);
@@ -1099,8 +1111,9 @@ public class CdrEnrichmentService {
             // Trunk rates don't have an initial charge concept separate from per-unit rate
             baseRateInfo.put("valor_inicial", BigDecimal.ZERO);
             baseRateInfo.put("valor_inicial_iva", false);
-            // Fetch IVA specific to this operator/type combination if needed (assuming baseRateInfo has it)
-            // baseRateInfo.put("iva", lookupService.findPrefixVat(...)); // Or reuse from baseRateInfo if already correct
+            // Fetch IVA specific to this operator/type combination
+            lookupService.findPrefixByTypeOperatorOrigin(telephonyTypeId, operatorId, originCountryId)
+                       .ifPresent(p -> baseRateInfo.put("iva", p.getVatValue()));
             applyFinalPricing(baseRateInfo, duration, callBuilder);
         } else {
             // 2. Check for TrunkRule if no specific TrunkRate found
@@ -1116,23 +1129,34 @@ public class CdrEnrichmentService {
                 baseRateInfo.put("valor_inicial_iva", false);
 
                 // Apply overrides from the rule
+                Long finalOperatorId = operatorId; // Start with original
+                Long finalTelephonyTypeId = telephonyTypeId;
+
                 if (rule.getNewOperatorId() != null && rule.getNewOperatorId() > 0) {
-                    callBuilder.operatorId(rule.getNewOperatorId());
+                    finalOperatorId = rule.getNewOperatorId();
+                    callBuilder.operatorId(finalOperatorId);
                     // Update operator name in rateInfo for consistency if needed (optional)
-                    lookupService.findOperatorById(rule.getNewOperatorId()).ifPresent(op -> baseRateInfo.put("operator_name", op.getName()));
-                    // Re-fetch IVA based on the *new* operator/type? Or assume rule value applies?
-                    // Let's assume the rule's rate value already considers the target. Fetching IVA might be needed.
-                    lookupService.findPrefixByTypeOperatorOrigin(telephonyTypeId, rule.getNewOperatorId(), getOriginCountryId(trunk.getCommLocation()))
-                       .ifPresent(p -> baseRateInfo.put("iva", p.getVatValue()));
+                    lookupService.findOperatorById(finalOperatorId).ifPresent(op -> baseRateInfo.put("operator_name", op.getName()));
                 }
                 if (rule.getNewTelephonyTypeId() != null && rule.getNewTelephonyTypeId() > 0) {
-                    callBuilder.telephonyTypeId(rule.getNewTelephonyTypeId());
+                     finalTelephonyTypeId = rule.getNewTelephonyTypeId();
+                    callBuilder.telephonyTypeId(finalTelephonyTypeId);
                     // Update type name in rateInfo (optional)
-                     lookupService.findTelephonyTypeById(rule.getNewTelephonyTypeId()).ifPresent(tt -> baseRateInfo.put("telephony_type_name", tt.getName()));
-                     // Re-fetch IVA based on the *new* type/operator?
-                     lookupService.findPrefixByTypeOperatorOrigin(rule.getNewTelephonyTypeId(), callBuilder.build().getOperatorId(), getOriginCountryId(trunk.getCommLocation()))
-                       .ifPresent(p -> baseRateInfo.put("iva", p.getVatValue()));
+                     lookupService.findTelephonyTypeById(finalTelephonyTypeId).ifPresent(tt -> baseRateInfo.put("telephony_type_name", tt.getName()));
                 }
+
+                // Re-fetch IVA based on the *final* operator/type after rule application
+                Long finalTelephonyTypeId1 = finalTelephonyTypeId;
+                Long finalOperatorId1 = finalOperatorId;
+                lookupService.findPrefixByTypeOperatorOrigin(finalTelephonyTypeId, finalOperatorId, originCountryId)
+                           .ifPresentOrElse(
+                               p -> baseRateInfo.put("iva", p.getVatValue()),
+                               () -> { // If no prefix found for the new combo, default IVA to 0
+                                   log.warn("No prefix found for rule-defined type {} / operator {}. Using default IVA 0.", finalTelephonyTypeId1, finalOperatorId1);
+                                   baseRateInfo.put("iva", BigDecimal.ZERO);
+                               }
+                           );
+
                 applyFinalPricing(baseRateInfo, duration, callBuilder);
             } else {
                 // 3. No TrunkRate or TrunkRule found, use base/band rate + special rates
@@ -1265,7 +1289,7 @@ public class CdrEnrichmentService {
         String city = (String) indicatorInfo.get("city_name");
         String country = (String) indicatorInfo.get("department_country");
         if (StringUtils.hasText(city) && StringUtils.hasText(country)) return city + " (" + country + ")";
-        return StringUtils.hasText(city) ? city : (StringUtils.hasText(country) ? country : "Unknown");
+        return StringUtils.hasText(city) ? city : (StringUtils.hasText(country) ? country : "Unknown Destination");
     }
 
     private Optional<SpecialRateValue> findApplicableSpecialRate(List<SpecialRateValue> candidates, LocalDateTime callDateTime) {
@@ -1309,7 +1333,7 @@ public class CdrEnrichmentService {
 
     /**
      * Preprocesses a phone number based on Colombian numbering plan rules,
-     * mimicking PHP functions _esCelular_fijo and _esNacional.
+     * mimicking PHP functions _esCelular_fijo and _esEntrante_60.
      * This version is specifically for preparing the number for LOOKUP.
      *
      * @param number The phone number to preprocess.
@@ -1323,72 +1347,73 @@ public class CdrEnrichmentService {
 
         int len = number.length();
         String originalNumber = number; // Keep original for logging
+        String processedNumber = number; // Start with original
 
-        // --- Logic from _esCelular_fijo ---
+        // --- Logic from _esCelular_fijo & _esEntrante_60 ---
         if (len == 10) {
             if (number.startsWith("3")) {
-                 // Check if it looks like a 10-digit mobile number (3xx xxx xxxx)
-                 if (number.matches("^3[0-4][0-9]\\d{7}$")) { // Matches 300-349 followed by 7 digits
-                    number = "03" + number; // Prepend "03" for mobile lookup consistency
-                    log.trace("Preprocessing (Mobile 10-digit): {} -> {}", originalNumber, number);
-                 }
+                // Check if it looks like a 10-digit mobile number (3xx xxx xxxx)
+                if (number.matches("^3[0-4][0-9]\\d{7}$")) { // Matches 300-349 followed by 7 digits
+                    processedNumber = "03" + number; // Prepend "03" for mobile lookup consistency
+                    log.trace("Preprocessing (Mobile 10-digit): {} -> {}", originalNumber, processedNumber);
+                }
             } else if (number.startsWith("60")) {
-                // Fixed line with new 60 prefix. Keep it for now.
-                // Prefix/Indicator lookup should handle '60'+NDC.
+                // Fixed line with new 60 prefix. Check if it's local or national.
+                // PHP logic (_esNacional) implies comparing Dpto/City. This is complex here.
+                // For lookup, we keep the '60' + 8 digits. Prefix/Indicator lookup should resolve it.
                 log.trace("Preprocessing (Fixed 10-digit 60): {} kept as is for prefix lookup", originalNumber);
                 // No change needed here for lookup, prefix search handles it.
             }
-        } else if (len == 11 && number.startsWith("03")) {
-             // Mobile number dialed with leading 03 (e.g., 0315...). Remove leading 0.
-             if (number.matches("^03[0-4][0-9]\\d{7}$")) {
-                 number = number.substring(1); // Result: 315...
-                 log.trace("Preprocessing (Mobile 11-digit 03): {} -> {}", originalNumber, number);
+        } else if (len == 11) {
+             if (number.startsWith("03")) {
+                 // Mobile number dialed with leading 03 (e.g., 0315...). Remove leading 0.
+                 if (number.matches("^03[0-4][0-9]\\d{7}$")) {
+                     processedNumber = number.substring(1); // Result: 315...
+                     log.trace("Preprocessing (Mobile 11-digit 03): {} -> {}", originalNumber, processedNumber);
+                     // Re-apply 10-digit logic
+                     processedNumber = "03" + processedNumber;
+                     log.trace("Preprocessing (Mobile 11-digit post-strip): {} -> {}", originalNumber, processedNumber);
+                 }
+             } else if (number.startsWith("604")) {
+                 // Fixed line with 604 prefix (potentially Medellin? Needs confirmation) - Keep 8 digits
+                 if (number.matches("^604\\d{8}$")) {
+                     processedNumber = number.substring(3); // Keep 8 digits
+                     log.trace("Preprocessing (Fixed 11-digit 604): {} -> {}", originalNumber, processedNumber);
+                 }
              }
-        } else if (len == 12 && (number.startsWith("573") || number.startsWith("603"))) {
-            // Mobile number dialed with country code (57) or new prefix (60) + mobile indicator (3)
-            if (number.matches("^(57|60)3[0-4][0-9]\\d{7}$")) {
-                number = number.substring(2); // Keep only the 10 digits starting with 3
-                log.trace("Preprocessing (Mobile 12-digit 573/603): {} -> {}", originalNumber, number);
-                // Now it matches the 10-digit mobile case, prepend "03"
-                number = "03" + number;
-                log.trace("Preprocessing (Mobile 12-digit post-strip): {} -> {}", originalNumber, number);
-            }
-        } else if (len == 12 && (number.startsWith("6060") || number.startsWith("5760"))) {
-            // Fixed line dialed with country code (57) or new prefix (60) + new fixed prefix (60)
-            if (number.matches("^(57|60)60\\d{8}$")) {
-                // Keep the 60 + 8 digits for lookup
-                number = number.substring(2);
-                log.trace("Preprocessing (Fixed 12-digit 5760/6060): {} -> {}", originalNumber, number);
-            }
-        } else if (len == 11 && number.startsWith("604")) {
-            // Fixed line with 604 prefix (potentially Medellin? Needs confirmation) - Keep 8 digits
-            if (number.matches("^604\\d{8}$")) {
-                number = number.substring(3); // Keep 8 digits
-                log.trace("Preprocessing (Fixed 11-digit 604): {} -> {}", originalNumber, number);
-                // This case seems less standard, might need indicator lookup to confirm if it's local
-            }
-        } else if (len == 10 && (number.startsWith("60") || number.startsWith("57"))) {
-            // National call with 60 or 57 prefix (e.g., 601xxxxxxx) - Keep 8 digits after prefix
-            if (number.matches("^(57|60)\\d{8}$")) {
-                number = number.substring(2); // Keep 8 digits
-                log.trace("Preprocessing (National 10-digit 57/60): {} -> {}", originalNumber, number);
-                // Prepend 09 for national lookup consistency? PHP logic was complex here.
-                // Let's rely on prefix/indicator lookup without prepending 09 for now.
+        } else if (len == 12) {
+            if (number.startsWith("573") || number.startsWith("603")) {
+                // Mobile number dialed with country code (57) or new prefix (60) + mobile indicator (3)
+                if (number.matches("^(57|60)3[0-4][0-9]\\d{7}$")) {
+                    processedNumber = number.substring(2); // Keep only the 10 digits starting with 3
+                    log.trace("Preprocessing (Mobile 12-digit 573/603): {} -> {}", originalNumber, processedNumber);
+                    // Now it matches the 10-digit mobile case, prepend "03"
+                    processedNumber = "03" + processedNumber;
+                    log.trace("Preprocessing (Mobile 12-digit post-strip): {} -> {}", originalNumber, processedNumber);
+                }
+            } else if (number.startsWith("6060") || number.startsWith("5760")) {
+                // Fixed line dialed with country code (57) or new prefix (60) + new fixed prefix (60)
+                if (number.matches("^(57|60)60\\d{8}$")) {
+                    // Keep the 60 + 8 digits for lookup
+                    processedNumber = number.substring(2);
+                    log.trace("Preprocessing (Fixed 12-digit 5760/6060): {} -> {}", originalNumber, processedNumber);
+                }
             }
         } else if (len == 9 && number.startsWith("60")) {
             // National call with 60 prefix and 7 digits (e.g., 601xxxxxxx) - Keep 7 digits
             if (number.matches("^60\\d{7}$")) {
-                number = number.substring(2); // Keep 7 digits
-                log.trace("Preprocessing (National 9-digit 60): {} -> {}", originalNumber, number);
-                // Prepend 09? Rely on lookup for now.
+                processedNumber = number.substring(2); // Keep 7 digits
+                log.trace("Preprocessing (National 9-digit 60): {} -> {}", originalNumber, processedNumber);
+                // PHP _esNacional logic might prepend '09', but rely on prefix lookup for now.
             }
         }
+
         // Add more rules from PHP (_esNacional, _esEntrante_60) if necessary for LOOKUP stage
 
-        if (!originalNumber.equals(number)) {
-            log.debug("Final preprocessed number for lookup: {}", number);
+        if (!originalNumber.equals(processedNumber)) {
+            log.debug("Final preprocessed number for lookup: {}", processedNumber);
         }
-        return number;
+        return processedNumber;
     }
 
 }
