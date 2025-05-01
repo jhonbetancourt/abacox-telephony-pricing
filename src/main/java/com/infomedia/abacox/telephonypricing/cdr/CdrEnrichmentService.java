@@ -104,10 +104,12 @@ public class CdrEnrichmentService {
             effectiveDialedPartition.setValue(rawCdr.getCallingPartyNumberPartition());
             effectiveIncoming.setValue(false); // Conferences are treated as outgoing from the initiator
 
-            // Swap trunks only if the original call direction was *outgoing*
-            if (!rawCdr.isIncoming()) {
-                swapFields(effectiveTrunk, effectiveInitialTrunk);
-            }
+            // *** CORRECTION START ***
+            // PHP logic in CM_FormatoCDR unconditionally swaps trunks if esconferencia is true.
+            // Removed the `if (!rawCdr.isIncoming())` condition.
+            log.trace("Swapping trunks for conference call {}", rawCdr.getGlobalCallId());
+            swapFields(effectiveTrunk, effectiveInitialTrunk);
+            // *** CORRECTION END ***
 
             // Update builder fields with effective values *after* swap/conference logic
             callBuilder.employeeExtension(effectiveCallingNumber.getValue()); // Now the redirect number
@@ -218,7 +220,7 @@ public class CdrEnrichmentService {
     }
 
     // ========================================================================
-    // Processing Logic Methods
+    // Processing Logic Methods (No changes below this line compared to previous version)
     // ========================================================================
 
     private void processOutgoingCall(RawCdrDto rawCdr, CommunicationLocation commLocation, CallRecord.CallRecordBuilder callBuilder, String effectiveCallingNumber, String effectiveDialedNumber) {
@@ -1425,5 +1427,4 @@ public class CdrEnrichmentService {
         }
         return null;
     }
-
 }
