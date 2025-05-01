@@ -214,27 +214,44 @@ public class CdrEnrichmentService {
     private void processOutgoingCall(RawCdrDto rawCdr, CommunicationLocation commLocation, CallRecord.CallRecordBuilder callBuilder, String effectiveCallingNumber, String effectiveDialedNumber) {
         log.debug("Processing outgoing call for CDR {} (effective: {} -> {})", rawCdr.getGlobalCallId(), effectiveCallingNumber, effectiveDialedNumber);
 
-        String numberToCheckPbxRule = effectiveDialedNumber; // Number potentially modified by conference/mobile logic
-        String numberAfterPbxRule = numberToCheckPbxRule; // Start with the same number
+        String numberToCheck = effectiveDialedNumber; // Number potentially modified by conference/mobile logic
         List<String> pbxPrefixes = configService.getPbxPrefixes(commLocation.getId());
         Long originCountryId = getOriginCountryId(commLocation);
 
-        // 1. Apply PBX Special Rule (Direction OUTGOING)
+        // 1. Clean Dialed Number (using effective number) for DIAL field and initial checks
+        // Determine if prefix *should* be removed based on context (non-trunk calls usually remove it)
+        boolean shouldRemovePrefixInitially = getPrefixLength(numberToCheck, pbxPrefixes) > 0; // Check if prefix exists
+        String cleanedNumberForDial = cleanNumber(numberToCheck, pbxPrefixes, shouldRemovePrefixInitially);
+        callBuilder.dial(cleanedNumberForDial); // Set 'dial' field based on initial cleaning
+        log.trace("Cleaned number for DIAL field: {}", cleanedNumberForDial);
+
+        // 2. Check if Internal Call (using cleanedNumberForDial)
+        ConfigurationService.ExtensionLengthConfig extConfig = configService.getExtensionLengthConfig(commLocation.getId());
+        if (isInternalCall(effectiveCallingNumber, cleanedNumberForDial, extConfig)) {
+            log.debug("Processing as internal call (effective: {} -> {})", effectiveCallingNumber, cleanedNumberForDial);
+            processInternalCall(rawCdr, commLocation, callBuilder, cleanedNumberForDial, extConfig);
+            return; // Finished
+        }
+
+        // --- If NOT Internal ---
+
+        // 3. Apply PBX Special Rule (Direction OUTGOING) - This might change the number used for subsequent lookups
         Optional<PbxSpecialRule> pbxRuleOpt = lookupService.findPbxSpecialRule(
-                numberToCheckPbxRule, commLocation.getId(), CallDirection.OUTGOING.getValue()
+                numberToCheck, commLocation.getId(), CallDirection.OUTGOING.getValue()
         );
+        String numberAfterPbxRule = numberToCheck; // Start with the effective number
         if (pbxRuleOpt.isPresent()) {
             PbxSpecialRule rule = pbxRuleOpt.get();
             String replacement = rule.getReplacement() != null ? rule.getReplacement() : "";
             String searchPattern = rule.getSearchPattern();
-            if (StringUtils.hasText(searchPattern) && numberToCheckPbxRule.startsWith(searchPattern)) {
-                String numberAfterSearch = numberToCheckPbxRule.substring(searchPattern.length());
+            if (StringUtils.hasText(searchPattern) && numberToCheck.startsWith(searchPattern)) {
+                String numberAfterSearch = numberToCheck.substring(searchPattern.length());
                 numberAfterPbxRule = replacement + numberAfterSearch; // Apply replacement
                 log.debug("Applied OUTGOING PBX rule {}, number changed to {}", rule.getId(), numberAfterPbxRule);
             }
         }
 
-        // 2. Preprocess Number (Colombian rules for lookup) using the potentially rule-modified number
+        // 4. Preprocess Number (Colombian rules for lookup) using the potentially rule-modified number
         String preprocessedNumber = preprocessNumberForLookup(numberAfterPbxRule, originCountryId);
         FieldWrapper<Long> forcedTelephonyType = new FieldWrapper<>(null);
         if (!preprocessedNumber.equals(numberAfterPbxRule)) {
@@ -246,39 +263,28 @@ public class CdrEnrichmentService {
             }
         }
 
-        // 3. Clean Dialed Number (using preprocessed number) for DIAL field and initial check
-        // Determine if prefix *should* be removed based on context (non-trunk calls usually remove it)
-        boolean shouldRemovePrefixInitially = getPrefixLength(numberAfterPbxRule, pbxPrefixes) > 0; // Check if prefix exists on the rule-modified number
-        String cleanedNumberForDial = cleanNumber(preprocessedNumber, pbxPrefixes, shouldRemovePrefixInitially);
-        callBuilder.dial(cleanedNumberForDial); // Set 'dial' field based on initial cleaning
-        log.trace("Cleaned number for DIAL field: {}", cleanedNumberForDial);
-
-        // 4. Check Special Services (using the cleanedNumberForDial)
+        // 5. Check Special Services (using the preprocessed number, as PBX rules might reveal a special number)
         Long indicatorIdForSpecial = commLocation.getIndicatorId();
         if (indicatorIdForSpecial != null && originCountryId != null) {
-            Optional<SpecialService> specialServiceOpt = lookupService.findSpecialService(cleanedNumberForDial, indicatorIdForSpecial, originCountryId);
+            // Clean the preprocessed number *without* removing PBX prefix for special service check
+            String numberForSpecialCheck = cleanNumber(preprocessedNumber, Collections.emptyList(), false);
+            Optional<SpecialService> specialServiceOpt = lookupService.findSpecialService(numberForSpecialCheck, indicatorIdForSpecial, originCountryId);
             if (specialServiceOpt.isPresent()) {
                 SpecialService specialService = specialServiceOpt.get();
                 log.debug("Call matches Special Service: {}", specialService.getId());
                 applySpecialServicePricing(specialService, callBuilder, rawCdr.getDuration());
+                // Update dial field to the number matched by special service
+                callBuilder.dial(numberForSpecialCheck);
                 return; // Finished
             }
         }
 
-        // 5. Check if Internal Call (using cleanedNumberForDial)
-        ConfigurationService.ExtensionLengthConfig extConfig = configService.getExtensionLengthConfig(commLocation.getId());
-        if (isInternalCall(effectiveCallingNumber, cleanedNumberForDial, extConfig)) {
-            log.debug("Processing as internal call (effective: {} -> {})", effectiveCallingNumber, cleanedNumberForDial);
-            processInternalCall(rawCdr, commLocation, callBuilder, cleanedNumberForDial, extConfig);
-            return; // Finished
-        }
-
-        // 6. Process as External Outgoing Call
-        // Pass the PREPROCESSED number to evaluateDestinationAndRate.
+        // 6. Process as External Outgoing Call (using the preprocessed number)
         log.debug("Processing as external outgoing call (effective: {} -> preprocessed: {})", effectiveCallingNumber, preprocessedNumber);
         evaluateDestinationAndRate(rawCdr, commLocation, callBuilder, preprocessedNumber, pbxPrefixes, forcedTelephonyType.getValue());
     }
 
+    // --- Other methods remain the same as in the previous response ---
     private void processIncomingCall(RawCdrDto rawCdr, CommunicationLocation commLocation, CallRecord.CallRecordBuilder callBuilder, String effectiveCallingNumber) {
         log.debug("Processing incoming call for CDR {} (effective caller: {})", rawCdr.getGlobalCallId(), effectiveCallingNumber);
 
@@ -732,7 +738,7 @@ public class CdrEnrichmentService {
 
     /**
      * Finds the effective operator ID to use for trunk rate/rule lookups.
-     * Checks if a specific rule exists for the actual operator, otherwise defaults to 0 (global).
+     * Checks if a specific rate exists for the actual operator, otherwise defaults to 0 (global).
      * Mimics PHP buscarOperador_Troncal logic.
      *
      * @param trunk             The Trunk entity.
