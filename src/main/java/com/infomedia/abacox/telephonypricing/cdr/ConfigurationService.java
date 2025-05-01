@@ -151,12 +151,18 @@ public class ConfigurationService {
         if (maxLength > 0 && maxLength < String.valueOf(Integer.MAX_VALUE).length()) {
             try {
                  // Create a string of '9's with the maxLength
-                 maxExtensionValue = Integer.parseInt("9".repeat(maxLength));
+                 // Ensure maxLength is positive before repeating
+                 maxExtensionValue = Integer.parseInt("9".repeat(Math.max(0, maxLength)));
             } catch (NumberFormatException | OutOfMemoryError e) { // Added OutOfMemoryError just in case maxLength is huge
                  log.warn("Could not calculate max extension value for length {}, using default {}. Error: {}", maxLength, MAX_POSSIBLE_EXTENSION_VALUE, e.getMessage());
                  maxExtensionValue = MAX_POSSIBLE_EXTENSION_VALUE;
             }
+        } else if (maxLength >= String.valueOf(Integer.MAX_VALUE).length()) {
+            // If maxLength is too large, use the absolute max value
+            maxExtensionValue = MAX_POSSIBLE_EXTENSION_VALUE;
+            log.warn("Extension maxLength {} is too large, capping max extension value at {}", maxLength, maxExtensionValue);
         }
+
         log.debug("Extension config for commLocationId {}: minLen={}, maxLen={}, maxVal={}", commLocationId, minLength, maxLength, maxExtensionValue);
         return new ExtensionLengthConfig(minLength, maxLength, maxExtensionValue);
     }

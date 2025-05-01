@@ -101,8 +101,8 @@ public class CiscoCm60Parser implements CdrParser {
             String originalCalledPartyNumberPartition = getField(fields, headerMap, "originalcalledpartynumberpartition");
             String lastRedirectDn = getField(fields, headerMap, "lastredirectdn");
             String lastRedirectDnPartition = getField(fields, headerMap, "lastredirectdnpartition");
-            String destMobileDeviceName = getField(fields, headerMap, "destmobiledevicename");
-            String finalMobileCalledPartyNumber = getField(fields, headerMap, "finalmobilecalledpartynumber");
+            String destMobileDeviceName = getField(fields, headerMap, "destmobiledevicename"); // Added
+            String finalMobileCalledPartyNumber = getField(fields, headerMap, "finalmobilecalledpartynumber"); // Added
             int duration = parseInteger(getField(fields, headerMap, "duration"));
             String authCodeDescription = getField(fields, headerMap, "authcodedescription");
             String origDeviceName = getField(fields, headerMap, "origdevicename");
@@ -158,8 +158,8 @@ public class CiscoCm60Parser implements CdrParser {
             builder.originalCalledPartyNumberPartition(originalCalledPartyNumberPartition);
             builder.lastRedirectDn(lastRedirectDn);
             builder.lastRedirectDnPartition(lastRedirectDnPartition);
-            builder.destMobileDeviceName(destMobileDeviceName);
-            builder.finalMobileCalledPartyNumber(finalMobileCalledPartyNumber);
+            builder.destMobileDeviceName(destMobileDeviceName); // Added
+            builder.finalMobileCalledPartyNumber(finalMobileCalledPartyNumber); // Added
             builder.duration(duration);
             builder.authCodeDescription(authCodeDescription);
             builder.origDeviceName(origDeviceName);
