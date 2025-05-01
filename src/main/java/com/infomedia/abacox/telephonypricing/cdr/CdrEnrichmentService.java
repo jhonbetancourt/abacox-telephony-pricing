@@ -78,10 +78,21 @@ public class CdrEnrichmentService {
 
             // Invert fields as per PHP logic for conferences (originator becomes destination)
             // Use the redirect number/partition as the effective *caller*
-            effectiveCallingNumber.setValue(rawCdr.getLastRedirectDn());
-            effectiveCallingPartition.setValue(rawCdr.getLastRedirectDnPartition());
-            effectiveDialedNumber.setValue(rawCdr.getCallingPartyNumber());
-            effectiveDialedPartition.setValue(rawCdr.getCallingPartyNumberPartition());
+            // Check if redirect number is empty (can happen in some scenarios)
+            if (StringUtils.hasText(rawCdr.getLastRedirectDn())) {
+                effectiveCallingNumber.setValue(rawCdr.getLastRedirectDn());
+                effectiveCallingPartition.setValue(rawCdr.getLastRedirectDnPartition());
+                effectiveDialedNumber.setValue(rawCdr.getCallingPartyNumber());
+                effectiveDialedPartition.setValue(rawCdr.getCallingPartyNumberPartition());
+            } else {
+                log.warn("Conference detected for CDR {} but LastRedirectDn is empty. Field inversion might be incorrect.", rawCdr.getGlobalCallId());
+                // Keep original caller/called for safety? Or use another field? PHP logic unclear here.
+                // Sticking with original caller/called if redirectDN is missing.
+                effectiveCallingNumber.setValue(rawCdr.getCallingPartyNumber());
+                effectiveCallingPartition.setValue(rawCdr.getCallingPartyNumberPartition());
+                effectiveDialedNumber.setValue(rawCdr.getFinalCalledPartyNumber());
+                effectiveDialedPartition.setValue(rawCdr.getFinalCalledPartyNumberPartition());
+            }
             effectiveIncoming.setValue(false); // Conferences are treated as outgoing from the initiator
 
             // PHP logic in CM_FormatoCDR conditionally swaps trunks based on joinOnBehalfOf
@@ -89,18 +100,18 @@ public class CdrEnrichmentService {
                 log.trace("Swapping trunks for conference call {} (not CONFERENCE_NOW)", rawCdr.getGlobalCallId());
                 swapFields(effectiveTrunk, effectiveInitialTrunk);
             } else {
-                 log.trace("Not swapping trunks for conference call {} (is CONFERENCE_NOW)", rawCdr.getGlobalCallId());
+                log.trace("Not swapping trunks for conference call {} (is CONFERENCE_NOW)", rawCdr.getGlobalCallId());
             }
 
             // Update builder fields with effective values *after* swap/conference logic
-            callBuilder.employeeExtension(effectiveCallingNumber.getValue()); // Now the redirect number
-            callBuilder.destinationPhone(effectiveDialedNumber.getValue()); // Now the original caller
+            callBuilder.employeeExtension(effectiveCallingNumber.getValue());
+            callBuilder.destinationPhone(effectiveDialedNumber.getValue());
             callBuilder.dial(effectiveDialedNumber.getValue()); // Initially same as destination
             callBuilder.isIncoming(effectiveIncoming.getValue()); // Now false
             callBuilder.trunk(effectiveTrunk.getValue());
             callBuilder.initialTrunk(effectiveInitialTrunk.getValue());
 
-            // Re-lookup employee based on the *effective* calling number (which is the redirect number)
+            // Re-lookup employee based on the *effective* calling number
             Optional<Employee> confEmployeeOpt = lookupService.findEmployeeByExtensionOrAuthCode(
                     effectiveCallingNumber.getValue(), null, commLocation.getId()
             );
@@ -114,16 +125,15 @@ public class CdrEnrichmentService {
                 callBuilder.employeeId(null); // Ensure previous lookup is cleared if this one fails
                 callBuilder.employee(null);
                 // Keep assignment cause as CONFERENCE even if lookup fails, as we know it's a conference CDR type
+                callBuilder.assignmentCause(CallAssignmentCause.CONFERENCE.getValue());
             }
         } else if (isPostConference) {
             log.debug("CDR {} identified as post-conference.", rawCdr.getGlobalCallId());
             callBuilder.transferCause(CallTransferCause.CONFERENCE_END.getValue());
             // PHP logic didn't swap trunks here, so we don't either.
-            // Employee assignment might need adjustment if the remaining parties are external,
-            // but that requires complex state/lookup omitted for now.
         } else {
-             // If not conference or post-conference, set transfer cause based on raw CDR reason
-             callBuilder.transferCause(CallTransferCause.fromValue(rawCdr.getLastRedirectRedirectReason()).getValue());
+            // If not conference or post-conference, set transfer cause based on raw CDR reason
+            callBuilder.transferCause(CallTransferCause.fromValue(rawCdr.getLastRedirectRedirectReason()).getValue());
         }
 
         // --- Initial Employee Lookup (if not already set by conference logic) ---
@@ -153,34 +163,7 @@ public class CdrEnrichmentService {
 
         // --- Determine Call Type and Enrich ---
         try {
-            // Apply PBX Special Rule *after* initial checks but *before* main processing
-            // This mirrors PHP's procesaSaliente/procesaInterna applying it after failing other checks
-            String numberForPbx = effectiveIncoming.getValue() ? effectiveCallingNumber.getValue() : effectiveDialedNumber.getValue();
-            CallDirection directionForPbx = effectiveIncoming.getValue() ? CallDirection.INCOMING : CallDirection.OUTGOING;
-            Optional<PbxSpecialRule> pbxRuleOpt = lookupService.findPbxSpecialRule(
-                    numberForPbx, commLocation.getId(), directionForPbx.getValue()
-            );
-
-            if (pbxRuleOpt.isPresent()) {
-                PbxSpecialRule rule = pbxRuleOpt.get();
-                String replacement = rule.getReplacement() != null ? rule.getReplacement() : "";
-                String searchPattern = rule.getSearchPattern();
-                if (StringUtils.hasText(searchPattern) && numberForPbx.startsWith(searchPattern)) {
-                    String numberAfterSearch = numberForPbx.substring(searchPattern.length());
-                    String numberAfterPbxRule = replacement + numberAfterSearch; // Apply replacement
-                    log.debug("Applied PBX rule {}, number changed from {} to {}", rule.getId(), numberForPbx, numberAfterPbxRule);
-                    // Update the effective number based on direction
-                    if (effectiveIncoming.getValue()) {
-                        effectiveCallingNumber.setValue(numberAfterPbxRule);
-                    } else {
-                        effectiveDialedNumber.setValue(numberAfterPbxRule);
-                        // Update dial field as well if outgoing
-                        callBuilder.dial(numberAfterPbxRule);
-                    }
-                }
-            }
-
-            // Now, determine call type using potentially modified numbers
+            // Determine call type using potentially modified numbers
             if (effectiveIncoming.getValue()) {
                 processIncomingCall(rawCdr, commLocation, callBuilder, effectiveCallingNumber.getValue());
             } else {
@@ -226,34 +209,45 @@ public class CdrEnrichmentService {
 
     private void processOutgoingCall(RawCdrDto rawCdr, CommunicationLocation commLocation, CallRecord.CallRecordBuilder callBuilder, String effectiveCallingNumber, String effectiveDialedNumber) {
         log.debug("Processing outgoing call for CDR {} (effective: {} -> {})", rawCdr.getGlobalCallId(), effectiveCallingNumber, effectiveDialedNumber);
-        // Use the effectiveDialedNumber which might have been modified by PBX rules
-        String numberToProcess = effectiveDialedNumber;
+
+        String numberToProcess = effectiveDialedNumber; // Start with the potentially conference-swapped number
         List<String> pbxPrefixes = configService.getPbxPrefixes(commLocation.getId());
         Long originCountryId = getOriginCountryId(commLocation);
 
-        // 1. Preprocess Number (Colombian rules for lookup)
+        // 1. Apply PBX Special Rule (Direction OUTGOING) - Moved inside
+        Optional<PbxSpecialRule> pbxRuleOpt = lookupService.findPbxSpecialRule(
+                numberToProcess, commLocation.getId(), CallDirection.OUTGOING.getValue()
+        );
+        if (pbxRuleOpt.isPresent()) {
+            PbxSpecialRule rule = pbxRuleOpt.get();
+            String replacement = rule.getReplacement() != null ? rule.getReplacement() : "";
+            String searchPattern = rule.getSearchPattern();
+            if (StringUtils.hasText(searchPattern) && numberToProcess.startsWith(searchPattern)) {
+                String numberAfterSearch = numberToProcess.substring(searchPattern.length());
+                numberToProcess = replacement + numberAfterSearch; // Apply replacement
+                log.debug("Applied OUTGOING PBX rule {}, number changed to {}", rule.getId(), numberToProcess);
+            }
+        }
+
+        // 2. Preprocess Number (Colombian rules for lookup) using the potentially rule-modified number
         String preprocessedNumber = preprocessNumberForLookup(numberToProcess, originCountryId);
         FieldWrapper<Long> forcedTelephonyType = new FieldWrapper<>(null);
         if (!preprocessedNumber.equals(numberToProcess)) {
             log.debug("Number preprocessed for lookup: {} -> {}", numberToProcess, preprocessedNumber);
-            // Check if preprocessing resulted in a mobile number format
-            if (preprocessedNumber.startsWith("03") && preprocessedNumber.length() == 12) { // 03 + 10 digits
+            if (preprocessedNumber.startsWith("03") && preprocessedNumber.length() == 12) {
                 forcedTelephonyType.setValue(ConfigurationService.TIPOTELE_CELULAR);
-            } else if (preprocessedNumber.matches("^\\d{7,8}$")) { // 7 or 8 digits after preprocessing might indicate LOCAL
+            } else if (preprocessedNumber.matches("^\\d{7,8}$")) {
                 forcedTelephonyType.setValue(ConfigurationService.TIPOTELE_LOCAL);
             }
-            // Add checks for fixed line if needed based on _esNacional logic results
         }
 
-        // 2. Clean Dialed Number (using preprocessed number for consistency in cleaning)
-        // Determine if prefix *should* be removed based on original number containing a prefix
-        boolean shouldRemovePrefix = getPrefixLength(numberToProcess, pbxPrefixes) > 0;
+        // 3. Clean Dialed Number (using preprocessed number)
+        boolean shouldRemovePrefix = getPrefixLength(numberToProcess, pbxPrefixes) > 0; // Check original rule-modified number
         String cleanedNumber = cleanNumber(preprocessedNumber, pbxPrefixes, shouldRemovePrefix);
-        // Set the 'dial' field to the cleaned number (which might still have prefixes if !shouldRemovePrefix)
-        callBuilder.dial(cleanedNumber);
-        log.trace("Initial cleaned number (dial field): {}", cleanedNumber);
+        callBuilder.dial(cleanedNumber); // Set 'dial' field
+        log.trace("Cleaned number for processing (dial field): {}", cleanedNumber);
 
-        // 3. Check Special Services (using the potentially modified cleanedNumber)
+        // 4. Check Special Services (using the cleanedNumber)
         Long indicatorIdForSpecial = commLocation.getIndicatorId();
         if (indicatorIdForSpecial != null && originCountryId != null) {
             Optional<SpecialService> specialServiceOpt = lookupService.findSpecialService(cleanedNumber, indicatorIdForSpecial, originCountryId);
@@ -261,18 +255,18 @@ public class CdrEnrichmentService {
                 SpecialService specialService = specialServiceOpt.get();
                 log.debug("Call matches Special Service: {}", specialService.getId());
                 applySpecialServicePricing(specialService, callBuilder, rawCdr.getDuration());
-                return; // Processing finished for special service
+                return; // Finished
             }
         }
 
-        // 4. Check if Internal Call (using cleanedNumber)
+        // 5. Check if Internal Call (using cleanedNumber)
         if (isInternalCall(effectiveCallingNumber, cleanedNumber, commLocation)) {
             log.debug("Processing as internal call (effective: {} -> {})", effectiveCallingNumber, cleanedNumber);
             processInternalCall(rawCdr, commLocation, callBuilder, cleanedNumber);
-            return; // Processing finished for internal call
+            return; // Finished
         }
 
-        // 5. Process as External Outgoing Call (using cleanedNumber)
+        // 6. Process as External Outgoing Call (using cleanedNumber)
         log.debug("Processing as external outgoing call (effective: {} -> {})", effectiveCallingNumber, cleanedNumber);
         evaluateDestinationAndRate(rawCdr, commLocation, callBuilder, cleanedNumber, pbxPrefixes, forcedTelephonyType.getValue());
     }
@@ -280,22 +274,13 @@ public class CdrEnrichmentService {
     private void processIncomingCall(RawCdrDto rawCdr, CommunicationLocation commLocation, CallRecord.CallRecordBuilder callBuilder, String effectiveCallingNumber) {
         log.debug("Processing incoming call for CDR {} (effective caller: {})", rawCdr.getGlobalCallId(), effectiveCallingNumber);
 
-        // PHP: Checks if internal call redirected outward (`info_interna`)
-        // This check is complex as `info_interna` relies on `es_llamada_interna` which uses lookups.
-        // For simplicity now, we assume incoming CDRs processed here are truly incoming.
-        // A more advanced state machine might be needed to perfectly replicate the PHP's ability
-        // to re-classify an incoming as outgoing based on internal checks *during* incoming processing.
-        // if (isInternalCall(effectiveCallingNumber, ???, commLocation)) { // Need destination for this check
-        //     log.debug("Incoming CDR {} might be an internal call redirected outward, attempting outgoing processing.", rawCdr.getGlobalCallId());
-        //     processOutgoingCall(rawCdr, commLocation, callBuilder, effectiveCallingNumber, ???); // Need destination
-        //     return;
-        // }
+        // NOTE: PHP logic to re-route incoming as outgoing if internal checks pass is complex and omitted here.
+        // This method assumes the call is truly incoming based on parser results.
 
-        // Use the effectiveCallingNumber which might have been modified by PBX rules
-        String numberToProcess = effectiveCallingNumber;
+        String numberToProcess = effectiveCallingNumber; // Start with potentially conference-swapped number
         Long originCountryId = getOriginCountryId(commLocation);
 
-        // Apply PBX Special Rules (Direction INCOMING) to the CALLING number
+        // 1. Apply PBX Special Rule (Direction INCOMING) to the CALLING number
         Optional<PbxSpecialRule> pbxRuleOpt = lookupService.findPbxSpecialRule(
                 numberToProcess, commLocation.getId(), CallDirection.INCOMING.getValue()
         );
@@ -306,58 +291,56 @@ public class CdrEnrichmentService {
             if (StringUtils.hasText(searchPattern) && numberToProcess.startsWith(searchPattern)) {
                 String numberAfterSearch = numberToProcess.substring(searchPattern.length());
                 numberToProcess = replacement + numberAfterSearch; // Apply replacement
-                log.debug("Applied PBX rule {} to incoming number, result: {}", rule.getId(), numberToProcess);
+                log.debug("Applied INCOMING PBX rule {} to incoming number, result: {}", rule.getId(), numberToProcess);
             }
         }
 
-        // 1. Preprocess Number (Colombian rules for lookup)
+        // 2. Preprocess Number (Colombian rules for lookup) using the potentially rule-modified number
         String preprocessedNumber = preprocessNumberForLookup(numberToProcess, originCountryId);
         FieldWrapper<Long> forcedTelephonyType = new FieldWrapper<>(null);
         if (!preprocessedNumber.equals(numberToProcess)) {
             log.debug("Incoming number preprocessed for lookup: {} -> {}", numberToProcess, preprocessedNumber);
             if (preprocessedNumber.startsWith("03") && preprocessedNumber.length() == 12) {
                 forcedTelephonyType.setValue(ConfigurationService.TIPOTELE_CELULAR);
-            } else if (preprocessedNumber.matches("^\\d{7,8}$")) { // 7 or 8 digits might indicate LOCAL
+            } else if (preprocessedNumber.matches("^\\d{7,8}$")) {
                 forcedTelephonyType.setValue(ConfigurationService.TIPOTELE_LOCAL);
             }
-            // Add checks for fixed line if needed based on _esNacional logic results
         }
 
-        // 2. Clean Calling Number (using preprocessed number for consistency)
+        // 3. Clean Calling Number (using preprocessed number)
         // Incoming numbers shouldn't have PBX prefixes removed typically
         String cleanedCallingNumber = cleanNumber(preprocessedNumber, Collections.emptyList(), false);
         callBuilder.dial(cleanedCallingNumber); // 'dial' for incoming is the caller's number
 
-        // 3. Determine Origin (PHP: buscarOrigen logic)
+        // 4. Determine Origin (PHP: buscarOrigen logic)
         Long commIndicatorId = commLocation.getIndicatorId();
         if (originCountryId != null && commIndicatorId != null) {
             String numberForLookup = cleanedCallingNumber; // Use the cleaned (and potentially rule-modified) number
 
             // PHP logic checks for PBX prefix on original number for incoming calls too
             List<String> pbxPrefixes = configService.getPbxPrefixes(commLocation.getId());
-            int prefixLen = getPrefixLength(numberToProcess, pbxPrefixes); // Check original (potentially rule-modified) number for prefix
+            int prefixLen = getPrefixLength(numberToProcess, pbxPrefixes); // Check rule-modified number for prefix
             if (prefixLen > 0) {
-                // If original had prefix, lookup origin using number *after* prefix
                 numberForLookup = numberToProcess.substring(prefixLen);
-                // Re-clean this potentially different number (without removing prefix again)
                 numberForLookup = cleanNumber(numberForLookup, Collections.emptyList(), false);
                 log.trace("Incoming call had PBX prefix, looking up origin for: {}", numberForLookup);
             }
 
             List<Map<String, Object>> prefixes = lookupService.findPrefixesByNumber(numberForLookup, originCountryId);
             // Filter if type was forced by preprocessing
-            if(forcedTelephonyType.getValue() != null) {
+            if (forcedTelephonyType.getValue() != null) {
                 Long forcedType = forcedTelephonyType.getValue();
                 prefixes = prefixes.stream()
                         .filter(p -> forcedType.equals(p.get("telephony_type_id")))
                         .collect(Collectors.toList());
-                if(prefixes.isEmpty()) log.warn("Forced TelephonyType ID {} has no matching prefixes for incoming number {}", forcedType, numberForLookup);
+                if (prefixes.isEmpty())
+                    log.warn("Forced TelephonyType ID {} has no matching prefixes for incoming number {}", forcedType, numberForLookup);
             }
             Optional<Map<String, Object>> bestPrefix = prefixes.stream().findFirst(); // Prefixes are ordered by specificity
 
             if (bestPrefix.isPresent()) {
                 Map<String, Object> prefixInfo = bestPrefix.get();
-                Long telephonyTypeId = (Long) prefixInfo.get("telephony_type_id"); // Use type from matched prefix
+                Long telephonyTypeId = (Long) prefixInfo.get("telephony_type_id");
                 Long operatorId = (Long) prefixInfo.get("operator_id");
                 String prefixCode = (String) prefixInfo.get("prefix_code");
 
@@ -369,7 +352,6 @@ public class CdrEnrichmentService {
                     numberWithoutPrefix = numberForLookup.substring(prefixCode.length());
                 }
 
-                // Find indicator based on number part after prefix
                 Optional<Map<String, Object>> indicatorInfoOpt = lookupService.findIndicatorByNumber(numberWithoutPrefix, telephonyTypeId, originCountryId);
                 indicatorInfoOpt.ifPresent(indInfo -> callBuilder.indicatorId((Long) indInfo.get("indicator_id")));
 
@@ -670,6 +652,7 @@ public class CdrEnrichmentService {
                 } else {
                     log.warn("Rate info not found for prefix {}, indicator {}", currentPrefixCode, destinationIndicatorId);
                     // If this was the only potential match and it failed rate lookup, store it for fallback
+                    // PHP Fallback: if ($arr_destino === false && $todosok)
                     if (assumedRateInfo == null && allPrefixesConsistent) {
                         assumedRateInfo = new HashMap<>();
                         assumedRateInfo.put("telephony_type_id", finalTelephonyTypeId);
@@ -680,7 +663,7 @@ public class CdrEnrichmentService {
                         assumedRateInfo.put("destination_name", "Assumed Destination");
                         assumedRateInfo.put("effective_number", effectiveNumber);
                         assumedRateInfo.put("applied_trunk_pricing", usesTrunk);
-                        // Add base rate info for assumed case
+                        // Add base rate info for assumed case (using the final prefix ID)
                         Optional<Map<String, Object>> baseRateOpt = lookupService.findBaseRateForPrefix(finalPrefixId);
                         baseRateOpt.ifPresent(assumedRateInfo::putAll);
                         log.debug("Storing assumed rate info based on consistent prefix {} (Type: {}, Op: {})", currentPrefixCode, finalTelephonyTypeId, currentOperatorId);
@@ -710,7 +693,7 @@ public class CdrEnrichmentService {
             }
         }
 
-        // 2. Assumed Rate Fallback (PHP: if ($arr_destino === false) block)
+        // 2. Assumed Rate Fallback (PHP: if ($arr_destino === false && $todosok) block)
         if (assumedRateInfo != null && allPrefixesConsistent) {
             log.warn("Using assumed rate info for number {} based on consistent prefix type/operator.", effectiveNumber);
             return Optional.of(assumedRateInfo);
@@ -724,7 +707,7 @@ public class CdrEnrichmentService {
      * Helper specifically for the LOCAL fallback in attemptRateLookup.
      * Attempts to find rate information assuming the call is local.
      *
-     * @param commLocation The communication location of the call origin.
+     * @param commLocation    The communication location of the call origin.
      * @param effectiveNumber The number being looked up (already cleaned).
      * @return Optional containing rate information if found, empty otherwise.
      */
@@ -748,7 +731,7 @@ public class CdrEnrichmentService {
 
         // Find the prefix associated with LOCAL type and the internal operator
         Optional<Prefix> localPrefixOpt = lookupService.findPrefixByTypeOperatorOrigin(localType, internalOperatorId, originCountryId);
-        if(localPrefixOpt.isEmpty()){
+        if (localPrefixOpt.isEmpty()) {
             log.warn("Cannot find Prefix entity for LOCAL type ({}) and Operator {} in Country {}", localType, internalOperatorId, originCountryId);
             return Optional.empty();
         }
@@ -758,7 +741,7 @@ public class CdrEnrichmentService {
         Optional<Map<String, Object>> indicatorInfoOpt = lookupService.findIndicatorByNumber(
                 effectiveNumber, localType, originCountryId
         );
-        if(indicatorInfoOpt.isEmpty()){
+        if (indicatorInfoOpt.isEmpty()) {
             log.warn("Could not find LOCAL indicator for number {}", effectiveNumber);
             return Optional.empty(); // No indicator means no destination match
         }
@@ -922,8 +905,15 @@ public class CdrEnrichmentService {
         return CONFERENCE_PREFIX.equalsIgnoreCase(prefix) && rest.matches("\\d+");
     }
 
-    @Getter @Setter
-    private static class FieldWrapper<T> { T value; FieldWrapper(T v) { this.value = v; } }
+    @Getter
+    @Setter
+    private static class FieldWrapper<T> {
+        T value;
+
+        FieldWrapper(T v) {
+            this.value = v;
+        }
+    }
 
     private <T> void swapFields(FieldWrapper<T> field1, FieldWrapper<T> field2) {
         T temp = field1.getValue();
@@ -932,7 +922,8 @@ public class CdrEnrichmentService {
         log.trace("Swapped fields: {} <-> {}", field1.getValue(), field2.getValue());
     }
 
-    private record LocationInfo(Long indicatorId, Long originCountryId, Long officeId) {}
+    private record LocationInfo(Long indicatorId, Long originCountryId, Long officeId) {
+    }
 
     private LocationInfo getLocationInfo(Employee employee, CommunicationLocation defaultLocation) {
         Long defaultIndicatorId = defaultLocation.getIndicatorId();
@@ -1358,7 +1349,7 @@ public class CdrEnrichmentService {
      * This version is specifically for preparing the number for LOOKUP.
      * Includes logic from _esNacional based on SERIE_EMPRESA.
      *
-     * @param number The phone number to preprocess.
+     * @param number          The phone number to preprocess.
      * @param originCountryId The origin country ID (used to check if rules apply).
      * @return The potentially modified phone number for lookup.
      */
@@ -1387,8 +1378,6 @@ public class CdrEnrichmentService {
             if (number.startsWith("03")) {
                 if (number.matches("^03[0-4][0-9]\\d{7}$")) {
                     // Keep as is for lookup (03 prefix is handled by prefix lookup)
-                    // processedNumber = number.substring(1); // Remove leading 0
-                    // processedNumber = "03" + processedNumber; // Add 03 back - redundant
                 }
             } else if (number.startsWith("604")) {
                 if (number.matches("^604\\d{8}$")) {
@@ -1403,22 +1392,22 @@ public class CdrEnrichmentService {
                 }
             } else if (number.startsWith("6060") || number.startsWith("5760")) {
                 if (number.matches("^(57|60)60\\d{8}$")) {
-                     // PHP logic removes 4 digits (5760 or 6060) leaving 8 digits
-                     // This likely implies it becomes a local number lookup
+                    // PHP logic removes 4 digits (5760 or 6060) leaving 8 digits
+                    // This likely implies it becomes a local number lookup
                     processedNumber = number.substring(4);
                 }
             }
         } else if (len == 9 && number.startsWith("60")) {
             if (number.matches("^60\\d{7}$")) {
                 // Try to determine national prefix based on the implied full 10-digit number
-                 String impliedFullNumber = "60" + number.substring(2, 3) + number.substring(3); // Reconstruct potential 10-digit
-                 String nationalPrefix = determineNationalPrefix(impliedFullNumber);
-                 if (nationalPrefix != null) {
-                     processedNumber = nationalPrefix + number.substring(2); // Apply national prefix + 7 digits
-                 } else {
-                     // If no national prefix found, assume it's local (remove 60)
-                     processedNumber = number.substring(2);
-                 }
+                String impliedFullNumber = "60" + number.substring(2, 3) + number.substring(3); // Reconstruct potential 10-digit
+                String nationalPrefix = determineNationalPrefix(impliedFullNumber);
+                if (nationalPrefix != null) {
+                    processedNumber = nationalPrefix + number.substring(2); // Apply national prefix + 7 digits
+                } else {
+                    // If no national prefix found, assume it's local (remove 60)
+                    processedNumber = number.substring(2);
+                }
             }
         }
 
