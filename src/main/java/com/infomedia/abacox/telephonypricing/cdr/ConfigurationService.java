@@ -47,7 +47,7 @@ public class ConfigurationService {
     // Absolute max value based on typical internal numbering plans (PHP: _ACUMTOTAL_MAXEXT)
     public static final int MAX_POSSIBLE_EXTENSION_VALUE = 9999999; // 7 digits
 
-    private Set<Long> internalTelephonyTypeIds;
+    private static Set<Long> internalTelephonyTypeIds;
 
     @Getter
     public static class ExtensionLengthConfig {
@@ -123,7 +123,7 @@ public class ConfigurationService {
     }
 
     // Renamed from getInternalCallTypeIds for clarity
-    public Set<Long> getInternalIpCallTypeIds() {
+    public static Set<Long> getInternalIpCallTypeIds() {
         return internalTelephonyTypeIds; // Return the initialized set
     }
 

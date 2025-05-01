@@ -37,18 +37,18 @@ public class LookupService {
             sqlBuilder.append(" AND e.communication_location_id = :commLocationId");
             params.put("commLocationId", commLocationId);
         } else {
-             log.warn("CommLocationId is null during employee lookup. Results may be incorrect if extensions/codes are not unique across locations.");
-             // Depending on requirements, might return empty or proceed without location filter
-             // Proceeding without filter for now, matching potential ambiguity in PHP if context wasn't passed.
+            log.warn("CommLocationId is null during employee lookup. Results may be incorrect if extensions/codes are not unique across locations.");
+            // Depending on requirements, might return empty or proceed without location filter
+            // Proceeding without filter for now, matching potential ambiguity in PHP if context wasn't passed.
         }
 
         // Prioritize authCode if provided (as per PHP logic flow)
         if (authCode != null && !authCode.isEmpty()) {
-             sqlBuilder.append(" AND e.auth_code = :authCode");
-             params.put("authCode", authCode);
+            sqlBuilder.append(" AND e.auth_code = :authCode");
+            params.put("authCode", authCode);
         } else if (extension != null && !extension.isEmpty()){
-             sqlBuilder.append(" AND e.extension = :extension");
-             params.put("extension", extension);
+            sqlBuilder.append(" AND e.extension = :extension");
+            params.put("extension", extension);
         } else {
             log.trace("No valid identifier (extension or authCode) provided for employee lookup.");
             return Optional.empty(); // No identifier to search by
@@ -71,17 +71,17 @@ public class LookupService {
         }
     }
 
-     @Cacheable(value = "employeeById", key = "#id")
-     public Optional<Employee> findEmployeeById(Long id) {
+    @Cacheable(value = "employeeById", key = "#id")
+    public Optional<Employee> findEmployeeById(Long id) {
         if (id == null || id <= 0) return Optional.empty();
         String sql = "SELECT e.* FROM employee e WHERE e.id = :id AND e.active = true";
         Query query = entityManager.createNativeQuery(sql, Employee.class);
         query.setParameter("id", id);
         try { return Optional.of((Employee) query.getSingleResult()); }
         catch (NoResultException e) { return Optional.empty(); }
-     }
+    }
 
-     // --- Prefix & Related Lookups ---
+    // --- Prefix & Related Lookups ---
 
     @Cacheable(value = "prefixLookup", key = "{#number, #originCountryId}")
     public List<Map<String, Object>> findPrefixesByNumber(String number, Long originCountryId) {
@@ -177,14 +177,54 @@ public class LookupService {
         }
     }
 
+    @Cacheable(value = "internalPrefixMatch", key = "{#number, #originCountryId}")
+    public Optional<Map<String, Object>> findInternalPrefixMatch(String number, Long originCountryId) {
+        if (originCountryId == null || !StringUtils.hasText(number)) return Optional.empty();
+        log.debug("Finding internal prefix match for number starting with: {}, originCountryId: {}", number.substring(0, Math.min(number.length(), 6))+"...", originCountryId);
+
+        Set<Long> internalTypes = ConfigurationService.getInternalIpCallTypeIds();
+        if (internalTypes.isEmpty()) return Optional.empty();
+
+        StringBuilder sqlBuilder = new StringBuilder();
+        sqlBuilder.append("SELECT p.telephone_type_id, p.operator_id ");
+        sqlBuilder.append("FROM prefix p ");
+        sqlBuilder.append("JOIN operator op ON p.operator_id = op.id ");
+        sqlBuilder.append("WHERE p.active = true AND op.active = true ");
+        sqlBuilder.append("  AND p.telephone_type_id IN (:internalTypes) ");
+        sqlBuilder.append("  AND :number LIKE p.code || '%' "); // Match numbers starting with the internal prefix
+        sqlBuilder.append("  AND op.origin_country_id = :originCountryId ");
+        sqlBuilder.append("ORDER BY LENGTH(p.code) DESC "); // Prioritize longer prefix matches
+        sqlBuilder.append("LIMIT 1");
+
+        Query query = entityManager.createNativeQuery(sqlBuilder.toString());
+        query.setParameter("internalTypes", internalTypes);
+        query.setParameter("number", number);
+        query.setParameter("originCountryId", originCountryId);
+
+        try {
+            Object[] result = (Object[]) query.getSingleResult();
+            Map<String, Object> map = new HashMap<>();
+            map.put("telephony_type_id", result[0]);
+            map.put("operator_id", result[1]);
+            log.trace("Found internal prefix match for number {}: Type={}, Op={}", number, result[0], result[1]);
+            return Optional.of(map);
+        } catch (NoResultException e) {
+            log.trace("No internal prefix match found for number {}", number);
+            return Optional.empty();
+        } catch (Exception e) {
+            log.error("Error finding internal prefix match for number {}: {}", number, e.getMessage(), e);
+            return Optional.empty();
+        }
+    }
+
 
     @Cacheable(value = "indicatorLookup", key = "{#numberWithoutPrefix, #telephonyTypeId, #originCountryId}")
     public Optional<Map<String, Object>> findIndicatorByNumber(String numberWithoutPrefix, Long telephonyTypeId, Long originCountryId) {
-         if (telephonyTypeId == null || originCountryId == null || !StringUtils.hasText(numberWithoutPrefix)) {
-             log.trace("findIndicatorByNumber - Invalid input: num={}, ttId={}, ocId={}", numberWithoutPrefix, telephonyTypeId, originCountryId);
-             return Optional.empty();
-         }
-         log.debug("Finding indicator for number: {}, telephonyTypeId: {}, originCountryId: {}", numberWithoutPrefix, telephonyTypeId, originCountryId);
+        if (telephonyTypeId == null || originCountryId == null || !StringUtils.hasText(numberWithoutPrefix)) {
+            log.trace("findIndicatorByNumber - Invalid input: num={}, ttId={}, ocId={}", numberWithoutPrefix, telephonyTypeId, originCountryId);
+            return Optional.empty();
+        }
+        log.debug("Finding indicator for number: {}, telephonyTypeId: {}, originCountryId: {}", numberWithoutPrefix, telephonyTypeId, originCountryId);
 
         // Get min/max NDC lengths for this telephony type and country
         Map<String, Integer> ndcLengths = findNdcMinMaxLength(telephonyTypeId, originCountryId);
@@ -210,8 +250,8 @@ public class LookupService {
             String subscriberNumberStr = numberWithoutPrefix; // Assume no NDC initially
 
             if (ndcLength > 0 && numberWithoutPrefix.length() >= ndcLength) {
-                 ndcStr = numberWithoutPrefix.substring(0, ndcLength);
-                 subscriberNumberStr = numberWithoutPrefix.substring(ndcLength);
+                ndcStr = numberWithoutPrefix.substring(0, ndcLength);
+                subscriberNumberStr = numberWithoutPrefix.substring(ndcLength);
             } else if (ndcLength > 0) {
                 // Number is shorter than the current NDC length we're checking
                 continue; // Skip to the next shorter NDC length
@@ -227,7 +267,7 @@ public class LookupService {
                 sqlBuilder.append("SELECT ");
                 sqlBuilder.append(" i.id as indicator_id, i.department_country, i.city_name, i.operator_id, ");
                 sqlBuilder.append(" s.ndc as series_ndc, s.initial_number as series_initial, s.final_number as series_final, ");
-                sqlBuilder.append(" s.company as series_company ");
+                sqlBuilder.append(" s.company as series_company "); // Added series_company
                 sqlBuilder.append("FROM series s ");
                 sqlBuilder.append("JOIN indicator i ON s.indicator_id = i.id ");
                 sqlBuilder.append("WHERE i.active = true AND s.active = true ");
@@ -267,7 +307,7 @@ public class LookupService {
                     map.put("series_ndc", result[4]);
                     map.put("series_initial", result[5]);
                     map.put("series_final", result[6]);
-                    map.put("series_company", result[7]);
+                    map.put("series_company", result[7]); // Added series_company
                     log.trace("Found indicator {} for number {} (NDC: {})", map.get("indicator_id"), numberWithoutPrefix, ndcStr);
                     return Optional.of(map); // Return the first, most specific match found
                 } catch (NoResultException e) {
@@ -278,7 +318,7 @@ public class LookupService {
                     // Potentially stop or continue based on error type
                 }
             } else {
-                 log.trace("Skipping NDC check: NDC '{}' or Subscriber '{}' is not numeric.", ndcStr, subscriberNumberStr);
+                log.trace("Skipping NDC check: NDC '{}' or Subscriber '{}' is not numeric.", ndcStr, subscriberNumberStr);
             }
         } // End NDC length loop
 
@@ -306,21 +346,47 @@ public class LookupService {
         // Only consider series with a positive NDC value for length calculation
         sqlBuilder.append("  AND s.ndc > 0 ");
 
-         Query query = entityManager.createNativeQuery(sqlBuilder.toString());
-         query.setParameter("telephonyTypeId", telephonyTypeId);
-         query.setParameter("originCountryId", originCountryId);
+        Query query = entityManager.createNativeQuery(sqlBuilder.toString());
+        query.setParameter("telephonyTypeId", telephonyTypeId);
+        query.setParameter("originCountryId", originCountryId);
 
-         try {
+        try {
             Object[] result = (Object[]) query.getSingleResult();
             // Safely cast to Number and get int value
             lengths.put("min", result[0] != null ? ((Number) result[0]).intValue() : 0);
             lengths.put("max", result[1] != null ? ((Number) result[1]).intValue() : 0);
-         } catch (Exception e) {
-             log.warn("Could not determine NDC lengths for telephony type {}: {}", telephonyTypeId, e.getMessage());
-             // Keep defaults (0, 0) on error
-         }
-         log.trace("NDC lengths for type {}: min={}, max={}", telephonyTypeId, lengths.get("min"), lengths.get("max"));
-         return lengths;
+        } catch (Exception e) {
+            log.warn("Could not determine NDC lengths for telephony type {}: {}", telephonyTypeId, e.getMessage());
+            // Keep defaults (0, 0) on error
+        }
+        log.trace("NDC lengths for type {}: min={}, max={}", telephonyTypeId, lengths.get("min"), lengths.get("max"));
+        return lengths;
+    }
+
+    @Cacheable(value = "seriesInfoForNationalLookup", key = "{#ndc, #subscriberNumber}")
+    public Optional<Map<String, Object>> findSeriesInfoForNationalLookup(int ndc, long subscriberNumber) {
+        log.debug("Finding series info for national lookup: NDC={}, Subscriber={}", ndc, subscriberNumber);
+        String sql = "SELECT s.company as series_company " +
+                     "FROM series s " +
+                     "WHERE s.active = true " +
+                     "  AND s.ndc = :ndc " +
+                     "  AND s.initial_number <= :subscriberNum AND s.final_number >= :subscriberNum " +
+                     "LIMIT 1";
+        Query query = entityManager.createNativeQuery(sql);
+        query.setParameter("ndc", ndc);
+        query.setParameter("subscriberNum", subscriberNumber);
+        try {
+            Object result = query.getSingleResult(); // Expecting only the company name
+            Map<String, Object> map = new HashMap<>();
+            map.put("series_company", result);
+            return Optional.of(map);
+        } catch (NoResultException e) {
+            log.trace("No series found for national lookup: NDC={}, Subscriber={}", ndc, subscriberNumber);
+            return Optional.empty();
+        } catch (Exception e) {
+            log.error("Error finding series info for national lookup: NDC={}, Subscriber={}: {}", ndc, subscriberNumber, e.getMessage(), e);
+            return Optional.empty();
+        }
     }
 
 
@@ -330,8 +396,8 @@ public class LookupService {
         log.debug("Finding base rate for prefixId: {}", prefixId);
         // Select the relevant fields for base rate calculation
         String sql = "SELECT base_value, vat_included, vat_value, band_ok " +
-                     "FROM prefix " +
-                     "WHERE id = :prefixId AND active = true";
+                "FROM prefix " +
+                "WHERE id = :prefixId AND active = true";
         Query query = entityManager.createNativeQuery(sql);
         query.setParameter("prefixId", prefixId);
         try {
@@ -355,7 +421,7 @@ public class LookupService {
     @Cacheable(value = "bandLookup", key = "{#prefixId, #indicatorId, #originIndicatorId}")
     public Optional<Map<String, Object>> findBandByPrefixAndIndicator(Long prefixId, Long indicatorId, Long originIndicatorId) {
         if (prefixId == null || indicatorId == null) {
-             log.trace("findBandByPrefixAndIndicator - Invalid input: prefixId={}, indicatorId={}", prefixId, indicatorId);
+            log.trace("findBandByPrefixAndIndicator - Invalid input: prefixId={}, indicatorId={}", prefixId, indicatorId);
             return Optional.empty();
         }
         // Use 0 for originIndicatorId if it's null (representing the 'all origins' case)
@@ -407,16 +473,16 @@ public class LookupService {
     public Optional<Trunk> findTrunkByCode(String trunkCode, Long commLocationId) {
         // Ensure trunkCode is not blank and commLocationId is provided
         if (!StringUtils.hasText(trunkCode) || commLocationId == null) {
-             log.trace("findTrunkByCode - Invalid input: trunkCode={}, commLocationId={}", trunkCode, commLocationId);
+            log.trace("findTrunkByCode - Invalid input: trunkCode={}, commLocationId={}", trunkCode, commLocationId);
             return Optional.empty();
         }
         log.debug("Finding trunk by code: '{}', commLocationId: {}", trunkCode, commLocationId);
         // Query active trunks matching the name and specific communication location
         String sql = "SELECT t.* FROM trunk t " +
-                     "WHERE t.active = true " +
-                     "  AND t.name = :trunkCode " +
-                     "  AND t.comm_location_id = :commLocationId " +
-                     "LIMIT 1"; // Expecting at most one active trunk with the same name per location
+                "WHERE t.active = true " +
+                "  AND t.name = :trunkCode " +
+                "  AND t.comm_location_id = :commLocationId " +
+                "LIMIT 1"; // Expecting at most one active trunk with the same name per location
         Query query = entityManager.createNativeQuery(sql, Trunk.class);
         query.setParameter("trunkCode", trunkCode);
         query.setParameter("commLocationId", commLocationId);
@@ -434,38 +500,38 @@ public class LookupService {
 
     @Cacheable(value = "trunkRateLookup", key = "{#trunkId, #operatorId, #telephonyTypeId}")
     public Optional<TrunkRate> findTrunkRate(Long trunkId, Long operatorId, Long telephonyTypeId) {
-         if (trunkId == null || operatorId == null || telephonyTypeId == null) {
-              log.trace("findTrunkRate - Invalid input: trunkId={}, opId={}, ttId={}", trunkId, operatorId, telephonyTypeId);
-             return Optional.empty();
-         }
-         log.debug("Finding trunk rate for trunkId: {}, operatorId: {}, telephonyTypeId: {}", trunkId, operatorId, telephonyTypeId);
-         // Find the specific rate defined for this combination
-         String sql = "SELECT tr.* FROM trunk_rate tr " +
-                      "WHERE tr.trunk_id = :trunkId " +
-                      "  AND tr.operator_id = :operatorId " +
-                      "  AND tr.telephony_type_id = :telephonyTypeId " +
-                      "LIMIT 1"; // Assuming only one rate per combination
-         Query query = entityManager.createNativeQuery(sql, TrunkRate.class);
-         query.setParameter("trunkId", trunkId);
-         query.setParameter("operatorId", operatorId);
-         query.setParameter("telephonyTypeId", telephonyTypeId);
-         try {
-             TrunkRate rate = (TrunkRate) query.getSingleResult();
-             return Optional.of(rate);
-         } catch (NoResultException e) {
-             log.trace("No TrunkRate found for trunkId: {}, opId: {}, ttId: {}", trunkId, operatorId, telephonyTypeId);
-             return Optional.empty();
-         } catch (Exception e) {
-             log.error("Error finding trunk rate for trunkId: {}, opId: {}, ttId: {}", trunkId, operatorId, telephonyTypeId, e);
-             return Optional.empty();
-         }
+        if (trunkId == null || operatorId == null || telephonyTypeId == null) {
+            log.trace("findTrunkRate - Invalid input: trunkId={}, opId={}, ttId={}", trunkId, operatorId, telephonyTypeId);
+            return Optional.empty();
+        }
+        log.debug("Finding trunk rate for trunkId: {}, operatorId: {}, telephonyTypeId: {}", trunkId, operatorId, telephonyTypeId);
+        // Find the specific rate defined for this combination
+        String sql = "SELECT tr.* FROM trunk_rate tr " +
+                "WHERE tr.trunk_id = :trunkId " +
+                "  AND tr.operator_id = :operatorId " +
+                "  AND tr.telephony_type_id = :telephonyTypeId " +
+                "LIMIT 1"; // Assuming only one rate per combination
+        Query query = entityManager.createNativeQuery(sql, TrunkRate.class);
+        query.setParameter("trunkId", trunkId);
+        query.setParameter("operatorId", operatorId);
+        query.setParameter("telephonyTypeId", telephonyTypeId);
+        try {
+            TrunkRate rate = (TrunkRate) query.getSingleResult();
+            return Optional.of(rate);
+        } catch (NoResultException e) {
+            log.trace("No TrunkRate found for trunkId: {}, opId: {}, ttId: {}", trunkId, operatorId, telephonyTypeId);
+            return Optional.empty();
+        } catch (Exception e) {
+            log.error("Error finding trunk rate for trunkId: {}, opId: {}, ttId: {}", trunkId, operatorId, telephonyTypeId, e);
+            return Optional.empty();
+        }
     }
 
 
     @Cacheable(value = "trunkRuleLookup", key = "{#trunkCode, #telephonyTypeId, #indicatorId, #originIndicatorId}")
     public Optional<TrunkRule> findTrunkRule(String trunkCode, Long telephonyTypeId, Long indicatorId, Long originIndicatorId) {
         if (telephonyTypeId == null || indicatorId == null) {
-             log.trace("findTrunkRule - Invalid input: ttId={}, indId={}", telephonyTypeId, indicatorId);
+            log.trace("findTrunkRule - Invalid input: ttId={}, indId={}", telephonyTypeId, indicatorId);
             return Optional.empty();
         }
         // Use 0 for originIndicatorId if null
@@ -525,7 +591,7 @@ public class LookupService {
     @Cacheable(value = "pbxSpecialRuleLookup", key = "{#dialedNumber, #commLocationId, #direction}")
     public Optional<PbxSpecialRule> findPbxSpecialRule(String dialedNumber, Long commLocationId, int direction) {
         if (!StringUtils.hasText(dialedNumber) || commLocationId == null) {
-             log.trace("findPbxSpecialRule - Invalid input: dialedNumber={}, commLocationId={}", dialedNumber, commLocationId);
+            log.trace("findPbxSpecialRule - Invalid input: dialedNumber={}, commLocationId={}", dialedNumber, commLocationId);
             return Optional.empty();
         }
         log.debug("Finding PBX special rule for number: {}, commLocationId: {}, direction: {}", dialedNumber, commLocationId, direction);
@@ -559,12 +625,12 @@ public class LookupService {
                 // 3. Check Minimum Length
                 if (match && rule.getMinLength() != null && dialedNumber.length() < rule.getMinLength()) {
                     match = false;
-                     log.trace("Rule {} ignored for number {} due to minLength ({} < {})", rule.getId(), dialedNumber, dialedNumber.length(), rule.getMinLength());
+                    log.trace("Rule {} ignored for number {} due to minLength ({} < {})", rule.getId(), dialedNumber, dialedNumber.length(), rule.getMinLength());
                 }
             } // End check for current rule
 
             if (match) {
-                 log.trace("Found matching PBX special rule {} for number {}", rule.getId(), dialedNumber);
+                log.trace("Found matching PBX special rule {} for number {}", rule.getId(), dialedNumber);
                 return Optional.of(rule); // Return the first (most specific) rule that matches
             }
         } // End loop through candidates
@@ -580,22 +646,22 @@ public class LookupService {
         // Query active rules matching the location (or global) and direction (0=both, 1=in, 2=out)
         // Order by specific location first, then by the length of the search pattern descending (more specific patterns first)
         String sql = "SELECT p.* FROM pbx_special_rule p " +
-                     "WHERE p.active = true " +
-                     // Match specific location OR global rules (comm_location_id IS NULL)
-                     "  AND (p.comm_location_id = :commLocationId OR p.comm_location_id IS NULL) " +
-                     // Match direction (0=both, or specific direction)
-                     "  AND p.direction IN (0, :direction) " +
-                     // Prioritize rules specific to the location, then longer search patterns
-                     "ORDER BY p.comm_location_id DESC NULLS LAST, LENGTH(p.search_pattern) DESC";
-         Query query = entityManager.createNativeQuery(sql, PbxSpecialRule.class);
-         query.setParameter("commLocationId", commLocationId);
-         query.setParameter("direction", direction);
-         try {
-             return query.getResultList();
-         } catch (Exception e) {
-             log.error("Error finding PBX special rule candidates for commLocationId: {}, direction: {}", commLocationId, direction, e);
-             return Collections.emptyList();
-         }
+                "WHERE p.active = true " +
+                // Match specific location OR global rules (comm_location_id IS NULL)
+                "  AND (p.comm_location_id = :commLocationId OR p.comm_location_id IS NULL) " +
+                // Match direction (0=both, or specific direction)
+                "  AND p.direction IN (0, :direction) " +
+                // Prioritize rules specific to the location, then longer search patterns
+                "ORDER BY p.comm_location_id DESC NULLS LAST, LENGTH(p.search_pattern) DESC";
+        Query query = entityManager.createNativeQuery(sql, PbxSpecialRule.class);
+        query.setParameter("commLocationId", commLocationId);
+        query.setParameter("direction", direction);
+        try {
+            return query.getResultList();
+        } catch (Exception e) {
+            log.error("Error finding PBX special rule candidates for commLocationId: {}, direction: {}", commLocationId, direction, e);
+            return Collections.emptyList();
+        }
     }
 
     @Cacheable(value = "specialRateValueLookup", key = "{#telephonyTypeId, #operatorId, #bandId, #originIndicatorId, #callDateTime}")
@@ -662,20 +728,20 @@ public class LookupService {
         query.setParameter("callDateTime", callDateTime);
 
         try {
-             List<SpecialRateValue> results = query.getResultList();
-             log.trace("Found {} special rate candidates", results.size());
-             return results;
-         } catch (Exception e) {
-             log.error("Error finding special rate values for ttId: {}, opId: {}, bandId: {}, originIndId: {}, dateTime: {}",
-                telephonyTypeId, operatorId, bandId, effectiveOriginIndicatorId, callDateTime, e);
-             return Collections.emptyList();
-         }
+            List<SpecialRateValue> results = query.getResultList();
+            log.trace("Found {} special rate candidates", results.size());
+            return results;
+        } catch (Exception e) {
+            log.error("Error finding special rate values for ttId: {}, opId: {}, bandId: {}, originIndId: {}, dateTime: {}",
+                    telephonyTypeId, operatorId, bandId, effectiveOriginIndicatorId, callDateTime, e);
+            return Collections.emptyList();
+        }
     }
 
     @Cacheable(value = "specialServiceLookup", key = "{#phoneNumber, #indicatorId, #originCountryId}")
     public Optional<SpecialService> findSpecialService(String phoneNumber, Long indicatorId, Long originCountryId) {
         if (!StringUtils.hasText(phoneNumber) || originCountryId == null) {
-             log.trace("findSpecialService - Invalid input: phone={}, indId={}, ocId={}", phoneNumber, indicatorId, originCountryId);
+            log.trace("findSpecialService - Invalid input: phone={}, indId={}, ocId={}", phoneNumber, indicatorId, originCountryId);
             return Optional.empty();
         }
         // Use 0 for indicatorId if null (global match)
@@ -683,14 +749,14 @@ public class LookupService {
         log.debug("Finding special service for number: {}, effectiveIndicatorId: {}, originCountryId: {}", phoneNumber, effectiveIndicatorId, originCountryId);
 
         String sql = "SELECT ss.* FROM special_service ss " +
-                     "WHERE ss.active = true " +
-                     "  AND ss.phone_number = :phoneNumber " +
-                     // Match specific indicator OR global (0)
-                     "  AND ss.indicator_id IN (0, :indicatorId) " +
-                     "  AND ss.origin_country_id = :originCountryId " +
-                     // Prioritize the specific indicator match over the global one
-                     "ORDER BY ss.indicator_id DESC " +
-                     "LIMIT 1"; // Get the most specific match
+                "WHERE ss.active = true " +
+                "  AND ss.phone_number = :phoneNumber " +
+                // Match specific indicator OR global (0)
+                "  AND ss.indicator_id IN (0, :indicatorId) " +
+                "  AND ss.origin_country_id = :originCountryId " +
+                // Prioritize the specific indicator match over the global one
+                "ORDER BY ss.indicator_id DESC " +
+                "LIMIT 1"; // Get the most specific match
         Query query = entityManager.createNativeQuery(sql, SpecialService.class);
         query.setParameter("phoneNumber", phoneNumber);
         query.setParameter("indicatorId", effectiveIndicatorId);
@@ -738,8 +804,8 @@ public class LookupService {
 
         log.debug("Finding min/max config for telephonyTypeId: {}, originCountryId: {}", telephonyTypeId, originCountryId);
         String sql = "SELECT min_value, max_value FROM telephony_type_config " +
-                     "WHERE telephony_type_id = :telephonyTypeId AND origin_country_id = :originCountryId " +
-                     "LIMIT 1"; // Assuming one config per type/country
+                "WHERE telephony_type_id = :telephonyTypeId AND origin_country_id = :originCountryId " +
+                "LIMIT 1"; // Assuming one config per type/country
         Query query = entityManager.createNativeQuery(sql);
         query.setParameter("telephonyTypeId", telephonyTypeId);
         query.setParameter("originCountryId", originCountryId);
@@ -764,12 +830,12 @@ public class LookupService {
         log.debug("Finding operator for telephonyTypeId: {}, originCountryId: {}", telephonyTypeId, originCountryId);
         // Find an active operator linked via an active prefix to the given type and origin country
         String sql = "SELECT op.* FROM operator op " +
-                     "JOIN prefix p ON p.operator_id = op.id " +
-                     "WHERE p.telephone_type_id = :telephonyTypeId " +
-                     "  AND op.origin_country_id = :originCountryId " +
-                     "  AND op.active = true " +
-                     "  AND p.active = true " +
-                     "LIMIT 1"; // Return the first matching operator
+                "JOIN prefix p ON p.operator_id = op.id " +
+                "WHERE p.telephone_type_id = :telephonyTypeId " +
+                "  AND op.origin_country_id = :originCountryId " +
+                "  AND op.active = true " +
+                "  AND p.active = true " +
+                "LIMIT 1"; // Return the first matching operator
         Query query = entityManager.createNativeQuery(sql, Operator.class);
         query.setParameter("telephonyTypeId", telephonyTypeId);
         query.setParameter("originCountryId", originCountryId);
@@ -785,18 +851,18 @@ public class LookupService {
         }
     }
 
-     @Cacheable(value = "internalTariff", key = "#telephonyTypeId")
-     public Optional<Map<String, Object>> findInternalTariff(Long telephonyTypeId) {
+    @Cacheable(value = "internalTariff", key = "#telephonyTypeId")
+    public Optional<Map<String, Object>> findInternalTariff(Long telephonyTypeId) {
         if (telephonyTypeId == null) return Optional.empty();
         log.debug("Finding internal tariff for telephonyTypeId: {}", telephonyTypeId);
         // Find the prefix associated with the internal telephony type
         // Assumes there's one relevant prefix entry for internal types (might need refinement based on operator/country if applicable)
         String sql = "SELECT p.base_value, p.vat_included, p.vat_value, tt.name as telephony_type_name " +
-                     "FROM prefix p " +
-                     "JOIN telephony_type tt ON p.telephone_type_id = tt.id " +
-                     "WHERE p.telephone_type_id = :telephonyTypeId " +
-                     "  AND p.active = true AND tt.active = true " +
-                     "LIMIT 1"; // Assuming one primary prefix defines the internal rate
+                "FROM prefix p " +
+                "JOIN telephony_type tt ON p.telephone_type_id = tt.id " +
+                "WHERE p.telephone_type_id = :telephonyTypeId " +
+                "  AND p.active = true AND tt.active = true " +
+                "LIMIT 1"; // Assuming one primary prefix defines the internal rate
         Query query = entityManager.createNativeQuery(sql);
         query.setParameter("telephonyTypeId", telephonyTypeId);
         try {
@@ -819,7 +885,7 @@ public class LookupService {
             log.error("Error finding internal tariff for telephonyTypeId: {}", telephonyTypeId, e);
             return Optional.empty();
         }
-     }
+    }
 
     @Cacheable(value = "extensionMinMaxLength", key = "{#commLocationId}")
     public Map<String, Integer> findExtensionMinMaxLength(Long commLocationId) {
@@ -880,7 +946,7 @@ public class LookupService {
 
         Query queryRange = entityManager.createNativeQuery(sqlRange.toString());
         queryRange.setParameter("maxExtPossibleLength", maxPossibleLength);
-         if (commLocationId != null) {
+        if (commLocationId != null) {
             queryRange.setParameter("commLocationId", commLocationId);
         }
 
@@ -891,7 +957,7 @@ public class LookupService {
 
             if (minRange != null && minRange < lengths.get("min")) lengths.put("min", minRange);
             if (maxRange != null && maxRange > lengths.get("max")) lengths.put("max", maxRange);
-             log.trace("Range ext lengths: min={}, max={}", minRange, maxRange);
+            log.trace("Range ext lengths: min={}, max={}", minRange, maxRange);
         } catch (Exception e) { log.warn("Could not determine extension lengths from ranges: {}", e.getMessage()); }
 
         // Final adjustments: If no lengths found, use defaults. Ensure min <= max.
@@ -912,11 +978,11 @@ public class LookupService {
         log.debug("Finding local NDC for indicatorId: {}", indicatorId);
         // Find the most frequent NDC associated with the given indicator ID
         String sql = "SELECT s.ndc FROM series s " +
-                     "WHERE s.indicator_id = :indicatorId " +
-                     "  AND s.ndc IS NOT NULL AND s.ndc > 0 " + // Only consider valid NDCs
-                     "GROUP BY s.ndc " +
-                     "ORDER BY COUNT(*) DESC, s.ndc ASC " + // Prioritize most frequent, then lowest value
-                     "LIMIT 1";
+                "WHERE s.indicator_id = :indicatorId " +
+                "  AND s.ndc IS NOT NULL AND s.ndc > 0 " + // Only consider valid NDCs
+                "GROUP BY s.ndc " +
+                "ORDER BY COUNT(*) DESC, s.ndc ASC " + // Prioritize most frequent, then lowest value
+                "LIMIT 1";
         Query query = entityManager.createNativeQuery(sql, Integer.class);
         query.setParameter("indicatorId", indicatorId);
         try {
@@ -978,35 +1044,35 @@ public class LookupService {
         catch (NoResultException e) { return Optional.empty(); }
     }
 
-     @Cacheable("operatorByIdLookup")
-     public Optional<Operator> findOperatorById(Long id) {
+    @Cacheable("operatorByIdLookup")
+    public Optional<Operator> findOperatorById(Long id) {
         if (id == null || id <= 0) return Optional.empty();
         String sql = "SELECT o.* FROM operator o WHERE o.id = :id AND o.active = true"; // Added active check
         Query query = entityManager.createNativeQuery(sql, Operator.class);
         query.setParameter("id", id);
         try { return Optional.of((Operator) query.getSingleResult()); }
         catch (NoResultException e) { return Optional.empty(); }
-     }
+    }
 
-     @Cacheable("telephonyTypeByIdLookup")
-     public Optional<TelephonyType> findTelephonyTypeById(Long id) {
+    @Cacheable("telephonyTypeByIdLookup")
+    public Optional<TelephonyType> findTelephonyTypeById(Long id) {
         if (id == null || id <= 0) return Optional.empty();
         String sql = "SELECT tt.* FROM telephony_type tt WHERE tt.id = :id AND tt.active = true"; // Added active check
         Query query = entityManager.createNativeQuery(sql, TelephonyType.class);
         query.setParameter("id", id);
         try { return Optional.of((TelephonyType) query.getSingleResult()); }
         catch (NoResultException e) { return Optional.empty(); }
-     }
+    }
 
-     @Cacheable("originCountryById")
-     public Optional<OriginCountry> findOriginCountryById(Long id) {
+    @Cacheable("originCountryById")
+    public Optional<OriginCountry> findOriginCountryById(Long id) {
         if (id == null || id <= 0) return Optional.empty();
         String sql = "SELECT oc.* FROM origin_country oc WHERE oc.id = :id AND oc.active = true"; // Added active check
         Query query = entityManager.createNativeQuery(sql, OriginCountry.class);
         query.setParameter("id", id);
         try { return Optional.of((OriginCountry) query.getSingleResult()); }
         catch (NoResultException e) { return Optional.empty(); }
-     }
+    }
 
     @Cacheable("subdivisionById")
     public Optional<Subdivision> findSubdivisionById(Long id) {
