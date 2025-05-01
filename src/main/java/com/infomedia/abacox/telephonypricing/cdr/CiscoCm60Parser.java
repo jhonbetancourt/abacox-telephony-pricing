@@ -133,12 +133,17 @@ public class CiscoCm60Parser implements CdrParser {
             builder.ringDuration(Math.max(0, ringDuration)); // Ensure non-negative
 
             // 3. Determine Basic Incoming Status (Refined during enrichment)
-            // Basic check: No partition and caller number looks external or is blank
+            // PHP: ($info_arr['partorigen'] == '' && ($info_arr['ext'] == '' || $info_arr['ext'] > _ACUMTOTAL_MAXEXT))
+            // Simplified check here, full check in enrichment
             boolean isCallingExtLikely = isLikelyExtensionBasic(callingPartyNumber);
             boolean incoming = (Strings.isBlank(callingPartyNumberPartition) && (Strings.isBlank(callingPartyNumber) || !isCallingExtLikely));
             builder.incoming(incoming);
 
-            // 4. Conference Prefix 'b' handling is deferred to enrichment service.
+            // 4. Conference/Post-Conference detection flags (logic moved to enrichment)
+            // boolean isConference = isConferenceCallIndicator(finalCalledPartyNumber) || (joinOnBehalfOf != null && joinOnBehalfOf == 7);
+            // boolean isPostConference = !isConference && isConferenceCallIndicator(lastRedirectDn);
+            // builder.conferenceCall(isConference);
+            // builder.postConferenceCall(isPostConference); // Add these fields to RawCdrDto if needed
 
             // --- Build DTO ---
             builder.globalCallId(globalCallId);
@@ -214,7 +219,8 @@ public class CiscoCm60Parser implements CdrParser {
         // Iterate through the mapping to find the standard key associated with the cleaned header
         for (Map.Entry<String, String> entry : HEADER_MAPPING.entrySet()) {
             if (entry.getKey().equals(cleanedHeader)) {
-                return entry.getValue().toLowerCase(); // Return the standard key (value from map), lowercased
+                // Return the standard field name (value from map), but keep it lowercase for map key consistency
+                return entry.getValue().toLowerCase();
             }
         }
         // If no mapping found, return the cleaned header itself (lowercased)
@@ -236,15 +242,15 @@ public class CiscoCm60Parser implements CdrParser {
 
     // --- Helper Methods ---
 
-    private String getField(String[] fields, Map<String, Integer> headerMap, String standardHeaderName) {
-        // Lookup using the standard, lowercase key defined in HEADER_MAPPING constants
-        Integer index = headerMap.get(standardHeaderName.toLowerCase());
+    private String getField(String[] fields, Map<String, Integer> headerMap, String standardFieldName) {
+        // Lookup using the standard, lowercase field name
+        Integer index = headerMap.get(standardFieldName.toLowerCase());
         if (index != null && index >= 0 && index < fields.length) {
             String value = fields[index];
              // Return empty string if the field is null, otherwise return the value
              return value != null ? value : "";
         }
-        log.trace("Header key '{}' not found in header map or index out of bounds.", standardHeaderName);
+        log.trace("Header key '{}' not found in header map or index out of bounds.", standardFieldName);
         return ""; // Return empty string if header not found or index invalid
     }
 
@@ -322,8 +328,8 @@ public class CiscoCm60Parser implements CdrParser {
         if (!effectiveNumber.matches("[\\d#*]+")) return false;
         // Use default plausible lengths here, enrichment service will use DB config
         // These defaults are less critical now as the main check is in enrichment.
-        int minExtLength = 2; // Default plausible min length
-        int maxExtLength = 7; // Default plausible max length
+        int minExtLength = ConfigurationService.DEFAULT_MIN_EXT_LENGTH;
+        int maxExtLength = ConfigurationService.DEFAULT_MAX_EXT_LENGTH;
         int numLength = effectiveNumber.length();
         return (numLength >= minExtLength && numLength <= maxExtLength);
     }

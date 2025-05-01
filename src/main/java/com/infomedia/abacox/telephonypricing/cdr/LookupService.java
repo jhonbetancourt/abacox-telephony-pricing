@@ -545,11 +545,11 @@ public class LookupService {
         // LEFT JOIN to potentially match specific trunk by name
         sqlBuilder.append("LEFT JOIN trunk t ON tr.trunk_id = t.id AND t.active = true ");
         sqlBuilder.append("WHERE tr.active = true ");
-        // Match rules for specific trunk OR global rules (trunk_id = 0)
-        sqlBuilder.append("  AND (tr.trunk_id = 0 OR (t.name = :trunkCode)) ");
+        // Match rules for specific trunk OR global rules (trunk_id = 0 or NULL)
+        sqlBuilder.append("  AND (tr.trunk_id IS NULL OR tr.trunk_id = 0 OR (t.name = :trunkCode)) ");
         sqlBuilder.append("  AND tr.telephony_type_id = :telephonyTypeId ");
-        // Match specific origin or global origin (0)
-        sqlBuilder.append("  AND tr.origin_indicator_id IN (0, :originIndicatorId) ");
+        // Match specific origin or global origin (0 or NULL)
+        sqlBuilder.append("  AND (tr.origin_indicator_id IS NULL OR tr.origin_indicator_id = 0 OR tr.origin_indicator_id = :originIndicatorId) ");
         // Match indicator_ids: exact match, starts with, ends with, contains, or empty/null
         sqlBuilder.append("  AND (tr.indicator_ids = '' OR tr.indicator_ids IS NULL OR tr.indicator_ids = :indicatorIdStr OR tr.indicator_ids LIKE :indicatorIdStrLikeStart OR tr.indicator_ids LIKE :indicatorIdStrLikeEnd OR tr.indicator_ids LIKE :indicatorIdStrLikeMiddle) ");
         // Order to prioritize: specific trunk over global, specific origin over global, more specific indicator_ids match over less specific or empty
@@ -930,14 +930,14 @@ public class LookupService {
 
         // Query 2: Based on ExtensionRange
         StringBuilder sqlRange = new StringBuilder();
-        sqlRange.append("SELECT COALESCE(MIN(LENGTH(er.range_start)), NULL) AS min_len, COALESCE(MAX(LENGTH(er.range_end)), NULL) AS max_len ");
+        sqlRange.append("SELECT COALESCE(MIN(LENGTH(CAST(er.range_start AS TEXT))), NULL) AS min_len, COALESCE(MAX(LENGTH(CAST(er.range_end AS TEXT))), NULL) AS max_len ");
         sqlRange.append("FROM extension_range er ");
         sqlRange.append("WHERE er.active = true ");
         // Ensure ranges are purely numeric for length calculation
-        sqlRange.append("  AND er.range_start ~ '^[0-9]+$' AND er.range_end ~ '^[0-9]+$' ");
+        sqlRange.append("  AND CAST(er.range_start AS TEXT) ~ '^[0-9]+$' AND CAST(er.range_end AS TEXT) ~ '^[0-9]+$' ");
         // Exclude ranges exceeding the max possible length
-        sqlRange.append("  AND LENGTH(er.range_start) < :maxExtPossibleLength ");
-        sqlRange.append("  AND LENGTH(er.range_end) < :maxExtPossibleLength ");
+        sqlRange.append("  AND LENGTH(CAST(er.range_start AS TEXT)) < :maxExtPossibleLength ");
+        sqlRange.append("  AND LENGTH(CAST(er.range_end AS TEXT)) < :maxExtPossibleLength ");
         // Ensure range is valid
         sqlRange.append("  AND er.range_end >= er.range_start ");
         if (commLocationId != null) {
