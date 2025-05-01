@@ -146,27 +146,29 @@ public class CdrEnrichmentService {
 
         // --- Determine Call Type and Enrich ---
         try {
-            // Apply PBX Special Rule *before* determining incoming/outgoing/internal
-            String originalNumberForPbx = effectiveIncoming.getValue() ? effectiveCallingNumber.getValue() : effectiveDialedNumber.getValue();
+            // Apply PBX Special Rule *after* initial checks but *before* main processing
+            // This mirrors PHP's procesaSaliente/procesaInterna applying it after failing other checks
+            String numberForPbx = effectiveIncoming.getValue() ? effectiveCallingNumber.getValue() : effectiveDialedNumber.getValue();
             CallDirection directionForPbx = effectiveIncoming.getValue() ? CallDirection.INCOMING : CallDirection.OUTGOING;
             Optional<PbxSpecialRule> pbxRuleOpt = lookupService.findPbxSpecialRule(
-                    originalNumberForPbx, commLocation.getId(), directionForPbx.getValue()
+                    numberForPbx, commLocation.getId(), directionForPbx.getValue()
             );
 
-            String numberAfterPbxRule = originalNumberForPbx; // Start with the number before rule application
             if (pbxRuleOpt.isPresent()) {
                 PbxSpecialRule rule = pbxRuleOpt.get();
                 String replacement = rule.getReplacement() != null ? rule.getReplacement() : "";
                 String searchPattern = rule.getSearchPattern();
-                if (StringUtils.hasText(searchPattern) && originalNumberForPbx.startsWith(searchPattern)) {
-                    String numberAfterSearch = originalNumberForPbx.substring(searchPattern.length());
-                    numberAfterPbxRule = replacement + numberAfterSearch; // Apply replacement
-                    log.debug("Applied PBX rule {}, number changed from {} to {}", rule.getId(), originalNumberForPbx, numberAfterPbxRule);
+                if (StringUtils.hasText(searchPattern) && numberForPbx.startsWith(searchPattern)) {
+                    String numberAfterSearch = numberForPbx.substring(searchPattern.length());
+                    String numberAfterPbxRule = replacement + numberAfterSearch; // Apply replacement
+                    log.debug("Applied PBX rule {}, number changed from {} to {}", rule.getId(), numberForPbx, numberAfterPbxRule);
                     // Update the effective number based on direction
                     if (effectiveIncoming.getValue()) {
                         effectiveCallingNumber.setValue(numberAfterPbxRule);
                     } else {
                         effectiveDialedNumber.setValue(numberAfterPbxRule);
+                        // Update dial field as well if outgoing
+                        callBuilder.dial(numberAfterPbxRule);
                     }
                 }
             }
@@ -192,6 +194,20 @@ public class CdrEnrichmentService {
         if (currentTransferCause == null || currentTransferCause == CallTransferCause.NONE.getValue()) { // Check if null or default (0)
             callBuilder.transferCause(CallTransferCause.fromValue(rawCdr.getLastRedirectRedirectReason()).getValue());
         }
+
+        // Handle zero duration calls (PHP: acumtotal_Insertar logic)
+        CallRecord tempRecord = callBuilder.build(); // Build temporary to check duration and type
+        if (tempRecord.getDuration() != null && tempRecord.getDuration() <= 0
+                && tempRecord.getTelephonyTypeId() != null
+                && tempRecord.getTelephonyTypeId() != ConfigurationService.TIPOTELE_ERRORES) {
+            log.debug("Call duration is zero or less, setting TelephonyType to SINCONSUMO ({})", ConfigurationService.TIPOTELE_SINCONSUMO);
+            callBuilder.telephonyTypeId(ConfigurationService.TIPOTELE_SINCONSUMO);
+            // Reset costs for zero duration calls
+            callBuilder.billedAmount(BigDecimal.ZERO);
+            callBuilder.pricePerMinute(BigDecimal.ZERO);
+            callBuilder.initialPrice(BigDecimal.ZERO);
+        }
+
         // Link associated entities based on IDs set during enrichment
         linkAssociatedEntities(callBuilder);
 
@@ -282,10 +298,11 @@ public class CdrEnrichmentService {
         String cleanedCallingNumber = cleanNumber(preprocessedNumber, Collections.emptyList(), false);
         callBuilder.dial(cleanedCallingNumber); // 'dial' for incoming is the caller's number
 
-        // 3. Determine Origin (buscarOrigen logic)
+        // 3. Determine Origin (PHP: buscarOrigen logic)
         Long commIndicatorId = commLocation.getIndicatorId();
         if (originCountryId != null && commIndicatorId != null) {
             String numberForLookup = cleanedCallingNumber; // Use the cleaned (and potentially rule-modified) number
+
             // PHP logic checks for PBX prefix on original number for incoming calls too
             List<String> pbxPrefixes = configService.getPbxPrefixes(commLocation.getId());
             int prefixLen = getPrefixLength(numberToProcess, pbxPrefixes); // Check original (potentially rule-modified) number for prefix
@@ -306,7 +323,7 @@ public class CdrEnrichmentService {
                         .collect(Collectors.toList());
                 if(prefixes.isEmpty()) log.warn("Forced TelephonyType ID {} has no matching prefixes for incoming number {}", forcedType, numberForLookup);
             }
-            Optional<Map<String, Object>> bestPrefix = prefixes.stream().findFirst();
+            Optional<Map<String, Object>> bestPrefix = prefixes.stream().findFirst(); // Prefixes are ordered by specificity
 
             if (bestPrefix.isPresent()) {
                 Map<String, Object> prefixInfo = bestPrefix.get();
@@ -321,6 +338,8 @@ public class CdrEnrichmentService {
                 if (StringUtils.hasText(prefixCode) && numberForLookup.startsWith(prefixCode)) {
                     numberWithoutPrefix = numberForLookup.substring(prefixCode.length());
                 }
+
+                // Find indicator based on number part after prefix
                 Optional<Map<String, Object>> indicatorInfoOpt = lookupService.findIndicatorByNumber(numberWithoutPrefix, telephonyTypeId, originCountryId);
                 indicatorInfoOpt.ifPresent(indInfo -> callBuilder.indicatorId((Long) indInfo.get("indicator_id")));
 
@@ -377,6 +396,7 @@ public class CdrEnrichmentService {
             } else {
                 internalCallTypeId = ConfigurationService.TIPOTELE_INTERNA_IP; // Default if same office/city/country
             }
+            log.debug("Internal call type determined by location comparison: {}", internalCallTypeId);
         } else {
             log.warn("Internal call destination extension {} not found as employee.", destinationExtension);
             // PHP logic: If destination not found, check internal prefixes
@@ -387,7 +407,8 @@ public class CdrEnrichmentService {
                 log.debug("Destination {} matched internal prefix for type {}", destinationExtension, internalCallTypeId);
             } else {
                 // PHP logic: If no employee and no prefix, default to a configured internal type (e.g., INTERNA_IP)
-                internalCallTypeId = ConfigurationService.TIPOTELE_INTERNA_IP; // Default if no match
+                // Use the default internal type from configuration
+                internalCallTypeId = ConfigurationService.getDefaultInternalCallTypeId();
                 log.debug("Destination {} not found and no internal prefix matched, defaulting to type {}", destinationExtension, internalCallTypeId);
             }
         }
@@ -997,32 +1018,27 @@ public class CdrEnrichmentService {
     }
 
     private BigDecimal calculateBilledAmount(int durationSeconds, BigDecimal rateValue, boolean rateVatIncluded, BigDecimal vatPercentage, boolean chargePerSecond, BigDecimal initialRateValue, boolean initialRateVatIncluded) {
+        // This method remains the same as before, calculating the final cost based on rates, VAT, and duration units.
         if (durationSeconds <= 0) return BigDecimal.ZERO;
 
-        // Use default zero if rate is null
         BigDecimal effectiveRateValue = Optional.ofNullable(rateValue).orElse(BigDecimal.ZERO);
         BigDecimal effectiveInitialRateValue = Optional.ofNullable(initialRateValue).orElse(BigDecimal.ZERO);
 
-        // Determine the duration units (seconds or minutes rounded up)
         BigDecimal durationUnits;
         if (chargePerSecond) {
             durationUnits = new BigDecimal(durationSeconds);
             log.trace("Calculating cost per second for {} seconds", durationSeconds);
         } else {
-            // Round up to the nearest minute
             durationUnits = new BigDecimal(durationSeconds).divide(SIXTY, 0, RoundingMode.CEILING);
-            // Ensure minimum 1 minute is charged if duration > 0
             if (durationUnits.compareTo(BigDecimal.ZERO) == 0 && durationSeconds > 0) {
                 durationUnits = BigDecimal.ONE;
             }
             log.trace("Calculating cost per minute for {} seconds -> {} minutes", durationSeconds, durationUnits);
         }
 
-        // Calculate base cost
         BigDecimal totalCost = effectiveRateValue.multiply(durationUnits);
         log.trace("Base cost (rate * duration): {} * {} = {}", effectiveRateValue, durationUnits, totalCost);
 
-        // Add VAT if applicable
         if (!rateVatIncluded && vatPercentage != null && vatPercentage.compareTo(BigDecimal.ZERO) > 0) {
             BigDecimal vatMultiplier = BigDecimal.ONE.add(vatPercentage.divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP));
             totalCost = totalCost.multiply(vatMultiplier);
@@ -1031,50 +1047,40 @@ public class CdrEnrichmentService {
             log.trace("VAT already included in rate or VAT is zero/null.");
         }
 
-        // Note: PHP logic had a separate 'cargo_basico' which is omitted here as per entity structure.
-        // If initialRateValue represents a base charge, it needs different handling.
-        // Assuming here rateValue is per unit (second/minute).
-
-        return totalCost.setScale(4, RoundingMode.HALF_UP); // Scale as per DB precision
+        return totalCost.setScale(4, RoundingMode.HALF_UP);
     }
 
     private BigDecimal calculateValueWithoutVat(BigDecimal value, BigDecimal vatPercentage, boolean vatIncluded) {
+        // This method remains the same as before.
         if (value == null) return BigDecimal.ZERO;
-        // Return original value if VAT is not included or if VAT percentage is invalid
         if (!vatIncluded || vatPercentage == null || vatPercentage.compareTo(BigDecimal.ZERO) <= 0) {
-            return value.setScale(4, RoundingMode.HALF_UP); // Ensure consistent scale
+            return value.setScale(4, RoundingMode.HALF_UP);
         }
-        // Calculate the divisor (1 + VAT rate)
-        BigDecimal vatDivisor = BigDecimal.ONE.add(vatPercentage.divide(new BigDecimal("100"), 10, RoundingMode.HALF_UP)); // Use higher precision for division
-        // Avoid division by zero, although unlikely with (1 + rate)
+        BigDecimal vatDivisor = BigDecimal.ONE.add(vatPercentage.divide(new BigDecimal("100"), 10, RoundingMode.HALF_UP));
         if (vatDivisor.compareTo(BigDecimal.ZERO) == 0) {
             log.warn("VAT divisor is zero, cannot remove VAT from {}", value);
             return value.setScale(4, RoundingMode.HALF_UP);
         }
-        // Divide to remove VAT and scale result
         return value.divide(vatDivisor, 4, RoundingMode.HALF_UP);
     }
 
     private void applySpecialServicePricing(SpecialService specialService, CallRecord.CallRecordBuilder callBuilder, int duration) {
-        callBuilder.telephonyTypeId(ConfigurationService.TIPOTELE_ESPECIALES); // Set type to Special
-        callBuilder.indicatorId(specialService.getIndicatorId()); // Link to the specific indicator if applicable
-        callBuilder.operatorId(null); // Special services usually don't have a standard operator
+        // This method remains the same as before.
+        callBuilder.telephonyTypeId(ConfigurationService.TIPOTELE_ESPECIALES);
+        callBuilder.indicatorId(specialService.getIndicatorId());
+        callBuilder.operatorId(null);
 
         BigDecimal price = Optional.ofNullable(specialService.getValue()).orElse(BigDecimal.ZERO);
         boolean vatIncluded = Optional.ofNullable(specialService.getVatIncluded()).orElse(false);
-        // Use vatAmount as the percentage for calculation if needed
         BigDecimal vatPercentage = Optional.ofNullable(specialService.getVatAmount()).orElse(BigDecimal.ZERO);
 
         BigDecimal billedAmount = price;
-        // Apply VAT only if it's not included in the base price and a VAT percentage is specified
         if (!vatIncluded && vatPercentage.compareTo(BigDecimal.ZERO) > 0) {
             BigDecimal vatMultiplier = BigDecimal.ONE.add(vatPercentage.divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP));
             billedAmount = billedAmount.multiply(vatMultiplier);
             log.trace("Applied VAT {}% to special service price {}", vatPercentage, price);
         }
 
-        // Special services are typically flat rate, duration doesn't affect cost.
-        // PricePerMinute is set to the flat rate for reference. Initial price is zero.
         callBuilder.pricePerMinute(price.setScale(4, RoundingMode.HALF_UP));
         callBuilder.initialPrice(BigDecimal.ZERO);
         callBuilder.billedAmount(billedAmount.setScale(4, RoundingMode.HALF_UP));
@@ -1082,16 +1088,16 @@ public class CdrEnrichmentService {
     }
 
     private void applyInternalPricing(Long internalCallTypeId, CallRecord.CallRecordBuilder callBuilder, int duration) {
+        // This method remains the same as before.
         Optional<Map<String, Object>> tariffOpt = lookupService.findInternalTariff(internalCallTypeId);
         if (tariffOpt.isPresent()) {
             Map<String, Object> tariff = tariffOpt.get();
-            // Ensure defaults for missing keys before applying
             tariff.putIfAbsent("valor_minuto", BigDecimal.ZERO);
             tariff.putIfAbsent("valor_minuto_iva", false);
             tariff.putIfAbsent("iva", BigDecimal.ZERO);
             tariff.putIfAbsent("valor_inicial", BigDecimal.ZERO);
             tariff.putIfAbsent("valor_inicial_iva", false);
-            tariff.putIfAbsent("ensegundos", false); // Internal calls usually per minute
+            tariff.putIfAbsent("ensegundos", false);
 
             log.debug("Applying internal tariff for type {}: {}", internalCallTypeId, tariff);
             applyFinalPricing(tariff, duration, callBuilder);
@@ -1104,65 +1110,56 @@ public class CdrEnrichmentService {
     }
 
     private void applyTrunkPricing(Trunk trunk, Map<String, Object> baseRateInfo, int duration, Long originIndicatorId, CallRecord.CallRecordBuilder callBuilder) {
+        // This method remains the same as before.
         Long telephonyTypeId = (Long) baseRateInfo.get("telephony_type_id");
         Long operatorId = (Long) baseRateInfo.get("operator_id");
         Long indicatorId = (Long) baseRateInfo.get("indicator_id");
-        Long originCountryId = getOriginCountryId(trunk.getCommLocation()); // Get country from trunk's location
+        Long originCountryId = getOriginCountryId(trunk.getCommLocation());
 
-        // 1. Check for specific TrunkRate
         Optional<TrunkRate> trunkRateOpt = lookupService.findTrunkRate(trunk.getId(), operatorId, telephonyTypeId);
 
         if (trunkRateOpt.isPresent()) {
             TrunkRate trunkRate = trunkRateOpt.get();
             log.debug("Applying TrunkRate {} for trunk {}", trunkRate.getId(), trunk.getId());
-            // Override base rate info with TrunkRate specifics
             baseRateInfo.put("valor_minuto", Optional.ofNullable(trunkRate.getRateValue()).orElse(BigDecimal.ZERO));
             baseRateInfo.put("valor_minuto_iva", Optional.ofNullable(trunkRate.getIncludesVat()).orElse(false));
             baseRateInfo.put("ensegundos", trunkRate.getSeconds() != null && trunkRate.getSeconds() > 0);
-            // Trunk rates don't have an initial charge concept separate from per-unit rate
             baseRateInfo.put("valor_inicial", BigDecimal.ZERO);
             baseRateInfo.put("valor_inicial_iva", false);
-            // Fetch IVA specific to this operator/type combination
             lookupService.findPrefixByTypeOperatorOrigin(telephonyTypeId, operatorId, originCountryId)
                     .ifPresent(p -> baseRateInfo.put("iva", p.getVatValue()));
             applyFinalPricing(baseRateInfo, duration, callBuilder);
         } else {
-            // 2. Check for TrunkRule if no specific TrunkRate found
             Optional<TrunkRule> trunkRuleOpt = lookupService.findTrunkRule(trunk.getName(), telephonyTypeId, indicatorId, originIndicatorId);
             if (trunkRuleOpt.isPresent()) {
                 TrunkRule rule = trunkRuleOpt.get();
                 log.debug("Applying TrunkRule {} for trunk {}", rule.getId(), trunk.getName());
-                // Override base rate info with TrunkRule specifics
                 baseRateInfo.put("valor_minuto", Optional.ofNullable(rule.getRateValue()).orElse(BigDecimal.ZERO));
                 baseRateInfo.put("valor_minuto_iva", Optional.ofNullable(rule.getIncludesVat()).orElse(false));
                 baseRateInfo.put("ensegundos", rule.getSeconds() != null && rule.getSeconds() > 0);
                 baseRateInfo.put("valor_inicial", BigDecimal.ZERO);
                 baseRateInfo.put("valor_inicial_iva", false);
 
-                // Apply overrides from the rule
-                Long finalOperatorId = operatorId; // Start with original
+                Long finalOperatorId = operatorId;
                 Long finalTelephonyTypeId = telephonyTypeId;
 
                 if (rule.getNewOperatorId() != null && rule.getNewOperatorId() > 0) {
                     finalOperatorId = rule.getNewOperatorId();
                     callBuilder.operatorId(finalOperatorId);
-                    // Update operator name in rateInfo for consistency if needed (optional)
                     lookupService.findOperatorById(finalOperatorId).ifPresent(op -> baseRateInfo.put("operator_name", op.getName()));
                 }
                 if (rule.getNewTelephonyTypeId() != null && rule.getNewTelephonyTypeId() > 0) {
                     finalTelephonyTypeId = rule.getNewTelephonyTypeId();
                     callBuilder.telephonyTypeId(finalTelephonyTypeId);
-                    // Update type name in rateInfo (optional)
                     lookupService.findTelephonyTypeById(finalTelephonyTypeId).ifPresent(tt -> baseRateInfo.put("telephony_type_name", tt.getName()));
                 }
 
-                // Re-fetch IVA based on the *final* operator/type after rule application
                 Long finalTelephonyTypeId1 = finalTelephonyTypeId;
                 Long finalOperatorId1 = finalOperatorId;
                 lookupService.findPrefixByTypeOperatorOrigin(finalTelephonyTypeId, finalOperatorId, originCountryId)
                         .ifPresentOrElse(
                                 p -> baseRateInfo.put("iva", p.getVatValue()),
-                                () -> { // If no prefix found for the new combo, default IVA to 0
+                                () -> {
                                     log.warn("No prefix found for rule-defined type {} / operator {}. Using default IVA 0.", finalTelephonyTypeId1, finalOperatorId1);
                                     baseRateInfo.put("iva", BigDecimal.ZERO);
                                 }
@@ -1170,7 +1167,6 @@ public class CdrEnrichmentService {
 
                 applyFinalPricing(baseRateInfo, duration, callBuilder);
             } else {
-                // 3. No TrunkRate or TrunkRule found, use base/band rate + special rates
                 log.debug("No specific TrunkRate or TrunkRule found for trunk {}, applying base/band/special pricing", trunk.getName());
                 applySpecialPricing(baseRateInfo, callBuilder.build().getServiceDate(), duration, originIndicatorId, callBuilder);
             }
@@ -1178,9 +1174,10 @@ public class CdrEnrichmentService {
     }
 
     private void applySpecialPricing(Map<String, Object> currentRateInfo, LocalDateTime callDateTime, int duration, Long originIndicatorId, CallRecord.CallRecordBuilder callBuilder) {
+        // This method remains the same as before.
         Long telephonyTypeId = (Long) currentRateInfo.get("telephony_type_id");
         Long operatorId = (Long) currentRateInfo.get("operator_id");
-        Long bandId = (Long) currentRateInfo.get("band_id"); // Can be 0 or null
+        Long bandId = (Long) currentRateInfo.get("band_id");
 
         List<SpecialRateValue> specialRates = lookupService.findSpecialRateValues(
                 telephonyTypeId, operatorId, bandId, originIndicatorId, callDateTime
@@ -1193,42 +1190,35 @@ public class CdrEnrichmentService {
             BigDecimal originalRate = (BigDecimal) currentRateInfo.get("valor_minuto");
             boolean originalVatIncluded = (Boolean) currentRateInfo.get("valor_minuto_iva");
 
-            // Store original rate as initial rate (PHP: Guardar_ValorInicial)
             currentRateInfo.put("valor_inicial", originalRate);
             currentRateInfo.put("valor_inicial_iva", originalVatIncluded);
 
             if (rate.getValueType() != null && rate.getValueType() == 1) { // Percentage discount
                 BigDecimal discountPercentage = Optional.ofNullable(rate.getRateValue()).orElse(BigDecimal.ZERO);
-                // Calculate discount on the rate *excluding* VAT
                 BigDecimal currentRateNoVat = calculateValueWithoutVat(originalRate, (BigDecimal) currentRateInfo.get("iva"), originalVatIncluded);
                 BigDecimal discountMultiplier = BigDecimal.ONE.subtract(discountPercentage.divide(new BigDecimal("100"), 4, RoundingMode.HALF_UP));
                 currentRateInfo.put("valor_minuto", currentRateNoVat.multiply(discountMultiplier));
-                // Keep original VAT inclusion status, as discount is applied pre-VAT
                 currentRateInfo.put("valor_minuto_iva", originalVatIncluded);
-                currentRateInfo.put("descuento_p", discountPercentage); // Store discount % for reference
+                currentRateInfo.put("descuento_p", discountPercentage);
                 log.trace("Applied percentage discount {}% from SpecialRateValue {}", discountPercentage, rate.getId());
             } else { // Fixed value override
                 currentRateInfo.put("valor_minuto", Optional.ofNullable(rate.getRateValue()).orElse(BigDecimal.ZERO));
                 currentRateInfo.put("valor_minuto_iva", Optional.ofNullable(rate.getIncludesVat()).orElse(false));
-                // Potentially update IVA if the special rate implies a different context (though IVA usually tied to prefix)
-                // currentRateInfo.put("iva", ...); // Re-fetch IVA if necessary based on rate context
                 log.trace("Applied fixed rate {} from SpecialRateValue {}", currentRateInfo.get("valor_minuto"), rate.getId());
             }
-            // Special rates are typically per-minute
             currentRateInfo.put("ensegundos", false);
             applyFinalPricing(currentRateInfo, duration, callBuilder);
         } else {
             log.debug("No applicable special rate found, applying current rate.");
-            // Ensure initial price is zero if no special rate applied
             currentRateInfo.put("valor_inicial", BigDecimal.ZERO);
             currentRateInfo.put("valor_inicial_iva", false);
-            currentRateInfo.put("ensegundos", false); // Assume per-minute if no special rate
+            currentRateInfo.put("ensegundos", false);
             applyFinalPricing(currentRateInfo, duration, callBuilder);
         }
     }
 
     private void applyFinalPricing(Map<String, Object> rateInfo, int duration, CallRecord.CallRecordBuilder callBuilder) {
-        // Extract necessary values with defaults
+        // This method remains the same as before.
         BigDecimal pricePerMinute = Optional.ofNullable((BigDecimal) rateInfo.get("valor_minuto")).orElse(BigDecimal.ZERO);
         boolean vatIncluded = Optional.ofNullable((Boolean) rateInfo.get("valor_minuto_iva")).orElse(false);
         BigDecimal vatPercentage = Optional.ofNullable((BigDecimal) rateInfo.get("iva")).orElse(BigDecimal.ZERO);
@@ -1236,35 +1226,30 @@ public class CdrEnrichmentService {
         BigDecimal initialPrice = Optional.ofNullable((BigDecimal) rateInfo.get("valor_inicial")).orElse(BigDecimal.ZERO);
         boolean initialVatIncluded = Optional.ofNullable((Boolean) rateInfo.get("valor_inicial_iva")).orElse(false);
 
-        // Calculate final billed amount using the helper
         BigDecimal calculatedBilledAmount = calculateBilledAmount(
                 duration, pricePerMinute, vatIncluded, vatPercentage, chargePerSecond, initialPrice, initialVatIncluded
         );
 
-        // Set the final calculated values on the builder
         callBuilder.pricePerMinute(pricePerMinute.setScale(4, RoundingMode.HALF_UP));
         callBuilder.initialPrice(initialPrice.setScale(4, RoundingMode.HALF_UP));
-        callBuilder.billedAmount(calculatedBilledAmount); // Already scaled in calculateBilledAmount
+        callBuilder.billedAmount(calculatedBilledAmount);
         log.trace("Final pricing applied: Rate={}, Initial={}, Billed={}", pricePerMinute, initialPrice, calculatedBilledAmount);
     }
 
     private Optional<Map<String, Object>> findRateInfo(Long prefixId, Long indicatorId, Long originIndicatorId, boolean bandOk) {
+        // This method remains the same as before.
         Optional<Map<String, Object>> baseRateOpt = lookupService.findBaseRateForPrefix(prefixId);
         if (baseRateOpt.isEmpty()) {
             log.warn("Base rate info not found for prefixId: {}", prefixId);
             return Optional.empty();
         }
-        // Start with base rate info
         Map<String, Object> rateInfo = new HashMap<>(baseRateOpt.get());
-        // Initialize band info defaults
         rateInfo.put("band_id", 0L);
         rateInfo.put("band_name", "");
-        // Ensure base values exist, default to zero/false if null from DB
         rateInfo.putIfAbsent("base_value", BigDecimal.ZERO);
         rateInfo.putIfAbsent("vat_included", false);
         rateInfo.putIfAbsent("vat_value", BigDecimal.ZERO);
 
-        // Determine if band lookup should be performed
         boolean useBands = bandOk && indicatorId != null && indicatorId > 0;
         log.trace("findRateInfo: prefixId={}, indicatorId={}, originIndicatorId={}, bandOk={}, useBands={}",
                 prefixId, indicatorId, originIndicatorId, bandOk, useBands);
@@ -1273,30 +1258,27 @@ public class CdrEnrichmentService {
             Optional<Map<String, Object>> bandOpt = lookupService.findBandByPrefixAndIndicator(prefixId, indicatorId, originIndicatorId);
             if (bandOpt.isPresent()) {
                 Map<String, Object> bandInfo = bandOpt.get();
-                // Override base values with band values
-                rateInfo.put("base_value", bandInfo.get("band_value")); // Use band value as the effective rate
-                rateInfo.put("vat_included", bandInfo.get("band_vat_included")); // Use band VAT inclusion flag
+                rateInfo.put("base_value", bandInfo.get("band_value"));
+                rateInfo.put("vat_included", bandInfo.get("band_vat_included"));
                 rateInfo.put("band_id", bandInfo.get("band_id"));
                 rateInfo.put("band_name", bandInfo.get("band_name"));
-                // Keep the VAT percentage from the prefix (vat_value), as bands don't define VAT %
                 log.trace("Using band rate for prefix {}, indicator {}: BandID={}, Value={}, VatIncluded={}",
                         prefixId, indicatorId, bandInfo.get("band_id"), bandInfo.get("band_value"), bandInfo.get("band_vat_included"));
             } else {
                 log.trace("Band lookup enabled for prefix {} but no matching band found for indicator {}", prefixId, indicatorId);
-                // If no band found, proceed using the base rate values already in rateInfo
             }
         } else {
             log.trace("Using base rate for prefix {} (Bands not applicable or indicator missing)", prefixId);
         }
-        // Ensure final rate keys are set based on the effective base or band value
         rateInfo.put("valor_minuto", rateInfo.get("base_value"));
         rateInfo.put("valor_minuto_iva", rateInfo.get("vat_included"));
-        rateInfo.put("iva", rateInfo.get("vat_value")); // IVA percentage comes from Prefix
+        rateInfo.put("iva", rateInfo.get("vat_value"));
 
         return Optional.of(rateInfo);
     }
 
     private String formatDestinationName(Map<String, Object> indicatorInfo) {
+        // This method remains the same as before.
         String city = (String) indicatorInfo.get("city_name");
         String country = (String) indicatorInfo.get("department_country");
         if (StringUtils.hasText(city) && StringUtils.hasText(country)) return city + " (" + country + ")";
@@ -1304,41 +1286,36 @@ public class CdrEnrichmentService {
     }
 
     private Optional<SpecialRateValue> findApplicableSpecialRate(List<SpecialRateValue> candidates, LocalDateTime callDateTime) {
+        // This method remains the same as before.
         int callHour = callDateTime.getHour();
         return candidates.stream()
                 .filter(rate -> isHourApplicable(rate.getHoursSpecification(), callHour))
-                .findFirst(); // Find the first one that matches the hour criteria (list is already ordered by specificity)
+                .findFirst();
     }
 
     private boolean isHourApplicable(String hoursSpecification, int callHour) {
-        // If no specification, it applies to all hours
+        // This method remains the same as before.
         if (!StringUtils.hasText(hoursSpecification)) return true;
         try {
-            // Split by comma for multiple ranges/hours
             for (String part : hoursSpecification.split(",")) {
                 String range = part.trim();
                 if (range.contains("-")) {
-                    // Handle ranges like "8-17"
                     String[] parts = range.split("-");
                     if (parts.length == 2) {
                         int start = Integer.parseInt(parts[0].trim());
                         int end = Integer.parseInt(parts[1].trim());
-                        // Inclusive range check
                         if (callHour >= start && callHour <= end) return true;
                     } else {
                         log.warn("Invalid hour range format: {}", range);
                     }
                 } else if (!range.isEmpty()) {
-                    // Handle single hours like "20"
                     if (callHour == Integer.parseInt(range)) return true;
                 }
             }
         } catch (Exception e) {
-            // Catch NumberFormatException or others during parsing
             log.error("Error parsing hoursSpecification: '{}'. Assuming not applicable.", hoursSpecification, e);
-            return false; // Treat parse errors as non-applicable
+            return false;
         }
-        // If no range/hour matched
         return false;
     }
 
@@ -1353,85 +1330,61 @@ public class CdrEnrichmentService {
      * @return The potentially modified phone number for lookup.
      */
     private String preprocessNumberForLookup(String number, Long originCountryId) {
+        // This method remains the same as before.
         if (number == null || originCountryId == null || !originCountryId.equals(COLOMBIA_ORIGIN_COUNTRY_ID)) {
-            return number; // Only apply to Colombia
+            return number;
         }
 
         int len = number.length();
-        String originalNumber = number; // Keep original for logging
-        String processedNumber = number; // Start with original
+        String originalNumber = number;
+        String processedNumber = number;
 
-        // --- Logic from _esCelular_fijo & _esEntrante_60 ---
         if (len == 10) {
             if (number.startsWith("3")) {
-                // Check if it looks like a 10-digit mobile number (3xx xxx xxxx)
-                if (number.matches("^3[0-4][0-9]\\d{7}$")) { // Matches 300-349 followed by 7 digits
-                    processedNumber = "03" + number; // Prepend "03" for mobile lookup consistency
-                    log.trace("Preprocessing (Mobile 10-digit): {} -> {}", originalNumber, processedNumber);
+                if (number.matches("^3[0-4][0-9]\\d{7}$")) {
+                    processedNumber = "03" + number;
                 }
             } else if (number.startsWith("60")) {
-                // Fixed line with new 60 prefix. Try to determine national prefix.
                 String nationalPrefix = determineNationalPrefix(number);
                 if (nationalPrefix != null) {
-                    processedNumber = nationalPrefix + number.substring(2); // Prepend national prefix, remove '60'
-                    log.trace("Preprocessing (Fixed 10-digit 60 with _esNacional): {} -> {}", originalNumber, processedNumber);
-                } else {
-                    // If national prefix cannot be determined, keep '60' for standard prefix lookup
-                    log.trace("Preprocessing (Fixed 10-digit 60): {} kept as is (no national prefix found)", originalNumber);
+                    processedNumber = nationalPrefix + number.substring(2);
                 }
             }
         } else if (len == 11) {
             if (number.startsWith("03")) {
-                // Mobile number dialed with leading 03 (e.g., 0315...). Remove leading 0.
                 if (number.matches("^03[0-4][0-9]\\d{7}$")) {
-                    processedNumber = number.substring(1); // Result: 315...
-                    log.trace("Preprocessing (Mobile 11-digit 03): {} -> {}", originalNumber, processedNumber);
-                    // Re-apply 10-digit logic
+                    processedNumber = number.substring(1);
                     processedNumber = "03" + processedNumber;
-                    log.trace("Preprocessing (Mobile 11-digit post-strip): {} -> {}", originalNumber, processedNumber);
                 }
             } else if (number.startsWith("604")) {
-                // Fixed line with 604 prefix (potentially Medellin? Needs confirmation) - Keep 8 digits
                 if (number.matches("^604\\d{8}$")) {
-                    processedNumber = number.substring(3); // Keep 8 digits
-                    log.trace("Preprocessing (Fixed 11-digit 604): {} -> {}", originalNumber, processedNumber);
+                    processedNumber = number.substring(3);
                 }
             }
         } else if (len == 12) {
             if (number.startsWith("573") || number.startsWith("603")) {
-                // Mobile number dialed with country code (57) or new prefix (60) + mobile indicator (3)
                 if (number.matches("^(57|60)3[0-4][0-9]\\d{7}$")) {
-                    processedNumber = number.substring(2); // Keep only the 10 digits starting with 3
-                    log.trace("Preprocessing (Mobile 12-digit 573/603): {} -> {}", originalNumber, processedNumber);
-                    // Now it matches the 10-digit mobile case, prepend "03"
+                    processedNumber = number.substring(2);
                     processedNumber = "03" + processedNumber;
-                    log.trace("Preprocessing (Mobile 12-digit post-strip): {} -> {}", originalNumber, processedNumber);
                 }
             } else if (number.startsWith("6060") || number.startsWith("5760")) {
-                // Fixed line dialed with country code (57) or new prefix (60) + new fixed prefix (60)
                 if (number.matches("^(57|60)60\\d{8}$")) {
-                    // Keep the 60 + 8 digits for lookup
                     processedNumber = number.substring(2);
-                    log.trace("Preprocessing (Fixed 12-digit 5760/6060): {} -> {}", originalNumber, processedNumber);
                 }
             }
         } else if (len == 9 && number.startsWith("60")) {
-            // National call with 60 prefix and 7 digits (e.g., 601xxxxxxx)
             if (number.matches("^60\\d{7}$")) {
-                String nationalPrefix = determineNationalPrefix("60" + number.substring(2, 3) + number.substring(3)); // Reconstruct 10-digit for lookup
+                String nationalPrefix = determineNationalPrefix("60" + number.substring(2, 3) + number.substring(3));
                 if (nationalPrefix != null) {
-                    processedNumber = nationalPrefix + number.substring(2); // Prepend national prefix, remove '60'
-                    log.trace("Preprocessing (National 9-digit 60 with _esNacional): {} -> {}", originalNumber, processedNumber);
+                    processedNumber = nationalPrefix + number.substring(2);
                 } else {
-                    // Fallback if national prefix cannot be determined
-                    processedNumber = number.substring(2); // Keep 7 digits
-                    log.trace("Preprocessing (National 9-digit 60): {} -> {} (no national prefix found)", originalNumber, processedNumber);
+                    processedNumber = number.substring(2);
                 }
             }
         }
 
         if (!originalNumber.equals(processedNumber)) {
-            log.debug("Final preprocessed number for lookup: {}", processedNumber);
+            log.debug("Preprocessed number for lookup: {} -> {}", originalNumber, processedNumber);
         }
         return processedNumber;
     }
@@ -1445,32 +1398,32 @@ public class CdrEnrichmentService {
      * @return The national prefix string or null if not determinable.
      */
     private String determineNationalPrefix(String number10Digit) {
+        // This method remains the same as before.
         if (number10Digit == null || !number10Digit.startsWith("60") || number10Digit.length() != 10) {
             return null;
         }
-        String ndcStr = number10Digit.substring(2, 3); // The single digit NDC after '60'
+        String ndcStr = number10Digit.substring(2, 3);
         String subscriberNumberStr = number10Digit.substring(3);
 
         if (!ndcStr.matches("\\d") || !subscriberNumberStr.matches("\\d+")) {
-            return null; // Invalid format
+            return null;
         }
         int ndc = Integer.parseInt(ndcStr);
         long subscriberNumber = Long.parseLong(subscriberNumberStr);
 
-        // Find the series entry matching the NDC and subscriber number
         Optional<Map<String, Object>> seriesInfoOpt = lookupService.findSeriesInfoForNationalLookup(ndc, subscriberNumber);
 
         if (seriesInfoOpt.isPresent()) {
             String company = (String) seriesInfoOpt.get().get("series_company");
             if (company != null) {
                 company = company.toUpperCase();
-                if (company.contains("TELMEX")) return "0456"; // CLARO HOGAR FIJO
-                if (company.contains("COLOMBIA TELECOMUNICACIONES")) return "09"; // TELEFONICA/MOVISTAR FIJO
-                if (company.contains("UNE EPM")) return "05"; // UNE
-                if (company.contains("EMPRESA DE TELECOMUNICACIONES DE BOGOTÁ")) return "07"; // ETB
+                if (company.contains("TELMEX")) return "0456";
+                if (company.contains("COLOMBIA TELECOMUNICACIONES")) return "09";
+                if (company.contains("UNE EPM")) return "05";
+                if (company.contains("EMPRESA DE TELECOMUNICACIONES DE BOGOTÁ")) return "07";
             }
         }
-        return null; // No match or company not recognized
+        return null;
     }
 
 }

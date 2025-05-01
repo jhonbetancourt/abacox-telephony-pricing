@@ -48,6 +48,7 @@ public class ConfigurationService {
     public static final int MAX_POSSIBLE_EXTENSION_VALUE = 9999999; // 7 digits
 
     private static Set<Long> internalTelephonyTypeIds;
+    private static Long defaultInternalCallTypeId; // Store the default type
 
     @Getter
     public static class ExtensionLengthConfig {
@@ -63,13 +64,13 @@ public class ConfigurationService {
     }
 
 
-    @PostConstruct
-    private void initializeInternalTypes() {
+    static {
         // Define which telephony types are considered 'internal' based on PHP logic/constants
         internalTelephonyTypeIds = Set.of(
                 TIPOTELE_INTERNA_IP, TIPOTELE_LOCAL_IP, TIPOTELE_NACIONAL_IP, TIPOTELE_INTERNACIONAL_IP
         );
-        log.info("Initialized internal telephony type IDs: {}", internalTelephonyTypeIds);
+        // Define the default internal type (PHP logic defaults to INTERNA_IP if others fail)
+        defaultInternalCallTypeId = TIPOTELE_INTERNA_IP;
     }
 
     @Cacheable("pbxPrefixes")
@@ -125,6 +126,11 @@ public class ConfigurationService {
     // Renamed from getInternalCallTypeIds for clarity
     public static Set<Long> getInternalIpCallTypeIds() {
         return internalTelephonyTypeIds; // Return the initialized set
+    }
+
+    // Added method to get the default internal type ID
+    public static Long getDefaultInternalCallTypeId() {
+        return defaultInternalCallTypeId;
     }
 
     // Corrected call to lookupService
