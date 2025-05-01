@@ -232,14 +232,15 @@ public class LookupService {
         int maxNdcLength = ndcLengths.getOrDefault("max", 0);
 
         // Handle LOCAL type specifically if no NDC range is found (PHP logic implicitly does this)
-        boolean checkLocalFallback = (maxNdcLength == 0 && telephonyTypeId == ConfigurationService.TIPOTELE_LOCAL);
+        boolean checkLocalFallback = (minNdcLength == 0 && maxNdcLength == 0 && telephonyTypeId.equals(ConfigurationService.TIPOTELE_LOCAL));
         if (maxNdcLength == 0 && !checkLocalFallback) {
             log.trace("No NDC length range found for telephony type {}, cannot find indicator.", telephonyTypeId);
             return Optional.empty(); // Cannot proceed without NDC length info (unless it's LOCAL)
         }
 
         if(checkLocalFallback) {
-            minNdcLength = 0; // No NDC prefix for local type lookup
+            // For local lookup, NDC length is effectively 0
+            minNdcLength = 0;
             maxNdcLength = 0;
             log.trace("Treating as LOCAL type lookup (NDC length 0)");
         }
@@ -285,7 +286,10 @@ public class LookupService {
                 sqlBuilder.append("  AND s.initial_number <= :subscriberNum AND s.final_number >= :subscriberNum ");
                 // Order results: prioritize specific country, then longer NDC, then narrowest range
                 sqlBuilder.append("ORDER BY i.origin_country_id DESC, "); // Specific country first
-                sqlBuilder.append("         LENGTH(CAST(s.ndc AS TEXT)) DESC, "); // Longer NDC match first
+                // Prioritize longer NDC only if ndcLength > 0
+                if (ndcLength > 0) {
+                    sqlBuilder.append("     LENGTH(CAST(s.ndc AS TEXT)) DESC, ");
+                }
                 sqlBuilder.append("         (s.final_number - s.initial_number) ASC "); // Narrowest matching range first
                 sqlBuilder.append("LIMIT 1");
 

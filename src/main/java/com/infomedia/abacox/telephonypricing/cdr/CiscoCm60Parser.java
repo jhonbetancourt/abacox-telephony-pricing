@@ -218,8 +218,9 @@ public class CiscoCm60Parser implements CdrParser {
     private String findStandardKey(String cleanedHeader) {
         // Iterate through the mapping to find the standard key associated with the cleaned header
         for (Map.Entry<String, String> entry : HEADER_MAPPING.entrySet()) {
+            // Compare the cleaned header (from file) with the *key* of the mapping
             if (entry.getKey().equals(cleanedHeader)) {
-                // Return the standard field name (value from map), but keep it lowercase for map key consistency
+                // Return the standard field name (value from map), lowercased for consistency
                 return entry.getValue().toLowerCase();
             }
         }

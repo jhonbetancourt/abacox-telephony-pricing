@@ -269,14 +269,14 @@ public class CdrEnrichmentService {
             log.debug("Number preprocessed for lookup: {} -> {}", numberAfterPbxRule, preprocessedNumber);
             if (preprocessedNumber.startsWith("03") && preprocessedNumber.length() == 12) {
                 forcedTelephonyType.setValue(ConfigurationService.TIPOTELE_CELULAR);
-            } else if (preprocessedNumber.matches("^\\d{7,8}$")) {
+            } else if (preprocessedNumber.matches("^\\d{7,8}$")) { // Check if it looks like a local number AFTER preprocessing
                 forcedTelephonyType.setValue(ConfigurationService.TIPOTELE_LOCAL);
             }
         }
 
         // 3. Clean Dialed Number (using preprocessed number)
-        // Check original number (potentially modified by conference/mobile) for PBX prefix presence
-        boolean shouldRemovePrefix = getPrefixLength(numberToCheckPbxRule, pbxPrefixes) > 0;
+        // Check original number (potentially modified by conference/mobile/pbx) for PBX prefix presence
+        boolean shouldRemovePrefix = getPrefixLength(numberAfterPbxRule, pbxPrefixes) > 0;
         String cleanedNumber = cleanNumber(preprocessedNumber, pbxPrefixes, shouldRemovePrefix);
         callBuilder.dial(cleanedNumber); // Set 'dial' field
         log.trace("Cleaned number for processing (dial field): {}", cleanedNumber);
@@ -309,9 +309,6 @@ public class CdrEnrichmentService {
     private void processIncomingCall(RawCdrDto rawCdr, CommunicationLocation commLocation, CallRecord.CallRecordBuilder callBuilder, String effectiveCallingNumber) {
         log.debug("Processing incoming call for CDR {} (effective caller: {})", rawCdr.getGlobalCallId(), effectiveCallingNumber);
 
-        // NOTE: PHP logic to re-route incoming as outgoing if internal checks pass is complex and omitted here.
-        // This method assumes the call is truly incoming based on parser results.
-
         String numberToCheckPbxRule = effectiveCallingNumber; // Number potentially modified by conference/mobile logic
         String numberAfterPbxRule = numberToCheckPbxRule; // Start with the same number
         Long originCountryId = getOriginCountryId(commLocation);
@@ -338,7 +335,7 @@ public class CdrEnrichmentService {
             log.debug("Incoming number preprocessed for lookup: {} -> {}", numberAfterPbxRule, preprocessedNumber);
             if (preprocessedNumber.startsWith("03") && preprocessedNumber.length() == 12) {
                 forcedTelephonyType.setValue(ConfigurationService.TIPOTELE_CELULAR);
-            } else if (preprocessedNumber.matches("^\\d{7,8}$")) {
+            } else if (preprocessedNumber.matches("^\\d{7,8}$")) { // Check if it looks like a local number AFTER preprocessing
                 forcedTelephonyType.setValue(ConfigurationService.TIPOTELE_LOCAL);
             }
         }
@@ -357,9 +354,14 @@ public class CdrEnrichmentService {
             List<String> pbxPrefixes = configService.getPbxPrefixes(commLocation.getId());
             int prefixLen = getPrefixLength(numberAfterPbxRule, pbxPrefixes); // Check rule-modified number for prefix
             if (prefixLen > 0) {
+                // If prefix existed, use the number *after* the prefix for lookup
                 numberForLookup = numberAfterPbxRule.substring(prefixLen);
-                numberForLookup = cleanNumber(numberForLookup, Collections.emptyList(), false);
+                numberForLookup = cleanNumber(numberForLookup, Collections.emptyList(), false); // Clean again just in case
                 log.trace("Incoming call had PBX prefix, looking up origin for: {}", numberForLookup);
+            } else {
+                // If no prefix, use the cleaned, preprocessed number
+                numberForLookup = cleanedCallingNumber;
+                 log.trace("Incoming call had no PBX prefix, looking up origin for: {}", numberForLookup);
             }
 
             List<Map<String, Object>> prefixes = lookupService.findPrefixesByNumber(numberForLookup, originCountryId);
@@ -541,7 +543,7 @@ public class CdrEnrichmentService {
         // Determine the effective number for lookup based on trunk settings (PHP: limpiar_numero variations)
         String effectiveNumber = initialCleanedNumber;
         if (usesTrunk && trunk.getNoPbxPrefix() != null && trunk.getNoPbxPrefix()) {
-            // If trunk ignores PBX prefix, clean the *original* number (potentially modified by conference/mobile) without removing any PBX prefix
+            // If trunk ignores PBX prefix, clean the *original* number (potentially modified by conference/mobile/pbx) without removing any PBX prefix
             effectiveNumber = cleanNumber(callBuilder.build().getDestinationPhone(), Collections.emptyList(), false);
             log.trace("Attempting lookup (Trunk {} ignores PBX prefix): {}", trunk.getId(), effectiveNumber);
         } else {
@@ -1400,49 +1402,55 @@ public class CdrEnrichmentService {
 
         if (len == 10) {
             if (number.startsWith("3")) {
+                // Check if it looks like a 10-digit mobile number (3xx xxx xxxx)
                 if (number.matches("^3[0-4][0-9]\\d{7}$")) {
-                    processedNumber = "03" + number;
+                    processedNumber = "03" + number; // Add 03 prefix for lookup consistency
                 }
             } else if (number.startsWith("60")) {
-                String nationalPrefix = determineNationalPrefix(number);
+                // 10-digit fixed line starting with 60
+                String nationalPrefix = determineNationalPrefix(number); // Try to find operator prefix
                 if (nationalPrefix != null) {
+                    // If national prefix found, replace 60 with it (e.g., 601xxxxxxx -> 091xxxxxxx)
                     processedNumber = nationalPrefix + number.substring(2);
+                } else {
+                    // If no specific operator prefix found, assume it's local (remove 60)
+                    // This matches the PHP fallback in _esCelular_fijo when _esNacional returns ''
+                    processedNumber = number.substring(2);
                 }
             }
         } else if (len == 11) {
             if (number.startsWith("03")) {
+                // 11-digit number starting with 03 (likely already processed mobile)
                 if (number.matches("^03[0-4][0-9]\\d{7}$")) {
                     // Keep as is for lookup (03 prefix is handled by prefix lookup)
                 }
             } else if (number.startsWith("604")) {
+                 // 11-digit number starting with 604 (specific case from PHP)
                 if (number.matches("^604\\d{8}$")) {
-                    processedNumber = number.substring(3); // Remove 604 for local lookup? PHP logic is unclear here, assume remove
+                    processedNumber = number.substring(3); // Remove 604, treat as local?
                 }
             }
         } else if (len == 12) {
             if (number.startsWith("573") || number.startsWith("603")) {
+                // 12-digit mobile starting with 573 or 603
                 if (number.matches("^(57|60)3[0-4][0-9]\\d{7}$")) {
                     processedNumber = number.substring(2); // Remove 57 or 60
                     processedNumber = "03" + processedNumber; // Add 03 prefix
                 }
             } else if (number.startsWith("6060") || number.startsWith("5760")) {
+                 // 12-digit fixed line starting with 5760 or 6060
                 if (number.matches("^(57|60)60\\d{8}$")) {
-                    // PHP logic removes 4 digits (5760 or 6060) leaving 8 digits
-                    // This likely implies it becomes a local number lookup
+                    // PHP logic removes 4 digits, leaving 8 digits (likely local)
                     processedNumber = number.substring(4);
                 }
             }
         } else if (len == 9 && number.startsWith("60")) {
+             // 9-digit fixed line starting with 60 (less common case)
             if (number.matches("^60\\d{7}$")) {
-                // Try to determine national prefix based on the implied full 10-digit number
-                String impliedFullNumber = "60" + number.substring(2, 3) + number.substring(3); // Reconstruct potential 10-digit
-                String nationalPrefix = determineNationalPrefix(impliedFullNumber);
-                if (nationalPrefix != null) {
-                    processedNumber = nationalPrefix + number.substring(2); // Apply national prefix + 7 digits
-                } else {
-                    // If no national prefix found, assume it's local (remove 60)
-                    processedNumber = number.substring(2);
-                }
+                // Try to reconstruct potential 10-digit number to find national prefix
+                // Assume the missing digit is the NDC (e.g., 60xxxxxxx -> 60Nxxxxxxx)
+                // This is ambiguous, PHP logic was also unclear. Best guess: treat as local.
+                processedNumber = number.substring(2); // Remove 60, treat as 7-digit local
             }
         }
 
