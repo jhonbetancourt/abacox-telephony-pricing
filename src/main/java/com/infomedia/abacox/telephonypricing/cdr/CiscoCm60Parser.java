@@ -330,8 +330,8 @@ public class CiscoCm60Parser implements CdrParser {
         if (!effectiveNumber.matches("[\\d#*]+")) return false;
         // Use default plausible lengths here, enrichment service will use DB config
         // These defaults are less critical now as the main check is in enrichment.
-        int minExtLength = ConfigurationService.DEFAULT_MIN_EXT_LENGTH;
-        int maxExtLength = ConfigurationService.DEFAULT_MAX_EXT_LENGTH;
+        int minExtLength = CdrProcessingConfig.DEFAULT_MIN_EXT_LENGTH;
+        int maxExtLength = CdrProcessingConfig.DEFAULT_MAX_EXT_LENGTH;
         int numLength = effectiveNumber.length();
         return (numLength >= minExtLength && numLength <= maxExtLength);
     }

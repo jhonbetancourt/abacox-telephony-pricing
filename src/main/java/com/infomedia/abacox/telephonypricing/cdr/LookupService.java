@@ -15,7 +15,6 @@ import org.springframework.util.StringUtils;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Service
 @Log4j2
@@ -117,7 +116,7 @@ public class LookupService {
         Query query = entityManager.createNativeQuery(sqlBuilder.toString());
         query.setParameter("number", number);
         query.setParameter("originCountryId", originCountryId);
-        query.setParameter("specialCallsType", ConfigurationService.TIPOTELE_ESPECIALES);
+        query.setParameter("specialCallsType", CdrProcessingConfig.TIPOTELE_ESPECIALES);
 
         List<Object[]> results = query.getResultList();
         List<Map<String, Object>> mappedResults = new ArrayList<>();
@@ -182,7 +181,7 @@ public class LookupService {
         if (originCountryId == null || !StringUtils.hasText(number)) return Optional.empty();
         log.debug("Finding internal prefix match for number starting with: {}, originCountryId: {}", number.substring(0, Math.min(number.length(), 6))+"...", originCountryId);
 
-        Set<Long> internalTypes = ConfigurationService.getInternalIpCallTypeIds();
+        Set<Long> internalTypes = CdrProcessingConfig.getInternalIpCallTypeIds();
         if (internalTypes.isEmpty()) return Optional.empty();
 
         StringBuilder sqlBuilder = new StringBuilder();
@@ -232,7 +231,7 @@ public class LookupService {
         int maxNdcLength = ndcLengths.getOrDefault("max", 0);
 
         // Handle LOCAL type specifically if no NDC range is found (PHP logic implicitly does this)
-        boolean checkLocalFallback = (minNdcLength == 0 && maxNdcLength == 0 && telephonyTypeId.equals(ConfigurationService.TIPOTELE_LOCAL));
+        boolean checkLocalFallback = (minNdcLength == 0 && maxNdcLength == 0 && telephonyTypeId.equals(CdrProcessingConfig.TIPOTELE_LOCAL));
         if (maxNdcLength == 0 && !checkLocalFallback) {
             log.trace("No NDC length range found for telephony type {}, cannot find indicator.", telephonyTypeId);
             return Optional.empty(); // Cannot proceed without NDC length info (unless it's LOCAL)
@@ -899,7 +898,7 @@ public class LookupService {
         lengths.put("min", Integer.MAX_VALUE);
         lengths.put("max", 0);
 
-        int maxPossibleLength = String.valueOf(ConfigurationService.MAX_POSSIBLE_EXTENSION_VALUE).length();
+        int maxPossibleLength = String.valueOf(CdrProcessingConfig.MAX_POSSIBLE_EXTENSION_VALUE).length();
 
         // Query 1: Based on Employee extensions
         StringBuilder sqlEmployee = new StringBuilder();
@@ -965,8 +964,8 @@ public class LookupService {
         } catch (Exception e) { log.warn("Could not determine extension lengths from ranges: {}", e.getMessage()); }
 
         // Final adjustments: If no lengths found, use defaults. Ensure min <= max.
-        if (lengths.get("min") == Integer.MAX_VALUE) lengths.put("min", ConfigurationService.DEFAULT_MIN_EXT_LENGTH);
-        if (lengths.get("max") == 0) lengths.put("max", ConfigurationService.DEFAULT_MAX_EXT_LENGTH);
+        if (lengths.get("min") == Integer.MAX_VALUE) lengths.put("min", CdrProcessingConfig.DEFAULT_MIN_EXT_LENGTH);
+        if (lengths.get("max") == 0) lengths.put("max", CdrProcessingConfig.DEFAULT_MAX_EXT_LENGTH);
         if (lengths.get("min") > lengths.get("max")) {
             log.warn("Calculated min length ({}) > max length ({}), adjusting min to max.", lengths.get("min"), lengths.get("max"));
             lengths.put("min", lengths.get("max"));

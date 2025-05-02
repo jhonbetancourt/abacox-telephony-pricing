@@ -3,21 +3,19 @@ package com.infomedia.abacox.telephonypricing.cdr;
 import com.infomedia.abacox.telephonypricing.entity.*;
 import com.infomedia.abacox.telephonypricing.repository.OperatorRepository;
 import com.infomedia.abacox.telephonypricing.repository.TelephonyTypeRepository;
-import jakarta.annotation.PostConstruct;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
-import java.math.BigDecimal;
 import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 @Log4j2
-public class ConfigurationService {
+public class CdrProcessingConfig {
 
     private final OperatorRepository operatorRepository;
     private final TelephonyTypeRepository telephonyTypeRepository;

@@ -21,7 +21,7 @@ import java.util.stream.Collectors;
 public class CdrEnrichmentService {
 
     private final LookupService lookupService;
-    private final ConfigurationService configService;
+    private final CdrProcessingConfig configService;
 
     private static final BigDecimal SIXTY = new BigDecimal("60");
     private static final String CONFERENCE_PREFIX = "b"; // From PHP include_cm.php
@@ -189,9 +189,9 @@ public class CdrEnrichmentService {
         CallRecord tempRecord = callBuilder.build(); // Build temporary to check duration and type
         if (tempRecord.getDuration() != null && tempRecord.getDuration() <= 0
                 && tempRecord.getTelephonyTypeId() != null
-                && tempRecord.getTelephonyTypeId() != ConfigurationService.TIPOTELE_ERRORES) {
-            log.debug("Call duration is zero or less, setting TelephonyType to SINCONSUMO ({})", ConfigurationService.TIPOTELE_SINCONSUMO);
-            callBuilder.telephonyTypeId(ConfigurationService.TIPOTELE_SINCONSUMO);
+                && tempRecord.getTelephonyTypeId() != CdrProcessingConfig.TIPOTELE_ERRORES) {
+            log.debug("Call duration is zero or less, setting TelephonyType to SINCONSUMO ({})", CdrProcessingConfig.TIPOTELE_SINCONSUMO);
+            callBuilder.telephonyTypeId(CdrProcessingConfig.TIPOTELE_SINCONSUMO);
             // Reset costs for zero duration calls
             callBuilder.billedAmount(BigDecimal.ZERO);
             callBuilder.pricePerMinute(BigDecimal.ZERO);
@@ -226,7 +226,7 @@ public class CdrEnrichmentService {
         log.trace("Cleaned number for DIAL field: {}", cleanedNumberForDial);
 
         // 2. Check if Internal Call (using cleanedNumberForDial)
-        ConfigurationService.ExtensionLengthConfig extConfig = configService.getExtensionLengthConfig(commLocation.getId());
+        CdrProcessingConfig.ExtensionLengthConfig extConfig = configService.getExtensionLengthConfig(commLocation.getId());
         if (isInternalCall(effectiveCallingNumber, cleanedNumberForDial, extConfig)) {
             log.debug("Processing as internal call (effective: {} -> {})", effectiveCallingNumber, cleanedNumberForDial);
             processInternalCall(rawCdr, commLocation, callBuilder, cleanedNumberForDial, extConfig);
@@ -257,9 +257,9 @@ public class CdrEnrichmentService {
         if (!preprocessedNumber.equals(numberAfterPbxRule)) {
             log.debug("Number preprocessed for lookup: {} -> {}", numberAfterPbxRule, preprocessedNumber);
             if (preprocessedNumber.startsWith("03") && preprocessedNumber.length() == 12) {
-                forcedTelephonyType.setValue(ConfigurationService.TIPOTELE_CELULAR);
+                forcedTelephonyType.setValue(CdrProcessingConfig.TIPOTELE_CELULAR);
             } else if (preprocessedNumber.matches("^\\d{7,8}$")) { // Check if it looks like a local number AFTER preprocessing
-                forcedTelephonyType.setValue(ConfigurationService.TIPOTELE_LOCAL);
+                forcedTelephonyType.setValue(CdrProcessingConfig.TIPOTELE_LOCAL);
             }
         }
 
@@ -315,9 +315,9 @@ public class CdrEnrichmentService {
         if (!preprocessedNumber.equals(numberAfterPbxRule)) {
             log.debug("Incoming number preprocessed for lookup: {} -> {}", numberAfterPbxRule, preprocessedNumber);
              if (preprocessedNumber.startsWith("03") && preprocessedNumber.length() == 12) {
-                forcedTelephonyType.setValue(ConfigurationService.TIPOTELE_CELULAR);
+                forcedTelephonyType.setValue(CdrProcessingConfig.TIPOTELE_CELULAR);
             } else if (preprocessedNumber.matches("^\\d{7,8}$")) { // Check if it looks like a local number AFTER preprocessing
-                forcedTelephonyType.setValue(ConfigurationService.TIPOTELE_LOCAL);
+                forcedTelephonyType.setValue(CdrProcessingConfig.TIPOTELE_LOCAL);
             }
         }
 
@@ -377,14 +377,14 @@ public class CdrEnrichmentService {
             } else {
                 // Fallback logic from PHP buscarOrigen - if no prefix matches, assume LOCAL
                 log.warn("Could not classify incoming call origin for {}, assuming LOCAL", numberForLookup);
-                callBuilder.telephonyTypeId(ConfigurationService.TIPOTELE_LOCAL);
+                callBuilder.telephonyTypeId(CdrProcessingConfig.TIPOTELE_LOCAL);
                 callBuilder.indicatorId(commIndicatorId); // Use the location's own indicator
-                configService.getOperatorInternal(ConfigurationService.TIPOTELE_LOCAL, originCountryId)
+                configService.getOperatorInternal(CdrProcessingConfig.TIPOTELE_LOCAL, originCountryId)
                         .ifPresent(op -> callBuilder.operatorId(op.getId()));
             }
         } else {
             log.warn("Missing Origin Country or Indicator for CommunicationLocation {}, cannot classify incoming call origin.", commLocation.getId());
-            callBuilder.telephonyTypeId(ConfigurationService.TIPOTELE_ERRORES);
+            callBuilder.telephonyTypeId(CdrProcessingConfig.TIPOTELE_ERRORES);
         }
 
         // Incoming calls typically zero cost
@@ -393,7 +393,7 @@ public class CdrEnrichmentService {
         callBuilder.initialPrice(BigDecimal.ZERO);
     }
 
-    private void processInternalCall(RawCdrDto rawCdr, CommunicationLocation commLocation, CallRecord.CallRecordBuilder callBuilder, String destinationExtension, ConfigurationService.ExtensionLengthConfig extConfig) {
+    private void processInternalCall(RawCdrDto rawCdr, CommunicationLocation commLocation, CallRecord.CallRecordBuilder callBuilder, String destinationExtension, CdrProcessingConfig.ExtensionLengthConfig extConfig) {
         String sourceExtension = callBuilder.build().getEmployeeExtension();
         log.debug("Processing internal call from {} to {}", sourceExtension, destinationExtension);
 
@@ -414,14 +414,14 @@ public class CdrEnrichmentService {
 
             // Determine internal call type based on location comparison (PHP: tipo_llamada_interna)
             if (sourceLoc.originCountryId != null && destLoc.originCountryId != null && !sourceLoc.originCountryId.equals(destLoc.originCountryId)) {
-                internalCallTypeId = ConfigurationService.TIPOTELE_INTERNACIONAL_IP;
+                internalCallTypeId = CdrProcessingConfig.TIPOTELE_INTERNACIONAL_IP;
             } else if (sourceLoc.indicatorId != null && destLoc.indicatorId != null && !sourceLoc.indicatorId.equals(destLoc.indicatorId)) {
-                internalCallTypeId = ConfigurationService.TIPOTELE_NACIONAL_IP;
+                internalCallTypeId = CdrProcessingConfig.TIPOTELE_NACIONAL_IP;
             } else if (sourceLoc.officeId != null && destLoc.officeId != null && !sourceLoc.officeId.equals(destLoc.officeId)) {
                 // PHP logic compares subdireccion, which is mapped to officeId here
-                internalCallTypeId = ConfigurationService.TIPOTELE_LOCAL_IP;
+                internalCallTypeId = CdrProcessingConfig.TIPOTELE_LOCAL_IP;
             } else {
-                internalCallTypeId = ConfigurationService.TIPOTELE_INTERNA_IP; // Default if same office/city/country
+                internalCallTypeId = CdrProcessingConfig.TIPOTELE_INTERNA_IP; // Default if same office/city/country
             }
             log.debug("Internal call type determined by location comparison: {}", internalCallTypeId);
         } else {
@@ -435,7 +435,7 @@ public class CdrEnrichmentService {
             } else {
                 // PHP logic: If no employee and no prefix, default to a configured internal type (e.g., INTERNA_IP)
                 // Use the default internal type from configuration
-                internalCallTypeId = ConfigurationService.getDefaultInternalCallTypeId();
+                internalCallTypeId = CdrProcessingConfig.getDefaultInternalCallTypeId();
                 log.debug("Destination {} not found and no internal prefix matched, defaulting to type {}", destinationExtension, internalCallTypeId);
             }
             // If destination employee not found, use the source's indicator ID
@@ -500,7 +500,7 @@ public class CdrEnrichmentService {
             }
         } else {
             log.error("Could not determine rate for number: {} (effective: {}) after fallback.", rawCdr.getFinalCalledPartyNumber(), initialNumberToLookup);
-            callBuilder.telephonyTypeId(ConfigurationService.TIPOTELE_ERRORES); // Mark as error
+            callBuilder.telephonyTypeId(CdrProcessingConfig.TIPOTELE_ERRORES); // Mark as error
             callBuilder.dial(initialNumberToLookup); // Keep the cleaned number in dial field
             // Set zero costs for errors
             callBuilder.billedAmount(BigDecimal.ZERO);
@@ -592,7 +592,7 @@ public class CdrEnrichmentService {
                 }
 
                 // If still allowed, check if the type implies prefix removal (e.g., not LOCAL)
-                if (removePrefixForLookup && currentTelephonyTypeId != ConfigurationService.TIPOTELE_LOCAL) {
+                if (removePrefixForLookup && currentTelephonyTypeId != CdrProcessingConfig.TIPOTELE_LOCAL) {
                     numberWithoutPrefix = effectiveNumber.substring(currentPrefixCode.length());
                     prefixRemoved = true;
                     log.trace("Prefix {} removed for indicator lookup (Type: {}), remaining: {}", currentPrefixCode, currentTelephonyTypeId, numberWithoutPrefix);
@@ -639,10 +639,10 @@ public class CdrEnrichmentService {
                 Long finalPrefixId = currentPrefixId;
                 boolean finalBandOk = bandOk;
                 // Check only if the *current* type being evaluated is LOCAL
-                if (currentTelephonyTypeId == ConfigurationService.TIPOTELE_LOCAL && destinationNdc != null) {
+                if (currentTelephonyTypeId == CdrProcessingConfig.TIPOTELE_LOCAL && destinationNdc != null) {
                     boolean isExtended = lookupService.isLocalExtended(destinationNdc, originIndicatorId);
                     if (isExtended) {
-                        finalTelephonyTypeId = ConfigurationService.TIPOTELE_LOCAL_EXT;
+                        finalTelephonyTypeId = CdrProcessingConfig.TIPOTELE_LOCAL_EXT;
                         log.debug("Reclassified call to {} as LOCAL_EXTENDED based on NDC {} and origin {}", effectiveNumber, destinationNdc, originIndicatorId);
                         // Find the appropriate prefix for the LOCAL_EXTENDED type
                         Optional<Operator> localExtOpOpt = configService.getOperatorInternal(finalTelephonyTypeId, originCountryId);
@@ -786,7 +786,7 @@ public class CdrEnrichmentService {
     private Optional<Map<String, Object>> findRateInfoForLocal(CommunicationLocation commLocation, String effectiveNumber) {
         Long originCountryId = getOriginCountryId(commLocation);
         Long originIndicatorId = commLocation.getIndicatorId();
-        Long localType = ConfigurationService.TIPOTELE_LOCAL;
+        Long localType = CdrProcessingConfig.TIPOTELE_LOCAL;
 
         if (originCountryId == null || originIndicatorId == null) {
             log.error("Cannot find LOCAL rate: Missing Origin Country ({}) or Indicator ID ({}) for Location {}", originCountryId, originIndicatorId, commLocation.getId());
@@ -827,7 +827,7 @@ public class CdrEnrichmentService {
         if (destinationNdc != null) { // Check if destination NDC was found
             boolean isExtended = lookupService.isLocalExtended(destinationNdc, originIndicatorId);
             if (isExtended) {
-                finalTelephonyTypeId = ConfigurationService.TIPOTELE_LOCAL_EXT;
+                finalTelephonyTypeId = CdrProcessingConfig.TIPOTELE_LOCAL_EXT;
                 log.debug("Reclassified LOCAL fallback call to {} as LOCAL_EXTENDED based on NDC {} and origin {}", effectiveNumber, destinationNdc, originIndicatorId);
                 // Find the appropriate prefix for the LOCAL_EXTENDED type
                 Optional<Operator> localExtOpOpt = configService.getOperatorInternal(finalTelephonyTypeId, originCountryId);
@@ -914,7 +914,7 @@ public class CdrEnrichmentService {
         return longestMatchLength; // Return length of the longest match (or 0 if none)
     }
 
-    private boolean isInternalCall(String callingNumber, String dialedNumber, ConfigurationService.ExtensionLengthConfig extConfig) {
+    private boolean isInternalCall(String callingNumber, String dialedNumber, CdrProcessingConfig.ExtensionLengthConfig extConfig) {
         boolean callingIsExt = isLikelyExtension(callingNumber, extConfig);
         boolean dialedIsExt = isLikelyExtension(dialedNumber, extConfig);
         log.trace("isInternalCall check: Caller '{}' (isExt: {}) -> Dialed '{}' (isExt: {})", callingNumber, callingIsExt, dialedNumber, dialedIsExt);
@@ -922,7 +922,7 @@ public class CdrEnrichmentService {
     }
 
     // Uses the configuration service for accurate length checks
-    private boolean isLikelyExtension(String number, ConfigurationService.ExtensionLengthConfig extConfig) {
+    private boolean isLikelyExtension(String number, CdrProcessingConfig.ExtensionLengthConfig extConfig) {
         if (!StringUtils.hasText(number)) return false;
         // Handle potential leading '+' before cleaning/checking
         String effectiveNumber = number.startsWith("+") ? number.substring(1) : number;
@@ -1156,7 +1156,7 @@ public class CdrEnrichmentService {
     }
 
     private void applySpecialServicePricing(SpecialService specialService, CallRecord.CallRecordBuilder callBuilder, int duration) {
-        callBuilder.telephonyTypeId(ConfigurationService.TIPOTELE_ESPECIALES);
+        callBuilder.telephonyTypeId(CdrProcessingConfig.TIPOTELE_ESPECIALES);
         callBuilder.indicatorId(specialService.getIndicatorId());
         callBuilder.operatorId(null); // Special services don't usually have a specific operator rate
 
