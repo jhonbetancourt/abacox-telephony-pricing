@@ -1,44 +1,219 @@
-package com.infomedia.abacox.telephonypricing.component.migration; // Use your actual package
+package com.infomedia.abacox.telephonypricing.service; // Use your actual package
 
+import com.infomedia.abacox.telephonypricing.component.migration.DataMigrationExecutor;
+import com.infomedia.abacox.telephonypricing.component.migration.MigrationParams;
+import com.infomedia.abacox.telephonypricing.component.migration.SourceDbConfig;
+import com.infomedia.abacox.telephonypricing.component.migration.TableMigrationConfig;
+import com.infomedia.abacox.telephonypricing.dto.migration.MigrationStart;
+import com.infomedia.abacox.telephonypricing.dto.migration.MigrationStatus;
+import com.infomedia.abacox.telephonypricing.exception.MigrationAlreadyInProgressException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService; // Added
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future; // Added
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+
 import static java.util.Map.entry;
 
-@Component
+@Service
 @Log4j2
 @RequiredArgsConstructor
-public class MigrationRunner {
+public class MigrationService {
 
     private final DataMigrationExecutor dataMigrationExecutor;
+    private final ExecutorService migrationExecutorService = Executors.newSingleThreadExecutor();
 
-    public void run(SourceDbConfig sourceDbConfig) {
-        log.info("<<<<<<<<<< STARTING Full Data Migration >>>>>>>>>>");
+    // --- State Tracking ---
+    private final AtomicBoolean isMigrationRunning = new AtomicBoolean(false);
+    private final AtomicReference<MigrationState> currentState = new AtomicReference<>(MigrationState.IDLE);
+    private final AtomicReference<LocalDateTime> startTime = new AtomicReference<>();
+    private final AtomicReference<LocalDateTime> endTime = new AtomicReference<>();
+    private final AtomicReference<String> errorMessage = new AtomicReference<>();
+    private final AtomicInteger totalTables = new AtomicInteger(0);
+    private final AtomicInteger migratedTables = new AtomicInteger(0);
+    private final AtomicReference<String> currentStep = new AtomicReference<>("");
+    private final AtomicReference<Future<?>> migrationTaskFuture = new AtomicReference<>(null); // To potentially cancel
+    // --- End State Tracking ---
+
+    /**
+     * Initiates the data migration asynchronously using a dedicated ExecutorService.
+     * Throws MigrationAlreadyInProgressException if a migration is already running.
+     *
+     * @param runRequest The parameters for the migration.
+     */
+    public void startAsync(MigrationStart runRequest) {
+        // Use compareAndSet for atomicity, although isMigrationRunning.get() check is likely sufficient
+        // because the actual execution is serialized by the single-thread executor.
+        // However, compareAndSet is robust against potential (though unlikely) races here.
+        if (!isMigrationRunning.compareAndSet(false, true)) {
+             throw new MigrationAlreadyInProgressException("A data migration is already in progress.");
+        }
+
+        log.info("Submitting migration task to executor service.");
         try {
-            List<TableMigrationConfig> tablesToMigrate = defineMigrationOrderAndMappings();
-            MigrationRequest request = new MigrationRequest(sourceDbConfig, tablesToMigrate);
-            log.info("Constructed migration request with {} tables.", tablesToMigrate.size());
-            dataMigrationExecutor.runMigration(request);
-            log.info("<<<<<<<<<< Full Data Migration Finished Successfully >>>>>>>>>>");
+            // Reset state *before* submitting the task
+            resetMigrationState();
+
+            // Submit the actual migration logic to run asynchronously
+            Future<?> future = migrationExecutorService.submit(() -> {
+                start(runRequest); // Call the private method containing the logic
+            });
+            migrationTaskFuture.set(future); // Store the future if cancellation is needed
+
         } catch (Exception e) {
-            log.error("<<<<<<<<<< Full Data Migration FAILED >>>>>>>>>>", e);
-            // throw e; // Optional: Stop application startup on failure
+            // Handle potential submission errors (e.g., RejectedExecutionException if executor is shutting down)
+            log.error("Failed to submit migration task to executor service", e);
+            currentState.set(MigrationState.FAILED);
+            errorMessage.set("Failed to start migration task: " + e.getMessage());
+            endTime.set(LocalDateTime.now());
+            isMigrationRunning.set(false); // Ensure state is reset if submission fails
+            migrationTaskFuture.set(null);
+            // Rethrow or handle as appropriate for your application
+            // throw new RuntimeException("Failed to submit migration task", e);
         }
     }
 
     /**
-     * Defines the migration configuration using Builder and Map.ofEntries.
-     * Order is crucial for dependencies.
-     * Excludes audit columns.
-     * treatZeroIdAsNullForForeignKeys defaults to true via @Builder.Default.
+     * Resets the internal state variables before starting a new migration.
      */
-    private List<TableMigrationConfig> defineMigrationOrderAndMappings() {
-        List<TableMigrationConfig> configs = new ArrayList<>();
+    private void resetMigrationState() {
+        currentState.set(MigrationState.STARTING); // Indicate preparing to run
+        startTime.set(LocalDateTime.now());
+        endTime.set(null);
+        errorMessage.set(null);
+        migratedTables.set(0);
+        totalTables.set(0);
+        currentStep.set("Initializing...");
+        migrationTaskFuture.set(null); // Clear previous future
+        log.debug("Migration state reset.");
+    }
 
+
+    /**
+     * Contains the core logic for performing the data migration.
+     * This method is executed asynchronously via the migrationExecutorService.
+     * It should NOT be called directly from outside startAsync.
+     *
+     * @param runRequest The parameters for the migration.
+     */
+    public void start(MigrationStart runRequest) {
+        isMigrationRunning.set(true);
+        log.info("<<<<<<<<<< Starting Full Data Migration Execution >>>>>>>>>>");
+        currentState.set(MigrationState.RUNNING); // Now actually running
+        List<TableMigrationConfig> tablesToMigrate = List.of();
+        try {
+            String url = "jdbc:sqlserver://" + runRequest.getHost() + ":" + runRequest.getPort() + ";databaseName="
+                    + runRequest.getDatabase() + ";encrypt=" + runRequest.getEncryption() + ";trustServerCertificate="
+                    + runRequest.getTrustServerCertificate() + ";";
+
+            SourceDbConfig sourceDbConfig = SourceDbConfig.builder()
+                    .url(url)
+                    .username(runRequest.getUsername())
+                    .password(runRequest.getPassword())
+                    .build();
+
+            tablesToMigrate = defineMigrationOrderAndMappings();
+            int totalTableCount = tablesToMigrate.size();
+            totalTables.set(totalTableCount);
+
+            MigrationParams params = new MigrationParams(sourceDbConfig, tablesToMigrate);
+
+            log.info("Constructed migration params with {} tables. Starting execution.", totalTableCount);
+            currentStep.set(String.format("Starting migration of %d tables...", totalTableCount));
+
+            // Pass the progress reporting method reference
+            dataMigrationExecutor.runMigration(params, this::reportProgress);
+
+            // If runMigration completes without exception
+            currentState.set(MigrationState.COMPLETED);
+            currentStep.set(String.format("Finished: Successfully migrated %d/%d tables.", migratedTables.get(), totalTables.get()));
+            log.info("<<<<<<<<<< Full Data Migration Finished Successfully >>>>>>>>>>");
+
+        } catch (Exception e) {
+            // Catch exceptions from runMigration or setup
+            log.error("<<<<<<<<<< Full Data Migration FAILED during execution >>>>>>>>>>", e);
+            currentState.set(MigrationState.FAILED);
+            String failureMsg = (e.getCause() != null) ? e.getCause().getMessage() : e.getMessage();
+            errorMessage.set("Migration failed: " + failureMsg);
+            // Ensure the step reflects failure if not already set by reportProgress
+            if (!currentStep.get().toLowerCase().contains("failed")) {
+                 currentStep.set(String.format("Failed during migration (%d/%d tables completed). Error: %s",
+                         migratedTables.get(), totalTables.get(), failureMsg));
+            }
+             log.error("Final migration status: FAILED. Error: {}", errorMessage.get());
+             // Optional: Rethrow if the executor's exception handling mechanism needs it,
+             // but typically logging and setting state is sufficient for background tasks.
+             // throw new RuntimeException("Migration failed", e);
+
+        } finally {
+            endTime.set(LocalDateTime.now());
+            isMigrationRunning.set(false); // Release the lock
+            migrationTaskFuture.set(null); // Clear the future on completion/failure
+            log.info("Migration process ended. State: {}, Duration: {}", currentState.get(),
+                    startTime.get() != null && endTime.get() != null ?
+                            java.time.Duration.between(startTime.get(), endTime.get()) : "N/A");
+        }
+    }
+
+
+    public MigrationStatus getStatus() {
+        return MigrationStatus.builder()
+                .state(currentState.get())
+                .startTime(startTime.get())
+                .endTime(endTime.get())
+                .errorMessage(errorMessage.get())
+                .tablesToMigrate(totalTables.get())
+                .tablesMigrated(migratedTables.get())
+                .currentStep(currentStep.get())
+                .build();
+    }
+
+    /**
+     * Callback method invoked by DataMigrationExecutor after processing each table.
+     * Updates the migration progress status.
+     *
+     * @param config The configuration of the table just processed.
+     * @param error  The exception that occurred during processing, or null if successful.
+     */
+    private void reportProgress(TableMigrationConfig config, Exception error) {
+        int currentTotal = totalTables.get(); // Get snapshot of total
+
+        if (error == null) {
+            // Success for this table
+            int completedCount = migratedTables.incrementAndGet();
+            String stepMessage = String.format("Migrated table %d/%d: %s",
+                    completedCount, currentTotal, config.getSourceTableName());
+            currentStep.set(stepMessage);
+            log.debug(stepMessage); // Keep debug for successful steps
+        } else {
+            // Failure for this table
+            int completedCount = migratedTables.get();
+            String stepMessage = String.format("Failed on table %d/%d: %s. Error: %s",
+                    completedCount + 1, // Show user which table number failed (e.g., 5/10)
+                    currentTotal,
+                    config.getSourceTableName(),
+                    error.getMessage());
+            currentStep.set(stepMessage);
+            errorMessage.set(error.getMessage()); // Set the specific error message
+            // The main performMigration() catch block will set the final FAILED state
+            log.warn("Progress update: Failure on table {}. Error: {}", config.getSourceTableName(), error.getMessage());
+        }
+    }
+
+
+    // --- defineMigrationOrderAndMappings() method remains the same ---
+    private List<TableMigrationConfig> defineMigrationOrderAndMappings() {
+       // ... (Keep the existing long list of table configurations)
+        List<TableMigrationConfig> configs = new ArrayList<>();
         // --- Order based on dependencies ---
 
         // Level 0: No FK dependencies among these
@@ -442,7 +617,7 @@ public class MigrationRunner {
                         entry("TARIFATRONCAL_NOPREFIJOPBX", "noPbxPrefix"),
                         entry("TARIFATRONCAL_NOPREFIJO", "noPrefix"),
                         entry("TARIFATRONCAL_SEGUNDOS", "seconds"
-                )))
+                        )))
                 .build());
 
         // Level 6: Depend on Level 5 or lower
@@ -502,7 +677,15 @@ public class MigrationRunner {
                         entry("FILEINFO_TIPO", "type")
                 ))
                 .build());
-
         return configs;
+    }
+
+    // Added STARTING state
+    public enum MigrationState {
+        IDLE,        // No migration running, none run yet or last one finished
+        STARTING,    // Submitted to executor, preparing to run
+        RUNNING,     // Migration is currently executing
+        COMPLETED,   // Last migration finished successfully
+        FAILED       // Last migration failed
     }
 }

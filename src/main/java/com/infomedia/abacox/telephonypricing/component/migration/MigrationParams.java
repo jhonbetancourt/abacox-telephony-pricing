@@ -11,7 +11,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class MigrationRequest {
+public class MigrationParams {
     private SourceDbConfig sourceDbConfig;
     private List<TableMigrationConfig> tablesToMigrate; // Ordered list
 }

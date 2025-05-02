@@ -1,16 +1,13 @@
 package com.infomedia.abacox.telephonypricing.service;
 
-import com.infomedia.abacox.telephonypricing.component.migration.*;
 import lombok.RequiredArgsConstructor;
-import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
 public class InitService {
 
-    private final MigrationRunner migrationRunner;
+  /*  private final MigrationRunner migrationRunner;
 
     @EventListener(ApplicationReadyEvent.class)
     public void init() {
@@ -21,5 +18,5 @@ public class InitService {
                 .build();
 
         migrationRunner.run(sourceDbConfig);
-    }
+    }*/
 }
