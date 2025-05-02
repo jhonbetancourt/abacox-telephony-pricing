@@ -120,8 +120,9 @@ public class CdrEnrichmentService {
             if (standardDto.isIncoming()) {
                 processIncomingCall(standardDto, commLocation, callBuilder, standardDto.getCallingPartyNumber());
             } else {
-                processOutgoingCall(standardDto, commLocation, callBuilder,
-                        standardDto.getCallingPartyNumber(), standardDto.getCalledPartyNumber());
+                // Use a depth counter to prevent infinite recursion in case of rule loops
+                processOutgoingCallRecursive(standardDto, commLocation, callBuilder,
+                        standardDto.getCallingPartyNumber(), standardDto.getCalledPartyNumber(), 0);
             }
         } catch (Exception e) {
             log.error("Error during enrichment for CDR {}: {}", standardDto.getGlobalCallId(), e.getMessage(), e);
@@ -156,31 +157,40 @@ public class CdrEnrichmentService {
     }
 
     // ========================================================================
-    // Processing Logic Methods (processOutgoingCall, processIncomingCall, etc.)
-    // Now use specific lookup services and RateCalculationService
+    // Recursive Outgoing Call Processing
     // ========================================================================
+    private void processOutgoingCallRecursive(StandardizedCallEventDto standardDto, CommunicationLocation commLocation, CallRecord.CallRecordBuilder callBuilder, String effectiveCallingNumber, String effectiveDialedNumber, int depth) {
+        log.debug("Processing outgoing call (Depth: {}) for CDR {} (effective: {} -> {})", depth, standardDto.getGlobalCallId(), effectiveCallingNumber, effectiveDialedNumber);
+        final int MAX_RECURSION_DEPTH = 5; // Prevent infinite loops
 
-    private void processOutgoingCall(StandardizedCallEventDto standardDto, CommunicationLocation commLocation, CallRecord.CallRecordBuilder callBuilder, String effectiveCallingNumber, String effectiveDialedNumber) {
-        log.debug("Processing outgoing call for CDR {} (effective: {} -> {})", standardDto.getGlobalCallId(), effectiveCallingNumber, effectiveDialedNumber);
+        if (depth > MAX_RECURSION_DEPTH) {
+            log.error("Max recursion depth ({}) reached for CDR {}. Aborting processing for this call.", MAX_RECURSION_DEPTH, standardDto.getGlobalCallId());
+            callBuilder.telephonyTypeId(CdrProcessingConfig.TIPOTELE_ERRORES); // Mark as error
+            return;
+        }
 
         List<String> pbxPrefixes = configService.getPbxPrefixes(commLocation.getId());
         boolean shouldRemovePrefixInitially = getPrefixLength(effectiveDialedNumber, pbxPrefixes) > 0;
         String cleanedNumberForDial = cleanNumber(effectiveDialedNumber, pbxPrefixes, shouldRemovePrefixInitially);
-        callBuilder.dial(cleanedNumberForDial);
+        callBuilder.dial(cleanedNumberForDial); // Set DIAL field early
         log.trace("Cleaned number for DIAL field: {}", cleanedNumberForDial);
 
         CdrProcessingConfig.ExtensionLengthConfig extConfig = configService.getExtensionLengthConfig(commLocation.getId());
         if (isInternalCall(effectiveCallingNumber, cleanedNumberForDial, extConfig)) {
             log.debug("Processing as internal call (effective: {} -> {})", effectiveCallingNumber, cleanedNumberForDial);
             processInternalCall(standardDto, commLocation, callBuilder, cleanedNumberForDial, extConfig);
-            return;
+            return; // Internal call processing complete
         }
 
         Long originCountryId = configLookupService.getOriginCountryIdFromCommLocation(commLocation);
+        Long indicatorIdForSpecial = commLocation.getIndicatorId();
+
+        // --- Check PBX Rule ---
         Optional<PbxSpecialRule> pbxRuleOpt = pbxRuleLookupService.findPbxSpecialRule(
                 effectiveDialedNumber, commLocation.getId(), CallDirection.OUTGOING.getValue()
         );
         String numberAfterPbxRule = effectiveDialedNumber;
+        boolean ruleApplied = false;
         if (pbxRuleOpt.isPresent()) {
             PbxSpecialRule rule = pbxRuleOpt.get();
             String replacement = rule.getReplacement() != null ? rule.getReplacement() : "";
@@ -188,10 +198,24 @@ public class CdrEnrichmentService {
             if (StringUtils.hasText(searchPattern) && effectiveDialedNumber.startsWith(searchPattern)) {
                 String numberAfterSearch = effectiveDialedNumber.substring(searchPattern.length());
                 numberAfterPbxRule = replacement + numberAfterSearch;
-                log.debug("Applied OUTGOING PBX rule {}, number changed to {}", rule.getId(), numberAfterPbxRule);
+                if (!numberAfterPbxRule.equals(effectiveDialedNumber)) {
+                    log.debug("Applied OUTGOING PBX rule {}, number changed from {} to {}", rule.getId(), effectiveDialedNumber, numberAfterPbxRule);
+                    ruleApplied = true;
+                } else {
+                     log.trace("PBX rule {} matched but resulted in no change to number {}", rule.getId(), effectiveDialedNumber);
+                }
             }
         }
 
+        // --- Recursive Call if PBX Rule Applied ---
+        if (ruleApplied) {
+            log.debug("Re-evaluating call processing with number modified by PBX rule: {}", numberAfterPbxRule);
+            // Call recursively with the *new* number and incremented depth
+            processOutgoingCallRecursive(standardDto, commLocation, callBuilder, effectiveCallingNumber, numberAfterPbxRule, depth + 1);
+            return; // Stop processing at this level, recursion handles the rest
+        }
+
+        // --- Continue Processing if No Rule Applied or No Change ---
         String preprocessedNumber = preprocessNumberForLookup(numberAfterPbxRule, originCountryId);
         FieldWrapper<Long> forcedTelephonyType = new FieldWrapper<>(null);
         if (!preprocessedNumber.equals(numberAfterPbxRule)) {
@@ -203,25 +227,28 @@ public class CdrEnrichmentService {
             }
         }
 
-        Long indicatorIdForSpecial = commLocation.getIndicatorId();
+        // --- Check Special Service ---
         if (indicatorIdForSpecial != null && originCountryId != null) {
             String numberForSpecialCheck = cleanNumber(preprocessedNumber, Collections.emptyList(), false);
             Optional<SpecialService> specialServiceOpt = specialLookupService.findSpecialService(numberForSpecialCheck, indicatorIdForSpecial, originCountryId);
             if (specialServiceOpt.isPresent()) {
                 SpecialService specialService = specialServiceOpt.get();
                 log.debug("Call matches Special Service: {}", specialService.getId());
-                // Use RateCalculationService
                 rateCalculationService.applySpecialServicePricing(specialService, callBuilder);
-                callBuilder.dial(numberForSpecialCheck);
-                return;
+                callBuilder.dial(numberForSpecialCheck); // Update DIAL if special service matched
+                return; // Special service processing complete
             }
         }
 
+        // --- Evaluate Destination and Rate (External Call) ---
         log.debug("Processing as external outgoing call (effective: {} -> preprocessed: {})", effectiveCallingNumber, preprocessedNumber);
         evaluateDestinationAndRate(standardDto, commLocation, callBuilder, preprocessedNumber, pbxPrefixes, forcedTelephonyType.getValue());
     }
 
 
+    // ========================================================================
+    // Incoming Call Processing (More accurate lookup logic)
+    // ========================================================================
     private void processIncomingCall(StandardizedCallEventDto standardDto, CommunicationLocation commLocation, CallRecord.CallRecordBuilder callBuilder, String effectiveCallingNumber) {
         log.debug("Processing incoming call for CDR {} (effective caller: {})", standardDto.getGlobalCallId(), effectiveCallingNumber);
 
@@ -230,6 +257,7 @@ public class CdrEnrichmentService {
         Long commIndicatorId = commLocation.getIndicatorId();
         List<String> pbxPrefixes = configService.getPbxPrefixes(commLocation.getId());
 
+        // --- Apply PBX Rule ---
         Optional<PbxSpecialRule> pbxRuleOpt = pbxRuleLookupService.findPbxSpecialRule(
                 originalIncomingNumber, commLocation.getId(), CallDirection.INCOMING.getValue()
         );
@@ -245,72 +273,48 @@ public class CdrEnrichmentService {
             }
         }
 
+        // --- Preprocess (e.g., Colombian 60 prefix) ---
         String preprocessedNumber = preprocessNumberForLookup(numberAfterPbxRule, originCountryId);
-        FieldWrapper<Long> forcedTelephonyType = new FieldWrapper<>(null);
+        FieldWrapper<Long> forcedTelephonyType = new FieldWrapper<>(null); // Not typically used for incoming origin lookup
         if (!preprocessedNumber.equals(numberAfterPbxRule)) {
             log.debug("Incoming number preprocessed for lookup: {} -> {}", numberAfterPbxRule, preprocessedNumber);
-            if (preprocessedNumber.startsWith("03") && preprocessedNumber.length() == 12) {
-                forcedTelephonyType.setValue(CdrProcessingConfig.TIPOTELE_CELULAR);
-            } else if (preprocessedNumber.matches("^\\d{7,8}$")) {
-                forcedTelephonyType.setValue(CdrProcessingConfig.TIPOTELE_LOCAL);
-            }
+            // Note: Preprocessing might hint at the type, but the lookup below confirms it
         }
 
+        // --- Clean Number (Remove PBX prefix if present) ---
         String numberForLookup;
-        int prefixLen = getPrefixLength(numberAfterPbxRule, pbxPrefixes);
+        int prefixLen = getPrefixLength(preprocessedNumber, pbxPrefixes);
         if (prefixLen > 0) {
-            numberForLookup = numberAfterPbxRule.substring(prefixLen);
+            numberForLookup = preprocessedNumber.substring(prefixLen);
             numberForLookup = cleanNumber(numberForLookup, Collections.emptyList(), false);
             log.trace("Incoming call had PBX prefix, looking up origin for: {}", numberForLookup);
         } else {
-            numberForLookup = preprocessedNumber;
+            numberForLookup = cleanNumber(preprocessedNumber, Collections.emptyList(), false);
             log.trace("Incoming call had no PBX prefix, looking up origin for: {}", numberForLookup);
         }
 
-        callBuilder.dial(cleanNumber(preprocessedNumber, Collections.emptyList(), false));
+        callBuilder.dial(numberForLookup); // Set DIAL field
 
+        // --- Origin Lookup (buscarOrigen logic) ---
         if (originCountryId != null && commIndicatorId != null) {
-            List<Map<String, Object>> prefixes = prefixLookupService.findPrefixesByNumber(numberForLookup, originCountryId);
+            Optional<Map<String, Object>> originInfoOpt = findIncomingOrigin(numberForLookup, originCountryId, commIndicatorId);
 
-            if (forcedTelephonyType.getValue() != null) {
-                Long forcedType = forcedTelephonyType.getValue();
-                prefixes = prefixes.stream()
-                        .filter(p -> forcedType.equals(p.get("telephony_type_id")))
-                        .collect(Collectors.toList());
-                 if (prefixes.isEmpty())
-                    log.warn("Forced TelephonyType ID {} has no matching prefixes for incoming lookup number {}", forcedType, numberForLookup);
-            }
-
-            Optional<Map<String, Object>> bestPrefix = prefixes.stream().findFirst();
-
-            if (bestPrefix.isPresent()) {
-                Map<String, Object> prefixInfo = bestPrefix.get();
-                Long telephonyTypeId = (Long) prefixInfo.get("telephony_type_id");
-                Long operatorId = (Long) prefixInfo.get("operator_id");
-                String prefixCode = (String) prefixInfo.get("prefix_code");
+            if (originInfoOpt.isPresent()) {
+                Map<String, Object> originInfo = originInfoOpt.get();
+                Long telephonyTypeId = (Long) originInfo.get("telephony_type_id");
+                Long operatorId = (Long) originInfo.get("operator_id");
+                Long indicatorId = (Long) originInfo.get("indicator_id");
 
                 callBuilder.telephonyTypeId(telephonyTypeId);
                 callBuilder.operatorId(operatorId);
-
-                String numberWithoutPrefix = numberForLookup;
-                if (StringUtils.hasText(prefixCode) && numberForLookup.startsWith(prefixCode)) {
-                    numberWithoutPrefix = numberForLookup.substring(prefixCode.length());
-                }
-
-                Optional<Map<String, Object>> indicatorInfoOpt = indicatorLookupService.findIndicatorByNumber(numberWithoutPrefix, telephonyTypeId, originCountryId);
-                Long indicatorId = indicatorInfoOpt
-                        .map(ind -> (Long) ind.get("indicator_id"))
-                        .filter(id -> id != null && id > 0)
-                        .orElse(null);
                 callBuilder.indicatorId(indicatorId);
 
-                log.debug("Incoming call classified as Type ID: {}, Operator ID: {}, Indicator ID: {}",
+                log.debug("Incoming call classified as Type ID: {}, Operator ID: {}, Origin Indicator ID: {}",
                         telephonyTypeId, operatorId, indicatorId);
-
             } else {
                 log.warn("Could not classify incoming call origin for {}, assuming LOCAL", numberForLookup);
                 callBuilder.telephonyTypeId(CdrProcessingConfig.TIPOTELE_LOCAL);
-                callBuilder.indicatorId(commIndicatorId);
+                callBuilder.indicatorId(commIndicatorId); // Assume origin is same as comm location indicator
                 configService.getOperatorInternal(CdrProcessingConfig.TIPOTELE_LOCAL, originCountryId)
                         .ifPresent(op -> callBuilder.operatorId(op.getId()));
             }
@@ -326,6 +330,9 @@ public class CdrEnrichmentService {
         callBuilder.initialPrice(BigDecimal.ZERO);
     }
 
+    // ========================================================================
+    // Internal Call Processing (with prefix fallback)
+    // ========================================================================
     private void processInternalCall(StandardizedCallEventDto standardDto, CommunicationLocation commLocation, CallRecord.CallRecordBuilder callBuilder, String destinationExtension, CdrProcessingConfig.ExtensionLengthConfig extConfig) {
         String sourceExtension = standardDto.getCallingPartyNumber();
         log.debug("Processing internal call from {} to {}", sourceExtension, destinationExtension);
@@ -343,7 +350,7 @@ public class CdrEnrichmentService {
         if (destEmployeeOpt.isPresent()) {
             callBuilder.destinationEmployeeId(destEmployeeOpt.get().getId());
             callBuilder.destinationEmployee(destEmployeeOpt.get());
-            indicatorId = destLoc.indicatorId;
+            indicatorId = destLoc.indicatorId; // Use destination employee's location indicator
 
             if (sourceLoc.originCountryId != null && destLoc.originCountryId != null && !sourceLoc.originCountryId.equals(destLoc.originCountryId)) {
                 internalCallTypeId = CdrProcessingConfig.TIPOTELE_INTERNACIONAL_IP;
@@ -357,24 +364,29 @@ public class CdrEnrichmentService {
             log.debug("Internal call type determined by location comparison: {}", internalCallTypeId);
 
         } else {
-            log.warn("Internal call destination extension {} not found as employee.", destinationExtension);
+            log.warn("Internal call destination extension {} not found as employee. Checking internal prefixes.", destinationExtension);
+            // --- Internal Prefix Fallback (PHP: tipo_llamada_interna -> foreach ($_lista_Prefijos['ttin']) ---
             Optional<Map<String, Object>> internalPrefixOpt = prefixLookupService.findInternalPrefixMatch(destinationExtension, sourceLoc.originCountryId);
             if (internalPrefixOpt.isPresent()) {
                 internalCallTypeId = (Long) internalPrefixOpt.get().get("telephony_type_id");
                 operatorId = (Long) internalPrefixOpt.get().get("operator_id");
+                // Try to find indicator based on the matched internal prefix type
                 Optional<Map<String, Object>> indInfo = indicatorLookupService.findIndicatorByNumber(destinationExtension, internalCallTypeId, sourceLoc.originCountryId);
-                indicatorId = indInfo.map(m -> (Long)m.get("indicator_id")).filter(id -> id != null && id > 0).orElse(null);
+                indicatorId = indInfo.map(m -> (Long) m.get("indicator_id")).filter(id -> id != null && id > 0).orElse(sourceLoc.indicatorId); // Fallback to source indicator
                 log.debug("Destination {} matched internal prefix for type {}, Op {}, Ind {}", destinationExtension, internalCallTypeId, operatorId, indicatorId);
             } else {
+                // --- Default if no employee and no prefix match ---
                 internalCallTypeId = CdrProcessingConfig.getDefaultInternalCallTypeId();
-                indicatorId = sourceLoc.indicatorId;
+                indicatorId = sourceLoc.indicatorId; // Default to source indicator
                 log.debug("Destination {} not found and no internal prefix matched, defaulting to type {}, Ind {}", destinationExtension, internalCallTypeId, indicatorId);
+                callBuilder.assignmentCause(CallAssignmentCause.RANGES.getValue()); // Or a new cause? PHP used _ASUMIDO
             }
         }
 
         callBuilder.telephonyTypeId(internalCallTypeId);
         callBuilder.indicatorId(indicatorId != null && indicatorId > 0 ? indicatorId : null);
 
+        // Assign operator (either from prefix match or default internal)
         if (operatorId == null) {
             configService.getOperatorInternal(internalCallTypeId, sourceLoc.originCountryId)
                     .ifPresent(op -> callBuilder.operatorId(op.getId()));
@@ -386,6 +398,9 @@ public class CdrEnrichmentService {
         rateCalculationService.applyInternalPricing(internalCallTypeId, callBuilder, standardDto.getDurationSeconds());
     }
 
+    // ========================================================================
+    // evaluateDestinationAndRate (Remains mostly the same, calls attemptRateLookup)
+    // ========================================================================
     private void evaluateDestinationAndRate(StandardizedCallEventDto standardDto, CommunicationLocation commLocation, CallRecord.CallRecordBuilder callBuilder, String initialNumberToLookup, List<String> pbxPrefixes, Long forcedTelephonyTypeId) {
         Optional<Trunk> trunkOpt = trunkLookupService.findTrunkByCode(standardDto.getDestinationTrunkIdentifier(), commLocation.getId());
         boolean usesTrunk = trunkOpt.isPresent();
@@ -394,6 +409,7 @@ public class CdrEnrichmentService {
 
         Optional<Map<String, Object>> finalRateInfoOpt = attemptRateLookup(standardDto, commLocation, callBuilder, initialNumberToLookup, pbxPrefixes, trunkOpt, forcedTelephonyTypeId);
 
+        // --- Fallback Logic (PHP: Normalization) ---
         if (finalRateInfoOpt.isEmpty() && usesTrunk) {
             log.warn("Initial rate lookup failed for trunk call {}, attempting fallback (no trunk info)", standardDto.getGlobalCallId());
             finalRateInfoOpt = attemptRateLookup(standardDto, commLocation, callBuilder, initialNumberToLookup, pbxPrefixes, Optional.empty(), forcedTelephonyTypeId);
@@ -425,6 +441,9 @@ public class CdrEnrichmentService {
         }
     }
 
+    // ========================================================================
+    // attemptRateLookup (Remains mostly the same)
+    // ========================================================================
     private Optional<Map<String, Object>> attemptRateLookup(StandardizedCallEventDto standardDto, CommunicationLocation commLocation, CallRecord.CallRecordBuilder callBuilder, String initialNumberToLookup, List<String> pbxPrefixes, Optional<Trunk> trunkOpt, Long forcedTelephonyTypeId) {
         Long originCountryId = configLookupService.getOriginCountryIdFromCommLocation(commLocation);
         Long originIndicatorId = commLocation.getIndicatorId();
@@ -620,7 +639,10 @@ public class CdrEnrichmentService {
         return Optional.empty();
     }
 
-    private Optional<Map<String, Object>> findRateInfoForLocal(CommunicationLocation commLocation, String effectiveNumber) {
+    // ========================================================================
+    // findRateInfoForLocal (Remains the same)
+    // ========================================================================
+     private Optional<Map<String, Object>> findRateInfoForLocal(CommunicationLocation commLocation, String effectiveNumber) {
         Long originCountryId = configLookupService.getOriginCountryIdFromCommLocation(commLocation);
         Long originIndicatorId = commLocation.getIndicatorId();
         Long localType = CdrProcessingConfig.TIPOTELE_LOCAL;
@@ -700,6 +722,9 @@ public class CdrEnrichmentService {
         return Optional.empty();
     }
 
+    // ========================================================================
+    // findRateInfo (Remains the same)
+    // ========================================================================
     private Optional<Map<String, Object>> findRateInfo(Long prefixId, Long indicatorId, Long originIndicatorId, boolean bandOk) {
         Optional<Map<String, Object>> baseRateOpt = prefixLookupService.findBaseRateForPrefix(prefixId);
         if (baseRateOpt.isEmpty()) {
@@ -713,7 +738,7 @@ public class CdrEnrichmentService {
         rateInfo.putIfAbsent("vat_included", false);
         rateInfo.putIfAbsent("vat_value", BigDecimal.ZERO);
 
-        boolean useBands = bandOk && indicatorId != null;
+        boolean useBands = bandOk && indicatorId != null && indicatorId > 0; // Band lookup requires a valid indicator ID
         log.trace("findRateInfo: prefixId={}, indicatorId={}, originIndicatorId={}, bandOk={}, useBands={}",
                 prefixId, indicatorId, originIndicatorId, bandOk, useBands);
 
@@ -742,6 +767,81 @@ public class CdrEnrichmentService {
         return Optional.of(rateInfo);
     }
 
+    // ========================================================================
+    // findIncomingOrigin (New method implementing buscarOrigen logic)
+    // ========================================================================
+    private Optional<Map<String, Object>> findIncomingOrigin(String numberForLookup, Long originCountryId, Long commIndicatorId) {
+        log.debug("Finding origin for incoming number: {}, originCountryId: {}, commIndicatorId: {}", numberForLookup, originCountryId, commIndicatorId);
+
+        // Iterate through potential telephony types based on length ranges
+        // This requires getting all relevant TelephonyTypeConfig entries for the country
+        // and then trying findIndicatorByNumber for each matching type.
+
+        // Get all TelephonyTypeConfigs for the origin country
+        List<TelephonyTypeConfig> typeConfigs = configLookupService.findAllTelephonyTypeConfigsByCountry(originCountryId);
+
+        // Sort configs: prioritize longer max lengths, then shorter min lengths (similar to PHP prefix logic)
+        typeConfigs.sort(Comparator.<TelephonyTypeConfig, Integer>comparing(cfg -> Optional.ofNullable(cfg.getMaxValue()).orElse(0)).reversed()
+                .thenComparing(cfg -> Optional.ofNullable(cfg.getMinValue()).orElse(0)));
+
+        int numberLength = numberForLookup.length();
+
+        for (TelephonyTypeConfig config : typeConfigs) {
+            Long currentTelephonyTypeId = config.getTelephonyTypeId();
+            int minLength = Optional.ofNullable(config.getMinValue()).orElse(0);
+            int maxLength = Optional.ofNullable(config.getMaxValue()).orElse(0);
+
+            // Skip internal types and types where length doesn't match config
+            if (configService.isInternalTelephonyType(currentTelephonyTypeId) ||
+                numberLength < minLength ||
+                (maxLength > 0 && numberLength > maxLength)) {
+                log.trace("Skipping type {} for incoming lookup (Internal or length mismatch: {} not in [{}, {}])", currentTelephonyTypeId, numberLength, minLength, maxLength);
+                continue;
+            }
+
+            log.trace("Attempting incoming origin lookup for type {}: Number={}, Length Range=[{}, {}]", currentTelephonyTypeId, numberForLookup, minLength, maxLength);
+
+            Optional<Map<String, Object>> indicatorInfoOpt = indicatorLookupService.findIndicatorByNumber(
+                    numberForLookup, currentTelephonyTypeId, originCountryId
+            );
+
+            if (indicatorInfoOpt.isPresent()) {
+                Map<String, Object> indicatorInfo = indicatorInfoOpt.get();
+                Long foundIndicatorId = (Long) indicatorInfo.get("indicator_id");
+                Long foundOperatorId = (Long) indicatorInfo.get("operator_id");
+                Integer foundNdc = (Integer) indicatorInfo.get("series_ndc");
+
+                Long finalTelephonyTypeId = currentTelephonyTypeId;
+                String destinationName = formatDestinationName(indicatorInfo);
+
+                // Check if it's local extended
+                if (currentTelephonyTypeId == CdrProcessingConfig.TIPOTELE_LOCAL && foundNdc != null) {
+                    boolean isExtended = indicatorLookupService.isLocalExtended(foundNdc, commIndicatorId);
+                    if (isExtended) {
+                        finalTelephonyTypeId = CdrProcessingConfig.TIPOTELE_LOCAL_EXT;
+                        destinationName += " (Local Extended)";
+                        log.debug("Incoming origin classified as LOCAL_EXTENDED based on NDC {} and comm indicator {}", foundNdc, commIndicatorId);
+                    }
+                }
+
+                Map<String, Object> originResult = new HashMap<>();
+                originResult.put("telephony_type_id", finalTelephonyTypeId);
+                originResult.put("operator_id", foundOperatorId);
+                originResult.put("indicator_id", foundIndicatorId);
+                originResult.put("destination_name", destinationName);
+
+                log.debug("Found incoming origin: Type={}, Op={}, Ind={}", finalTelephonyTypeId, foundOperatorId, foundIndicatorId);
+                return Optional.of(originResult);
+            } else {
+                 log.trace("No indicator match found for incoming number {} with type {}", numberForLookup, currentTelephonyTypeId);
+            }
+        }
+
+        log.warn("Could not determine origin for incoming number {}", numberForLookup);
+        return Optional.empty();
+    }
+
+
     // --- Helper Methods (Keep relevant ones) ---
 
     @Getter @Setter
@@ -753,39 +853,50 @@ public class CdrEnrichmentService {
     private LocationInfo getLocationInfo(Employee employee, CommunicationLocation defaultLocation) {
         Long defaultIndicatorId = defaultLocation.getIndicatorId();
         Long defaultOriginCountryId = configLookupService.getOriginCountryIdFromCommLocation(defaultLocation);
-        Long defaultOfficeId = null;
+        Long defaultOfficeId = null; // Office ID isn't directly on CommLocation
 
         if (employee != null) {
+            // Start with defaults or employee's direct subdivision
             Long empOfficeId = employee.getSubdivisionId();
-            Long empOriginCountryId = defaultOriginCountryId;
-            Long empIndicatorId = defaultIndicatorId;
+            Long empOriginCountryId = defaultOriginCountryId; // Default, might be overridden
+            Long empIndicatorId = defaultIndicatorId; // Default, might be overridden
 
-            if (employee.getCommunicationLocationId() != null) {
+            // 1. Check Employee's assigned CommunicationLocation (if different from default)
+            if (employee.getCommunicationLocationId() != null && !employee.getCommunicationLocationId().equals(defaultLocation.getId())) {
                 Optional<CommunicationLocation> empLocOpt = entityLookupService.findCommunicationLocationById(employee.getCommunicationLocationId());
                 if (empLocOpt.isPresent()) {
                     CommunicationLocation empLoc = empLocOpt.get();
                     empIndicatorId = empLoc.getIndicatorId() != null ? empLoc.getIndicatorId() : defaultIndicatorId;
                     Long empLocCountryId = configLookupService.getOriginCountryIdFromCommLocation(empLoc);
                     empOriginCountryId = empLocCountryId != null ? empLocCountryId : defaultOriginCountryId;
-                    log.trace("Using location info from Employee's CommLocation {}: Indicator={}, Country={}", employee.getCommunicationLocationId(), empIndicatorId, empOriginCountryId);
+                    log.trace("Using location info from Employee's specific CommLocation {}: Indicator={}, Country={}", employee.getCommunicationLocationId(), empIndicatorId, empOriginCountryId);
+                    // We found specific location info, return it (office ID remains employee's direct one)
                     return new LocationInfo(empIndicatorId, empOriginCountryId, empOfficeId);
                 } else {
                     log.warn("Employee {} has CommLocationId {} assigned, but location not found.", employee.getId(), employee.getCommunicationLocationId());
                 }
             }
 
+            // 2. If no specific CommLocation, check CostCenter for OriginCountry override
             if (employee.getCostCenterId() != null) {
                 Optional<CostCenter> ccOpt = entityLookupService.findCostCenterById(employee.getCostCenterId());
                 if (ccOpt.isPresent() && ccOpt.get().getOriginCountryId() != null) {
+                    // Override country if CostCenter has one specified
                     empOriginCountryId = ccOpt.get().getOriginCountryId();
-                    log.trace("Using OriginCountry {} from Employee's CostCenter {}", empOriginCountryId, employee.getCostCenterId());
+                    log.trace("Overriding OriginCountry to {} based on Employee's CostCenter {}", empOriginCountryId, employee.getCostCenterId());
                 }
             }
+
+            // 3. If still using default indicator, double-check if Subdivision provides one (less common)
+            // This requires traversing the Subdivision hierarchy if needed, which adds complexity.
+            // Simplified: Check direct subdivision's parent if needed, or assume default indicator is sufficient if not overridden by CommLocation.
+            // For now, we rely on the CommLocation (either default or employee's specific one) for the indicator.
 
             log.trace("Final location info for Employee {}: Indicator={}, Country={}, Office={}", employee.getId(), empIndicatorId, empOriginCountryId, empOfficeId);
             return new LocationInfo(empIndicatorId, empOriginCountryId, empOfficeId);
         }
 
+        // No employee, use defaults from the call's CommunicationLocation
         log.trace("Using default location info: Indicator={}, Country={}, Office={}", defaultIndicatorId, defaultOriginCountryId, defaultOfficeId);
         return new LocationInfo(defaultIndicatorId, defaultOriginCountryId, defaultOfficeId);
     }
@@ -809,41 +920,55 @@ public class CdrEnrichmentService {
         // --- Logic from _esCelular_fijo ---
         if (len == 10) {
             if (number.startsWith("3")) {
-                if (number.matches("^3[0-4][0-9]\\d{7}$")) {
-                    processedNumber = "03" + number;
+                // Check if it looks like a mobile number (3xx)
+                if (number.matches("^3[0-4][0-9]\\d{7}$")) { // Basic mobile pattern check
+                    processedNumber = "03" + number; // Add prefix for internal consistency
                 }
             } else if (number.startsWith("60")) {
-                String nationalPrefix = determineNationalPrefix(number);
+                // Check if it's a fixed line with the new 60 prefix
+                String nationalPrefix = determineNationalPrefix(number); // Check if we can map to old operator prefix
                 if (nationalPrefix != null) {
+                    // If mapped, prepend the old operator prefix (e.g., 09) for prefix lookup consistency
                     processedNumber = nationalPrefix + number.substring(2);
                 } else {
-                    processedNumber = number.substring(2);
+                    // If not mapped, assume it's a local number (remove 60 + NDC digit)
+                    // This assumes NDC is single digit after 60 for local check
+                    if (number.matches("^60\\d{8}$")) {
+                        processedNumber = number.substring(3); // Keep 7 digits for local lookup
+                    } else {
+                         log.warn("Unexpected 10-digit number starting with 60: {}", number);
+                    }
                 }
             }
         }
         // --- Logic from _esEntrante_60 ---
         else if (len == 12) {
             if (number.startsWith("573") || number.startsWith("603")) {
+                 // Incoming mobile number with country code
                 if (number.matches("^(57|60)3[0-4][0-9]\\d{7}$")) {
-                    processedNumber = number.substring(2);
-                    processedNumber = "03" + processedNumber;
+                    processedNumber = number.substring(2); // Remove 57 or 60 prefix
+                    // processedNumber = "03" + processedNumber; // Add 03 prefix? No, keep 10 digits for lookup
                 }
             } else if (number.startsWith("6060") || number.startsWith("5760")) {
+                // Incoming fixed line with country code and 60 prefix
                  if (number.matches("^(57|60)60\\d{8}$")) {
-                    processedNumber = number.substring(4);
+                    processedNumber = number.substring(4); // Remove 5760 or 6060
                 }
             }
         } else if (len == 11) {
             if (number.startsWith("03")) {
-                // Keep as is
-            } else if (number.startsWith("604")) {
+                // Mobile number starting with 03 (older format)
+                 if (number.matches("^03[0-4][0-9]\\d{7}$")) {
+                    processedNumber = number.substring(1); // Remove leading 0 for consistency? Or keep 03? Keep 03 for now.
+                 }
+            } else if (number.startsWith("604")) { // Example specific NDC check
                  if (number.matches("^604\\d{8}$")) {
-                    processedNumber = number.substring(3);
+                    processedNumber = number.substring(3); // Remove 604
                 }
             }
         } else if (len == 9 && number.startsWith("60")) {
              if (number.matches("^60\\d{7}$")) {
-                processedNumber = number.substring(2);
+                processedNumber = number.substring(2); // Remove 60, keep 7 digits
             }
         }
 
@@ -857,7 +982,7 @@ public class CdrEnrichmentService {
          if (number10Digit == null || !number10Digit.startsWith("60") || number10Digit.length() != 10) {
             return null;
         }
-        String ndcStr = number10Digit.substring(2, 3);
+        String ndcStr = number10Digit.substring(2, 3); // Assumes single digit NDC after 60
         String subscriberNumberStr = number10Digit.substring(3);
 
         if (!ndcStr.matches("\\d") || !subscriberNumberStr.matches("\\d+")) {
@@ -873,13 +998,15 @@ public class CdrEnrichmentService {
             String company = (String) seriesInfoOpt.get().get("series_company");
             if (company != null) {
                 company = company.toUpperCase();
-                if (company.contains("TELMEX")) return "0456";
-                if (company.contains("COLOMBIA TELECOMUNICACIONES")) return "09";
-                if (company.contains("UNE EPM")) return "05";
-                if (company.contains("EMPRESA DE TELECOMUNICACIONES DE BOGOTÁ")) return "07";
+                // Map company names to legacy prefixes (adjust names as needed)
+                if (company.contains("TELMEX") || company.contains("CLARO")) return "0456"; // Claro Fijo
+                if (company.contains("COLOMBIA TELECOMUNICACIONES") || company.contains("MOVISTAR")) return "09"; // Movistar Fijo
+                if (company.contains("UNE EPM") || company.contains("TIGO")) return "05"; // Tigo-Une Fijo
+                if (company.contains("EMPRESA DE TELECOMUNICACIONES DE BOGOTÁ") || company.contains("ETB")) return "07"; // ETB Fijo
             }
         }
-        return null;
+        log.warn("Could not map new 10-digit number {} to a legacy operator prefix.", number10Digit);
+        return null; // Return null if no mapping found
     }
 
      private String cleanNumber(String number, List<String> pbxPrefixes, boolean removePrefix) {
@@ -897,8 +1024,11 @@ public class CdrEnrichmentService {
             }
         }
 
+        // Keep +, #, * along with digits
         boolean hasPlus = cleaned.startsWith("+");
+        // Remove any character that is NOT a digit, #, or *
         cleaned = cleaned.replaceAll("[^0-9#*]", "");
+        // Restore leading + if it was removed by the regex
         if (hasPlus && !cleaned.startsWith("+")) {
             cleaned = "+" + cleaned;
         }
@@ -931,17 +1061,20 @@ public class CdrEnrichmentService {
          if (!StringUtils.hasText(number)) return false;
         String effectiveNumber = number.startsWith("+") ? number.substring(1) : number;
 
+        // Allow digits, #, *
         if (!effectiveNumber.matches("[\\d#*]+")) {
             log.trace("isLikelyExtension: '{}' contains invalid characters.", number);
             return false;
         }
 
         int numLength = effectiveNumber.length();
+        // Check length range
         if (numLength < extConfig.getMinLength() || numLength > extConfig.getMaxLength()) {
             log.trace("isLikelyExtension: '{}' length {} outside range ({}-{}).", number, numLength, extConfig.getMinLength(), extConfig.getMaxLength());
             return false;
         }
 
+        // Check max value only if it's purely numeric
         try {
             if (effectiveNumber.matches("\\d+")) {
                 long numValue = Long.parseLong(effectiveNumber);
@@ -951,6 +1084,7 @@ public class CdrEnrichmentService {
                 }
             }
         } catch (NumberFormatException e) {
+            // Ignore if not purely numeric (e.g., contains # or *)
             log.trace("isLikelyExtension: '{}' contains non-digits, skipping max value check.", number);
         }
         log.trace("isLikelyExtension: '{}' is considered a likely extension.", number);
@@ -970,12 +1104,25 @@ public class CdrEnrichmentService {
                  Long originCountryId = configLookupService.getOriginCountryIdFromCommLocation(trunk.getCommLocation());
                  Long defaultOperatorId = configService.getOperatorInternal(telephonyTypeId, originCountryId)
                                                       .map(Operator::getId).orElse(null);
-                 if (actualOperatorId != null && !actualOperatorId.equals(defaultOperatorId)) {
-                     log.trace("Global TrunkRate ignores prefix, but actual operator {} is not the default for type {}. Operator rule not applicable.", actualOperatorId, telephonyTypeId);
-                     return null; // Indicate no applicable operator rule
+                 if (actualOperatorId != null && defaultOperatorId != null && !actualOperatorId.equals(defaultOperatorId)) {
+                     // Check if the prefix belongs exclusively to the actualOperatorId
+                     List<Map<String, Object>> prefixesForCode = prefixLookupService.findPrefixesByNumber(prefixCode, originCountryId)
+                         .stream().filter(p -> prefixCode.equals(p.get("prefix_code"))).toList();
+
+                     if (prefixesForCode.size() == 1 && actualOperatorId.equals(prefixesForCode.get(0).get("operator_id"))) {
+                        log.trace("Global TrunkRate ignores prefix, but actual operator {} is the *only* operator for prefix {}. Operator rule still not applicable.", actualOperatorId, prefixCode);
+                        return null; // Indicate no applicable operator rule
+                     } else {
+                         log.trace("Global TrunkRate ignores prefix, and actual operator {} is not the default {} (or prefix {} has multiple operators). Using operator 0.", actualOperatorId, defaultOperatorId, prefixCode);
+                         // Fall through to return 0L
+                     }
+                 } else {
+                      log.trace("Global TrunkRate ignores prefix, and actual operator {} is the default {} (or null). Using operator 0.", actualOperatorId, defaultOperatorId);
+                      // Fall through to return 0L
                  }
+             } else {
+                 log.trace("Found global TrunkRate for trunk {}, type {}. Using operator 0.", trunk.getId(), telephonyTypeId);
              }
-             log.trace("Found global TrunkRate for trunk {}, type {}. Using operator 0.", trunk.getId(), telephonyTypeId);
              return 0L; // Use 0 to indicate global rule applies
         }
 

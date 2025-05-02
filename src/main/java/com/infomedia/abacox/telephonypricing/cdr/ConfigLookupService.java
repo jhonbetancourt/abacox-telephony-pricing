@@ -5,17 +5,20 @@ import com.infomedia.abacox.telephonypricing.cdr.CdrProcessingConfig;
 import com.infomedia.abacox.telephonypricing.entity.CommunicationLocation;
 import com.infomedia.abacox.telephonypricing.entity.Indicator;
 import com.infomedia.abacox.telephonypricing.entity.OriginCountry;
+import com.infomedia.abacox.telephonypricing.entity.TelephonyTypeConfig; // Import added
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.NoResultException;
 import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.Query;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
-import org.springframework.cache.annotation.Cacheable;
+// import org.springframework.cache.annotation.Cacheable; // Cache potentially useful here
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collections; // Import added
 import java.util.HashMap;
+import java.util.List; // Import added
 import java.util.Map;
 import java.util.Optional;
 
@@ -69,6 +72,26 @@ public class ConfigLookupService {
         return config;
     }
 
+    public List<TelephonyTypeConfig> findAllTelephonyTypeConfigsByCountry(Long originCountryId) {
+        if (originCountryId == null) {
+            log.warn("findAllTelephonyTypeConfigsByCountry called with null originCountryId.");
+            return Collections.emptyList();
+        }
+        log.debug("Finding all TelephonyTypeConfigs for originCountryId: {}", originCountryId);
+        String sql = "SELECT ttc.* FROM telephony_type_config ttc " +
+                     "JOIN telephony_type tt ON ttc.telephony_type_id = tt.id " + // Ensure linked type is active
+                     "WHERE ttc.origin_country_id = :originCountryId AND tt.active = true";
+        Query query = entityManager.createNativeQuery(sql, TelephonyTypeConfig.class);
+        query.setParameter("originCountryId", originCountryId);
+        try {
+            return query.getResultList();
+        } catch (Exception e) {
+            log.error("Error finding all TelephonyTypeConfigs for originCountryId: {}", originCountryId, e);
+            return Collections.emptyList();
+        }
+    }
+
+
     public Map<String, Integer> findExtensionMinMaxLength(Long commLocationId) {
         log.debug("Finding min/max extension length for commLocationId: {}", commLocationId);
         Map<String, Integer> lengths = new HashMap<>();
@@ -82,8 +105,8 @@ public class ConfigLookupService {
         sqlEmployee.append("SELECT COALESCE(MIN(LENGTH(e.extension)), NULL) AS min_len, COALESCE(MAX(LENGTH(e.extension)), NULL) AS max_len ");
         sqlEmployee.append("FROM employee e ");
         sqlEmployee.append("WHERE e.active = true ");
-        sqlEmployee.append("  AND e.extension ~ '^[0-9#*]+$' ");
-        sqlEmployee.append("  AND e.extension NOT LIKE '0%' ");
+        sqlEmployee.append("  AND e.extension ~ '^[0-9#*]+$' "); // Allow # and *
+        sqlEmployee.append("  AND e.extension NOT LIKE '0%' "); // Exclude numbers starting with 0
         sqlEmployee.append("  AND LENGTH(e.extension) < :maxExtPossibleLength ");
         if (commLocationId != null) {
             sqlEmployee.append(" AND e.communication_location_id = :commLocationId ");
@@ -110,10 +133,11 @@ public class ConfigLookupService {
         sqlRange.append("SELECT COALESCE(MIN(LENGTH(CAST(er.range_start AS TEXT))), NULL) AS min_len, COALESCE(MAX(LENGTH(CAST(er.range_end AS TEXT))), NULL) AS max_len ");
         sqlRange.append("FROM extension_range er ");
         sqlRange.append("WHERE er.active = true ");
+        // Ensure start/end are numeric before casting/length check
         sqlRange.append("  AND CAST(er.range_start AS TEXT) ~ '^[0-9]+$' AND CAST(er.range_end AS TEXT) ~ '^[0-9]+$' ");
         sqlRange.append("  AND LENGTH(CAST(er.range_start AS TEXT)) < :maxExtPossibleLength ");
         sqlRange.append("  AND LENGTH(CAST(er.range_end AS TEXT)) < :maxExtPossibleLength ");
-        sqlRange.append("  AND er.range_end >= er.range_start ");
+        sqlRange.append("  AND er.range_end >= er.range_start "); // Basic range validity
         if (commLocationId != null) {
             sqlRange.append(" AND er.comm_location_id = :commLocationId ");
         }
