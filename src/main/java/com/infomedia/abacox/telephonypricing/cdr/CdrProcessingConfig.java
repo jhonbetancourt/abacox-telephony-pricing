@@ -2,9 +2,6 @@
 package com.infomedia.abacox.telephonypricing.cdr;
 
 import com.infomedia.abacox.telephonypricing.entity.*;
-// Import new lookup services
-import com.infomedia.abacox.telephonypricing.repository.OperatorRepository;
-import com.infomedia.abacox.telephonypricing.repository.TelephonyTypeRepository;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
@@ -51,10 +48,6 @@ public class CdrProcessingConfig {
     private static Set<Long> internalTelephonyTypeIds;
     private static Long defaultInternalCallTypeId;
 
-    private final OperatorRepository operatorRepository;
-    private final TelephonyTypeRepository telephonyTypeRepository;
-    private final LookupService lookupService;
-
     @Getter
     public static class ExtensionLengthConfig {
         // ... (keep constructor and fields)
@@ -70,7 +63,6 @@ public class CdrProcessingConfig {
     }
 
     static {
-        // ... (keep static initializer)
         internalTelephonyTypeIds = Set.of(
                 TIPOTELE_INTERNA_IP, TIPOTELE_LOCAL_IP, TIPOTELE_NACIONAL_IP, TIPOTELE_INTERNACIONAL_IP
         );
@@ -80,7 +72,6 @@ public class CdrProcessingConfig {
     @Cacheable("pbxPrefixes")
     public List<String> getPbxPrefixes(Long communicationLocationId) {
         log.debug("Fetching PBX prefixes for commLocationId: {}", communicationLocationId);
-        // Use ConfigLookupService
         Optional<String> prefixStringOpt = configLookupService.findPbxPrefixByCommLocationId(communicationLocationId);
         if (prefixStringOpt.isPresent() && !prefixStringOpt.get().isEmpty()) {
             List<String> prefixes = Arrays.stream(prefixStringOpt.get().split(","))

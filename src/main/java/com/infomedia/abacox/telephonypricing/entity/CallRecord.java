@@ -299,22 +299,6 @@ public class CallRecord extends AuditedEntity {
     private FileInfo fileInfo;
 
     /**
-     * ID of the centralized system.
-     * Original field: ACUMTOTAL_CENTRALIZADA_ID
-     * Note: This field was nullable in the original schema.
-     */
-    @Column(name = "centralized_id")
-    private Long centralizedId;
-
-    /**
-     * IP address of origin.
-     * Original field: ACUMTOTAL_IPORIGEN
-     * Note: This field was nullable in the original schema.
-     */
-    @Column(name = "origin_ip", length = 64)
-    private String originIp;
-
-    /**
      * SHA-256 hash of the original raw CDR line to prevent duplicates.
      * Length 64 for SHA-256 hex output.
      * Must be unique across all records.
