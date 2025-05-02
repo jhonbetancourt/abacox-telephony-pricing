@@ -55,7 +55,6 @@ public class CdrEnrichmentService {
         callBuilder.transferCause(CallTransferCause.fromValue(Optional.ofNullable(standardDto.getRedirectReason()).orElse(0)).getValue());
         callBuilder.assignmentCause(CallAssignmentCause.UNKNOWN.getValue());
         callBuilder.fileInfoId(standardDto.getFileInfoId());
-        callBuilder.originIp(null);
         callBuilder.billedAmount(BigDecimal.ZERO);
         callBuilder.pricePerMinute(BigDecimal.ZERO);
         callBuilder.initialPrice(BigDecimal.ZERO);

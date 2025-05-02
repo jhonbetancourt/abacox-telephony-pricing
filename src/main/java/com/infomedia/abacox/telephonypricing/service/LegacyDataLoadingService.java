@@ -213,8 +213,6 @@ public class LegacyDataLoadingService {
                             .assignmentCause(assignmentCause)
                             .destinationEmployeeId(destinationEmployeeId)
                             .fileInfoId(fileInfoId)
-                            .centralizedId(centralizedId)
-                            .originIp(originIp)
                             .build();
                     setAuditedFields(callRecord, csvRow, legacyMapping, id); // Pass ID
                     try {
