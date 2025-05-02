@@ -313,4 +313,12 @@ public class CallRecord extends AuditedEntity {
      */
     @Column(name = "origin_ip", length = 64)
     private String originIp;
+
+    /**
+     * SHA-256 hash of the original raw CDR line to prevent duplicates.
+     * Length 64 for SHA-256 hex output.
+     * Must be unique across all records.
+     */
+    @Column(name = "cdr_hash", length = 64, unique = true)
+    private String cdrHash;
 }

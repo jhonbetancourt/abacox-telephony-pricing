@@ -4,13 +4,16 @@ import java.util.Map;
 import java.util.Optional;
 
 public interface CdrParser {
+
     /**
-     * Parses a single line from a CDR source.
-     * @param line The raw CDR line.
-     * @param headerMap Optional map of header names to column indices, if applicable.
-     * @return Optional containing RawCdrDto if parsing is successful and valid, empty otherwise.
+     * Parses a single line from a CDR source and translates it into a standardized format.
+     *
+     * @param line       The raw CDR line.
+     * @param headerMap  Optional map of header names to column indices, if applicable.
+     * @param metadata   Metadata about the CDR source (e.g., commLocationId).
+     * @return Optional containing StandardizedCallEventDto if parsing and translation are successful, empty otherwise.
      */
-    Optional<RawCdrDto> parseLine(String line, Map<String, Integer> headerMap);
+    Optional<StandardizedCallEventDto> parseLine(String line, Map<String, Integer> headerMap, CdrProcessingRequest metadata);
 
     /**
      * Identifies if a line is a header line.

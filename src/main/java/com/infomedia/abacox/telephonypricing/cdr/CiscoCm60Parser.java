@@ -4,7 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Component;
 import org.apache.logging.log4j.util.Strings;
-import org.springframework.util.StringUtils;
+// import org.springframework.util.StringUtils; // Use one consistent String utility
 
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -19,9 +19,9 @@ import java.util.regex.Pattern;
 @RequiredArgsConstructor
 public class CiscoCm60Parser implements CdrParser {
 
-    // --- Constants based on CM_TipoPlanta ---
-    // Header names should be lowercase for consistent map lookup
+    // --- Constants ---
     private static final Map<String, String> HEADER_MAPPING = Map.ofEntries(
+            // (Keep the existing HEADER_MAPPING as before)
             Map.entry("callingpartynumberpartition", "callingPartyNumberPartition"),
             Map.entry("callingpartynumber", "callingPartyNumber"),
             Map.entry("finalcalledpartynumberpartition", "finalCalledPartyNumberPartition"),
@@ -30,8 +30,8 @@ public class CiscoCm60Parser implements CdrParser {
             Map.entry("originalcalledpartynumber", "originalCalledPartyNumber"),
             Map.entry("lastredirectdnpartition", "lastRedirectDnPartition"),
             Map.entry("lastredirectdn", "lastRedirectDn"),
-            Map.entry("destmobiledevicename", "destMobileDeviceName"), // Added partition for mobile
-            Map.entry("finalmobilecalledpartynumber", "finalMobileCalledPartyNumber"), // Added mobile number
+            Map.entry("destmobiledevicename", "destMobileDeviceName"),
+            Map.entry("finalmobilecalledpartynumber", "finalMobileCalledPartyNumber"),
             Map.entry("lastredirectredirectreason", "lastRedirectRedirectReason"),
             Map.entry("datetimeorigination", "dateTimeOrigination"),
             Map.entry("datetimeconnect", "dateTimeConnect"),
@@ -50,59 +50,65 @@ public class CiscoCm60Parser implements CdrParser {
             Map.entry("globalcallid_callid", "globalCallID_callId"),
             Map.entry("duration", "duration"),
             Map.entry("authcodedescription", "authCodeDescription")
-            // Ensure all keys used in getField are lowercase here
     );
 
     private static final String DELIMITER = ",";
     private static final String HEADER_START_TOKEN = "cdrRecordType";
-    private static final int MIN_EXPECTED_FIELDS = 50; // Keep as an estimate
+    private static final int MIN_EXPECTED_FIELDS = 50;
     private static final Pattern NUMERIC_PATTERN = Pattern.compile("\\d+");
-    private static final String CONFERENCE_PREFIX = "b"; // Default conference prefix from PHP logic
+    private static final String CONFERENCE_PREFIX = "b";
 
     @Override
-    public Optional<RawCdrDto> parseLine(String line, Map<String, Integer> headerMap) {
+    public Optional<StandardizedCallEventDto> parseLine(String line, Map<String, Integer> headerMap, CdrProcessingRequest metadata) {
         if (line == null || line.trim().isEmpty() || isHeaderLine(line) || line.startsWith(";")) {
-             log.trace("Skipping empty, header, or comment line: {}", line);
+            log.trace("Skipping empty, header, or comment line: {}", line);
+            return Optional.empty();
+        }
+        // Skip data type lines
+        String trimmedUpperLine = line.trim().toUpperCase();
+        if (trimmedUpperLine.startsWith("INTEGER,") || trimmedUpperLine.startsWith("VARCHAR(")) {
+            log.debug("Skipping data type definition line: {}", line.substring(0, Math.min(line.length(), 100)) + "...");
             return Optional.empty();
         }
 
         if (headerMap == null || headerMap.isEmpty()) {
-             log.warn("Header map is missing or empty, cannot parse line accurately: {}", line);
-             return Optional.empty(); // Cannot parse without headers
+            log.warn("Header map is missing or empty, cannot parse line accurately: {}", line);
+            return Optional.empty();
         }
-
         if (!line.contains(DELIMITER)) {
             log.warn("Line does not contain delimiter '{}': {}", DELIMITER, line);
             return Optional.empty();
         }
 
-        // Split using the delimiter, preserving trailing empty fields
-        String[] fields = line.split(DELIMITER, -1);
+        // Calculate hash first from the original line
+        String cdrHash = HashUtil.sha256(line);
+        if (cdrHash == null) {
+            log.error("CRITICAL: Failed to generate hash for line. Skipping.");
+            // Consider quarantining this line with a specific error? For now, just skip.
+            return Optional.empty();
+        }
 
-        // Clean fields (remove quotes, trim whitespace)
+        String[] fields = line.split(DELIMITER, -1);
         for (int i = 0; i < fields.length; i++) {
             fields[i] = cleanCsvField(fields[i]);
         }
 
         try {
-            RawCdrDto.RawCdrDtoBuilder builder = RawCdrDto.builder();
-            builder.cdrLine(line); // Store original line
-
-            // --- Extract Core Fields using headerMap ---
+            // --- Extract Raw Fields ---
             String globalCallId = getField(fields, headerMap, "globalcallid_callid");
             LocalDateTime dateTimeOrigination = parseTimestamp(getField(fields, headerMap, "datetimeorigination"));
             LocalDateTime dateTimeConnect = parseTimestamp(getField(fields, headerMap, "datetimeconnect"));
             LocalDateTime dateTimeDisconnect = parseTimestamp(getField(fields, headerMap, "datetimedisconnect"));
-            String callingPartyNumber = getField(fields, headerMap, "callingpartynumber");
-            String callingPartyNumberPartition = getField(fields, headerMap, "callingpartynumberpartition");
-            String finalCalledPartyNumber = getField(fields, headerMap, "finalcalledpartynumber");
-            String finalCalledPartyNumberPartition = getField(fields, headerMap, "finalcalledpartynumberpartition");
-            String originalCalledPartyNumber = getField(fields, headerMap, "originalcalledpartynumber");
-            String originalCalledPartyNumberPartition = getField(fields, headerMap, "originalcalledpartynumberpartition");
-            String lastRedirectDn = getField(fields, headerMap, "lastredirectdn");
-            String lastRedirectDnPartition = getField(fields, headerMap, "lastredirectdnpartition");
-            String destMobileDeviceName = getField(fields, headerMap, "destmobiledevicename"); // Added
-            String finalMobileCalledPartyNumber = getField(fields, headerMap, "finalmobilecalledpartynumber"); // Added
+            String rawCallingPartyNumber = getField(fields, headerMap, "callingpartynumber");
+            String rawCallingPartyNumberPartition = getField(fields, headerMap, "callingpartynumberpartition");
+            String rawFinalCalledPartyNumber = getField(fields, headerMap, "finalcalledpartynumber");
+            String rawFinalCalledPartyNumberPartition = getField(fields, headerMap, "finalcalledpartynumberpartition");
+            String rawOriginalCalledPartyNumber = getField(fields, headerMap, "originalcalledpartynumber");
+            String rawOriginalCalledPartyNumberPartition = getField(fields, headerMap, "originalcalledpartynumberpartition");
+            String rawLastRedirectDn = getField(fields, headerMap, "lastredirectdn");
+            String rawLastRedirectDnPartition = getField(fields, headerMap, "lastredirectdnpartition");
+            // String rawDestMobileDeviceName = getField(fields, headerMap, "destmobiledevicename"); // Partitions might be needed later
+            // String rawFinalMobileCalledPartyNumber = getField(fields, headerMap, "finalmobilecalledpartynumber");
             int duration = parseInteger(getField(fields, headerMap, "duration"));
             String authCodeDescription = getField(fields, headerMap, "authcodedescription");
             String origDeviceName = getField(fields, headerMap, "origdevicename");
@@ -110,88 +116,112 @@ public class CiscoCm60Parser implements CdrParser {
             int lastRedirectRedirectReason = parseInteger(getField(fields, headerMap, "lastredirectredirectreason"));
             Integer joinOnBehalfOf = parseOptionalInteger(getField(fields, headerMap, "joinonbehalfof"));
             Integer destCallTerminationOnBehalfOf = parseOptionalInteger(getField(fields, headerMap, "destcallterminationonbehalfof"));
-            Integer destConversationId = parseOptionalInteger(getField(fields, headerMap, "destconversationid"));
+            // Integer destConversationId = parseOptionalInteger(getField(fields, headerMap, "destconversationid"));
 
-            // --- Apply Logic from PHP (CM_FormatoCDR and helpers) ---
+            // --- Cisco-Specific Interpretation ---
 
-            // 1. Handle empty finalCalledPartyNumber (fallback to original)
-            if (Strings.isBlank(finalCalledPartyNumber)) {
-                finalCalledPartyNumber = originalCalledPartyNumber;
-                finalCalledPartyNumberPartition = originalCalledPartyNumberPartition;
-                 log.trace("Using originalCalledPartyNumber ({}) as finalCalledPartyNumber for {}", finalCalledPartyNumber, globalCallId);
-            }
+            // 1. Determine effective called number (fallback)
+            String effectiveCalledNumber = Strings.isBlank(rawFinalCalledPartyNumber) ? rawOriginalCalledPartyNumber : rawFinalCalledPartyNumber;
+            // String effectiveCalledPartition = Strings.isBlank(rawFinalCalledPartyNumber) ? rawOriginalCalledPartyNumberPartition : rawFinalCalledPartyNumberPartition;
 
             // 2. Calculate Ring Duration
             int ringDuration = 0;
             if (dateTimeConnect != null && dateTimeOrigination != null && dateTimeConnect.isAfter(dateTimeOrigination)) {
                 ringDuration = (int) java.time.Duration.between(dateTimeOrigination, dateTimeConnect).getSeconds();
             } else if (dateTimeDisconnect != null && dateTimeOrigination != null && dateTimeDisconnect.isAfter(dateTimeOrigination)) {
-                // If call never connected, ring duration is the time until disconnect
                 ringDuration = (int) java.time.Duration.between(dateTimeOrigination, dateTimeDisconnect).getSeconds();
                 duration = 0; // Ensure duration is 0 if call never connected
             }
-            builder.ringDuration(Math.max(0, ringDuration)); // Ensure non-negative
+            ringDuration = Math.max(0, ringDuration); // Ensure non-negative
 
-            // 3. Determine Basic Incoming Status (Refined during enrichment)
-            // PHP: ($info_arr['partorigen'] == '' && ($info_arr['ext'] == '' || $info_arr['ext'] > _ACUMTOTAL_MAXEXT))
-            // Simplified check here, full check in enrichment
-            boolean isCallingExtLikely = isLikelyExtensionBasic(callingPartyNumber);
-            boolean incoming = (Strings.isBlank(callingPartyNumberPartition) && (Strings.isBlank(callingPartyNumber) || !isCallingExtLikely));
-            builder.incoming(incoming);
+            // 3. Determine Basic Incoming Status
+            boolean isCallingExtLikely = isLikelyExtensionBasic(rawCallingPartyNumber);
+            boolean isIncoming = (Strings.isBlank(rawCallingPartyNumberPartition) && (Strings.isBlank(rawCallingPartyNumber) || !isCallingExtLikely));
 
-            // 4. Conference/Post-Conference detection flags (logic moved to enrichment)
-            // boolean isConference = isConferenceCallIndicator(finalCalledPartyNumber) || (joinOnBehalfOf != null && joinOnBehalfOf == 7);
-            // boolean isPostConference = !isConference && isConferenceCallIndicator(lastRedirectDn);
-            // builder.conferenceCall(isConference);
-            // builder.postConferenceCall(isPostConference); // Add these fields to RawCdrDto if needed
+            // 4. Conference Check
+            boolean isConference = isConferenceCallIndicator(effectiveCalledNumber) || (joinOnBehalfOf != null && joinOnBehalfOf == 7);
 
-            // --- Build DTO ---
+            // 5. Determine Standardized Caller/Called/Redirect based on conference status
+            String finalCallingParty = rawCallingPartyNumber;
+            String finalCalledParty = effectiveCalledNumber;
+            String finalRedirectingParty = rawLastRedirectDn;
+
+            if (isConference) {
+                // For conference, the party *initiating* the conference action (often in lastRedirectDn)
+                // becomes the semantic 'caller' for tracking purposes. The original caller becomes the redirect party.
+                if (Strings.isNotBlank(rawLastRedirectDn)) {
+                    finalCallingParty = rawLastRedirectDn;
+                    finalRedirectingParty = rawCallingPartyNumber; // Store original caller here
+                } else {
+                    // If lastRedirectDn is empty in a conference, log warning but keep original caller
+                    log.warn("Conference detected for CDR {} but LastRedirectDn is empty. Semantic caller/redirect might be inaccurate.", globalCallId);
+                }
+                // The 'called' party remains the conference bridge ID ('b...')
+                finalCalledParty = effectiveCalledNumber;
+                isIncoming = false; // Treat conference legs initiated by internal parties as outgoing semantically
+            }
+
+            // --- Build Standardized DTO ---
+            StandardizedCallEventDto.StandardizedCallEventDtoBuilder builder = StandardizedCallEventDto.builder();
+
             builder.globalCallId(globalCallId);
-            builder.dateTimeOrigination(dateTimeOrigination);
-            builder.dateTimeConnect(dateTimeConnect);
-            builder.dateTimeDisconnect(dateTimeDisconnect);
-            builder.callingPartyNumber(callingPartyNumber);
-            builder.callingPartyNumberPartition(callingPartyNumberPartition);
-            builder.finalCalledPartyNumber(finalCalledPartyNumber);
-            builder.finalCalledPartyNumberPartition(finalCalledPartyNumberPartition);
-            builder.originalCalledPartyNumber(originalCalledPartyNumber);
-            builder.originalCalledPartyNumberPartition(originalCalledPartyNumberPartition);
-            builder.lastRedirectDn(lastRedirectDn);
-            builder.lastRedirectDnPartition(lastRedirectDnPartition);
-            builder.destMobileDeviceName(destMobileDeviceName); // Added
-            builder.finalMobileCalledPartyNumber(finalMobileCalledPartyNumber); // Added
-            builder.duration(duration);
-            builder.authCodeDescription(authCodeDescription);
-            builder.origDeviceName(origDeviceName);
-            builder.destDeviceName(destDeviceName);
-            builder.lastRedirectRedirectReason(lastRedirectRedirectReason);
-            builder.joinOnBehalfOf(joinOnBehalfOf);
-            builder.destCallTerminationOnBehalfOf(destCallTerminationOnBehalfOf); // Keep original
-            builder.disconnectCause(destCallTerminationOnBehalfOf); // Map to new field
-            builder.destConversationId(destConversationId);
+            builder.originalRawLine(line);
+            builder.cdrHash(cdrHash);
+            builder.callingPartyNumber(finalCallingParty);
+            builder.calledPartyNumber(finalCalledParty);
+            builder.authCode(authCodeDescription);
 
-            // Video fields
-            builder.origVideoCapCodec(getField(fields, headerMap, "origvideocap_codec"));
-            builder.origVideoCapBandwidth(parseOptionalInteger(getField(fields, headerMap, "origvideocap_bandwidth")));
-            builder.origVideoCapResolution(getField(fields, headerMap, "origvideocap_resolution"));
-            builder.destVideoCapCodec(getField(fields, headerMap, "destvideocap_codec"));
-            builder.destVideoCapBandwidth(parseOptionalInteger(getField(fields, headerMap, "destvideocap_bandwidth")));
-            builder.destVideoCapResolution(getField(fields, headerMap, "destvideocap_resolution"));
+            builder.callStartTime(dateTimeOrigination);
+            builder.callConnectTime(dateTimeConnect);
+            builder.callEndTime(dateTimeDisconnect);
+            builder.durationSeconds(duration);
+            builder.ringDurationSeconds(ringDuration);
 
-            RawCdrDto dto = builder.build();
-            log.trace("Successfully parsed CDR line into DTO: {}", dto.getGlobalCallId());
+            builder.isIncoming(isIncoming);
+            builder.isConference(isConference);
+            // Basic CallTypeHint (can be refined in enrichment)
+            builder.callTypeHint(isConference ? StandardizedCallEventDto.CallTypeHint.CONFERENCE : StandardizedCallEventDto.CallTypeHint.UNKNOWN);
+
+            builder.sourceTrunkIdentifier(origDeviceName);
+            builder.destinationTrunkIdentifier(destDeviceName);
+            builder.redirectingPartyNumber(finalRedirectingParty);
+            builder.redirectReason(lastRedirectRedirectReason);
+            builder.disconnectCause(destCallTerminationOnBehalfOf);
+
+            // Source Metadata
+            builder.communicationLocationId(metadata.getCommunicationLocationId());
+            builder.fileInfoId(metadata.getFileInfoId());
+            builder.sourceDescription(metadata.getSourceDescription());
+
+
+            StandardizedCallEventDto dto = builder.build();
+            log.trace("Successfully parsed and standardized CDR line into DTO: {}", dto.getGlobalCallId());
             return Optional.of(dto);
 
         } catch (Exception e) {
-            log.error("Failed to parse CDR line: {} - Error: {}", line, e.getMessage(), e);
+            log.error("Failed to parse/standardize CDR line: {} - Error: {}", line, e.getMessage(), e);
             return Optional.empty();
         }
     }
 
+    // --- Other CdrParser methods (isHeaderLine, parseHeader, etc.) ---
+    // (Keep implementations from previous step)
+
     @Override
     public boolean isHeaderLine(String line) {
-        // Cisco CDR headers start with "cdrRecordType" (case-insensitive)
-        return line != null && line.toLowerCase().trim().startsWith(HEADER_START_TOKEN.toLowerCase());
+        if (line == null || line.trim().isEmpty()) {
+            return false;
+        }
+        try {
+            String[] fields = line.split(getDelimiter(), -1);
+            if (fields.length > 0) {
+                String firstFieldCleaned = cleanCsvField(fields[0].trim());
+                return HEADER_START_TOKEN.equalsIgnoreCase(firstFieldCleaned);
+            }
+        } catch (Exception e) {
+            log.warn("Error checking if line is header: {}", line, e);
+        }
+        return false;
     }
 
      @Override
@@ -199,14 +229,12 @@ public class CiscoCm60Parser implements CdrParser {
         Map<String, Integer> headerMap = new HashMap<>();
         if (headerLine == null || !isHeaderLine(headerLine)) {
             log.warn("Provided line is not a valid header line: {}", headerLine);
-            return headerMap; // Return empty map if not a valid header
+            return headerMap;
         }
         String[] headers = headerLine.split(DELIMITER, -1);
         for (int i = 0; i < headers.length; i++) {
             String cleanedHeader = cleanCsvField(headers[i].trim()).toLowerCase();
             if (!cleanedHeader.isEmpty()) {
-                // Use the standard key from HEADER_MAPPING if available, otherwise use the cleaned header
-                // Ensure the key stored in the map is the standard one used by getField
                 String standardKey = findStandardKey(cleanedHeader);
                 headerMap.put(standardKey, i);
             }
@@ -215,25 +243,18 @@ public class CiscoCm60Parser implements CdrParser {
         return headerMap;
     }
 
-    // Helper to find the standard key (value in HEADER_MAPPING) for a given cleaned header
     private String findStandardKey(String cleanedHeader) {
-        // Iterate through the mapping to find the standard key associated with the cleaned header
         for (Map.Entry<String, String> entry : HEADER_MAPPING.entrySet()) {
-            // Compare the cleaned header (from file) with the *key* of the mapping
             if (entry.getKey().equals(cleanedHeader)) {
-                // Return the standard field name (value from map), lowercased for consistency
                 return entry.getValue().toLowerCase();
             }
         }
-        // If no mapping found, return the cleaned header itself (lowercased)
+        log.trace("No explicit mapping found for header '{}', using it directly (lowercase).", cleanedHeader);
         return cleanedHeader;
     }
 
-
     @Override
     public int getExpectedMinFields() {
-        // This is an estimate, Cisco CDRs can vary.
-        // The actual check should be based on the presence of required fields via headerMap.
         return MIN_EXPECTED_FIELDS;
     }
 
@@ -245,31 +266,27 @@ public class CiscoCm60Parser implements CdrParser {
     // --- Helper Methods ---
 
     private String getField(String[] fields, Map<String, Integer> headerMap, String standardFieldName) {
-        // Lookup using the standard, lowercase field name
         Integer index = headerMap.get(standardFieldName.toLowerCase());
         if (index != null && index >= 0 && index < fields.length) {
             String value = fields[index];
-             // Return empty string if the field is null, otherwise return the value
              return value != null ? value : "";
         }
         log.trace("Header key '{}' not found in header map or index out of bounds.", standardFieldName);
-        return ""; // Return empty string if header not found or index invalid
+        return "";
     }
-
 
     private LocalDateTime parseTimestamp(String timestampStr) {
         if (Strings.isBlank(timestampStr) || "0".equals(timestampStr)) {
-            return null; // Represents cases where the timestamp is explicitly zero or empty
+            return null;
         }
         try {
             long epochSeconds = Long.parseLong(timestampStr);
-            // Handle potential zero timestamp after parsing, although already checked
             if (epochSeconds == 0) return null;
             return LocalDateTime.ofInstant(Instant.ofEpochSecond(epochSeconds), ZoneOffset.UTC);
         } catch (NumberFormatException e) {
             log.warn("Could not parse timestamp: '{}'. Returning null.", timestampStr);
             return null;
-        } catch (Exception e) { // Catch other potential exceptions like DateTimeException
+        } catch (Exception e) {
             log.error("Error converting epoch seconds {} to LocalDateTime: {}", timestampStr, e.getMessage());
             return null;
         }
@@ -280,7 +297,6 @@ public class CiscoCm60Parser implements CdrParser {
            return 0;
         }
         try {
-            // Use regex for stricter validation before parsing
             if (!intStr.matches("-?\\d+")) {
                  log.warn("Non-numeric value encountered where integer expected: '{}'. Returning 0.", intStr);
                  return 0;
@@ -293,10 +309,9 @@ public class CiscoCm60Parser implements CdrParser {
     }
      private Integer parseOptionalInteger(String intStr) {
         if (Strings.isBlank(intStr) || "0".equals(intStr)) {
-           return null; // Return null for blank or zero, indicating absence or zero value
+           return null;
         }
         try {
-             // Use regex for stricter validation before parsing
              if (!intStr.matches("-?\\d+")) {
                  log.warn("Non-numeric value encountered where optional integer expected: '{}'. Returning null.", intStr);
                  return null;
@@ -308,42 +323,32 @@ public class CiscoCm60Parser implements CdrParser {
         }
     }
 
-
     private String cleanCsvField(String field) {
         if (field == null) return "";
         String cleaned = field.trim();
-        // Handle quoted fields correctly
         if (cleaned.startsWith("\"") && cleaned.endsWith("\"") && cleaned.length() >= 2) {
             cleaned = cleaned.substring(1, cleaned.length() - 1);
-            // Replace escaped double quotes ("") with a single double quote (")
             cleaned = cleaned.replace("\"\"", "\"");
         }
         return cleaned;
     }
 
-     // Basic check used during parsing before full context is available.
-     // Full check using DB config happens in EnrichmentService.
      private boolean isLikelyExtensionBasic(String number) {
-        if (!StringUtils.hasText(number)) return false;
+        if (Strings.isBlank(number)) return false;
         String effectiveNumber = number.startsWith("+") ? number.substring(1) : number;
-        // Allow digits, hash, asterisk as per PHP logic
         if (!effectiveNumber.matches("[\\d#*]+")) return false;
-        // Use default plausible lengths here, enrichment service will use DB config
-        // These defaults are less critical now as the main check is in enrichment.
         int minExtLength = CdrProcessingConfig.DEFAULT_MIN_EXT_LENGTH;
         int maxExtLength = CdrProcessingConfig.DEFAULT_MAX_EXT_LENGTH;
         int numLength = effectiveNumber.length();
         return (numLength >= minExtLength && numLength <= maxExtLength);
     }
 
-    // Helper to check for conference prefix 'b' (EVAL-CONFERENCIA)
     private boolean isConferenceCallIndicator(String number) {
         if (number == null || number.length() <= CONFERENCE_PREFIX.length()) {
             return false;
         }
         String prefix = number.substring(0, CONFERENCE_PREFIX.length());
         String rest = number.substring(CONFERENCE_PREFIX.length());
-        // Check if prefix matches (case-insensitive) and the rest is numeric
         return CONFERENCE_PREFIX.equalsIgnoreCase(prefix) && rest.matches("\\d+");
     }
 }
