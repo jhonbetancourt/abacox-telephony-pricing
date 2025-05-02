@@ -51,16 +51,17 @@ public class IndicatorLookupService {
         int minNdcLength = ndcLengths.getOrDefault("min", 0);
         int maxNdcLength = ndcLengths.getOrDefault("max", 0);
 
-        boolean checkLocalFallback = (minNdcLength == 0 && maxNdcLength == 0 && telephonyTypeId.equals(CdrProcessingConfig.TIPOTELE_LOCAL));
-        if (maxNdcLength == 0 && !checkLocalFallback) {
-            log.trace("No NDC length range found for telephony type {}, cannot find indicator.", telephonyTypeId);
-            return Optional.empty();
-        }
+        // PHP: Special handling for TIPOTELE_LOCAL - forces NDC length 0
+        boolean checkLocalFallback = (telephonyTypeId.equals(CdrProcessingConfig.TIPOTELE_LOCAL));
         if (checkLocalFallback) {
             minNdcLength = 0; // Force NDC length 0 for local lookup
             maxNdcLength = 0;
             log.trace("Treating as LOCAL type lookup (NDC length 0)");
+        } else if (maxNdcLength == 0) {
+             log.trace("No NDC length range found for telephony type {}, cannot find indicator.", telephonyTypeId);
+             return Optional.empty();
         }
+
 
         Map<String, Object> bestMatch = null;
         long smallestSeriesRange = Long.MAX_VALUE;
@@ -76,9 +77,14 @@ public class IndicatorLookupService {
             } else if (ndcLength > 0) {
                 // Number is shorter than the current NDC length being checked
                 continue;
+            } else if (ndcLength == 0 && !checkLocalFallback) {
+                 // Only process NDC length 0 if it's explicitly a LOCAL lookup
+                 continue;
             }
 
+
             // Validate parts are numeric before querying
+            // Allow empty NDC string (for length 0), subscriber must be numeric
             if (ndcStr.matches("\\d*") && subscriberNumberStr.matches("\\d+")) {
                 Integer ndc = ndcStr.isEmpty() ? null : Integer.parseInt(ndcStr); // Use null for NDC 0/empty
                 long subscriberNumber = Long.parseLong(subscriberNumberStr);
@@ -118,7 +124,10 @@ public class IndicatorLookupService {
                 if (ndc != null) {
                     sqlBuilder.append("  AND s.ndc = :ndc ");
                 } else {
-                    sqlBuilder.append("  AND (s.ndc = 0 OR s.ndc IS NULL) "); // Match NDC 0 or NULL
+                    // For local calls (ndcLength == 0), we look for NDC 0 or NULL in the series table
+                    // For other types where ndcLength might become 0 due to short number, this might be incorrect,
+                    // but the outer loop should handle it.
+                    sqlBuilder.append("  AND (s.ndc = 0 OR s.ndc IS NULL) ");
                 }
 
                 // Handle origin country filtering (PHP logic)
@@ -135,15 +144,10 @@ public class IndicatorLookupService {
                 sqlBuilder.append(localCondition);
 
                 // Order by (PHP logic: NDC DESC, Band Origin DESC, Series Range ASC)
+                // NDC DESC is implicitly handled by the outer loop (maxNdcLength to minNdcLength)
                 sqlBuilder.append("ORDER BY ");
-                if (ndcLength > 0) {
-                    sqlBuilder.append(" LENGTH(CAST(s.ndc AS TEXT)) DESC, "); // Prioritize longer NDC matches implicitly via loop order
-                }
                 sqlBuilder.append(orderByBandOrigin); // Prioritize specific band origin
                 sqlBuilder.append(" (s.final_number - s.initial_number) ASC "); // Prioritize smallest range
-
-                // We fetch all matches for this NDC length and then pick the best one in Java
-                // sqlBuilder.append("LIMIT 1"); // Remove LIMIT 1
 
                 Query query = entityManager.createNativeQuery(sqlBuilder.toString());
                 query.setParameter("telephonyTypeId", telephonyTypeId);
@@ -253,9 +257,11 @@ public class IndicatorLookupService {
 
     public Optional<Map<String, Object>> findSeriesInfoForNationalLookup(int ndc, long subscriberNumber) {
         log.debug("Finding series info for national lookup: NDC={}, Subscriber={}", ndc, subscriberNumber);
-        String sql = "SELECT s.company as series_company " +
+        // Added INDICATIVO_DPTO_PAIS, INDICATIVO_CIUDAD for Colombian preprocessing logic
+        String sql = "SELECT s.company as series_company, i.department_country, i.city_name " +
                      "FROM series s " +
-                     "WHERE s.active = true " +
+                     "JOIN indicator i ON s.indicator_id = i.id " +
+                     "WHERE s.active = true AND i.active = true " +
                      "  AND s.ndc = :ndc " +
                      "  AND s.initial_number <= :subscriberNum AND s.final_number >= :subscriberNum " +
                      "LIMIT 1";
@@ -263,9 +269,11 @@ public class IndicatorLookupService {
         query.setParameter("ndc", ndc);
         query.setParameter("subscriberNum", subscriberNumber);
         try {
-            Object result = query.getSingleResult();
+            Object[] result = (Object[]) query.getSingleResult(); // Expecting 3 columns now
             Map<String, Object> map = new HashMap<>();
-            map.put("series_company", result);
+            map.put("series_company", result[0]);
+            map.put("department_country", result[1]);
+            map.put("city_name", result[2]);
             return Optional.of(map);
         } catch (NoResultException e) {
             log.trace("No series found for national lookup: NDC={}, Subscriber={}", ndc, subscriberNumber);

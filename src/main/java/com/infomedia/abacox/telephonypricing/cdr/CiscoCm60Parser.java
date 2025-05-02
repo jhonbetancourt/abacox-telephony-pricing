@@ -119,17 +119,18 @@ public class CiscoCm60Parser implements CdrParser {
 
             // 1. Determine effective called number (fallback logic from CM_FormatoCDR)
             String effectiveCalledNumber = Strings.isBlank(rawFinalCalledPartyNumber) ? rawOriginalCalledPartyNumber : rawFinalCalledPartyNumber;
-            // String effectiveCalledPartition = Strings.isBlank(rawFinalCalledPartyNumber) ? rawOriginalCalledPartyNumberPartition : rawFinalCalledPartyNumberPartition; // Partition not directly used in Standardized DTO
+            String effectiveCalledPartition = Strings.isBlank(rawFinalCalledPartyNumber) ? rawOriginalCalledPartyNumberPartition : rawFinalCalledPartyNumberPartition; // Partition used for incoming check
 
             // 2. Calculate Ring Duration (same as before)
             int ringDuration = calculateRingDuration(dateTimeOrigination, dateTimeConnect, dateTimeDisconnect);
             if (dateTimeConnect == null) duration = 0; // Ensure duration is 0 if call never connected
 
-            // 3. Determine Basic Incoming Status (same as before)
+            // 3. Determine Basic Incoming Status (PHP logic: partorigen == '' && (ext == '' || ext > max_ext || !is_numeric(ext)))
+            // Simplified: If calling partition is blank AND calling number is blank or not a likely extension, it's incoming.
             boolean isCallingExtLikely = isLikelyExtensionBasic(rawCallingPartyNumber);
             boolean isIncoming = (Strings.isBlank(rawCallingPartyNumberPartition) && (Strings.isBlank(rawCallingPartyNumber) || !isCallingExtLikely));
 
-            // 4. Conference Check (same as before)
+            // 4. Conference Check
             boolean isConference = isConferenceCallIndicator(effectiveCalledNumber) || (joinOnBehalfOf != null && joinOnBehalfOf == 7);
 
             // 5. Determine Standardized Caller/Called/Redirect based on conference/transfer/mobile redirect status
@@ -144,14 +145,18 @@ public class CiscoCm60Parser implements CdrParser {
 
             if (isConference) {
                 // Handle conference logic (swapping caller/redirect)
-                if (Strings.isNotBlank(rawLastRedirectDn)) {
+                // PHP: Inverts caller/redirect if redirect is not a conference ID itself
+                if (Strings.isNotBlank(rawLastRedirectDn) && !isConferenceCallIndicator(rawLastRedirectDn)) {
                     finalCallingParty = rawLastRedirectDn;
                     finalRedirectingParty = rawCallingPartyNumber;
                 } else {
-                    log.warn("Conference detected for CDR {} but LastRedirectDn is empty. Semantic caller/redirect might be inaccurate.", globalCallId);
+                    log.warn("Conference detected for CDR {} but LastRedirectDn is empty or also a conference ID. Semantic caller/redirect might be inaccurate.", globalCallId);
+                    // Keep original caller if redirect is missing/invalid
+                    finalCallingParty = rawCallingPartyNumber;
+                    finalRedirectingParty = rawLastRedirectDn; // Keep redirect as is
                 }
                 finalCalledParty = effectiveCalledNumber; // Keep conference ID as called party
-                isIncoming = false; // Treat as outgoing
+                isIncoming = false; // Treat conference leg setup as outgoing from the participant's perspective
                 transferCause = (joinOnBehalfOf != null && joinOnBehalfOf == 7) ? CallTransferCause.CONFERENCE_NOW : CallTransferCause.CONFERENCE;
             } else if (isMobileRedirect) {
                 // Handle mobile redirect (final called party becomes the mobile number)
@@ -160,20 +165,20 @@ public class CiscoCm60Parser implements CdrParser {
                 // Redirecting party is the number *before* the mobile redirect
                 finalRedirectingParty = effectiveCalledNumber;
                 transferCause = CallTransferCause.AUTO; // Treat mobile redirect as an auto-transfer
-                isIncoming = false; // Mobile redirects imply an outgoing leg
+                isIncoming = false; // Mobile redirects imply an outgoing leg from the original device
             } else if (Strings.isNotBlank(rawLastRedirectDn) && !rawLastRedirectDn.equals(effectiveCalledNumber)) {
                 // Handle regular transfers/redirects
-                // Check if the redirect DN itself indicates a conference end
+                // Check if the redirect DN itself indicates a conference end (PHP: IMDEX_TRANSFER_CONFERE_FIN)
                 if (isConferenceCallIndicator(rawLastRedirectDn)) {
                     transferCause = CallTransferCause.CONFERENCE_END;
                     // In PHP, ext-redir was sometimes replaced with conference originator here, complex logic omitted for now
                 } else if (lastRedirectRedirectReason > 0 && lastRedirectRedirectReason <= 16) {
-                    // Map Cisco reason codes to standard causes if possible
+                    // Map known Cisco reason codes to standard causes
                     transferCause = mapCiscoTransferReason(lastRedirectRedirectReason);
                 } else {
                     transferCause = CallTransferCause.AUTO; // Default for other redirects
                 }
-                // Redirecting party is already set correctly
+                // Redirecting party is already set correctly to rawLastRedirectDn
             }
 
             // --- Build Standardized DTO ---
@@ -348,6 +353,7 @@ public class CiscoCm60Parser implements CdrParser {
      private boolean isLikelyExtensionBasic(String number) {
         if (Strings.isBlank(number)) return false;
         String effectiveNumber = number.startsWith("+") ? number.substring(1) : number;
+        // Basic check: contains only digits, #, * and is within a plausible length range
         if (!effectiveNumber.matches("[\\d#*]+")) return false;
         int minExtLength = CdrProcessingConfig.DEFAULT_MIN_EXT_LENGTH;
         int maxExtLength = CdrProcessingConfig.DEFAULT_MAX_EXT_LENGTH;

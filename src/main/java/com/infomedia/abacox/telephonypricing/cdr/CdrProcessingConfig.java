@@ -125,6 +125,10 @@ public class CdrProcessingConfig {
         return entityLookupService.findOperatorById(id);
     }
 
+    public static boolean isLocalTelephonyType(Long telephonyTypeId) {
+        return telephonyTypeId != null && (telephonyTypeId.equals(TIPOTELE_LOCAL) || telephonyTypeId.equals(TIPOTELE_LOCAL_EXT));
+    }
+
     public ExtensionLengthConfig getExtensionLengthConfig(Long commLocationId) {
         log.debug("Fetching extension length config for commLocationId: {}", commLocationId);
         // Use ConfigLookupService
