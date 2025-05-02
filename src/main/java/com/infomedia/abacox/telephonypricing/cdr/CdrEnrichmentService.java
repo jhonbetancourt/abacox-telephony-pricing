@@ -1045,10 +1045,7 @@ public class CdrEnrichmentService {
                     log.trace("Prefix {} removed for indicator lookup (Type: {}), remaining: {}", currentPrefixCode, currentTelephonyTypeId, numberWithoutPrefix);
                 } else if (removePrefixForLookup) {
                     log.trace("Prefix {} not removed for indicator lookup (Type: {})", currentPrefixCode, currentTelephonyTypeId);
-                    removePrefixForLookup = false;
                 }
-            } else {
-                removePrefixForLookup = false;
             }
 
             int prefixLength = (currentPrefixCode != null ? currentPrefixCode.length() : 0);
