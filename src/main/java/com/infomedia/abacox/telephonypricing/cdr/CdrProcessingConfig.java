@@ -1,6 +1,8 @@
+// FILE: cdr/CdrProcessingConfig.java
 package com.infomedia.abacox.telephonypricing.cdr;
 
 import com.infomedia.abacox.telephonypricing.entity.*;
+// Import new lookup services
 import com.infomedia.abacox.telephonypricing.repository.OperatorRepository;
 import com.infomedia.abacox.telephonypricing.repository.TelephonyTypeRepository;
 import lombok.Getter;
@@ -17,9 +19,10 @@ import java.util.stream.Collectors;
 @Log4j2
 public class CdrProcessingConfig {
 
-    private final OperatorRepository operatorRepository;
-    private final TelephonyTypeRepository telephonyTypeRepository;
-    private final LookupService lookupService;
+    // Inject specific lookup services needed for config retrieval
+    private final ConfigLookupService configLookupService;
+    private final EntityLookupService entityLookupService;
+    private final PrefixLookupService prefixLookupService; // Needed for getOperatorInternal
 
     // --- Constants based on PHP defines/usage ---
     public static final long TIPOTELE_LOCAL = 3L;
@@ -46,10 +49,15 @@ public class CdrProcessingConfig {
     public static final int MAX_POSSIBLE_EXTENSION_VALUE = 9999999; // 7 digits
 
     private static Set<Long> internalTelephonyTypeIds;
-    private static Long defaultInternalCallTypeId; // Store the default type
+    private static Long defaultInternalCallTypeId;
+
+    private final OperatorRepository operatorRepository;
+    private final TelephonyTypeRepository telephonyTypeRepository;
+    private final LookupService lookupService;
 
     @Getter
     public static class ExtensionLengthConfig {
+        // ... (keep constructor and fields)
         private final int minLength;
         private final int maxLength;
         private final int maxExtensionValue;
@@ -61,26 +69,24 @@ public class CdrProcessingConfig {
         }
     }
 
-
     static {
-        // Define which telephony types are considered 'internal' based on PHP logic/constants
+        // ... (keep static initializer)
         internalTelephonyTypeIds = Set.of(
                 TIPOTELE_INTERNA_IP, TIPOTELE_LOCAL_IP, TIPOTELE_NACIONAL_IP, TIPOTELE_INTERNACIONAL_IP
         );
-        // Define the default internal type (PHP logic defaults to INTERNA_IP if others fail)
         defaultInternalCallTypeId = TIPOTELE_INTERNA_IP;
     }
 
     @Cacheable("pbxPrefixes")
     public List<String> getPbxPrefixes(Long communicationLocationId) {
         log.debug("Fetching PBX prefixes for commLocationId: {}", communicationLocationId);
-        Optional<String> prefixStringOpt = lookupService.findPbxPrefixByCommLocationId(communicationLocationId);
+        // Use ConfigLookupService
+        Optional<String> prefixStringOpt = configLookupService.findPbxPrefixByCommLocationId(communicationLocationId);
         if (prefixStringOpt.isPresent() && !prefixStringOpt.get().isEmpty()) {
-            // Split the comma-separated string into a list
             List<String> prefixes = Arrays.stream(prefixStringOpt.get().split(","))
-                                          .map(String::trim)
-                                          .filter(s -> !s.isEmpty())
-                                          .collect(Collectors.toList());
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
+                    .collect(Collectors.toList());
             log.trace("Found PBX prefixes: {}", prefixes);
             return prefixes;
         }
@@ -88,9 +94,9 @@ public class CdrProcessingConfig {
         return Collections.emptyList();
     }
 
+    // --- Methods using internalTelephonyTypeIds remain the same ---
     @Cacheable("internalTelephonyTypes")
     public Set<Long> getInternalTelephonyTypeIds() {
-        // Return the set initialized in @PostConstruct
         return internalTelephonyTypeIds;
     }
 
@@ -98,65 +104,65 @@ public class CdrProcessingConfig {
         return telephonyTypeId != null && internalTelephonyTypeIds.contains(telephonyTypeId);
     }
 
+    public static Set<Long> getInternalIpCallTypeIds() {
+        return internalTelephonyTypeIds;
+    }
+
+    public static Long getDefaultInternalCallTypeId() {
+        return defaultInternalCallTypeId;
+    }
+
     @Cacheable("telephonyTypeMinMax")
     public Map<String, Integer> getTelephonyTypeMinMax(Long telephonyTypeId, Long originCountryId) {
         log.debug("Fetching min/max length config for telephonyTypeId: {}, originCountryId: {}", telephonyTypeId, originCountryId);
-        return lookupService.findTelephonyTypeMinMaxConfig(telephonyTypeId, originCountryId);
+        // Use ConfigLookupService
+        return configLookupService.findTelephonyTypeMinMaxConfig(telephonyTypeId, originCountryId);
     }
 
     @Cacheable(value = "internalOperator", key = "#telephonyTypeId + '-' + #originCountryId")
     public Optional<Operator> getOperatorInternal(Long telephonyTypeId, Long originCountryId) {
         log.debug("Fetching internal operator for telephonyTypeId: {}, originCountryId: {}", telephonyTypeId, originCountryId);
-        // This relies on the LookupService to find the operator associated with internal types
-        return lookupService.findOperatorByTelephonyTypeAndOrigin(telephonyTypeId, originCountryId);
+        // This now relies on PrefixLookupService finding a prefix and its operator
+        // Find *any* prefix for this type/origin to get the associated operator
+        List<Map<String, Object>> prefixes = prefixLookupService.findPrefixesByNumber("", originCountryId); // Use empty number, filter by type
+        return prefixes.stream()
+                .filter(p -> telephonyTypeId.equals(p.get("telephony_type_id")))
+                .findFirst()
+                .flatMap(p -> entityLookupService.findOperatorById((Long) p.get("operator_id")));
     }
 
     @Cacheable("telephonyTypeById")
     public Optional<TelephonyType> getTelephonyTypeById(Long id) {
-        return lookupService.findTelephonyTypeById(id);
+        // Use EntityLookupService
+        return entityLookupService.findTelephonyTypeById(id);
     }
 
     @Cacheable("operatorById")
     public Optional<Operator> getOperatorById(Long id) {
-        return lookupService.findOperatorById(id);
+        // Use EntityLookupService
+        return entityLookupService.findOperatorById(id);
     }
 
-    // Renamed from getInternalCallTypeIds for clarity
-    public static Set<Long> getInternalIpCallTypeIds() {
-        return internalTelephonyTypeIds; // Return the initialized set
-    }
-
-    // Added method to get the default internal type ID
-    public static Long getDefaultInternalCallTypeId() {
-        return defaultInternalCallTypeId;
-    }
-
-    // Corrected call to lookupService
     @Cacheable(value = "extensionLengthConfig", key = "{#commLocationId}")
     public ExtensionLengthConfig getExtensionLengthConfig(Long commLocationId) {
         log.debug("Fetching extension length config for commLocationId: {}", commLocationId);
-        // Get min/max length based on employees and ranges for the specific location
-        Map<String, Integer> lengths = lookupService.findExtensionMinMaxLength(commLocationId);
+        // Use ConfigLookupService
+        Map<String, Integer> lengths = configLookupService.findExtensionMinMaxLength(commLocationId);
         int minLength = lengths.getOrDefault("min", DEFAULT_MIN_EXT_LENGTH);
         int maxLength = lengths.getOrDefault("max", DEFAULT_MAX_EXT_LENGTH);
-        int maxExtensionValue = MAX_POSSIBLE_EXTENSION_VALUE; // Default max value
+        int maxExtensionValue = MAX_POSSIBLE_EXTENSION_VALUE;
 
-        // Ensure min/max are logical and within bounds
         if (minLength <= 0) minLength = DEFAULT_MIN_EXT_LENGTH;
         if (maxLength <= 0 || maxLength < minLength) maxLength = Math.max(minLength, DEFAULT_MAX_EXT_LENGTH);
 
-        // Calculate the maximum numeric value based on the max length
         if (maxLength > 0 && maxLength < String.valueOf(Integer.MAX_VALUE).length()) {
             try {
-                 // Create a string of '9's with the maxLength
-                 // Ensure maxLength is positive before repeating
-                 maxExtensionValue = Integer.parseInt("9".repeat(Math.max(0, maxLength)));
-            } catch (NumberFormatException | OutOfMemoryError e) { // Added OutOfMemoryError just in case maxLength is huge
-                 log.warn("Could not calculate max extension value for length {}, using default {}. Error: {}", maxLength, MAX_POSSIBLE_EXTENSION_VALUE, e.getMessage());
-                 maxExtensionValue = MAX_POSSIBLE_EXTENSION_VALUE;
+                maxExtensionValue = Integer.parseInt("9".repeat(Math.max(0, maxLength)));
+            } catch (NumberFormatException | OutOfMemoryError e) {
+                log.warn("Could not calculate max extension value for length {}, using default {}. Error: {}", maxLength, MAX_POSSIBLE_EXTENSION_VALUE, e.getMessage());
+                maxExtensionValue = MAX_POSSIBLE_EXTENSION_VALUE;
             }
-        } else if (maxLength >= String.valueOf(Integer.MAX_VALUE).length()) {
-            // If maxLength is too large, use the absolute max value
+        } else {
             maxExtensionValue = MAX_POSSIBLE_EXTENSION_VALUE;
             log.warn("Extension maxLength {} is too large, capping max extension value at {}", maxLength, maxExtensionValue);
         }
