@@ -21,11 +21,11 @@ import java.util.Optional;
 @Log4j2
 public class RateCalculationService {
 
-    private final CdrProcessingConfig configService;
     private final SpecialLookupService specialLookupService;
     private final PrefixLookupService prefixLookupService;
     private final TrunkLookupService trunkLookupService;
-    private final EntityLookupService entityLookupService; // For operator/type names if needed
+    private final EntityLookupService entityLookupService;
+    private final CdrProcessingConfig configService;
 
     private static final BigDecimal SIXTY = new BigDecimal("60");
     private static final BigDecimal ONE_HUNDRED = new BigDecimal("100");
@@ -40,18 +40,16 @@ public class RateCalculationService {
         callBuilder.telephonyTypeId(CdrProcessingConfig.TIPOTELE_ESPECIALES);
         callBuilder.indicatorId(specialService.getIndicatorId() != null && specialService.getIndicatorId() > 0 ? specialService.getIndicatorId() : null);
 
-        // PHP's operador_interno logic: Find the operator linked via Prefix table for this type/country
         Long originCountryId = specialService.getOriginCountryId();
         configService.getOperatorInternal(CdrProcessingConfig.TIPOTELE_ESPECIALES, originCountryId)
                 .ifPresent(op -> callBuilder.operatorId(op.getId()));
 
-        // Use a map to mimic PHP's $infovalor structure for calculation
         Map<String, Object> rateInfo = new HashMap<>();
         rateInfo.put("valor_minuto", Optional.ofNullable(specialService.getValue()).orElse(BigDecimal.ZERO));
         rateInfo.put("valor_minuto_iva", Optional.ofNullable(specialService.getVatIncluded()).orElse(false));
-        rateInfo.put("iva", Optional.ofNullable(specialService.getVatAmount()).orElse(BigDecimal.ZERO)); // PHP uses SERVESPECIAL_IVA as the percentage
-        rateInfo.put("ensegundos", false); // Special services are typically per-call or per-minute
-        rateInfo.put("valor_inicial", BigDecimal.ZERO); // PHP's buscar_NumeroEspecial doesn't handle initial charge
+        rateInfo.put("iva", Optional.ofNullable(specialService.getVatAmount()).orElse(BigDecimal.ZERO));
+        rateInfo.put("ensegundos", false);
+        rateInfo.put("valor_inicial", BigDecimal.ZERO);
         rateInfo.put("valor_inicial_iva", false);
 
         applyFinalPricing(rateInfo, duration, callBuilder);
@@ -91,15 +89,14 @@ public class RateCalculationService {
     public void applyTrunkPricing(Trunk trunk, Map<String, Object> baseRateInfo, int duration, Long originIndicatorId, Long originCountryId, LocalDateTime callDateTime, CallRecord.CallRecordBuilder callBuilder) {
         Long telephonyTypeId = (Long) baseRateInfo.get("telephony_type_id");
         Long operatorId = (Long) baseRateInfo.get("operator_id");
-        Long indicatorId = (Long) baseRateInfo.get("indicator_id"); // Can be null
+        Long indicatorId = (Long) baseRateInfo.get("indicator_id");
 
         Optional<TrunkRate> trunkRateOpt = trunkLookupService.findTrunkRate(trunk.getId(), operatorId, telephonyTypeId);
         Optional<TrunkRule> trunkRuleOpt = trunkLookupService.findTrunkRule(trunk.getName(), telephonyTypeId, indicatorId, originIndicatorId);
 
-        Map<String, Object> rateInfo = new HashMap<>(baseRateInfo); // Start with base rate info
+        Map<String, Object> rateInfo = new HashMap<>(baseRateInfo);
         boolean ruleApplied = false;
 
-        // PHP prioritizes specific TrunkRule over TrunkRate if both match? Let's assume rule overrides rate if found.
         if (trunkRuleOpt.isPresent()) {
             TrunkRule rule = trunkRuleOpt.get();
             ruleApplied = true;
@@ -108,29 +105,27 @@ public class RateCalculationService {
             rateInfo.put("valor_minuto", Optional.ofNullable(rule.getRateValue()).orElse(BigDecimal.ZERO));
             rateInfo.put("valor_minuto_iva", Optional.ofNullable(rule.getIncludesVat()).orElse(false));
             rateInfo.put("ensegundos", rule.getSeconds() != null && rule.getSeconds() > 0);
-            rateInfo.put("valor_inicial", BigDecimal.ZERO); // Rules don't have initial charge concept
+            rateInfo.put("valor_inicial", BigDecimal.ZERO);
             rateInfo.put("valor_inicial_iva", false);
 
             Long finalOperatorId = operatorId;
             Long finalTelephonyTypeId = telephonyTypeId;
 
-            // Apply re-routing from rule
             if (rule.getNewOperatorId() != null && rule.getNewOperatorId() > 0) {
                 finalOperatorId = rule.getNewOperatorId();
-                callBuilder.operatorId(finalOperatorId); // Update the main record
+                callBuilder.operatorId(finalOperatorId);
                 entityLookupService.findOperatorById(finalOperatorId).ifPresent(op -> rateInfo.put("operator_name", op.getName()));
                 log.trace("TrunkRule rerouted Operator to {}", finalOperatorId);
             }
             if (rule.getNewTelephonyTypeId() != null && rule.getNewTelephonyTypeId() > 0) {
                 finalTelephonyTypeId = rule.getNewTelephonyTypeId();
-                callBuilder.telephonyTypeId(finalTelephonyTypeId); // Update the main record
+                callBuilder.telephonyTypeId(finalTelephonyTypeId);
                 entityLookupService.findTelephonyTypeById(finalTelephonyTypeId).ifPresent(tt -> rateInfo.put("telephony_type_name", tt.getName()));
                 log.trace("TrunkRule rerouted TelephonyType to {}", finalTelephonyTypeId);
             }
 
-            // Get VAT based on the potentially *new* type/operator
-            Long finalTelephonyTypeId1 = finalTelephonyTypeId; // Need final variable for lambda
-            Long finalOperatorId1 = finalOperatorId; // Need final variable for lambda
+            Long finalTelephonyTypeId1 = finalTelephonyTypeId;
+            Long finalOperatorId1 = finalOperatorId;
             prefixLookupService.findPrefixByTypeOperatorOrigin(finalTelephonyTypeId, finalOperatorId, originCountryId)
                     .ifPresentOrElse(
                             p -> rateInfo.put("iva", p.getVatValue()),
@@ -139,7 +134,7 @@ public class RateCalculationService {
                                 rateInfo.put("iva", BigDecimal.ZERO);
                             }
                     );
-            rateInfo.put("tipotele_nombre", rateInfo.get("telephony_type_name") + " (xRule)"); // Add suffix like PHP
+            rateInfo.put("tipotele_nombre", rateInfo.get("telephony_type_name") + " (xRule)");
 
         } else if (trunkRateOpt.isPresent()) {
             TrunkRate trunkRate = trunkRateOpt.get();
@@ -148,9 +143,8 @@ public class RateCalculationService {
             rateInfo.put("valor_minuto", Optional.ofNullable(trunkRate.getRateValue()).orElse(BigDecimal.ZERO));
             rateInfo.put("valor_minuto_iva", Optional.ofNullable(trunkRate.getIncludesVat()).orElse(false));
             rateInfo.put("ensegundos", trunkRate.getSeconds() != null && trunkRate.getSeconds() > 0);
-            rateInfo.put("valor_inicial", BigDecimal.ZERO); // Rates don't have initial charge concept
+            rateInfo.put("valor_inicial", BigDecimal.ZERO);
             rateInfo.put("valor_inicial_iva", false);
-            // Get VAT from the corresponding Prefix for the original type/operator
             prefixLookupService.findPrefixByTypeOperatorOrigin(telephonyTypeId, operatorId, originCountryId)
                     .ifPresentOrElse(
                             p -> rateInfo.put("iva", p.getVatValue()),
@@ -159,16 +153,14 @@ public class RateCalculationService {
                                 rateInfo.put("iva", BigDecimal.ZERO);
                             }
                     );
-             rateInfo.put("tipotele_nombre", rateInfo.get("telephony_type_name") + " (xTrunkRate)"); // Add suffix
+             rateInfo.put("tipotele_nombre", rateInfo.get("telephony_type_name") + " (xTrunkRate)");
 
         } else {
             log.debug("No specific TrunkRate or TrunkRule found for trunk {}, applying base/band/special pricing", trunk.getName());
-            // Fallback to standard pricing (base/band + special rates)
             applySpecialPricing(baseRateInfo, callDateTime, duration, originIndicatorId, callBuilder);
-            return; // Exit as special pricing handles the final calculation
+            return;
         }
 
-        // Apply final calculation based on trunk rate/rule info
         applyFinalPricing(rateInfo, duration, callBuilder);
     }
 
@@ -183,12 +175,11 @@ public class RateCalculationService {
     public void applySpecialPricing(Map<String, Object> currentRateInfo, LocalDateTime callDateTime, int duration, Long originIndicatorId, CallRecord.CallRecordBuilder callBuilder) {
         Long telephonyTypeId = (Long) currentRateInfo.get("telephony_type_id");
         Long operatorId = (Long) currentRateInfo.get("operator_id");
-        Long bandId = (Long) currentRateInfo.get("band_id"); // May be null or 0
+        Long bandId = (Long) currentRateInfo.get("band_id");
 
-        // If type or duration is invalid, skip special pricing
         if (telephonyTypeId == null || telephonyTypeId <= 0 || duration <= 0) {
             log.trace("Skipping special pricing: Invalid TelephonyType ({}) or Duration ({}).", telephonyTypeId, duration);
-            applyFinalPricing(currentRateInfo, duration, callBuilder); // Apply the current rate as is
+            applyFinalPricing(currentRateInfo, duration, callBuilder);
             return;
         }
 
@@ -197,7 +188,7 @@ public class RateCalculationService {
         );
         Optional<SpecialRateValue> applicableRate = findApplicableSpecialRate(specialRates, callDateTime);
 
-        Map<String, Object> rateInfoForFinalCalc = new HashMap<>(currentRateInfo); // Copy to modify
+        Map<String, Object> rateInfoForFinalCalc = new HashMap<>(currentRateInfo);
 
         if (applicableRate.isPresent()) {
             SpecialRateValue rate = applicableRate.get();
@@ -205,26 +196,22 @@ public class RateCalculationService {
             BigDecimal originalRate = (BigDecimal) rateInfoForFinalCalc.get("valor_minuto");
             boolean originalVatIncluded = (Boolean) rateInfoForFinalCalc.get("valor_minuto_iva");
 
-            // PHP: Guarda_ValorInicial - Store original rate as initial price if a special rate applies
             rateInfoForFinalCalc.put("valor_inicial", originalRate);
             rateInfoForFinalCalc.put("valor_inicial_iva", originalVatIncluded);
 
-            if (rate.getValueType() != null && rate.getValueType() == 1) { // Percentage discount
+            if (rate.getValueType() != null && rate.getValueType() == 1) {
                  BigDecimal discountPercentage = Optional.ofNullable(rate.getRateValue()).orElse(BigDecimal.ZERO);
-                // Calculate discount on the rate *without* VAT
                 BigDecimal currentRateNoVat = calculateValueWithoutVat(originalRate, (BigDecimal) rateInfoForFinalCalc.get("iva"), originalVatIncluded);
                 BigDecimal discountMultiplier = BigDecimal.ONE.subtract(discountPercentage.divide(ONE_HUNDRED, 10, RoundingMode.HALF_UP));
                 rateInfoForFinalCalc.put("valor_minuto", currentRateNoVat.multiply(discountMultiplier));
-                // The resulting rate is now *without* VAT, regardless of original status
                 rateInfoForFinalCalc.put("valor_minuto_iva", false);
-                rateInfoForFinalCalc.put("descuento_p", discountPercentage); // Store for info
+                rateInfoForFinalCalc.put("descuento_p", discountPercentage);
                 log.trace("Applied percentage discount {}% from SpecialRateValue {}", discountPercentage, rate.getId());
-            } else { // Fixed value override
+            } else {
                 rateInfoForFinalCalc.put("valor_minuto", Optional.ofNullable(rate.getRateValue()).orElse(BigDecimal.ZERO));
                 rateInfoForFinalCalc.put("valor_minuto_iva", Optional.ofNullable(rate.getIncludesVat()).orElse(false));
                 log.trace("Applied fixed rate {} from SpecialRateValue {}", rateInfoForFinalCalc.get("valor_minuto"), rate.getId());
             }
-            // Fetch IVA based on the *original* operator/type, as special rate might not define it
             prefixLookupService.findPrefixByTypeOperatorOrigin(telephonyTypeId, operatorId, (Long) currentRateInfo.get("origin_country_id"))
                     .ifPresentOrElse(
                             p -> rateInfoForFinalCalc.put("iva", p.getVatValue()),
@@ -233,18 +220,16 @@ public class RateCalculationService {
                                 rateInfoForFinalCalc.put("iva", BigDecimal.ZERO);
                             }
                     );
-            rateInfoForFinalCalc.put("ensegundos", false); // Special rates usually apply per minute
-            rateInfoForFinalCalc.put("tipotele_nombre", rateInfoForFinalCalc.get("telephony_type_name") + " (xSpecialRate)"); // Add suffix
+            rateInfoForFinalCalc.put("ensegundos", false);
+            rateInfoForFinalCalc.put("tipotele_nombre", rateInfoForFinalCalc.get("telephony_type_name") + " (xSpecialRate)");
 
         } else {
             log.debug("No applicable special rate found, applying current rate.");
-            // No special rate, so initial price is zero (PHP: Guarda_ValorInicial not called)
             rateInfoForFinalCalc.put("valor_inicial", BigDecimal.ZERO);
             rateInfoForFinalCalc.put("valor_inicial_iva", false);
-            rateInfoForFinalCalc.put("ensegundos", false); // Default to per-minute
+            rateInfoForFinalCalc.put("ensegundos", false);
         }
 
-        // Apply final calculation based on potentially modified rateInfo
         applyFinalPricing(rateInfoForFinalCalc, duration, callBuilder);
     }
 
@@ -255,19 +240,16 @@ public class RateCalculationService {
      * @param callBuilder Builder to update.
      */
     private void applyFinalPricing(Map<String, Object> rateInfo, int duration, CallRecord.CallRecordBuilder callBuilder) {
-        // Extract values with defaults
         BigDecimal pricePerUnit = Optional.ofNullable((BigDecimal) rateInfo.get("valor_minuto")).orElse(BigDecimal.ZERO);
         boolean vatIncluded = Optional.ofNullable((Boolean) rateInfo.get("valor_minuto_iva")).orElse(false);
         BigDecimal vatPercentage = Optional.ofNullable((BigDecimal) rateInfo.get("iva")).orElse(BigDecimal.ZERO);
         boolean chargePerSecond = Optional.ofNullable((Boolean) rateInfo.get("ensegundos")).orElse(false);
         BigDecimal initialPrice = Optional.ofNullable((BigDecimal) rateInfo.get("valor_inicial")).orElse(BigDecimal.ZERO);
-        // boolean initialVatIncluded = Optional.ofNullable((Boolean) rateInfo.get("valor_inicial_iva")).orElse(false); // PHP didn't use this in Calcular_Valor
 
         BigDecimal calculatedBilledAmount = calculateBilledAmount(
                 duration, pricePerUnit, vatIncluded, vatPercentage, chargePerSecond, initialPrice
         );
 
-        // Store the rate *per minute* even if charged per second
         BigDecimal pricePerMinuteStored = pricePerUnit;
         if (chargePerSecond) {
             pricePerMinuteStored = pricePerUnit.multiply(SIXTY);
@@ -283,16 +265,10 @@ public class RateCalculationService {
 
     // --- Helper Methods ---
 
-    /**
-     * Calculates the final billed amount based on duration, rate, VAT, and charge unit.
-     * Matches PHP's Calcular_Valor logic.
-     */
     private BigDecimal calculateBilledAmount(int durationSeconds, BigDecimal rateValue, boolean rateVatIncluded, BigDecimal vatPercentage, boolean chargePerSecond, BigDecimal initialRateValue) {
         if (durationSeconds <= 0) return BigDecimal.ZERO;
 
         BigDecimal effectiveRateValue = Optional.ofNullable(rateValue).orElse(BigDecimal.ZERO);
-        // PHP's Calcular_Valor did not include initialRateValue (cargo_basico was separate and removed).
-        // We add it here if present, assuming it's a flat charge applied *before* VAT if rateVatIncluded is false.
         BigDecimal effectiveInitialRateValue = Optional.ofNullable(initialRateValue).orElse(BigDecimal.ZERO);
 
         BigDecimal durationUnits;
@@ -301,27 +277,20 @@ public class RateCalculationService {
         if (chargePerSecond) {
             durationUnits = new BigDecimal(durationSeconds);
             log.trace("Calculating cost per second for {} seconds", durationSeconds);
-            // pricePerUnit remains the rate per second
         } else {
-            // PHP: Calculate minutes, rounding up (integer division + ceil effect)
             long minutes = (long) Math.ceil((double) durationSeconds / 60.0);
-            // Ensure minimum 1 minute charge if duration > 0
             durationUnits = BigDecimal.valueOf(Math.max(1, minutes));
             log.trace("Calculating cost per minute for {} seconds -> {} minutes", durationSeconds, durationUnits);
-            // pricePerUnit remains the rate per minute
         }
 
-        // Calculate cost based on duration and rate per unit
         BigDecimal durationCost = pricePerUnit.multiply(durationUnits);
         log.trace("Base duration cost (rate * duration units): {} * {} = {}", pricePerUnit, durationUnits, durationCost);
 
-        // Add initial rate (if any)
         BigDecimal totalCostBeforeVat = durationCost.add(effectiveInitialRateValue);
         if (effectiveInitialRateValue.compareTo(BigDecimal.ZERO) > 0) {
              log.trace("Added initial charge: {}", effectiveInitialRateValue);
         }
 
-        // Apply VAT if not already included in the rate(s)
         BigDecimal finalBilledAmount = totalCostBeforeVat;
         if (!rateVatIncluded && vatPercentage != null && vatPercentage.compareTo(BigDecimal.ZERO) > 0) {
             BigDecimal vatMultiplier = BigDecimal.ONE.add(vatPercentage.divide(ONE_HUNDRED, 10, RoundingMode.HALF_UP));
@@ -347,32 +316,15 @@ public class RateCalculationService {
         return value.divide(vatDivisor, 4, RoundingMode.HALF_UP);
     }
 
-    /**
-     * Finds the single most applicable special rate from a list of candidates.
-     * PHP logic implicitly takes the first match based on its ORDER BY clause.
-     * We simulate this by filtering based on hour applicability and taking the first.
-     *
-     * @param candidates   List of potential SpecialRateValue entities, assumed sorted by priority.
-     * @param callDateTime The timestamp of the call.
-     * @return Optional containing the best matching SpecialRateValue.
-     */
     private Optional<SpecialRateValue> findApplicableSpecialRate(List<SpecialRateValue> candidates, LocalDateTime callDateTime) {
         int callHour = callDateTime.getHour();
         return candidates.stream()
                 .filter(rate -> isHourApplicable(rate.getHoursSpecification(), callHour))
-                .findFirst(); // Takes the first match based on the list's sorting (simulates PHP ORDER BY)
+                .findFirst();
     }
 
-    /**
-     * Checks if the call hour falls within the specified hour ranges.
-     * Matches PHP's ArregloHoras logic.
-     *
-     * @param hoursSpecification Comma-separated hours/ranges (e.g., "8-12,14,18-22").
-     * @param callHour           The hour of the call (0-23).
-     * @return True if the hour is applicable, false otherwise.
-     */
      private boolean isHourApplicable(String hoursSpecification, int callHour) {
-        if (!StringUtils.hasText(hoursSpecification)) return true; // No spec means applicable all hours
+        if (!StringUtils.hasText(hoursSpecification)) return true;
         try {
             for (String part : hoursSpecification.split(",")) {
                 String range = part.trim();
@@ -381,16 +333,15 @@ public class RateCalculationService {
                     if (parts.length == 2) {
                         int start = Integer.parseInt(parts[0].trim());
                         int end = Integer.parseInt(parts[1].trim());
-                        // Handle overnight ranges (e.g., 22-06)
-                        if (start <= end) { // Normal range (e.g., 8-17)
+                        if (start <= end) {
                             if (callHour >= start && callHour <= end) return true;
-                        } else { // Overnight range (e.g., 22-06)
+                        } else {
                             if (callHour >= start || callHour <= end) return true;
                         }
                     } else {
                         log.warn("Invalid hour range format: {}", range);
                     }
-                } else if (!range.isEmpty()) { // Single hour
+                } else if (!range.isEmpty()) {
                     if (callHour == Integer.parseInt(range)) return true;
                 }
             }
@@ -399,6 +350,6 @@ public class RateCalculationService {
             return false;
         }
         log.trace("Call hour {} is not within specification '{}'", callHour, hoursSpecification);
-        return false; // Not applicable if no range matched
+        return false;
     }
 }
