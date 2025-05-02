@@ -28,7 +28,6 @@ public class SpecialLookupService {
     @PersistenceContext
     private EntityManager entityManager;
 
-    @Cacheable(value = "specialRateValueLookup", key = "{#telephonyTypeId, #operatorId, #bandId, #originIndicatorId, #callDateTime}")
     public List<SpecialRateValue> findSpecialRateValues(Long telephonyTypeId, Long operatorId, Long bandId, Long originIndicatorId, LocalDateTime callDateTime) {
         if (callDateTime == null) return Collections.emptyList();
         Long effectiveOriginIndicatorId = originIndicatorId != null ? originIndicatorId : 0L;
@@ -90,7 +89,6 @@ public class SpecialLookupService {
         }
     }
 
-    @Cacheable(value = "specialServiceLookup", key = "{#phoneNumber, #indicatorId, #originCountryId}")
     public Optional<SpecialService> findSpecialService(String phoneNumber, Long indicatorId, Long originCountryId) {
         if (!StringUtils.hasText(phoneNumber) || originCountryId == null) {
             log.trace("findSpecialService - Invalid input: phone={}, indId={}, ocId={}", phoneNumber, indicatorId, originCountryId);

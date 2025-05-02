@@ -28,11 +28,6 @@ public class ConfigLookupService {
     @PersistenceContext
     private EntityManager entityManager;
 
-    // Inject IndicatorLookupService to avoid circular dependency if needed later,
-    // but for now, keep the direct query for OriginCountry ID.
-    // private final IndicatorLookupService indicatorLookupService;
-
-    @Cacheable(value = "commLocationPrefix", key = "#commLocationId")
     public Optional<String> findPbxPrefixByCommLocationId(Long commLocationId) {
         if (commLocationId == null) return Optional.empty();
         log.debug("Finding PBX prefix for commLocationId: {}", commLocationId);
@@ -50,7 +45,6 @@ public class ConfigLookupService {
         }
     }
 
-    @Cacheable(value = "telephonyTypeConfig", key = "{#telephonyTypeId, #originCountryId}")
     public Map<String, Integer> findTelephonyTypeMinMaxConfig(Long telephonyTypeId, Long originCountryId) {
         Map<String, Integer> config = new HashMap<>();
         config.put("min", 0); config.put("max", 0);
@@ -75,7 +69,6 @@ public class ConfigLookupService {
         return config;
     }
 
-     @Cacheable(value = "extensionMinMaxLength", key = "{#commLocationId}")
     public Map<String, Integer> findExtensionMinMaxLength(Long commLocationId) {
         log.debug("Finding min/max extension length for commLocationId: {}", commLocationId);
         Map<String, Integer> lengths = new HashMap<>();
@@ -153,7 +146,6 @@ public class ConfigLookupService {
         return lengths;
     }
 
-    @Cacheable("originCountryById")
     public Optional<OriginCountry> findOriginCountryById(Long id) {
         if (id == null || id <= 0) return Optional.empty();
         String sql = "SELECT oc.* FROM origin_country oc WHERE oc.id = :id AND oc.active = true";

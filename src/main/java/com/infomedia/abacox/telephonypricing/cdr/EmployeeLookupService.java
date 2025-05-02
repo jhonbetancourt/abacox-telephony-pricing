@@ -25,7 +25,6 @@ public class EmployeeLookupService {
     @PersistenceContext
     private EntityManager entityManager;
 
-    @Cacheable(value = "employeeLookup", key = "{#extension, #authCode, #commLocationId}")
     public Optional<Employee> findEmployeeByExtensionOrAuthCode(String extension, String authCode, Long commLocationId) {
         log.debug("Looking up employee by extension: '{}', authCode: '{}', commLocationId: {}", extension, authCode, commLocationId);
         StringBuilder sqlBuilder = new StringBuilder("SELECT e.* FROM employee e WHERE e.active = true ");
@@ -66,7 +65,6 @@ public class EmployeeLookupService {
         }
     }
 
-    @Cacheable(value = "employeeById", key = "#id")
     public Optional<Employee> findEmployeeById(Long id) {
         if (id == null || id <= 0) return Optional.empty();
         String sql = "SELECT e.* FROM employee e WHERE e.id = :id AND e.active = true";
@@ -76,7 +74,6 @@ public class EmployeeLookupService {
         catch (NoResultException e) { return Optional.empty(); }
     }
 
-     @Cacheable(value = "destinationEmployeeById", key = "#id") // Separate cache if needed
     public Optional<Employee> findDestinationEmployeeById(Long id) {
         // Same logic as findEmployeeById, potentially different cache/logging if needed
         return findEmployeeById(id);

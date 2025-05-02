@@ -25,7 +25,6 @@ public class PbxRuleLookupService {
     @PersistenceContext
     private EntityManager entityManager;
 
-    @Cacheable(value = "pbxSpecialRuleLookup", key = "{#dialedNumber, #commLocationId, #direction}")
     public Optional<PbxSpecialRule> findPbxSpecialRule(String dialedNumber, Long commLocationId, int direction) {
         if (!StringUtils.hasText(dialedNumber) || commLocationId == null) {
             log.trace("findPbxSpecialRule - Invalid input: dialedNumber={}, commLocationId={}", dialedNumber, commLocationId);
@@ -69,7 +68,6 @@ public class PbxRuleLookupService {
         return Optional.empty();
     }
 
-    @Cacheable(value = "pbxSpecialRuleCandidates", key = "{#commLocationId, #direction}")
     public List<PbxSpecialRule> findPbxSpecialRuleCandidates(Long commLocationId, int direction) {
         if (commLocationId == null) return Collections.emptyList();
         log.debug("Finding PBX special rule candidates for commLocationId: {}, direction: {}", commLocationId, direction);

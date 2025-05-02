@@ -26,27 +26,22 @@ public class EntityLookupService {
     @PersistenceContext
     private EntityManager entityManager;
 
-    @Cacheable("communicationLocationById")
     public Optional<CommunicationLocation> findCommunicationLocationById(Long id) {
         return findById(id, CommunicationLocation.class, "communication_location");
     }
 
-    @Cacheable("operatorByIdLookup")
     public Optional<Operator> findOperatorById(Long id) {
         return findById(id, Operator.class, "operator");
     }
 
-    @Cacheable("telephonyTypeByIdLookup")
     public Optional<TelephonyType> findTelephonyTypeById(Long id) {
         return findById(id, TelephonyType.class, "telephony_type");
     }
 
-    @Cacheable("subdivisionById")
     public Optional<Subdivision> findSubdivisionById(Long id) {
         return findById(id, Subdivision.class, "subdivision");
     }
 
-    @Cacheable("costCenterById")
     public Optional<CostCenter> findCostCenterById(Long id) {
         return findById(id, CostCenter.class, "cost_center");
     }

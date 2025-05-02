@@ -26,7 +26,6 @@ public class IndicatorLookupService {
     @PersistenceContext
     private EntityManager entityManager;
 
-    @Cacheable(value = "indicatorLookup", key = "{#numberWithoutPrefix, #telephonyTypeId, #originCountryId}")
     public Optional<Map<String, Object>> findIndicatorByNumber(String numberWithoutPrefix, Long telephonyTypeId, Long originCountryId) {
         if (telephonyTypeId == null || originCountryId == null || !StringUtils.hasText(numberWithoutPrefix)) {
             log.trace("findIndicatorByNumber - Invalid input: num={}, ttId={}, ocId={}", numberWithoutPrefix, telephonyTypeId, originCountryId);
@@ -125,7 +124,6 @@ public class IndicatorLookupService {
         return Optional.empty(); // No indicator found after checking all possible NDC lengths
     }
 
-    @Cacheable(value = "ndcMinMaxLength", key = "{#telephonyTypeId, #originCountryId}")
     public Map<String, Integer> findNdcMinMaxLength(Long telephonyTypeId, Long originCountryId) {
         Map<String, Integer> lengths = new HashMap<>();
         lengths.put("min", 0); lengths.put("max", 0);
@@ -157,7 +155,6 @@ public class IndicatorLookupService {
         return lengths;
     }
 
-    @Cacheable(value = "seriesInfoForNationalLookup", key = "{#ndc, #subscriberNumber}")
     public Optional<Map<String, Object>> findSeriesInfoForNationalLookup(int ndc, long subscriberNumber) {
         log.debug("Finding series info for national lookup: NDC={}, Subscriber={}", ndc, subscriberNumber);
         String sql = "SELECT s.company as series_company " +
@@ -183,7 +180,6 @@ public class IndicatorLookupService {
         }
     }
 
-    @Cacheable(value = "localNdc", key = "#indicatorId")
     public Optional<Integer> findLocalNdcForIndicator(Long indicatorId) {
         if (indicatorId == null || indicatorId <= 0) return Optional.empty();
         log.debug("Finding local NDC for indicatorId: {}", indicatorId);
@@ -208,7 +204,6 @@ public class IndicatorLookupService {
         }
     }
 
-    @Cacheable(value = "isLocalExtended", key = "{#destinationNdc, #originIndicatorId}")
     public boolean isLocalExtended(Integer destinationNdc, Long originIndicatorId) {
         if (destinationNdc == null || originIndicatorId == null || originIndicatorId <= 0) {
             return false;
@@ -229,7 +224,6 @@ public class IndicatorLookupService {
         }
     }
 
-    @Cacheable("indicatorById")
     public Optional<Indicator> findIndicatorById(Long id) {
         if (id == null || id <= 0) {
              log.trace("findIndicatorById requested for invalid ID: {}", id);

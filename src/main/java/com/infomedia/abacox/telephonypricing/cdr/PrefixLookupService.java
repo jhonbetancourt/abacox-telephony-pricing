@@ -27,7 +27,6 @@ public class PrefixLookupService {
     @PersistenceContext
     private EntityManager entityManager;
 
-    @Cacheable(value = "prefixLookup", key = "{#number, #originCountryId}")
     public List<Map<String, Object>> findPrefixesByNumber(String number, Long originCountryId) {
         if (originCountryId == null || !StringUtils.hasText(number)) return Collections.emptyList();
         log.debug("Finding prefixes for number starting with: {}, originCountryId: {}", number.substring(0, Math.min(number.length(), 6))+"...", originCountryId);
@@ -78,7 +77,6 @@ public class PrefixLookupService {
         return mappedResults;
     }
 
-    @Cacheable(value = "prefixByTypeOperatorOrigin", key = "{#telephonyTypeId, #operatorId, #originCountryId}")
     public Optional<Prefix> findPrefixByTypeOperatorOrigin(Long telephonyTypeId, Long operatorId, Long originCountryId) {
         if (telephonyTypeId == null || operatorId == null || originCountryId == null) {
             log.trace("findPrefixByTypeOperatorOrigin - Invalid input: ttId={}, opId={}, ocId={}", telephonyTypeId, operatorId, originCountryId);
@@ -112,7 +110,6 @@ public class PrefixLookupService {
         }
     }
 
-    @Cacheable(value = "internalPrefixMatch", key = "{#number, #originCountryId}")
     public Optional<Map<String, Object>> findInternalPrefixMatch(String number, Long originCountryId) {
         if (originCountryId == null || !StringUtils.hasText(number)) return Optional.empty();
         log.debug("Finding internal prefix match for number starting with: {}, originCountryId: {}", number.substring(0, Math.min(number.length(), 6))+"...", originCountryId);
@@ -152,7 +149,6 @@ public class PrefixLookupService {
         }
     }
 
-    @Cacheable(value = "baseRateLookup", key = "{#prefixId}")
     public Optional<Map<String, Object>> findBaseRateForPrefix(Long prefixId) {
         if (prefixId == null) return Optional.empty();
         log.debug("Finding base rate for prefixId: {}", prefixId);
@@ -178,7 +174,6 @@ public class PrefixLookupService {
         }
     }
 
-     @Cacheable(value = "internalTariff", key = "#telephonyTypeId")
     public Optional<Map<String, Object>> findInternalTariff(Long telephonyTypeId) {
         if (telephonyTypeId == null) return Optional.empty();
         log.debug("Finding internal tariff for telephonyTypeId: {}", telephonyTypeId);

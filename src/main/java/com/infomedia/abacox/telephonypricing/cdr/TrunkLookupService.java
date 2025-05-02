@@ -26,7 +26,6 @@ public class TrunkLookupService {
     @PersistenceContext
     private EntityManager entityManager;
 
-    @Cacheable(value = "trunkLookup", key = "#trunkCode + '-' + #commLocationId")
     public Optional<Trunk> findTrunkByCode(String trunkCode, Long commLocationId) {
         if (!StringUtils.hasText(trunkCode) || commLocationId == null) {
             log.trace("findTrunkByCode - Invalid input: trunkCode={}, commLocationId={}", trunkCode, commLocationId);
@@ -53,7 +52,6 @@ public class TrunkLookupService {
         }
     }
 
-    @Cacheable(value = "trunkRateLookup", key = "{#trunkId, #operatorId, #telephonyTypeId}")
     public Optional<TrunkRate> findTrunkRate(Long trunkId, Long operatorId, Long telephonyTypeId) {
         if (trunkId == null || operatorId == null || telephonyTypeId == null) {
             log.trace("findTrunkRate - Invalid input: trunkId={}, opId={}, ttId={}", trunkId, operatorId, telephonyTypeId);
@@ -81,8 +79,6 @@ public class TrunkLookupService {
         }
     }
 
-
-    @Cacheable(value = "trunkRuleLookup", key = "{#trunkCode, #telephonyTypeId, #indicatorId, #originIndicatorId}")
     public Optional<TrunkRule> findTrunkRule(String trunkCode, Long telephonyTypeId, Long indicatorId, Long originIndicatorId) {
         if (telephonyTypeId == null) {
             log.trace("findTrunkRule - Invalid input: ttId is null");

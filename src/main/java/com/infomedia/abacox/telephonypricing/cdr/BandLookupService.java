@@ -25,7 +25,6 @@ public class BandLookupService {
     @PersistenceContext
     private EntityManager entityManager;
 
-    @Cacheable(value = "bandLookup", key = "{#prefixId, #indicatorId, #originIndicatorId}")
     public Optional<Map<String, Object>> findBandByPrefixAndIndicator(Long prefixId, Long indicatorId, Long originIndicatorId) {
         if (prefixId == null) {
             log.trace("findBandByPrefixAndIndicator - Invalid input: prefixId is null");

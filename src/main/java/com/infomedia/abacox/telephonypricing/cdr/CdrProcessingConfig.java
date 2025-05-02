@@ -1,11 +1,9 @@
-// FILE: cdr/CdrProcessingConfig.java
 package com.infomedia.abacox.telephonypricing.cdr;
 
 import com.infomedia.abacox.telephonypricing.entity.*;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -69,7 +67,6 @@ public class CdrProcessingConfig {
         defaultInternalCallTypeId = TIPOTELE_INTERNA_IP;
     }
 
-    @Cacheable("pbxPrefixes")
     public List<String> getPbxPrefixes(Long communicationLocationId) {
         log.debug("Fetching PBX prefixes for commLocationId: {}", communicationLocationId);
         Optional<String> prefixStringOpt = configLookupService.findPbxPrefixByCommLocationId(communicationLocationId);
@@ -85,8 +82,6 @@ public class CdrProcessingConfig {
         return Collections.emptyList();
     }
 
-    // --- Methods using internalTelephonyTypeIds remain the same ---
-    @Cacheable("internalTelephonyTypes")
     public Set<Long> getInternalTelephonyTypeIds() {
         return internalTelephonyTypeIds;
     }
@@ -103,14 +98,12 @@ public class CdrProcessingConfig {
         return defaultInternalCallTypeId;
     }
 
-    @Cacheable("telephonyTypeMinMax")
     public Map<String, Integer> getTelephonyTypeMinMax(Long telephonyTypeId, Long originCountryId) {
         log.debug("Fetching min/max length config for telephonyTypeId: {}, originCountryId: {}", telephonyTypeId, originCountryId);
         // Use ConfigLookupService
         return configLookupService.findTelephonyTypeMinMaxConfig(telephonyTypeId, originCountryId);
     }
 
-    @Cacheable(value = "internalOperator", key = "#telephonyTypeId + '-' + #originCountryId")
     public Optional<Operator> getOperatorInternal(Long telephonyTypeId, Long originCountryId) {
         log.debug("Fetching internal operator for telephonyTypeId: {}, originCountryId: {}", telephonyTypeId, originCountryId);
         // This now relies on PrefixLookupService finding a prefix and its operator
@@ -122,19 +115,16 @@ public class CdrProcessingConfig {
                 .flatMap(p -> entityLookupService.findOperatorById((Long) p.get("operator_id")));
     }
 
-    @Cacheable("telephonyTypeById")
     public Optional<TelephonyType> getTelephonyTypeById(Long id) {
         // Use EntityLookupService
         return entityLookupService.findTelephonyTypeById(id);
     }
 
-    @Cacheable("operatorById")
     public Optional<Operator> getOperatorById(Long id) {
         // Use EntityLookupService
         return entityLookupService.findOperatorById(id);
     }
 
-    @Cacheable(value = "extensionLengthConfig", key = "{#commLocationId}")
     public ExtensionLengthConfig getExtensionLengthConfig(Long commLocationId) {
         log.debug("Fetching extension length config for commLocationId: {}", commLocationId);
         // Use ConfigLookupService
