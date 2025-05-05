@@ -1,5 +1,6 @@
 package com.infomedia.abacox.telephonypricing.entity;
 
+import com.infomedia.abacox.telephonypricing.entity.superclass.ActivableEntity;
 import com.infomedia.abacox.telephonypricing.entity.superclass.AuditedEntity;
 import jakarta.persistence.*;
 import lombok.*;
@@ -19,7 +20,7 @@ import java.math.BigDecimal;
 @NoArgsConstructor
 @AllArgsConstructor
 @SuperBuilder(toBuilder = true)
-public class TrunkRate extends AuditedEntity {
+public class TrunkRate extends ActivableEntity {
 
     /**
      * Primary key for the trunk rate.

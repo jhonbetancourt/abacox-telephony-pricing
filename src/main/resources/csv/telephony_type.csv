@@ -14,3 +14,4 @@ id,name,callCategoryId,usesTrunks
 13,Pago revertido,3,0
 14,Interna Internacional,4,0
 16,Sin Consumo,5,0
+99,Error,,0
