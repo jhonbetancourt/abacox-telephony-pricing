@@ -27,26 +27,26 @@ public class CdrProcessingConfig {
     public static final long TIPOTELE_INTERNACIONAL = 5L;
     public static final long TIPOTELE_CELULAR = 2L;
     public static final long TIPOTELE_CELUFIJO = 1L;
-    public static final long TIPOTELE_ESPECIALES = 11L; // Matches PHP _TIPOTELE_ESPECIALES
-    public static final long TIPOTELE_LOCAL_EXT = 12L; // Matches PHP _TIPOTELE_LOCAL_EXT
+    public static final long TIPOTELE_ESPECIALES = 11L;
+    public static final long TIPOTELE_LOCAL_EXT = 12L;
     public static final long TIPOTELE_SATELITAL = 10L;
-    public static final long TIPOTELE_INTERNA_IP = 7L; // Matches PHP _TIPOTELE_INTERNA_IP
-    public static final long TIPOTELE_LOCAL_IP = 8L; // Matches PHP _TIPOTELE_LOCAL_IP
-    public static final long TIPOTELE_NACIONAL_IP = 9L; // Matches PHP _TIPOTELE_NACIONAL_IP
-    public static final long TIPOTELE_INTERNACIONAL_IP = 14L; // Matches PHP _TIPOTELE_INTERNAL_IP (assuming typo in PHP)
-    public static final long TIPOTELE_SINCONSUMO = 16L; // Matches PHP _TIPOTELE_SINCONSUMO
-    public static final long TIPOTELE_ERRORES = 99L; // Matches PHP _TIPOTELE_ERRORES (example)
-    public static final long TIPOTELE_PAGO_REVERTIDO = 13L; // Added based on PHP comments
-    public static final long TIPOTELE_SERVICIOS_VARIOS = 6L; // Added based on PHP comments
+    public static final long TIPOTELE_INTERNA_IP = 7L;
+    public static final long TIPOTELE_LOCAL_IP = 8L;
+    public static final long TIPOTELE_NACIONAL_IP = 9L;
+    public static final long TIPOTELE_INTERNACIONAL_IP = 14L;
+    public static final long TIPOTELE_SINCONSUMO = 16L;
+    public static final long TIPOTELE_ERRORES = 99L;
+    public static final long TIPOTELE_PAGO_REVERTIDO = 13L;
+    public static final long TIPOTELE_SERVICIOS_VARIOS = 6L;
 
-    // Default extension lengths if DB lookup fails or returns invalid data
     public static final int DEFAULT_MIN_EXT_LENGTH = 2;
     public static final int DEFAULT_MAX_EXT_LENGTH = 7;
-    // Absolute max value based on typical internal numbering plans (PHP: _ACUMTOTAL_MAXEXT)
-    public static final int MAX_POSSIBLE_EXTENSION_VALUE = 9999999; // 7 digits
+    public static final int MAX_POSSIBLE_EXTENSION_VALUE = 9999999;
 
     private static Set<Long> internalTelephonyTypeIds;
-    private static Long defaultInternalCallTypeId; // Store the default type
+    private static Long defaultInternalCallTypeId;
+    private static Set<String> ignoredAuthCodes;
+    private static int minCallDurationForBilling = 0; // Default: bill even 0-second calls if rate applies
 
     @Getter
     public static class ExtensionLengthConfig {
@@ -63,12 +63,12 @@ public class CdrProcessingConfig {
 
 
     static {
-        // Define which telephony types are considered 'internal' based on PHP logic/constants
         internalTelephonyTypeIds = Set.of(
                 TIPOTELE_INTERNA_IP, TIPOTELE_LOCAL_IP, TIPOTELE_NACIONAL_IP, TIPOTELE_INTERNACIONAL_IP
         );
-        // Define the default internal type (PHP logic defaults to INTERNA_IP if others fail)
         defaultInternalCallTypeId = TIPOTELE_INTERNA_IP;
+        ignoredAuthCodes = Set.of("Invalid Authorization Code", "Invalid Authorization Level");
+        // minCallDurationForBilling can be loaded from DB or properties if needed
     }
 
     @Cacheable("pbxPrefixes")
@@ -76,7 +76,6 @@ public class CdrProcessingConfig {
         log.debug("Fetching PBX prefixes for commLocationId: {}", communicationLocationId);
         Optional<String> prefixStringOpt = lookupService.findPbxPrefixByCommLocationId(communicationLocationId);
         if (prefixStringOpt.isPresent() && !prefixStringOpt.get().isEmpty()) {
-            // Split the comma-separated string into a list
             List<String> prefixes = Arrays.stream(prefixStringOpt.get().split(","))
                                           .map(String::trim)
                                           .filter(s -> !s.isEmpty())
@@ -90,7 +89,6 @@ public class CdrProcessingConfig {
 
     @Cacheable("internalTelephonyTypes")
     public Set<Long> getInternalTelephonyTypeIds() {
-        // Return the set initialized in @PostConstruct
         return internalTelephonyTypeIds;
     }
 
@@ -107,7 +105,6 @@ public class CdrProcessingConfig {
     @Cacheable(value = "internalOperator", key = "#telephonyTypeId + '-' + #originCountryId")
     public Optional<Operator> getOperatorInternal(Long telephonyTypeId, Long originCountryId) {
         log.debug("Fetching internal operator for telephonyTypeId: {}, originCountryId: {}", telephonyTypeId, originCountryId);
-        // This relies on the LookupService to find the operator associated with internal types
         return lookupService.findOperatorByTelephonyTypeAndOrigin(telephonyTypeId, originCountryId);
     }
 
@@ -121,47 +118,50 @@ public class CdrProcessingConfig {
         return lookupService.findOperatorById(id);
     }
 
-    // Renamed from getInternalCallTypeIds for clarity
     public static Set<Long> getInternalIpCallTypeIds() {
-        return internalTelephonyTypeIds; // Return the initialized set
+        return internalTelephonyTypeIds;
     }
 
-    // Added method to get the default internal type ID
     public static Long getDefaultInternalCallTypeId() {
         return defaultInternalCallTypeId;
     }
 
-    // Corrected call to lookupService
     @Cacheable(value = "extensionLengthConfig", key = "{#commLocationId}")
     public ExtensionLengthConfig getExtensionLengthConfig(Long commLocationId) {
         log.debug("Fetching extension length config for commLocationId: {}", commLocationId);
-        // Get min/max length based on employees and ranges for the specific location
         Map<String, Integer> lengths = lookupService.findExtensionMinMaxLength(commLocationId);
         int minLength = lengths.getOrDefault("min", DEFAULT_MIN_EXT_LENGTH);
         int maxLength = lengths.getOrDefault("max", DEFAULT_MAX_EXT_LENGTH);
-        int maxExtensionValue = MAX_POSSIBLE_EXTENSION_VALUE; // Default max value
+        int maxExtensionValue = MAX_POSSIBLE_EXTENSION_VALUE;
 
-        // Ensure min/max are logical and within bounds
         if (minLength <= 0) minLength = DEFAULT_MIN_EXT_LENGTH;
         if (maxLength <= 0 || maxLength < minLength) maxLength = Math.max(minLength, DEFAULT_MAX_EXT_LENGTH);
 
-        // Calculate the maximum numeric value based on the max length
         if (maxLength > 0 && maxLength < String.valueOf(Integer.MAX_VALUE).length()) {
             try {
-                 // Create a string of '9's with the maxLength
-                 // Ensure maxLength is positive before repeating
                  maxExtensionValue = Integer.parseInt("9".repeat(Math.max(0, maxLength)));
-            } catch (NumberFormatException | OutOfMemoryError e) { // Added OutOfMemoryError just in case maxLength is huge
+            } catch (NumberFormatException | OutOfMemoryError e) {
                  log.warn("Could not calculate max extension value for length {}, using default {}. Error: {}", maxLength, MAX_POSSIBLE_EXTENSION_VALUE, e.getMessage());
                  maxExtensionValue = MAX_POSSIBLE_EXTENSION_VALUE;
             }
         } else if (maxLength >= String.valueOf(Integer.MAX_VALUE).length()) {
-            // If maxLength is too large, use the absolute max value
             maxExtensionValue = MAX_POSSIBLE_EXTENSION_VALUE;
             log.warn("Extension maxLength {} is too large, capping max extension value at {}", maxLength, maxExtensionValue);
         }
 
         log.debug("Extension config for commLocationId {}: minLen={}, maxLen={}, maxVal={}", commLocationId, minLength, maxLength, maxExtensionValue);
         return new ExtensionLengthConfig(minLength, maxLength, maxExtensionValue);
+    }
+
+    public Set<String> getIgnoredAuthCodes() {
+        return ignoredAuthCodes;
+    }
+
+    public int getMinCallDurationForBilling() {
+        // This could be loaded from DB/properties
+        // PHP: $min_tiempo = defineParamCliente('CAPTURAS_TIEMPOCERO', $link);
+        //      if (!is_numeric($min_tiempo) || $min_tiempo < 0) { $min_tiempo = 0; }
+        // For now, hardcoding to 0 (meaning any duration > 0 is billable if rate applies)
+        return minCallDurationForBilling;
     }
 }

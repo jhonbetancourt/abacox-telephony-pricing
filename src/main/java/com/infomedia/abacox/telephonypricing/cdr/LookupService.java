@@ -41,12 +41,10 @@ public class LookupService {
             sqlBuilder.append(" AND e.communication_location_id = :commLocationId");
             params.put("commLocationId", commLocationId);
         } else {
-            // If commLocationId is not provided, search globally (omit the communication_location_id filter)
-            // This aligns with PHP's behavior where commLocationId is used to *prioritize* but not strictly limit if global search is implied.
             log.trace("CommLocationId is null or 0 for employee lookup. Searching without location constraint if not found locally.");
         }
 
-        boolean hasAuthCode = StringUtils.hasText(authCode);
+        boolean hasAuthCode = StringUtils.hasText(authCode) && !configService.getIgnoredAuthCodes().contains(authCode);
         boolean hasExtension = StringUtils.hasText(extension);
 
         String specificCondition = "";
@@ -57,15 +55,12 @@ public class LookupService {
             specificCondition = " AND e.extension = :extension ";
             params.put("extension", extension);
         } else {
-            log.trace("No valid identifier (extension or authCode) provided for employee lookup.");
+            log.trace("No valid identifier (extension or non-ignored authCode) provided for employee lookup.");
             return Optional.empty();
         }
         
         sqlBuilder.append(specificCondition);
-        // PHP logic often implies a preference for the most specific match (e.g. by comm_location_id if provided)
-        // then falls back. Here, we do one query. If commLocationId is part of the query, it's already specific.
-        // If not, it's a broader search.
-        sqlBuilder.append(" ORDER BY e.id DESC LIMIT 1"); // Or other relevant ordering if needed
+        sqlBuilder.append(" ORDER BY e.id DESC LIMIT 1");
 
         Query query = entityManager.createNativeQuery(sqlBuilder.toString(), Employee.class);
         params.forEach(query::setParameter);
@@ -75,9 +70,6 @@ public class LookupService {
             log.trace("Found employee: {}", employee.getId());
             return Optional.of(employee);
         } catch (NoResultException e) {
-            // If specific search (with commLocationId) fails, and a global search is desired,
-            // a second query without commLocationId could be made here.
-            // For now, keeping it to one attempt based on provided commLocationId.
             log.trace("Employee not found for ext: '{}', code: '{}', loc: {}", extension, authCode, commLocationId);
             return Optional.empty();
         } catch (Exception ex) {
@@ -91,7 +83,6 @@ public class LookupService {
         if (!StringUtils.hasText(extension) || commLocationId == null || callTime == null) return Optional.empty();
         log.debug("Finding range assignment for ext: {}, commLocationId: {}, callTime: {}", extension, commLocationId, callTime);
 
-        // Assuming extension is purely numeric for range comparison after cleaning
         long extNumeric;
         try {
             extNumeric = Long.parseLong(extension.replaceAll("[^0-9]", ""));
@@ -106,9 +97,7 @@ public class LookupService {
                      "  AND er.comm_location_id = :commLocationId " +
                      "  AND er.range_start <= :extNumeric " +
                      "  AND er.range_end >= :extNumeric " +
-                     // PHP doesn't explicitly use callTime for range validity in txt2dbv8.php's Obtener_RangoExt for this path.
-                     // If ranges have validity dates, they should be added here.
-                     "ORDER BY (er.range_end - er.range_start) ASC, er.id DESC " + // Prefer more specific ranges
+                     "ORDER BY (er.range_end - er.range_start) ASC, er.id DESC " +
                      "LIMIT 1";
         Query query = entityManager.createNativeQuery(sql);
         query.setParameter("commLocationId", commLocationId);
@@ -154,8 +143,8 @@ public class LookupService {
         sqlBuilder.append(" p.vat_included as prefix_vat_included, p.vat_value as prefix_vat_value, p.band_ok as prefix_band_ok, ");
         sqlBuilder.append(" tt.id as telephony_type_id, tt.name as telephony_type_name, tt.uses_trunks as telephony_type_uses_trunks, ");
         sqlBuilder.append(" op.id as operator_id, op.name as operator_name, ");
-        sqlBuilder.append(" COALESCE(ttc.min_value, 0) as telephony_type_min, "); // PHP uses 0 if not found
-        sqlBuilder.append(" COALESCE(ttc.max_value, 0) as telephony_type_max ");  // PHP uses 0 if not found
+        sqlBuilder.append(" COALESCE(ttc.min_value, 0) as telephony_type_min, ");
+        sqlBuilder.append(" COALESCE(ttc.max_value, 0) as telephony_type_max ");
         sqlBuilder.append("FROM prefix p ");
         sqlBuilder.append("JOIN telephony_type tt ON p.telephone_type_id = tt.id ");
         sqlBuilder.append("JOIN operator op ON p.operator_id = op.id ");
@@ -163,8 +152,7 @@ public class LookupService {
         sqlBuilder.append("WHERE p.active = true AND tt.active = true AND op.active = true ");
         sqlBuilder.append("  AND :number LIKE p.code || '%' ");
         sqlBuilder.append("  AND op.origin_country_id = :originCountryId ");
-        sqlBuilder.append("  AND tt.id != :specialCallsType "); // PHP: TIPOTELE_ID != _TIPOTELE_ESPECIALES
-        // PHP: ORDER BY $campo_len DESC, TIPOTELECFG_MIN DESC, TIPOTELE_ID
+        sqlBuilder.append("  AND tt.id != :specialCallsType ");
         sqlBuilder.append("ORDER BY LENGTH(p.code) DESC, COALESCE(ttc.min_value, 0) DESC, tt.id ASC");
 
 
@@ -259,8 +247,7 @@ public class LookupService {
         sqlBuilder.append("  AND p.telephone_type_id IN (:internalTypes) ");
         sqlBuilder.append("  AND :number LIKE p.code || '%' ");
         sqlBuilder.append("  AND op.origin_country_id = :originCountryId ");
-        sqlBuilder.append("ORDER BY LENGTH(p.code) DESC "); // PHP: ORDER BY $campo_len DESC, TIPOTELECFG_MIN DESC, TIPOTELE_ID
-                                                          // Simplified for internal prefixes, longest prefix match is usually sufficient.
+        sqlBuilder.append("ORDER BY LENGTH(p.code) DESC ");
         sqlBuilder.append("LIMIT 1");
 
         Query query = entityManager.createNativeQuery(sqlBuilder.toString());
@@ -305,8 +292,7 @@ public class LookupService {
             return Optional.empty();
         }
         if (checkLocalFallback) {
-            // For local calls, NDC length can be 0 (meaning the entire number is subscriber part)
-            minNdcLength = 0; maxNdcLength = 0; // PHP logic effectively uses this for local
+            minNdcLength = 0; maxNdcLength = 0;
             log.trace("Treating as LOCAL type lookup (effective NDC length 0)");
         }
 
@@ -321,15 +307,10 @@ public class LookupService {
             if (ndcLength > 0 && numberWithoutPrefix.length() >= ndcLength) {
                 ndcStr = numberWithoutPrefix.substring(0, ndcLength);
                 subscriberNumberStr = numberWithoutPrefix.substring(ndcLength);
-            } else if (ndcLength > 0) { // number too short for this NDC length
+            } else if (ndcLength > 0) {
                 continue;
             }
-            // If ndcLength is 0 (local), ndcStr remains empty, subscriberNumberStr is the whole number.
 
-            // PHP: if ($len_telefono - $i >= $tipotele_min_tmp)
-            // This means (length of subscriber part) >= (min length of type - length of prefix)
-            // Here, numberWithoutPrefix is already without operator prefix.
-            // So, (length of subscriber part) >= (min length of type - length of NDC)
             int minSubscriberLength = Math.max(0, typeMinDigits - ndcLength);
             if (subscriberNumberStr.length() < minSubscriberLength) {
                 log.trace("Subscriber part {} too short for NDC {} (min subscriber length {})", subscriberNumberStr, ndcStr, minSubscriberLength);
@@ -338,7 +319,7 @@ public class LookupService {
 
 
             if (ndcStr.matches("\\d*") && subscriberNumberStr.matches("\\d+")) {
-                Integer ndc = ndcStr.isEmpty() ? null : Integer.parseInt(ndcStr); // PHP uses 0 for empty NDC in series table
+                Integer ndc = ndcStr.isEmpty() ? null : Integer.parseInt(ndcStr);
                 long subscriberNumber = Long.parseLong(subscriberNumberStr);
 
                 StringBuilder sqlBuilder = new StringBuilder();
@@ -361,32 +342,28 @@ public class LookupService {
                 sqlBuilder.append("  AND i.telephony_type_id = :telephonyTypeId ");
                 if (ndc != null) {
                     sqlBuilder.append("  AND s.ndc = :ndc ");
-                } else { // Local call, NDC is 0 or NULL in series table
+                } else {
                     sqlBuilder.append("  AND (s.ndc = 0 OR s.ndc IS NULL) ");
                 }
-                // PHP: $filtro_origen
                 if (telephonyTypeId != CdrProcessingConfig.TIPOTELE_INTERNACIONAL && telephonyTypeId != CdrProcessingConfig.TIPOTELE_SATELITAL) {
                     sqlBuilder.append(" AND i.origin_country_id = :originCountryId ");
-                } else { // For international/satellite, allow any origin country for the indicator
-                    sqlBuilder.append(" AND i.origin_country_id IN (0, :originCountryId) "); // Or be more permissive if needed
+                } else {
+                    sqlBuilder.append(" AND i.origin_country_id IN (0, :originCountryId) ");
                 }
 
-                // PHP: $local_cond for operator matching based on prefix (if not band_ok)
                 if (!isPrefixBandOk && currentPrefixId != null) {
                      sqlBuilder.append(" AND (i.operator_id = 0 OR i.operator_id IS NULL OR i.operator_id IN (SELECT p_sub.operator_id FROM prefix p_sub WHERE p_sub.id = :currentPrefixId)) ");
                 }
 
                 sqlBuilder.append("  AND s.initial_number <= :subscriberNum AND s.final_number >= :subscriberNum ");
-                // PHP: ORDER BY SERIE_NDC DESC,$orden_cond SERIE_INICIAL, SERIE_FINAL
-                // $orden_cond is BANDA_INDICAORIGEN_ID DESC
-                sqlBuilder.append("ORDER BY i.origin_country_id DESC, "); // Prioritize specific country matches
+                sqlBuilder.append("ORDER BY i.origin_country_id DESC, ");
                 if (isPrefixBandOk) {
                     sqlBuilder.append(" b.origin_indicator_id DESC, ");
                 }
-                if (ndcLength > 0) { // Only sort by NDC length if it's relevant
+                if (ndcLength > 0) {
                     sqlBuilder.append(" LENGTH(CAST(s.ndc AS TEXT)) DESC, ");
                 }
-                sqlBuilder.append(" (s.final_number - s.initial_number) ASC "); // Prefer more specific (smaller) series range
+                sqlBuilder.append(" (s.final_number - s.initial_number) ASC ");
                 sqlBuilder.append("LIMIT 1");
 
                 Query query = entityManager.createNativeQuery(sqlBuilder.toString());
@@ -447,7 +424,7 @@ public class LookupService {
         sqlBuilder.append("WHERE i.active = true AND s.active = true ");
         sqlBuilder.append("  AND i.telephony_type_id = :telephonyTypeId ");
         sqlBuilder.append("  AND i.origin_country_id IN (0, :originCountryId) ");
-        sqlBuilder.append("  AND s.ndc IS NOT NULL "); // Allow s.ndc = 0 for local
+        sqlBuilder.append("  AND s.ndc IS NOT NULL ");
 
         Query query = entityManager.createNativeQuery(sqlBuilder.toString());
         query.setParameter("telephonyTypeId", telephonyTypeId);
@@ -470,12 +447,6 @@ public class LookupService {
         log.debug("Finding company for national series: NDC={}, Subscriber={}, OriginCountryId={}", ndc, subscriberNumber, originCountryId);
 
         Long nationalTelephonyTypeId = CdrProcessingConfig.TIPOTELE_NACIONAL;
-        // PHP's `_esNacional` implies a canonical operator for national calls, but the query doesn't strictly enforce it if not band_ok.
-        // For simplicity, we'll query series without hardcoding operator if not strictly needed by PHP logic for this path.
-        // The PHP query for `buscarDestino` (which this emulates for company) uses `INDICATIVO_OPERADOR_ID in (SELECT PREFIJO_OPERADOR_ID FROM prefijo WHERE PREFIJO_ID = $prefijo_id)`
-        // if `!$bandas_ok`. This means it considers operators linked to the *matched prefix*.
-        // This is complex to replicate directly without knowing which prefix matched.
-        // A simplification: if a canonical national operator exists for the country, use it. Otherwise, allow any.
 
         StringBuilder sqlBuilder = new StringBuilder();
         sqlBuilder.append("SELECT s.company as series_company ");
@@ -485,9 +456,7 @@ public class LookupService {
         sqlBuilder.append("  AND i.telephony_type_id = :nationalTelephonyTypeId ");
         sqlBuilder.append("  AND s.ndc = :ndc ");
         sqlBuilder.append("  AND s.initial_number <= :subscriberNum AND s.final_number >= :subscriberNum ");
-        sqlBuilder.append("  AND i.origin_country_id IN (0, :originCountryId) "); // Allow global indicators or country-specific
-        // If a specific operator is tied to national prefixes in general for this country, add:
-        // AND (i.operator_id = 0 OR i.operator_id IS NULL OR i.operator_id = :canonicalNationalOperatorId)
+        sqlBuilder.append("  AND i.origin_country_id IN (0, :originCountryId) ");
 
         sqlBuilder.append("ORDER BY i.origin_country_id DESC, LENGTH(CAST(s.ndc AS TEXT)) DESC, (s.final_number - s.initial_number) ASC ");
         sqlBuilder.append("LIMIT 1");
@@ -515,8 +484,7 @@ public class LookupService {
     public Optional<Map<String, Object>> findBaseRateForPrefix(Long prefixId) {
         if (prefixId == null) return Optional.empty();
         log.debug("Finding base rate for prefixId: {}", prefixId);
-        // PHP: PREFIJO_VALORBASE, PREFIJO_IVAINC, PREFIJO_BANDAOK, PREFIJO_IVA
-        String sql = "SELECT p.base_value, p.vat_included, p.vat_value, p.band_ok, p.telephone_type_id " + // Added telephone_type_id
+        String sql = "SELECT p.base_value, p.vat_included, p.vat_value, p.band_ok, p.telephone_type_id " +
                 "FROM prefix p " +
                 "WHERE p.id = :prefixId AND p.active = true";
         Query query = entityManager.createNativeQuery(sql);
@@ -528,7 +496,7 @@ public class LookupService {
             map.put("vat_included", result[1] != null ? result[1] : false);
             map.put("vat_value", result[2] != null ? result[2] : BigDecimal.ZERO);
             map.put("band_ok", result[3] != null ? result[3] : false);
-            map.put("telephony_type_id", result[4]); // Store for isLocalTypeForBandCheck
+            map.put("telephony_type_id", result[4]);
             return Optional.of(map);
         } catch (NoResultException e) {
             log.warn("No active prefix found for ID: {}", prefixId);
@@ -545,28 +513,24 @@ public class LookupService {
             log.trace("findBandByPrefixAndIndicator - Invalid input: prefixId is null");
             return Optional.empty();
         }
-        Long effectiveOriginIndicatorId = originIndicatorId != null ? originIndicatorId : 0L; // PHP uses 0 for global origin band
-        Long effectiveIndicatorId = indicatorId; // Can be null for local calls where band applies to origin only
+        Long effectiveOriginIndicatorId = originIndicatorId != null ? originIndicatorId : 0L;
+        Long effectiveIndicatorId = indicatorId;
 
         log.debug("Finding band for prefixId: {}, effectiveIndicatorId: {}, effectiveOriginIndicatorId: {}", prefixId, effectiveIndicatorId, effectiveOriginIndicatorId);
 
         StringBuilder sqlBuilder = new StringBuilder();
         sqlBuilder.append("SELECT b.id as band_id, b.value as band_value, b.vat_included as band_vat_included, b.name as band_name ");
         sqlBuilder.append("FROM band b ");
-        // PHP: if (!$es_local) { $addtabla = ', bandaindica'; ... AND BANDA_ID = BANDAINDICA_BANDA_ID AND BANDAINDICA_INDICATIVO_ID = $indicadestino }
-        // This means join band_indicator only if indicatorId is provided (non-local case or local with specific destination indicator)
         if (effectiveIndicatorId != null && effectiveIndicatorId > 0) {
             sqlBuilder.append("JOIN band_indicator bi ON b.id = bi.band_id AND bi.indicator_id = :indicatorId ");
         }
         sqlBuilder.append("WHERE b.active = true ");
         sqlBuilder.append("  AND b.prefix_id = :prefixId ");
-        // If indicatorId is null/0 (e.g. local call where band is only by origin), ensure we pick bands NOT linked to specific indicators
         if (effectiveIndicatorId == null || effectiveIndicatorId <= 0) {
              sqlBuilder.append(" AND NOT EXISTS (SELECT 1 FROM band_indicator bi_check WHERE bi_check.band_id = b.id) ");
         }
-        sqlBuilder.append("  AND b.origin_indicator_id IN (0, :originIndicatorId) "); // 0 for global origin band
-        // PHP: ORDER BY BANDA_INDICAORIGEN_ID DESC
-        sqlBuilder.append("ORDER BY b.origin_indicator_id DESC "); // Prioritize specific origin over global
+        sqlBuilder.append("  AND b.origin_indicator_id IN (0, :originIndicatorId) ");
+        sqlBuilder.append("ORDER BY b.origin_indicator_id DESC ");
         sqlBuilder.append("LIMIT 1");
 
         Query query = entityManager.createNativeQuery(sqlBuilder.toString());
@@ -603,15 +567,11 @@ public class LookupService {
             return Optional.empty();
         }
         log.debug("Finding trunk by code: '{}', commLocationId: {}", trunkCode, commLocationId);
-        // PHP: CELULINK_COMUBICACION_ID in (0, $comubicacion_id) ORDER BY CELULINK_COMUBICACION_ID ASC
-        // This means global (0) is checked first, then specific. To replicate, we might need two queries or a more complex order by.
-        // For simplicity, current ORDER BY t.comm_location_id DESC prefers specific over global (0).
-        // If PHP's ASC means global is preferred, change to ASC. Let's assume specific is preferred.
         String sql = "SELECT t.* FROM trunk t " +
                 "WHERE t.active = true " +
                 "  AND UPPER(t.name) = UPPER(:trunkCode) " +
-                "  AND (t.comm_location_id = :commLocationId OR t.comm_location_id = 0 OR t.comm_location_id IS NULL) " + // PHP: in (0, $comubicacion_id)
-                "ORDER BY CASE WHEN t.comm_location_id IS NOT NULL AND t.comm_location_id != 0 THEN 0 ELSE 1 END ASC, t.id DESC " + // Prioritize specific comm_location_id
+                "  AND (t.comm_location_id = :commLocationId OR t.comm_location_id = 0 OR t.comm_location_id IS NULL) " +
+                "ORDER BY CASE WHEN t.comm_location_id IS NOT NULL AND t.comm_location_id != 0 THEN 0 ELSE 1 END ASC, t.id DESC " +
                 "LIMIT 1";
         Query query = entityManager.createNativeQuery(sql, Trunk.class);
         query.setParameter("trunkCode", trunkCode);
@@ -638,7 +598,7 @@ public class LookupService {
         String sql = "SELECT tr.* FROM trunk_rate tr " +
                 "WHERE tr.active = true " +
                 "  AND tr.trunk_id = :trunkId " +
-                "  AND tr.operator_id = :operatorId " + // Operator ID must match (0 for global/any)
+                "  AND tr.operator_id = :operatorId " +
                 "  AND tr.telephony_type_id = :telephonyTypeId " +
                 "LIMIT 1";
         Query query = entityManager.createNativeQuery(sql, TrunkRate.class);
@@ -673,41 +633,36 @@ public class LookupService {
         StringBuilder sqlBuilder = new StringBuilder();
         sqlBuilder.append("SELECT tr.* ");
         sqlBuilder.append("FROM trunk_rule tr ");
-        sqlBuilder.append("LEFT JOIN trunk t ON tr.trunk_id = t.id AND t.active = true "); // Join to get trunk name
+        sqlBuilder.append("LEFT JOIN trunk t ON tr.trunk_id = t.id AND t.active = true ");
         sqlBuilder.append("WHERE tr.active = true ");
-        // PHP: (REGLATRONCAL_TRONCAL_ID = 0 OR REGLATRONCAL_TRONCAL_ID in (SELECT CELULINK_ID FROM celulink WHERE CELULINK_TRONCAL = $troncal_bd))
         sqlBuilder.append("  AND (tr.trunk_id = 0 OR tr.trunk_id IS NULL OR (t.name = :trunkName)) ");
         sqlBuilder.append("  AND tr.telephony_type_id = :telephonyTypeId ");
-        // PHP: REGLATRONCAL_INDICAORIGEN_ID in (0,".(1 * $resultado_directorio['INDICATIVO_ID']).")
         sqlBuilder.append("  AND (tr.origin_indicator_id = 0 OR tr.origin_indicator_id IS NULL OR tr.origin_indicator_id = :originIndicatorId) ");
 
-        // PHP: (REGLATRONCAL_INDICATIVO_ID = '' OR REGLATRONCAL_INDICATIVO_ID = '$indica_bd' OR REGLATRONCAL_INDICATIVO_ID like '$indica_bd,%' OR REGLATRONCAL_INDICATIVO_ID like '%,$indica_bd' OR REGLATRONCAL_INDICATIVO_ID like '%,$indica_bd,%')
         if (indicatorIdStr != null) {
             sqlBuilder.append("  AND (tr.indicator_ids = '' OR tr.indicator_ids IS NULL OR tr.indicator_ids = :indicatorIdStr OR tr.indicator_ids LIKE :indicatorIdStrLikeStart OR tr.indicator_ids LIKE :indicatorIdStrLikeEnd OR tr.indicator_ids LIKE :indicatorIdStrLikeMiddle) ");
-        } else { // If no specific indicator, rule must also have no specific indicator_ids
+        } else {
             sqlBuilder.append("  AND (tr.indicator_ids = '' OR tr.indicator_ids IS NULL) ");
         }
 
-        // PHP: ORDER BY PREFIJO_ID DESC, REGLATRONCAL_INDICATIVO_ID DESC
-        // This translates to: prefer specific trunk, then specific origin indicator, then most specific indicator_ids match
         sqlBuilder.append("ORDER BY CASE WHEN tr.trunk_id IS NOT NULL AND tr.trunk_id != 0 THEN 0 ELSE 1 END ASC, ");
         sqlBuilder.append("         CASE WHEN tr.origin_indicator_id IS NOT NULL AND tr.origin_indicator_id != 0 THEN 0 ELSE 1 END ASC, ");
         if (indicatorIdStr != null) {
-            sqlBuilder.append("     CASE WHEN tr.indicator_ids = :indicatorIdStr THEN 0 "); // Exact match
-            sqlBuilder.append("          WHEN tr.indicator_ids LIKE :indicatorIdStrLikeStart THEN 1 "); // Starts with
-            sqlBuilder.append("          WHEN tr.indicator_ids LIKE :indicatorIdStrLikeMiddle THEN 2 "); // Contains
-            sqlBuilder.append("          WHEN tr.indicator_ids LIKE :indicatorIdStrLikeEnd THEN 3 "); // Ends with
-            sqlBuilder.append("          WHEN tr.indicator_ids = '' OR tr.indicator_ids IS NULL THEN 5 "); // Empty/Global indicator_ids
-            sqlBuilder.append("          ELSE 4 "); // Other wildcard matches (less specific than exact contains)
+            sqlBuilder.append("     CASE WHEN tr.indicator_ids = :indicatorIdStr THEN 0 ");
+            sqlBuilder.append("          WHEN tr.indicator_ids LIKE :indicatorIdStrLikeStart THEN 1 ");
+            sqlBuilder.append("          WHEN tr.indicator_ids LIKE :indicatorIdStrLikeMiddle THEN 2 ");
+            sqlBuilder.append("          WHEN tr.indicator_ids LIKE :indicatorIdStrLikeEnd THEN 3 ");
+            sqlBuilder.append("          WHEN tr.indicator_ids = '' OR tr.indicator_ids IS NULL THEN 5 ");
+            sqlBuilder.append("          ELSE 4 ");
             sqlBuilder.append("     END ASC, ");
         } else {
              sqlBuilder.append("     CASE WHEN tr.indicator_ids = '' OR tr.indicator_ids IS NULL THEN 0 ELSE 1 END ASC, ");
         }
-        sqlBuilder.append("     LENGTH(tr.indicator_ids) DESC "); // Among similar matches, prefer longer (more specific) indicator_ids string
+        sqlBuilder.append("     LENGTH(tr.indicator_ids) DESC ");
         sqlBuilder.append("LIMIT 1");
 
         Query query = entityManager.createNativeQuery(sqlBuilder.toString(), TrunkRule.class);
-        query.setParameter("trunkName", trunkName != null ? trunkName : ""); // Handle null trunkName
+        query.setParameter("trunkName", trunkName != null ? trunkName : "");
         query.setParameter("telephonyTypeId", telephonyTypeId);
         query.setParameter("originIndicatorId", effectiveOriginIndicatorId);
         if (indicatorIdStr != null) {
@@ -779,12 +734,10 @@ public class LookupService {
     public List<PbxSpecialRule> findPbxSpecialRuleCandidates(Long commLocationId, int direction) {
         if (commLocationId == null) return Collections.emptyList();
         log.debug("Finding PBX special rule candidates for commLocationId: {}, direction: {}", commLocationId, direction);
-        // PHP: ORDER BY PBXESPECIAL_COMUBICACION_ID, PBXESPECIAL_BUSCAR DESC
-        // Prioritize rules specific to commLocation, then by longest search pattern (more specific)
         String sql = "SELECT p.* FROM pbx_special_rule p " +
                 "WHERE p.active = true " +
                 "  AND (p.comm_location_id = :commLocationId OR p.comm_location_id IS NULL OR p.comm_location_id = 0) " +
-                "  AND p.direction IN (0, :direction) " + // 0 for both, or specific direction
+                "  AND p.direction IN (0, :direction) " +
                 "ORDER BY CASE WHEN p.comm_location_id IS NOT NULL AND p.comm_location_id != 0 THEN 0 ELSE 1 END ASC, LENGTH(p.search_pattern) DESC";
         Query query = entityManager.createNativeQuery(sql, PbxSpecialRule.class);
         query.setParameter("commLocationId", commLocationId);
@@ -808,8 +761,8 @@ public class LookupService {
         log.debug("Finding special rate values for ttId: {}, opId: {}, bandId: {}, effectiveOriginIndId: {}, dateTime: {}",
                 effectiveTelephonyTypeId, effectiveOperatorId, effectiveBandId, effectiveOriginIndicatorId, callDateTime);
 
-        int dayOfWeek = callDateTime.getDayOfWeek().getValue(); // 1 (Monday) to 7 (Sunday)
-        boolean isHoliday = false; // Holiday logic omitted as per instructions
+        int dayOfWeek = callDateTime.getDayOfWeek().getValue();
+        boolean isHoliday = false; // Holiday logic omitted
 
         String dayColumn;
         switch (dayOfWeek) {
@@ -828,9 +781,8 @@ public class LookupService {
         StringBuilder sqlBuilder = new StringBuilder();
         sqlBuilder.append("SELECT srv.id, srv.name, srv.rate_value, srv.value_type, ");
         sqlBuilder.append("       srv.includes_vat, srv.hours_specification, ");
-        sqlBuilder.append("       COALESCE(p.vat_value, 0) as prefix_vat_value "); // Get VAT from the associated prefix
+        sqlBuilder.append("       COALESCE(p.vat_value, 0) as prefix_vat_value ");
         sqlBuilder.append("FROM special_rate_value srv ");
-        // Join prefix to get its VAT, matching on type and operator of the special rate
         sqlBuilder.append("LEFT JOIN prefix p ON srv.telephony_type_id = p.telephone_type_id AND srv.operator_id = p.operator_id AND p.active = true ");
         sqlBuilder.append("WHERE srv.active = true ");
         sqlBuilder.append("  AND (srv.telephony_type_id = :telephonyTypeId OR srv.telephony_type_id IS NULL OR srv.telephony_type_id = 0) ");
@@ -844,8 +796,6 @@ public class LookupService {
             sqlBuilder.append("OR srv.holiday_enabled = true");
         }
         sqlBuilder.append(") ");
-        // PHP: ORDER BY VALORESPECIAL_INDICAORIGEN_ID desc, VALORESPECIAL_TIPOTELE_ID, VALORESPECIAL_OPERADOR_ID, VALORESPECIAL_BANDA_ID
-        // This order prioritizes more specific matches.
         sqlBuilder.append("ORDER BY CASE WHEN srv.origin_indicator_id IS NOT NULL AND srv.origin_indicator_id != 0 THEN 0 ELSE 1 END ASC, ");
         sqlBuilder.append("         CASE WHEN srv.telephony_type_id IS NOT NULL AND srv.telephony_type_id != 0 THEN 0 ELSE 1 END ASC, ");
         sqlBuilder.append("         CASE WHEN srv.operator_id IS NOT NULL AND srv.operator_id != 0 THEN 0 ELSE 1 END ASC, ");
@@ -888,17 +838,15 @@ public class LookupService {
             log.trace("findSpecialService - Invalid input: phone={}, indId={}, ocId={}", phoneNumber, indicatorId, originCountryId);
             return Optional.empty();
         }
-        Long effectiveIndicatorId = indicatorId != null ? indicatorId : 0L; // PHP uses 0 for global
+        Long effectiveIndicatorId = indicatorId != null ? indicatorId : 0L;
         log.debug("Finding special service for number: {}, effectiveIndicatorId: {}, originCountryId: {}", phoneNumber, effectiveIndicatorId, originCountryId);
 
-        // PHP: SERVESPECIAL_INDICATIVO_ID in ( 0, $indicativo ) AND SERVESPECIAL_MPORIGEN_ID = $mporigen_id
-        // ORDER BY SERVESPECIAL_INDICATIVO_ID DESC  (prioritizes specific indicator over global 0)
         String sql = "SELECT ss.* FROM special_service ss " +
                 "WHERE ss.active = true " +
                 "  AND ss.phone_number = :phoneNumber " +
                 "  AND (ss.indicator_id = :indicatorId OR ss.indicator_id = 0 OR ss.indicator_id IS NULL) " +
                 "  AND ss.origin_country_id = :originCountryId " +
-                "ORDER BY CASE WHEN ss.indicator_id IS NOT NULL AND ss.indicator_id != 0 THEN 0 ELSE 1 END ASC, ss.id DESC " + // Prioritize specific indicator
+                "ORDER BY CASE WHEN ss.indicator_id IS NOT NULL AND ss.indicator_id != 0 THEN 0 ELSE 1 END ASC, ss.id DESC " +
                 "LIMIT 1";
         Query query = entityManager.createNativeQuery(sql, SpecialService.class);
         query.setParameter("phoneNumber", phoneNumber);
@@ -939,7 +887,7 @@ public class LookupService {
     
     public Map<String, Integer> findTelephonyTypeMinMaxConfig(Long telephonyTypeId, Long originCountryId) {
         Map<String, Integer> config = new HashMap<>();
-        config.put("min", 0); config.put("max", 0); // PHP defaults to 0 if not found
+        config.put("min", 0); config.put("max", 0);
         if (telephonyTypeId == null || originCountryId == null) return config;
 
         log.debug("Finding min/max config for telephonyTypeId: {}, originCountryId: {}", telephonyTypeId, originCountryId);
@@ -965,17 +913,13 @@ public class LookupService {
     public Optional<Operator> findOperatorByTelephonyTypeAndOrigin(Long telephonyTypeId, Long originCountryId) {
         if (telephonyTypeId == null || originCountryId == null) return Optional.empty();
         log.debug("Finding operator for telephonyTypeId: {}, originCountryId: {}", telephonyTypeId, originCountryId);
-        // PHP: SELECT OPERADOR_ID, OPERADOR_NOMBRE FROM operador, prefijo
-        //      WHERE PREFIJO_OPERADOR_ID = OPERADOR_ID AND PREFIJO_TIPOTELE_ID = $tipotele_id
-        //      AND OPERADOR_MPORIGEN_ID = $mporigen_id
-        // This implies any operator linked via a prefix for that type and country.
         String sql = "SELECT op.* FROM operator op " +
                 "JOIN prefix p ON p.operator_id = op.id " +
                 "WHERE p.telephone_type_id = :telephonyTypeId " +
                 "  AND op.origin_country_id = :originCountryId " +
                 "  AND op.active = true " +
                 "  AND p.active = true " +
-                "ORDER BY op.id ASC " + // Ensure consistent result if multiple
+                "ORDER BY op.id ASC " +
                 "LIMIT 1";
         Query query = entityManager.createNativeQuery(sql, Operator.class);
         query.setParameter("telephonyTypeId", telephonyTypeId);
@@ -996,16 +940,12 @@ public class LookupService {
     public Optional<Map<String, Object>> findInternalTariff(Long telephonyTypeId) {
         if (telephonyTypeId == null) return Optional.empty();
         log.debug("Finding internal tariff for telephonyTypeId: {}", telephonyTypeId);
-        // PHP: PREFIJO_VALORBASE, PREFIJO_IVAINC, TIPOTELE_NOMBRE, PREFIJO_IVA
-        //      FROM PREFIJO, TIPOTELE
-        //      WHERE PREFIJO_TIPOTELE_ID in (_tipotele_Internas($link)) AND PREFIJO_TIPOTELE_ID = TIPOTELE_ID
-        // This implies it takes the first prefix found for that internal type.
         String sql = "SELECT p.base_value, p.vat_included, p.vat_value, tt.name as telephony_type_name " +
                 "FROM prefix p " +
                 "JOIN telephony_type tt ON p.telephone_type_id = tt.id " +
-                "WHERE p.telephone_type_id = :telephonyTypeId " + // Specific internal type
+                "WHERE p.telephone_type_id = :telephonyTypeId " +
                 "  AND p.active = true AND tt.active = true " +
-                "ORDER BY p.id ASC " + // Ensure consistent result if multiple prefixes for same type
+                "ORDER BY p.id ASC " +
                 "LIMIT 1";
         Query query = entityManager.createNativeQuery(sql);
         query.setParameter("telephonyTypeId", telephonyTypeId);
@@ -1016,8 +956,8 @@ public class LookupService {
             map.put("valor_minuto_iva", result[1] != null ? result[1] : false);
             map.put("iva", result[2] != null ? result[2] : BigDecimal.ZERO);
             map.put("tipotele_nombre", result[3]);
-            map.put("ensegundos", false); // Internal tariffs usually not per-second
-            map.put("valor_inicial", BigDecimal.ZERO); // Internal tariffs usually no initial price
+            map.put("ensegundos", false);
+            map.put("valor_inicial", BigDecimal.ZERO);
             map.put("valor_inicial_iva", false);
             return Optional.of(map);
         } catch (NoResultException e) {
@@ -1038,14 +978,12 @@ public class LookupService {
 
         int maxPossibleLength = String.valueOf(CdrProcessingConfig.MAX_POSSIBLE_EXTENSION_VALUE).length();
 
-        // Query for Employee extensions
         StringBuilder sqlEmployee = new StringBuilder();
         sqlEmployee.append("SELECT COALESCE(MIN(LENGTH(e.extension)), NULL) AS min_len, COALESCE(MAX(LENGTH(e.extension)), NULL) AS max_len ");
         sqlEmployee.append("FROM employee e ");
         sqlEmployee.append("WHERE e.active = true ");
-        sqlEmployee.append("  AND e.extension ~ '^[0-9]+$' "); // Ensure numeric, no special chars
-        sqlEmployee.append("  AND e.extension NOT LIKE '0%' "); // PHP: not like '0%'
-        // PHP: not like '%-%' - already handled by numeric check
+        sqlEmployee.append("  AND e.extension ~ '^[0-9]+$' ");
+        sqlEmployee.append("  AND e.extension NOT LIKE '0%' ");
         sqlEmployee.append("  AND LENGTH(e.extension) > 0 AND LENGTH(e.extension) < :maxExtPossibleLength ");
         if (commLocationId != null && commLocationId > 0) {
             sqlEmployee.append(" AND e.communication_location_id = :commLocationId ");
@@ -1067,7 +1005,6 @@ public class LookupService {
             log.trace("Employee ext lengths for loc {}: min={}, max={}", commLocationId, minEmp, maxEmp);
         } catch (Exception e) { log.warn("Could not determine extension lengths from employees for loc {}: {}", commLocationId, e.getMessage()); }
 
-        // Query for ExtensionRange
         StringBuilder sqlRange = new StringBuilder();
         sqlRange.append("SELECT COALESCE(MIN(LENGTH(CAST(er.range_start AS TEXT))), NULL) AS min_len, COALESCE(MAX(LENGTH(CAST(er.range_end AS TEXT))), NULL) AS max_len ");
         sqlRange.append("FROM extension_range er ");
@@ -1111,12 +1048,11 @@ public class LookupService {
     public Optional<Integer> findLocalNdcForIndicator(Long indicatorId) {
         if (indicatorId == null || indicatorId <= 0) return Optional.empty();
         log.debug("Finding local NDC for indicatorId: {}", indicatorId);
-        // PHP: SELECT SERIE_NDC, count(*) as N FROM serie WHERE SERIE_INDICATIVO_ID = $indicativo_id GROUP BY SERIE_NDC ORDER BY N DESC, SERIE_NDC
         String sql = "SELECT s.ndc FROM series s " +
                 "WHERE s.indicator_id = :indicatorId " +
-                "  AND s.ndc IS NOT NULL AND s.ndc > 0 " + // PHP doesn't explicitly filter s.ndc > 0 here but implies it by usage
+                "  AND s.ndc IS NOT NULL AND s.ndc > 0 " +
                 "GROUP BY s.ndc " +
-                "ORDER BY COUNT(*) DESC, s.ndc ASC " + // Most frequent NDC, then smallest
+                "ORDER BY COUNT(*) DESC, s.ndc ASC " +
                 "LIMIT 1";
         Query query = entityManager.createNativeQuery(sql, Integer.class);
         query.setParameter("indicatorId", indicatorId);
@@ -1139,8 +1075,6 @@ public class LookupService {
             return false;
         }
         log.debug("Checking if NDC {} is local extended for origin indicator {}", destinationNdc, originIndicatorId);
-        // PHP: SELECT distinct(SERIE_NDC) as SERIE_NDC FROM serie WHERE SERIE_INDICATIVO_ID = $indicativolocal_id
-        // Then checks if $indicativo (destinationNdc) is in the list of NDCs for the originIndicatorId.
         String sql = "SELECT COUNT(s.id) FROM series s WHERE s.indicator_id = :originIndicatorId AND s.ndc = :destinationNdc AND s.active = true";
         Query query = entityManager.createNativeQuery(sql, Long.class);
         query.setParameter("originIndicatorId", originIndicatorId);
@@ -1152,6 +1086,33 @@ public class LookupService {
             return isExtended;
         } catch (Exception e) {
             log.error("Error checking local extended status for NDC {}, origin indicator {}: {}", destinationNdc, originIndicatorId, e);
+            return false;
+        }
+    }
+
+    public boolean isPrefixUniqueToOperator(String prefixCode, Long telephonyTypeId, Long originCountryId) {
+        if (!StringUtils.hasText(prefixCode) || telephonyTypeId == null || originCountryId == null) {
+            return false;
+        }
+        log.debug("Checking if prefix {} is unique for type {} in country {}", prefixCode, telephonyTypeId, originCountryId);
+        String sql = "SELECT COUNT(DISTINCT p.operator_id) " +
+                "FROM prefix p " +
+                "JOIN operator op ON p.operator_id = op.id " +
+                "WHERE p.active = true AND op.active = true " +
+                "  AND p.code = :prefixCode " +
+                "  AND p.telephone_type_id = :telephonyTypeId " +
+                "  AND op.origin_country_id = :originCountryId";
+        Query query = entityManager.createNativeQuery(sql, Long.class);
+        query.setParameter("prefixCode", prefixCode);
+        query.setParameter("telephonyTypeId", telephonyTypeId);
+        query.setParameter("originCountryId", originCountryId);
+        try {
+            Long count = (Long) query.getSingleResult();
+            boolean isUnique = count != null && count == 1;
+            log.trace("Prefix {} unique check for type {} in country {}: {}", prefixCode, telephonyTypeId, originCountryId, isUnique);
+            return isUnique;
+        } catch (Exception e) {
+            log.error("Error checking prefix uniqueness for code {}, type {}, country {}: {}", prefixCode, telephonyTypeId, originCountryId, e.getMessage(), e);
             return false;
         }
     }
@@ -1230,35 +1191,5 @@ public class LookupService {
         query.setParameter("id", id);
         try { return Optional.of((CostCenter) query.getSingleResult()); }
         catch (NoResultException e) { return Optional.empty(); }
-    }
-
-
-    public boolean isPrefixUniqueToOperator(String prefixCode, Long telephonyTypeId, Long originCountryId) {
-        if (!StringUtils.hasText(prefixCode) || telephonyTypeId == null || originCountryId == null) {
-            return false;
-        }
-        log.debug("Checking if prefix {} is unique for type {} in country {}", prefixCode, telephonyTypeId, originCountryId);
-        // PHP: count($_lista_Prefijos['ctlope'][$prefijo]) == 1
-        // This means checking how many distinct operators use this exact prefix for this telephony type in this country.
-        String sql = "SELECT COUNT(DISTINCT p.operator_id) " +
-                "FROM prefix p " +
-                "JOIN operator op ON p.operator_id = op.id " +
-                "WHERE p.active = true AND op.active = true " +
-                "  AND p.code = :prefixCode " +
-                "  AND p.telephone_type_id = :telephonyTypeId " +
-                "  AND op.origin_country_id = :originCountryId";
-        Query query = entityManager.createNativeQuery(sql, Long.class);
-        query.setParameter("prefixCode", prefixCode);
-        query.setParameter("telephonyTypeId", telephonyTypeId);
-        query.setParameter("originCountryId", originCountryId);
-        try {
-            Long count = (Long) query.getSingleResult();
-            boolean isUnique = count != null && count == 1;
-            log.trace("Prefix {} unique check for type {} in country {}: {}", prefixCode, telephonyTypeId, originCountryId, isUnique);
-            return isUnique;
-        } catch (Exception e) {
-            log.error("Error checking prefix uniqueness for code {}, type {}, country {}: {}", prefixCode, telephonyTypeId, originCountryId, e.getMessage(), e);
-            return false;
-        }
     }
 }
