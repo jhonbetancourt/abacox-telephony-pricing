@@ -240,7 +240,7 @@ public class CallRecord extends AuditedEntity {
      * Transfer information for the employee.
      * Original field: ACUMTOTAL_FUN_TRANSFER
      */
-    @Column(name = "employee_transfer", length = 50, nullable = false)
+    @Column(name = "employee_transfer", length = 50)
     @ColumnDefault("")
     private String employeeTransfer;
 
