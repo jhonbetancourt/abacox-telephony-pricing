@@ -92,8 +92,8 @@ public class ExtensionLookupService {
             log.trace("Range ext lengths for loc {}: min={}, max={}", commLocationId, minRange, maxRange);
         } catch (Exception e) { log.warn("Could not determine extension lengths from ranges for loc {}: {}", commLocationId, e.getMessage()); }
 
-        if (lengths.get("min") == Integer.MAX_VALUE) lengths.put("min", CdrProcessingConfig.DEFAULT_MIN_EXT_LENGTH);
-        if (lengths.get("max") == 0) lengths.put("max", CdrProcessingConfig.DEFAULT_MAX_EXT_LENGTH);
+        if (lengths.get("min") == Integer.MAX_VALUE) lengths.put("min", CdrProcessingConfig.DEFAULT_MIN_EXT_LENGTH_FALLBACK);
+        if (lengths.get("max") == 0) lengths.put("max", CdrProcessingConfig.DEFAULT_MAX_EXT_LENGTH_FALLBACK);
         if (lengths.get("min") > lengths.get("max")) {
             log.warn("Calculated min length ({}) > max length ({}) for loc {}, adjusting min to max.", lengths.get("min"), lengths.get("max"), commLocationId);
             lengths.put("min", lengths.get("max"));

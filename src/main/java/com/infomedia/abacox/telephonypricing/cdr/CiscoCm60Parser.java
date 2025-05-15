@@ -462,8 +462,8 @@ public class CiscoCm60Parser implements CdrParser {
         if (!effectiveNumber.matches("[\\d#*]+")) return false; // Allow digits, #, *
 
         // Using constants from CdrProcessingConfig for default lengths
-        int minExtLength = CdrProcessingConfig.DEFAULT_MIN_EXT_LENGTH;
-        int maxExtLength = CdrProcessingConfig.DEFAULT_MAX_EXT_LENGTH;
+        int minExtLength = CdrProcessingConfig.DEFAULT_MIN_EXT_LENGTH_FALLBACK;
+        int maxExtLength = CdrProcessingConfig.DEFAULT_MAX_EXT_LENGTH_FALLBACK;
 
         int numLength = effectiveNumber.length();
         return (numLength >= minExtLength && numLength <= maxExtLength);
