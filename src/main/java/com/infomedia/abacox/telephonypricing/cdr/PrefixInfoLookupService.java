@@ -145,7 +145,7 @@ public class PrefixInfoLookupService {
         if (!isTrunkCall) {
             // Check if a prefix with TIPOTELE_LOCAL was already included in the filtered results
             boolean localPrefixFoundInFilteredResults = finalResults.stream()
-                .anyMatch(map -> Long.valueOf(CdrProcessingConfig.TIPOTELE_LOCAL).equals(map.get("telephony_type_id")));
+                    .anyMatch(map -> Long.valueOf(CdrProcessingConfig.TIPOTELE_LOCAL).equals(map.get("telephony_type_id")));
 
             if (!localPrefixFoundInFilteredResults) {
                 log.debug("TIPOTELE_LOCAL not found in filtered results for non-trunk call, attempting explicit add for number: {}", numberForLog);
@@ -189,7 +189,7 @@ public class PrefixInfoLookupService {
                     log.warn("Explicit local prefix add: Could not find internal operator for TIPOTELE_LOCAL ({}) in Country {}.", CdrProcessingConfig.TIPOTELE_LOCAL, originCountryId);
                 }
             } else {
-                 log.debug("TIPOTELE_LOCAL was already found in filtered results. No explicit add needed.");
+                log.debug("TIPOTELE_LOCAL was already found in filtered results. No explicit add needed.");
             }
         }
         return finalResults;
@@ -330,10 +330,10 @@ public class PrefixInfoLookupService {
             // Ensure ndcStr (if not empty) and subscriberNumberStr are numeric.
             // ndcStr can be empty for local calls (NDC='0'). subscriberNumberStr must be numeric.
             if ((!ndcStr.isEmpty() && !ndcStr.matches("\\d*")) || !subscriberNumberStr.matches("\\d+")) {
-                 log.trace("Skipping NDC check: NDC '{}' or Subscriber '{}' is not numeric.", ndcStr, subscriberNumberStr);
-                 continue;
+                log.trace("Skipping NDC check: NDC '{}' or Subscriber '{}' is not numeric.", ndcStr, subscriberNumberStr);
+                continue;
             }
-            
+
             String ndcParam = ndcStr.isEmpty() ? "0" : ndcStr; // Use "0" for empty NDC (local)
             long subscriberNumber = Long.parseLong(subscriberNumberStr);
 
@@ -597,8 +597,8 @@ public class PrefixInfoLookupService {
             log.warn("No positive numeric NDC found for indicatorId: {}", indicatorId);
             return Optional.empty();
         } catch (NumberFormatException nfe) {
-             log.error("NDC value fetched for indicatorId {} is not a valid integer: {}", indicatorId, nfe.getMessage());
-             return Optional.empty();
+            log.error("NDC value fetched for indicatorId {} is not a valid integer: {}", indicatorId, nfe.getMessage());
+            return Optional.empty();
         }
         catch (Exception e) {
             log.error("Error finding local NDC for indicatorId: {}", indicatorId, e);
@@ -650,6 +650,61 @@ public class PrefixInfoLookupService {
         } catch (Exception e) {
             log.error("Error checking prefix uniqueness for code {}, type {}, country {}: {}", prefixCode, telephonyTypeId, originCountryId, e.getMessage(), e);
             return false;
+        }
+    }
+
+    /**
+     * Finds national series details for a given NDC and subscriber number.
+     * This query mirrors the one used in PHP's `_esCelular_fijo` for 10-digit numbers starting with "60".
+     *
+     * @param ndc              The National Destination Code (single digit string).
+     * @param subscriberNumber The subscriber part of the number (long).
+     * @param originCountryId  The origin country ID.
+     * @return Optional map containing "department_country", "city_name", "company" if a match is found.
+     */
+    public Optional<Map<String, String>> findNationalSeriesDetailsByNdcAndSubscriber(String ndc, long subscriberNumber, Long originCountryId) {
+        if (!StringUtils.hasText(ndc) || originCountryId == null) {
+            log.warn("findNationalSeriesDetails - Invalid input: ndc or originCountryId is null/empty.");
+            return Optional.empty();
+        }
+        log.debug("Finding national series details for NDC: {}, Subscriber: {}, OriginCountryId: {}", ndc, subscriberNumber, originCountryId);
+
+        StringBuilder sqlBuilder = new StringBuilder();
+        sqlBuilder.append("SELECT i.department_country, i.city_name, s.company ");
+        sqlBuilder.append("FROM series s ");
+        sqlBuilder.append("JOIN indicator i ON s.indicator_id = i.id ");
+        sqlBuilder.append("WHERE i.telephony_type_id = :nationalType "); // TIPOTELE_NACIONAL
+        sqlBuilder.append("  AND s.ndc = :ndc ");
+        sqlBuilder.append("  AND CAST(s.initial_number AS BIGINT) <= :subscriberNumber AND CAST(s.final_number AS BIGINT) >= :subscriberNumber ");
+        // The specific prefix ID (7000012L) implies a reference to a specific operator or prefix configuration for national calls.
+        // This should ideally be more dynamic or configurable if it's not a fixed system-wide constant.
+        sqlBuilder.append("  AND (i.operator_id = 0 OR i.operator_id IS NULL OR i.operator_id IN (SELECT p_sub.operator_id FROM prefix p_sub WHERE p_sub.id = :nationalRefPrefixId)) ");
+        sqlBuilder.append("  AND i.origin_country_id IN (0, :originCountryId) "); // Colombia or global
+        sqlBuilder.append("  AND s.active = true AND i.active = true ");
+        sqlBuilder.append("ORDER BY i.origin_country_id DESC, LENGTH(s.ndc) DESC, (CAST(s.final_number AS BIGINT) - CAST(s.initial_number AS BIGINT)) ASC ");
+        sqlBuilder.append("LIMIT 1");
+
+        Query query = entityManager.createNativeQuery(sqlBuilder.toString());
+        query.setParameter("nationalType", CdrProcessingConfig.TIPOTELE_NACIONAL);
+        query.setParameter("ndc", ndc);
+        query.setParameter("subscriberNumber", subscriberNumber);
+        query.setParameter("nationalRefPrefixId", CdrProcessingConfig.NATIONAL_REFERENCE_PREFIX_ID);
+        query.setParameter("originCountryId", originCountryId);
+
+        try {
+            Object[] result = (Object[]) query.getSingleResult();
+            Map<String, String> details = new HashMap<>();
+            details.put("department_country", (String) result[0]);
+            details.put("city_name", (String) result[1]);
+            details.put("company", (String) result[2]);
+            log.trace("Found national series details for NDC {}: {}", ndc, details);
+            return Optional.of(details);
+        } catch (NoResultException e) {
+            log.trace("No national series details found for NDC: {}, Subscriber: {}", ndc, subscriberNumber);
+            return Optional.empty();
+        } catch (Exception e) {
+            log.error("Error finding national series details for NDC: {}, Subscriber: {}: {}", ndc, subscriberNumber, e.getMessage(), e);
+            return Optional.empty();
         }
     }
 }

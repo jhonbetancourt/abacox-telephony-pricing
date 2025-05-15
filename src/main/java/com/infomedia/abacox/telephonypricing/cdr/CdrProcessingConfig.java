@@ -1,6 +1,7 @@
 package com.infomedia.abacox.telephonypricing.cdr;
 
-import com.infomedia.abacox.telephonypricing.entity.*;
+import com.infomedia.abacox.telephonypricing.entity.Operator;
+import com.infomedia.abacox.telephonypricing.entity.TelephonyType;
 import com.infomedia.abacox.telephonypricing.repository.OperatorRepository;
 import com.infomedia.abacox.telephonypricing.repository.TelephonyTypeRepository;
 import lombok.Getter;
@@ -39,12 +40,20 @@ public class CdrProcessingConfig {
 
     public static final int DEFAULT_MIN_EXT_LENGTH = 2;
     public static final int DEFAULT_MAX_EXT_LENGTH = 7;
-    public static final int MAX_POSSIBLE_EXTENSION_VALUE = 9999999;
+    public static final int MAX_POSSIBLE_EXTENSION_VALUE = 9999999; // Max value for a 7-digit extension
+
+    public static final Long COLOMBIA_ORIGIN_COUNTRY_ID = 1L;
+    // This ID (7000012L) is from the PHP code's SQL query for national number processing.
+    // It likely refers to a specific Prefix record used as a reference for national calls.
+    // Ideally, this would be looked up dynamically or configured more abstractly.
+    public static final Long NATIONAL_REFERENCE_PREFIX_ID = 7000012L;
+
 
     private static Set<Long> internalTelephonyTypeIds;
     private static Long defaultInternalCallTypeId;
     private static Set<String> ignoredAuthCodes;
     private static int minCallDurationForBilling = 0; // Default: bill even 0-second calls if rate applies
+
     private final ConfigurationLookupService configurationLookupService;
     private final EntityLookupService entityLookupService;
     private final ExtensionLookupService extensionLookupService;
@@ -62,6 +71,7 @@ public class CdrProcessingConfig {
         }
     }
 
+    private static final Map<String, String> COMPANY_TO_NATIONAL_OPERATOR_PREFIX_MAP;
 
     static {
         internalTelephonyTypeIds = Set.of(
@@ -69,18 +79,38 @@ public class CdrProcessingConfig {
         );
         defaultInternalCallTypeId = TIPOTELE_INTERNA_IP;
         ignoredAuthCodes = Set.of("Invalid Authorization Code", "Invalid Authorization Level");
-        // minCallDurationForBilling can be loaded from DB or properties if needed
+
+        // Initialize company to national operator prefix mapping (from PHP's _esNacional)
+        COMPANY_TO_NATIONAL_OPERATOR_PREFIX_MAP = new HashMap<>();
+        COMPANY_TO_NATIONAL_OPERATOR_PREFIX_MAP.put("TELMEX TELECOMUNICACIONES S.A. ESP", "0456"); // CLARO HOGAR FIJO
+        COMPANY_TO_NATIONAL_OPERATOR_PREFIX_MAP.put("COLOMBIA TELECOMUNICACIONES S.A. ESP", "09");   // Movistar Fijo
+        COMPANY_TO_NATIONAL_OPERATOR_PREFIX_MAP.put("UNE EPM TELECOMUNICACIONES S.A. E.S.P. - UNE EPM TELCO S.A.", "05"); // UNE/Tigo Fijo
+        COMPANY_TO_NATIONAL_OPERATOR_PREFIX_MAP.put("EMPRESA DE TELECOMUNICACIONES DE BOGOTÁ S.A. ESP.", "07"); // ETB Fijo
+        // Add more mappings if necessary
     }
 
-    
+    public String mapCompanyToNationalOperatorPrefix(String companyName) {
+        if (companyName == null || companyName.trim().isEmpty()) {
+            return "";
+        }
+        // Normalize company name slightly for matching (e.g. uppercase, remove common suffixes if needed)
+        // For now, direct match on known keys
+        for (Map.Entry<String, String> entry : COMPANY_TO_NATIONAL_OPERATOR_PREFIX_MAP.entrySet()) {
+            if (companyName.toUpperCase().contains(entry.getKey().toUpperCase())) {
+                return entry.getValue();
+            }
+        }
+        return ""; // No mapping found
+    }
+
     public List<String> getPbxPrefixes(Long communicationLocationId) {
         log.debug("Fetching PBX prefixes for commLocationId: {}", communicationLocationId);
         Optional<String> prefixStringOpt = configurationLookupService.findPbxPrefixByCommLocationId(communicationLocationId);
         if (prefixStringOpt.isPresent() && !prefixStringOpt.get().isEmpty()) {
             List<String> prefixes = Arrays.stream(prefixStringOpt.get().split(","))
-                                          .map(String::trim)
-                                          .filter(s -> !s.isEmpty())
-                                          .collect(Collectors.toList());
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
+                    .collect(Collectors.toList());
             log.trace("Found PBX prefixes: {}", prefixes);
             return prefixes;
         }
@@ -88,7 +118,7 @@ public class CdrProcessingConfig {
         return Collections.emptyList();
     }
 
-    
+
     public Set<Long> getInternalTelephonyTypeIds() {
         return internalTelephonyTypeIds;
     }
@@ -97,24 +127,24 @@ public class CdrProcessingConfig {
         return telephonyTypeId != null && internalTelephonyTypeIds.contains(telephonyTypeId);
     }
 
-    
+
     public Map<String, Integer> getTelephonyTypeMinMax(Long telephonyTypeId, Long originCountryId) {
         log.debug("Fetching min/max length config for telephonyTypeId: {}, originCountryId: {}", telephonyTypeId, originCountryId);
         return configurationLookupService.findTelephonyTypeMinMaxConfig(telephonyTypeId, originCountryId);
     }
 
-    
+
     public Optional<Operator> getOperatorInternal(Long telephonyTypeId, Long originCountryId) {
         log.debug("Fetching internal operator for telephonyTypeId: {}, originCountryId: {}", telephonyTypeId, originCountryId);
         return configurationLookupService.findOperatorByTelephonyTypeAndOrigin(telephonyTypeId, originCountryId);
     }
 
-    
+
     public Optional<TelephonyType> getTelephonyTypeById(Long id) {
         return entityLookupService.findTelephonyTypeById(id);
     }
 
-    
+
     public Optional<Operator> getOperatorById(Long id) {
         return entityLookupService.findOperatorById(id);
     }
@@ -127,7 +157,7 @@ public class CdrProcessingConfig {
         return defaultInternalCallTypeId;
     }
 
-    
+
     public ExtensionLengthConfig getExtensionLengthConfig(Long commLocationId) {
         log.debug("Fetching extension length config for commLocationId: {}", commLocationId);
         Map<String, Integer> lengths = extensionLookupService.findExtensionMinMaxLength(commLocationId);
@@ -140,15 +170,16 @@ public class CdrProcessingConfig {
 
         if (maxLength > 0 && maxLength < String.valueOf(Integer.MAX_VALUE).length()) {
             try {
-                 maxExtensionValue = Integer.parseInt("9".repeat(Math.max(0, maxLength)));
+                maxExtensionValue = Integer.parseInt("9".repeat(Math.max(0, maxLength)));
             } catch (NumberFormatException | OutOfMemoryError e) {
-                 log.warn("Could not calculate max extension value for length {}, using default {}. Error: {}", maxLength, MAX_POSSIBLE_EXTENSION_VALUE, e.getMessage());
-                 maxExtensionValue = MAX_POSSIBLE_EXTENSION_VALUE;
+                log.warn("Could not calculate max extension value for length {}, using default {}. Error: {}", maxLength, MAX_POSSIBLE_EXTENSION_VALUE, e.getMessage());
+                maxExtensionValue = MAX_POSSIBLE_EXTENSION_VALUE;
             }
         } else if (maxLength >= String.valueOf(Integer.MAX_VALUE).length()) {
             maxExtensionValue = MAX_POSSIBLE_EXTENSION_VALUE;
             log.warn("Extension maxLength {} is too large, capping max extension value at {}", maxLength, maxExtensionValue);
         }
+
 
         log.debug("Extension config for commLocationId {}: minLen={}, maxLen={}, maxVal={}", commLocationId, minLength, maxLength, maxExtensionValue);
         return new ExtensionLengthConfig(minLength, maxLength, maxExtensionValue);
@@ -159,10 +190,6 @@ public class CdrProcessingConfig {
     }
 
     public int getMinCallDurationForBilling() {
-        // This could be loaded from DB/properties
-        // PHP: $min_tiempo = defineParamCliente('CAPTURAS_TIEMPOCERO', $link);
-        //      if (!is_numeric($min_tiempo) || $min_tiempo < 0) { $min_tiempo = 0; }
-        // For now, hardcoding to 0 (meaning any duration > 0 is billable if rate applies)
         return minCallDurationForBilling;
     }
 }
