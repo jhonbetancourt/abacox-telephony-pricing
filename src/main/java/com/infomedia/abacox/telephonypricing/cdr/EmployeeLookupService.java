@@ -30,7 +30,7 @@ public class EmployeeLookupService {
     }
 
     public Optional<Employee> findEmployeeByExtensionOrAuthCode(String extension, String authCode, Long commLocationId) {
-        log.debug("Looking up employee by extension: '{}', authCode: '{}', commLocationId: {}", extension, authCode, commLocationId);
+        log.info("Looking up employee by extension: '{}', authCode: '{}', commLocationId: {}", extension, authCode, commLocationId);
         StringBuilder sqlBuilder = new StringBuilder("SELECT e.* FROM employee e WHERE e.active = true ");
         Map<String, Object> params = new HashMap<>();
 
@@ -38,7 +38,7 @@ public class EmployeeLookupService {
             sqlBuilder.append(" AND e.communication_location_id = :commLocationId");
             params.put("commLocationId", commLocationId);
         } else {
-            log.trace("CommLocationId is null or 0 for employee lookup. Searching without location constraint if not found locally.");
+            log.info("CommLocationId is null or 0 for employee lookup. Searching without location constraint if not found locally.");
         }
 
         boolean hasAuthCode = StringUtils.hasText(authCode) && !configService.getIgnoredAuthCodes().contains(authCode);
@@ -52,7 +52,7 @@ public class EmployeeLookupService {
             specificCondition = " AND e.extension = :extension ";
             params.put("extension", extension);
         } else {
-            log.trace("No valid identifier (extension or non-ignored authCode) provided for employee lookup.");
+            log.info("No valid identifier (extension or non-ignored authCode) provided for employee lookup.");
             return Optional.empty();
         }
         
@@ -64,26 +64,26 @@ public class EmployeeLookupService {
 
         try {
             Employee employee = (Employee) query.getSingleResult();
-            log.trace("Found employee: {}", employee.getId());
+            log.info("Found employee: {}", employee.getId());
             return Optional.of(employee);
         } catch (NoResultException e) {
-            log.trace("Employee not found for ext: '{}', code: '{}', loc: {}", extension, authCode, commLocationId);
+            log.info("Employee not found for ext: '{}', code: '{}', loc: {}", extension, authCode, commLocationId);
             return Optional.empty();
         } catch (Exception ex) {
-            log.error("Error finding employee for ext: '{}', code: '{}', loc: {}: {}", extension, authCode, commLocationId, ex.getMessage(), ex);
+            log.info("Error finding employee for ext: '{}', code: '{}', loc: {}: {}", extension, authCode, commLocationId, ex.getMessage(), ex);
             return Optional.empty();
         }
     }
 
     public Optional<Map<String, Object>> findRangeAssignment(String extension, Long commLocationId, LocalDateTime callTime) {
         if (!StringUtils.hasText(extension) || commLocationId == null || callTime == null) return Optional.empty();
-        log.debug("Finding range assignment for ext: {}, commLocationId: {}, callTime: {}", extension, commLocationId, callTime);
+        log.info("Finding range assignment for ext: {}, commLocationId: {}, callTime: {}", extension, commLocationId, callTime);
 
         long extNumeric;
         try {
             extNumeric = Long.parseLong(extension.replaceAll("[^0-9]", ""));
         } catch (NumberFormatException e) {
-            log.warn("Extension {} is not numeric, cannot perform range assignment.", extension);
+            log.info("Extension {} is not numeric, cannot perform range assignment.", extension);
             return Optional.empty();
         }
 
@@ -105,13 +105,13 @@ public class EmployeeLookupService {
             map.put("subdivision_id", result[0]);
             map.put("cost_center_id", result[1]);
             map.put("range_prefix", result[2]);
-            log.trace("Found range assignment for extension {}: {}", extension, map);
+            log.info("Found range assignment for extension {}: {}", extension, map);
             return Optional.of(map);
         } catch (NoResultException e) {
-            log.trace("No active range assignment found for extension {}", extension);
+            log.info("No active range assignment found for extension {}", extension);
             return Optional.empty();
         } catch (Exception e) {
-            log.error("Error finding range assignment for extension {}: {}", extension, e.getMessage(), e);
+            log.info("Error finding range assignment for extension {}: {}", extension, e.getMessage(), e);
             return Optional.empty();
         }
     }

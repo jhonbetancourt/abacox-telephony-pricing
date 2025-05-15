@@ -34,7 +34,7 @@ public class EntityLookupService {
 
     public Optional<Indicator> findIndicatorById(Long id) {
         if (id == null || id <= 0) {
-             log.trace("findIndicatorById requested for invalid ID: {}", id);
+             log.info("findIndicatorById requested for invalid ID: {}", id);
              return Optional.empty();
         }
         String sql = "SELECT i.* FROM indicator i WHERE i.id = :id AND i.active = true";

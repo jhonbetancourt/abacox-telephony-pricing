@@ -92,12 +92,12 @@ public class PrefixInfoLookupService {
 
         if (!StringUtils.hasText(fullDialedNumberWithNdcStr) || !StringUtils.hasText(ndcFromDbStr) ||
                 !StringUtils.hasText(seriesInitialFromDbStr) || !StringUtils.hasText(seriesFinalFromDbStr)) {
-            log.warn("adjustAndCompareSeries - Invalid string input: num={}, ndc={}, init={}, final={}",
+            log.info("adjustAndCompareSeries - Invalid string input: num={}, ndc={}, init={}, final={}",
                     fullDialedNumberWithNdcStr, ndcFromDbStr, seriesInitialFromDbStr, seriesFinalFromDbStr);
             return false;
         }
         if (!seriesInitialFromDbStr.matches("\\d+") || !seriesFinalFromDbStr.matches("\\d+")) {
-             log.warn("adjustAndCompareSeries - DB series initial or final is not purely numeric: init={}, final={}", seriesInitialFromDbStr, seriesFinalFromDbStr);
+             log.info("adjustAndCompareSeries - DB series initial or final is not purely numeric: init={}, final={}", seriesInitialFromDbStr, seriesFinalFromDbStr);
             return false;
         }
 
@@ -105,17 +105,17 @@ public class PrefixInfoLookupService {
         if (ndcFromDbStr.equals("0")) {
             dialedSubscriberPartStr = fullDialedNumberWithNdcStr;
             if (!fullDialedNumberWithNdcStr.matches("\\d+")) {
-                log.warn("adjustAndCompareSeries - Local number (NDC='0') '{}' is not purely numeric.", fullDialedNumberWithNdcStr);
+                log.info("adjustAndCompareSeries - Local number (NDC='0') '{}' is not purely numeric.", fullDialedNumberWithNdcStr);
                 return false;
             }
         } else {
             if (!fullDialedNumberWithNdcStr.startsWith(ndcFromDbStr)) {
-                log.warn("adjustAndCompareSeries - Full number '{}' does not start with DB NDC '{}'. This is unexpected if ndcFromDbStr was derived correctly.", fullDialedNumberWithNdcStr, ndcFromDbStr);
+                log.info("adjustAndCompareSeries - Full number '{}' does not start with DB NDC '{}'. This is unexpected if ndcFromDbStr was derived correctly.", fullDialedNumberWithNdcStr, ndcFromDbStr);
                 return false;
             }
             dialedSubscriberPartStr = fullDialedNumberWithNdcStr.substring(ndcFromDbStr.length());
             if (!dialedSubscriberPartStr.matches("\\d*")) {
-                log.warn("adjustAndCompareSeries - Subscriber part '{}' (from num '{}', ndc '{}') is not numeric.",
+                log.info("adjustAndCompareSeries - Subscriber part '{}' (from num '{}', ndc '{}') is not numeric.",
                         dialedSubscriberPartStr, fullDialedNumberWithNdcStr, ndcFromDbStr);
                 return false;
             }
@@ -150,13 +150,13 @@ public class PrefixInfoLookupService {
             long compFinalVal = Long.parseLong(comparisonFinalStr);
 
             boolean match = (dialedNumVal >= compInitialVal && dialedNumVal <= compFinalVal);
-            log.trace("Adjusted series comparison: DialedNum={}, DB_NDC={}, DB_Initial={}, DB_Final={}. AdjustedInitialSub={}, AdjustedFinalSub={}. FullCompInitial={}, FullCompFinal={}. Match: {}",
+            log.info("Adjusted series comparison: DialedNum={}, DB_NDC={}, DB_Initial={}, DB_Final={}. AdjustedInitialSub={}, AdjustedFinalSub={}. FullCompInitial={}, FullCompFinal={}. Match: {}",
                     fullDialedNumberWithNdcStr, ndcFromDbStr, seriesInitialFromDbStr, seriesFinalFromDbStr,
                     finalComparableInitialSubPart, finalComparableFinalSubPart,
                     comparisonInitialStr, comparisonFinalStr, match);
             return match;
         } catch (NumberFormatException e) {
-            log.error("Numeric conversion error during series comparison. Dialed: '{}', CompInitial: '{}', CompFinal: '{}'. Error: {}",
+            log.info("Numeric conversion error during series comparison. Dialed: '{}', CompInitial: '{}', CompFinal: '{}'. Error: {}",
                     fullDialedNumberWithNdcStr, comparisonInitialStr, comparisonFinalStr, e.getMessage());
             return false;
         }
@@ -172,7 +172,7 @@ public class PrefixInfoLookupService {
             Long originCommLocationIndicatorId
     ) {
         if (telephonyTypeId == null || originCountryId == null || !StringUtils.hasText(numberToLookup)) {
-            log.trace("findIndicatorByNumber - Invalid input: num={}, ttId={}, ocId={}", numberToLookup, telephonyTypeId, originCountryId);
+            log.info("findIndicatorByNumber - Invalid input: num={}, ttId={}, ocId={}", numberToLookup, telephonyTypeId, originCountryId);
             return Optional.empty();
         }
 
@@ -184,13 +184,13 @@ public class PrefixInfoLookupService {
             if (originNdcOpt.isPresent()) {
                 effectiveNumberForLookup = originNdcOpt.get() + numberToLookup; // Prepend NDC
                 effectiveTelephonyTypeId = CdrProcessingConfig.TIPOTELE_NACIONAL;
-                log.trace("Local call lookup: transformed num {} to {} for type NATIONAL", numberToLookup, effectiveNumberForLookup);
+                log.info("Local call lookup: transformed num {} to {} for type NATIONAL", numberToLookup, effectiveNumberForLookup);
             } else {
-                log.warn("Could not get origin NDC for local call lookup from indicator {}, proceeding with original number and type.", originCommLocationIndicatorId);
+                log.info("Could not get origin NDC for local call lookup from indicator {}, proceeding with original number and type.", originCommLocationIndicatorId);
             }
         }
 
-        log.debug("Finding indicator for effectiveNum: {}, effectiveTtId: {}, ocId: {}, bandOk: {}, prefixId: {}, originCommLocIndId: {}",
+        log.info("Finding indicator for effectiveNum: {}, effectiveTtId: {}, ocId: {}, bandOk: {}, prefixId: {}, originCommLocIndId: {}",
                 effectiveNumberForLookup, effectiveTelephonyTypeId, originCountryId, isPrefixBandOk, currentPrefixId, originCommLocationIndicatorId);
 
         Map<String, Integer> ndcLengths = findNdcMinMaxLength(effectiveTelephonyTypeId, originCountryId);
@@ -198,7 +198,7 @@ public class PrefixInfoLookupService {
         int maxNdcLength = ndcLengths.getOrDefault("max", 0);
 
         if (maxNdcLength == 0 && !effectiveTelephonyTypeId.equals(CdrProcessingConfig.TIPOTELE_LOCAL)) {
-            log.trace("No NDC length range found for effective telephony type {}, cannot find indicator.", effectiveTelephonyTypeId);
+            log.info("No NDC length range found for effective telephony type {}, cannot find indicator.", effectiveTelephonyTypeId);
             return Optional.empty();
         }
 
@@ -225,13 +225,13 @@ public class PrefixInfoLookupService {
             }
 
             if (!ndcStrToMatchInDb.matches("\\d+") || !subscriberPartForSeriesLookup.matches("\\d*")) {
-                log.trace("Skipping NDC lookup: NDC to match in DB '{}' or subscriber part '{}' is not valid.", ndcStrToMatchInDb, subscriberPartForSeriesLookup);
+                log.info("Skipping NDC lookup: NDC to match in DB '{}' or subscriber part '{}' is not valid.", ndcStrToMatchInDb, subscriberPartForSeriesLookup);
                 continue;
             }
 
             int minSubscriberLengthForThisTypeAndNdc = Math.max(0, typeMinDigits - currentNdcLength);
             if (subscriberPartForSeriesLookup.length() < minSubscriberLengthForThisTypeAndNdc) {
-                log.trace("Subscriber part '{}' (from num '{}') too short for NDC '{}' (min subscriber length {})",
+                log.info("Subscriber part '{}' (from num '{}') too short for NDC '{}' (min subscriber length {})",
                         subscriberPartForSeriesLookup, effectiveNumberForLookup, ndcStrToMatchInDb, minSubscriberLengthForThisTypeAndNdc);
                 continue;
             }
@@ -310,7 +310,7 @@ public class PrefixInfoLookupService {
                     if (approximateMatchResult == null) { // Store first approximate match
                         approximateMatchResult = new HashMap<>(seriesData);
                         approximateMatchResult.put("is_approximate", true);
-                        log.trace("Stored approximate match (NDC -1): {}", approximateMatchResult);
+                        log.info("Stored approximate match (NDC -1): {}", approximateMatchResult);
                     }
                     continue; // Continue to see if a non-approximate match is found for this NDC length
                 }
@@ -327,7 +327,7 @@ public class PrefixInfoLookupService {
             return Optional.of(approximateMatchResult);
         }
 
-        log.trace("No indicator found for number: {}", effectiveNumberForLookup);
+        log.info("No indicator found for number: {}", effectiveNumberForLookup);
         return Optional.empty();
     }
 
@@ -338,7 +338,7 @@ public class PrefixInfoLookupService {
         lengths.put("min", 0); lengths.put("max", 0);
         if (telephonyTypeId == null || originCountryId == null) return lengths;
 
-        log.debug("Finding min/max NDC length for telephonyTypeId: {}, originCountryId: {}", telephonyTypeId, originCountryId);
+        log.info("Finding min/max NDC length for telephonyTypeId: {}, originCountryId: {}", telephonyTypeId, originCountryId);
         StringBuilder sqlBuilder = new StringBuilder();
         // Ensure NDC='0' (for local) results in length 0, other NDCs use their actual length.
         sqlBuilder.append("SELECT COALESCE(MIN(CASE WHEN s.ndc = '0' THEN 0 ELSE LENGTH(s.ndc) END), 0) as min_len, ");
@@ -363,15 +363,15 @@ public class PrefixInfoLookupService {
             lengths.put("min", result[0] != null ? ((Number) result[0]).intValue() : 0);
             lengths.put("max", result[1] != null ? ((Number) result[1]).intValue() : 0);
         } catch (Exception e) {
-            log.warn("Could not determine NDC lengths for telephony type {}: {}", telephonyTypeId, e.getMessage());
+            log.info("Could not determine NDC lengths for telephony type {}: {}", telephonyTypeId, e.getMessage());
         }
-        log.trace("NDC lengths for type {}: min={}, max={}", telephonyTypeId, lengths.get("min"), lengths.get("max"));
+        log.info("NDC lengths for type {}: min={}, max={}", telephonyTypeId, lengths.get("min"), lengths.get("max"));
         return lengths;
     }
 
     public Optional<Map<String, Object>> findBaseRateForPrefix(Long prefixId) {
         if (prefixId == null) return Optional.empty();
-        log.debug("Finding base rate for prefixId: {}", prefixId);
+        log.info("Finding base rate for prefixId: {}", prefixId);
         String sql = "SELECT p.base_value, p.vat_included, p.vat_value, p.band_ok, p.telephone_type_id " +
                 "FROM prefix p " +
                 "WHERE p.id = :prefixId AND p.active = true";
@@ -387,23 +387,23 @@ public class PrefixInfoLookupService {
             map.put("telephony_type_id", result[4]);
             return Optional.of(map);
         } catch (NoResultException e) {
-            log.warn("No active prefix found for ID: {}", prefixId);
+            log.info("No active prefix found for ID: {}", prefixId);
             return Optional.empty();
         } catch (Exception e) {
-            log.error("Error finding base rate for prefixId: {}", prefixId, e);
+            log.info("Error finding base rate for prefixId: {}", prefixId, e);
             return Optional.empty();
         }
     }
 
     public Optional<Map<String, Object>> findBandByPrefixAndIndicator(Long prefixId, Long indicatorId, Long originIndicatorId) {
         if (prefixId == null) {
-            log.trace("findBandByPrefixAndIndicator - Invalid input: prefixId is null");
+            log.info("findBandByPrefixAndIndicator - Invalid input: prefixId is null");
             return Optional.empty();
         }
         Long effectiveOriginIndicatorId = originIndicatorId != null ? originIndicatorId : 0L;
         Long effectiveIndicatorId = indicatorId;
 
-        log.debug("Finding band for prefixId: {}, effectiveIndicatorId: {}, effectiveOriginIndicatorId: {}", prefixId, effectiveIndicatorId, effectiveOriginIndicatorId);
+        log.info("Finding band for prefixId: {}, effectiveIndicatorId: {}, effectiveOriginIndicatorId: {}", prefixId, effectiveIndicatorId, effectiveOriginIndicatorId);
 
         StringBuilder sqlBuilder = new StringBuilder();
         sqlBuilder.append("SELECT b.id as band_id, b.value as band_value, b.vat_included as band_vat_included, b.name as band_name ");
@@ -434,20 +434,20 @@ public class PrefixInfoLookupService {
             map.put("band_value", result[1] != null ? result[1] : BigDecimal.ZERO);
             map.put("band_vat_included", result[2] != null ? result[2] : false);
             map.put("band_name", result[3]);
-            log.trace("Found band {} for prefix {}, effective indicator {}", map.get("band_id"), prefixId, effectiveIndicatorId);
+            log.info("Found band {} for prefix {}, effective indicator {}", map.get("band_id"), prefixId, effectiveIndicatorId);
             return Optional.of(map);
         } catch (NoResultException e) {
-            log.trace("No matching band found for prefix {}, effective indicator {}", prefixId, effectiveIndicatorId);
+            log.info("No matching band found for prefix {}, effective indicator {}", prefixId, effectiveIndicatorId);
             return Optional.empty();
         } catch (Exception e) {
-            log.error("Error finding band for prefixId: {}, indicatorId: {}, originIndicatorId: {}", prefixId, effectiveIndicatorId, effectiveOriginIndicatorId, e);
+            log.info("Error finding band for prefixId: {}, indicatorId: {}, originIndicatorId: {}", prefixId, effectiveIndicatorId, effectiveOriginIndicatorId, e);
             return Optional.empty();
         }
     }
 
     public Optional<Integer> findLocalNdcForIndicator(Long indicatorId) {
         if (indicatorId == null || indicatorId <= 0) return Optional.empty();
-        log.debug("Finding local NDC for indicatorId: {}", indicatorId);
+        log.info("Finding local NDC for indicatorId: {}", indicatorId);
         String sql = "SELECT s.ndc FROM series s " +
                 "WHERE s.indicator_id = :indicatorId " +
                 "  AND s.ndc IS NOT NULL AND s.ndc != '0' AND s.ndc ~ '^[1-9][0-9]*$' " +
@@ -459,17 +459,17 @@ public class PrefixInfoLookupService {
         try {
             String ndcStr = (String) query.getSingleResult();
             Integer ndc = Integer.parseInt(ndcStr);
-            log.trace("Found local NDC {} for indicator {}", ndc, indicatorId);
+            log.info("Found local NDC {} for indicator {}", ndc, indicatorId);
             return Optional.of(ndc);
         } catch (NoResultException e) {
-            log.warn("No positive numeric NDC found for indicatorId: {}", indicatorId);
+            log.info("No positive numeric NDC found for indicatorId: {}", indicatorId);
             return Optional.empty();
         } catch (NumberFormatException nfe) {
-            log.error("NDC value fetched for indicatorId {} is not a valid integer: {}", indicatorId, nfe.getMessage());
+            log.info("NDC value fetched for indicatorId {} is not a valid integer: {}", indicatorId, nfe.getMessage());
             return Optional.empty();
         }
         catch (Exception e) {
-            log.error("Error finding local NDC for indicatorId: {}", indicatorId, e);
+            log.info("Error finding local NDC for indicatorId: {}", indicatorId, e);
             return Optional.empty();
         }
     }
@@ -478,7 +478,7 @@ public class PrefixInfoLookupService {
         if (destinationNdc == null || originIndicatorId == null || originIndicatorId <= 0) {
             return false;
         }
-        log.debug("Checking if NDC {} is local extended for origin indicator {}", destinationNdc, originIndicatorId);
+        log.info("Checking if NDC {} is local extended for origin indicator {}", destinationNdc, originIndicatorId);
         String sql = "SELECT COUNT(s.id) FROM series s WHERE s.indicator_id = :originIndicatorId AND s.ndc = :destinationNdcStr AND s.active = true";
         Query query = entityManager.createNativeQuery(sql, Long.class);
         query.setParameter("originIndicatorId", originIndicatorId);
@@ -486,10 +486,10 @@ public class PrefixInfoLookupService {
         try {
             Long count = (Long) query.getSingleResult();
             boolean isExtended = count != null && count > 0;
-            log.trace("Is NDC {} local extended for origin indicator {}: {}", destinationNdc, originIndicatorId, isExtended);
+            log.info("Is NDC {} local extended for origin indicator {}: {}", destinationNdc, originIndicatorId, isExtended);
             return isExtended;
         } catch (Exception e) {
-            log.error("Error checking local extended status for NDC {}, origin indicator {}: {}", destinationNdc, originIndicatorId, e);
+            log.info("Error checking local extended status for NDC {}, origin indicator {}: {}", destinationNdc, originIndicatorId, e);
             return false;
         }
     }
@@ -498,7 +498,7 @@ public class PrefixInfoLookupService {
         if (!StringUtils.hasText(prefixCode) || telephonyTypeId == null || originCountryId == null) {
             return false;
         }
-        log.debug("Checking if prefix {} is unique for type {} in country {}", prefixCode, telephonyTypeId, originCountryId);
+        log.info("Checking if prefix {} is unique for type {} in country {}", prefixCode, telephonyTypeId, originCountryId);
         String sql = "SELECT COUNT(DISTINCT p.operator_id) " +
                 "FROM prefix p " +
                 "JOIN operator op ON p.operator_id = op.id " +
@@ -513,20 +513,20 @@ public class PrefixInfoLookupService {
         try {
             Long count = (Long) query.getSingleResult();
             boolean isUnique = count != null && count == 1;
-            log.trace("Prefix {} unique check for type {} in country {}: {}", prefixCode, telephonyTypeId, originCountryId, isUnique);
+            log.info("Prefix {} unique check for type {} in country {}: {}", prefixCode, telephonyTypeId, originCountryId, isUnique);
             return isUnique;
         } catch (Exception e) {
-            log.error("Error checking prefix uniqueness for code {}, type {}, country {}: {}", prefixCode, telephonyTypeId, originCountryId, e.getMessage(), e);
+            log.info("Error checking prefix uniqueness for code {}, type {}, country {}: {}", prefixCode, telephonyTypeId, originCountryId, e.getMessage(), e);
             return false;
         }
     }
 
     public Optional<Map<String, String>> findNationalSeriesDetailsByNdcAndSubscriber(String ndc, long subscriberNumber, Long originCountryId) {
         if (!StringUtils.hasText(ndc) || originCountryId == null) {
-            log.warn("findNationalSeriesDetails - Invalid input: ndc or originCountryId is null/empty.");
+            log.info("findNationalSeriesDetails - Invalid input: ndc or originCountryId is null/empty.");
             return Optional.empty();
         }
-        log.debug("Finding national series details for NDC: {}, Subscriber: {}, OriginCountryId: {}", ndc, subscriberNumber, originCountryId);
+        log.info("Finding national series details for NDC: {}, Subscriber: {}, OriginCountryId: {}", ndc, subscriberNumber, originCountryId);
 
         StringBuilder sqlBuilder = new StringBuilder();
         sqlBuilder.append("SELECT i.department_country, i.city_name, s.company ");
@@ -554,13 +554,13 @@ public class PrefixInfoLookupService {
             details.put("department_country", (String) result[0]);
             details.put("city_name", (String) result[1]);
             details.put("company", (String) result[2]);
-            log.trace("Found national series details for NDC {}: {}", ndc, details);
+            log.info("Found national series details for NDC {}: {}", ndc, details);
             return Optional.of(details);
         } catch (NoResultException e) {
-            log.trace("No national series details found for NDC: {}, Subscriber: {}", ndc, subscriberNumber);
+            log.info("No national series details found for NDC: {}, Subscriber: {}", ndc, subscriberNumber);
             return Optional.empty();
         } catch (Exception e) {
-            log.error("Error finding national series details for NDC: {}, Subscriber: {}: {}", ndc, subscriberNumber, e.getMessage(), e);
+            log.info("Error finding national series details for NDC: {}, Subscriber: {}: {}", ndc, subscriberNumber, e.getMessage(), e);
             return Optional.empty();
         }
     }
@@ -574,12 +574,12 @@ public class PrefixInfoLookupService {
             CommunicationLocation commLocation
     ) {
         if (originCountryId == null || !StringUtils.hasText(processedNumber)) {
-            log.warn("findMatchingPrefixes - Invalid input: processedNumber or originCountryId is null/empty.");
+            log.info("findMatchingPrefixes - Invalid input: processedNumber or originCountryId is null/empty.");
             return Collections.emptyList();
         }
 
         String numberForLog = processedNumber.length() > 6 ? processedNumber.substring(0, 6) + "..." : processedNumber;
-        log.debug("Finding matching prefixes for number: '{}', originCountryId: {}, isTrunkCall: {}, allowedTrunkTypes: {}, forcedType: {}",
+        log.info("Finding matching prefixes for number: '{}', originCountryId: {}, isTrunkCall: {}, allowedTrunkTypes: {}, forcedType: {}",
                 numberForLog, originCountryId, isTrunkCall, allowedTelephonyTypeIdsForTrunk, forcedTelephonyTypeIdFromPreprocessing);
 
         StringBuilder sqlBuilder = new StringBuilder();
@@ -605,17 +605,17 @@ public class PrefixInfoLookupService {
         if (isTrunkCall && allowedTelephonyTypeIdsForTrunk != null && !allowedTelephonyTypeIdsForTrunk.isEmpty()) {
             sqlBuilder.append("  AND p.telephone_type_id IN (:allowedTelephonyTypeIdsForTrunk) ");
             queryParams.put("allowedTelephonyTypeIdsForTrunk", allowedTelephonyTypeIdsForTrunk);
-            log.trace("Trunk call: Filtering prefixes by allowed TelephonyType IDs: {}", allowedTelephonyTypeIdsForTrunk);
+            log.info("Trunk call: Filtering prefixes by allowed TelephonyType IDs: {}", allowedTelephonyTypeIdsForTrunk);
         } else {
             sqlBuilder.append("  AND :number LIKE p.code || '%' ");
             queryParams.put("number", processedNumber);
-            log.trace("Non-trunk call or no specific trunk types: Matching prefixes by code against number: '{}'", numberForLog);
+            log.info("Non-trunk call or no specific trunk types: Matching prefixes by code against number: '{}'", numberForLog);
         }
 
         if (forcedTelephonyTypeIdFromPreprocessing != null) {
             sqlBuilder.append("  AND p.telephone_type_id = :forcedTelephonyTypeId ");
             queryParams.put("forcedTelephonyTypeId", forcedTelephonyTypeIdFromPreprocessing);
-            log.trace("Further filtering prefixes by forced TelephonyType ID: {}", forcedTelephonyTypeIdFromPreprocessing);
+            log.info("Further filtering prefixes by forced TelephonyType ID: {}", forcedTelephonyTypeIdFromPreprocessing);
         }
 
         sqlBuilder.append("ORDER BY LENGTH(p.code) DESC, p.code DESC, COALESCE(ttc.min_value, 0) DESC, tt.id ASC, p.id ASC");
@@ -643,7 +643,7 @@ public class PrefixInfoLookupService {
             initialMappedResults.add(map);
         }
 
-        log.trace("Found {} candidate prefixes from SQL for number lookup (isTrunk: {})", initialMappedResults.size(), isTrunkCall);
+        log.info("Found {} candidate prefixes from SQL for number lookup (isTrunk: {})", initialMappedResults.size(), isTrunkCall);
 
         List<Map<String, Object>> finalResults = new ArrayList<>(initialMappedResults);
 
@@ -657,7 +657,7 @@ public class PrefixInfoLookupService {
                         return (currentCode == null ? "" : currentCode).equals(effectiveLongestCode);
                     })
                     .collect(Collectors.toList());
-            log.debug("Non-trunk call: Filtered to {} prefixes matching the longest code '{}'", finalResults.size(), effectiveLongestCode);
+            log.info("Non-trunk call: Filtered to {} prefixes matching the longest code '{}'", finalResults.size(), effectiveLongestCode);
         }
 
         if (!isTrunkCall) {
@@ -665,7 +665,7 @@ public class PrefixInfoLookupService {
                     .anyMatch(map -> Long.valueOf(CdrProcessingConfig.TIPOTELE_LOCAL).equals(map.get("telephony_type_id")));
 
             if (!localPrefixFoundInFilteredResults) {
-                log.debug("TIPOTELE_LOCAL not found in filtered results for non-trunk call, attempting explicit add for number: {}", numberForLog);
+                log.info("TIPOTELE_LOCAL not found in filtered results for non-trunk call, attempting explicit add for number: {}", numberForLog);
                 Optional<Operator> localInternalOperatorOpt = configService.getOperatorInternal(CdrProcessingConfig.TIPOTELE_LOCAL, originCountryId);
                 if (localInternalOperatorOpt.isPresent()) {
                     Long localOperatorId = localInternalOperatorOpt.get().getId();
@@ -694,16 +694,16 @@ public class PrefixInfoLookupService {
                             finalResults.add(localPrefixMap);
                             log.info("Explicitly added TIPOTELE_LOCAL prefix to candidates for number: {}", numberForLog);
                         } else {
-                            log.debug("Explicit local prefix add: number {} length {} is less than min length {} for local type.", numberForLog, processedNumber.length(), minLengthForLocal);
+                            log.info("Explicit local prefix add: number {} length {} is less than min length {} for local type.", numberForLog, processedNumber.length(), minLengthForLocal);
                         }
                     } else {
-                        log.warn("Explicit local prefix add: Could not find prefix definition for TIPOTELE_LOCAL ({}), Operator {}, Country {}.", CdrProcessingConfig.TIPOTELE_LOCAL, localOperatorId, originCountryId);
+                        log.info("Explicit local prefix add: Could not find prefix definition for TIPOTELE_LOCAL ({}), Operator {}, Country {}.", CdrProcessingConfig.TIPOTELE_LOCAL, localOperatorId, originCountryId);
                     }
                 } else {
-                    log.warn("Explicit local prefix add: Could not find internal operator for TIPOTELE_LOCAL ({}) in Country {}.", CdrProcessingConfig.TIPOTELE_LOCAL, originCountryId);
+                    log.info("Explicit local prefix add: Could not find internal operator for TIPOTELE_LOCAL ({}) in Country {}.", CdrProcessingConfig.TIPOTELE_LOCAL, originCountryId);
                 }
             } else {
-                log.debug("TIPOTELE_LOCAL was already found in filtered results. No explicit add needed.");
+                log.info("TIPOTELE_LOCAL was already found in filtered results. No explicit add needed.");
             }
         }
         return finalResults;
@@ -711,10 +711,10 @@ public class PrefixInfoLookupService {
 
     public Optional<Prefix> findPrefixByTypeOperatorOrigin(Long telephonyTypeId, Long operatorId, Long originCountryId) {
         if (telephonyTypeId == null || operatorId == null || originCountryId == null) {
-            log.trace("findPrefixByTypeOperatorOrigin - Invalid input: ttId={}, opId={}, ocId={}", telephonyTypeId, operatorId, originCountryId);
+            log.info("findPrefixByTypeOperatorOrigin - Invalid input: ttId={}, opId={}, ocId={}", telephonyTypeId, operatorId, originCountryId);
             return Optional.empty();
         }
-        log.debug("Finding prefix for type {}, operator {}, origin country {}", telephonyTypeId, operatorId, originCountryId);
+        log.info("Finding prefix for type {}, operator {}, origin country {}", telephonyTypeId, operatorId, originCountryId);
 
         StringBuilder sqlBuilder = new StringBuilder();
         sqlBuilder.append("SELECT p.* FROM prefix p ");
@@ -734,10 +734,10 @@ public class PrefixInfoLookupService {
             Prefix prefix = (Prefix) query.getSingleResult();
             return Optional.of(prefix);
         } catch (NoResultException e) {
-            log.warn("No active prefix found for type {}, operator {}, origin country {}", telephonyTypeId, operatorId, originCountryId);
+            log.info("No active prefix found for type {}, operator {}, origin country {}", telephonyTypeId, operatorId, originCountryId);
             return Optional.empty();
         } catch (Exception e) {
-            log.error("Error finding prefix for type {}, operator {}, origin country {}: {}", telephonyTypeId, operatorId, originCountryId, e.getMessage(), e);
+            log.info("Error finding prefix for type {}, operator {}, origin country {}: {}", telephonyTypeId, operatorId, originCountryId, e.getMessage(), e);
             return Optional.empty();
         }
     }
@@ -745,7 +745,7 @@ public class PrefixInfoLookupService {
     public Optional<Map<String, Object>> findInternalPrefixMatch(String number, Long originCountryId) {
         if (originCountryId == null || !StringUtils.hasText(number)) return Optional.empty();
         String numberForLog = number.length() > 6 ? number.substring(0, 6) + "..." : number;
-        log.debug("Finding internal prefix match for number starting with: {}, originCountryId: {}", numberForLog, originCountryId);
+        log.info("Finding internal prefix match for number starting with: {}, originCountryId: {}", numberForLog, originCountryId);
 
         Set<Long> internalTypes = CdrProcessingConfig.getInternalIpCallTypeIds();
         if (internalTypes.isEmpty()) return Optional.empty();
@@ -771,13 +771,13 @@ public class PrefixInfoLookupService {
             Map<String, Object> map = new HashMap<>();
             map.put("telephony_type_id", result[0]);
             map.put("operator_id", result[1]);
-            log.trace("Found internal prefix match for number {}: Type={}, Op={}", numberForLog, result[0], result[1]);
+            log.info("Found internal prefix match for number {}: Type={}, Op={}", numberForLog, result[0], result[1]);
             return Optional.of(map);
         } catch (NoResultException e) {
-            log.trace("No internal prefix match found for number {}", numberForLog);
+            log.info("No internal prefix match found for number {}", numberForLog);
             return Optional.empty();
         } catch (Exception e) {
-            log.error("Error finding internal prefix match for number {}: {}", numberForLog, e.getMessage(), e);
+            log.info("Error finding internal prefix match for number {}: {}", numberForLog, e.getMessage(), e);
             return Optional.empty();
         }
     }

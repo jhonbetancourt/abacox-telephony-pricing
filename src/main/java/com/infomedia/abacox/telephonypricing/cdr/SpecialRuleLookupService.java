@@ -28,10 +28,10 @@ public class SpecialRuleLookupService {
 
     public Optional<PbxSpecialRule> findPbxSpecialRule(String dialedNumber, Long commLocationId, int direction) {
         if (!StringUtils.hasText(dialedNumber) || commLocationId == null) {
-            log.trace("findPbxSpecialRule - Invalid input: dialedNumber={}, commLocationId={}", dialedNumber, commLocationId);
+            log.info("findPbxSpecialRule - Invalid input: dialedNumber={}, commLocationId={}", dialedNumber, commLocationId);
             return Optional.empty();
         }
-        log.debug("Finding PBX special rule for number: {}, commLocationId: {}, direction: {}", dialedNumber, commLocationId, direction);
+        log.info("Finding PBX special rule for number: {}, commLocationId: {}, direction: {}", dialedNumber, commLocationId, direction);
 
         List<PbxSpecialRule> candidates = findPbxSpecialRuleCandidates(commLocationId, direction);
 
@@ -48,30 +48,30 @@ public class SpecialRuleLookupService {
                         String trimmedIgnore = ignore.trim();
                         if (!trimmedIgnore.isEmpty() && dialedNumber.startsWith(trimmedIgnore)) {
                             match = false;
-                            log.trace("Rule {} ignored for number {} due to ignore pattern '{}'", rule.getId(), dialedNumber, trimmedIgnore);
+                            log.info("Rule {} ignored for number {} due to ignore pattern '{}'", rule.getId(), dialedNumber, trimmedIgnore);
                             break;
                         }
                     }
                 }
                 if (match && rule.getMinLength() != null && dialedNumber.length() < rule.getMinLength()) {
                     match = false;
-                    log.trace("Rule {} ignored for number {} due to minLength ({} < {})", rule.getId(), dialedNumber, dialedNumber.length(), rule.getMinLength());
+                    log.info("Rule {} ignored for number {} due to minLength ({} < {})", rule.getId(), dialedNumber, dialedNumber.length(), rule.getMinLength());
                 }
             }
 
             if (match) {
-                log.trace("Found matching PBX special rule {} for number {}", rule.getId(), dialedNumber);
+                log.info("Found matching PBX special rule {} for number {}", rule.getId(), dialedNumber);
                 return Optional.of(rule);
             }
         }
 
-        log.trace("No matching PBX special rule found for number {}", dialedNumber);
+        log.info("No matching PBX special rule found for number {}", dialedNumber);
         return Optional.empty();
     }
 
     public List<PbxSpecialRule> findPbxSpecialRuleCandidates(Long commLocationId, int direction) {
         if (commLocationId == null) return Collections.emptyList();
-        log.debug("Finding PBX special rule candidates for commLocationId: {}, direction: {}", commLocationId, direction);
+        log.info("Finding PBX special rule candidates for commLocationId: {}, direction: {}", commLocationId, direction);
         String sql = "SELECT p.* FROM pbx_special_rule p " +
                 "WHERE p.active = true " +
                 "  AND (p.comm_location_id = :commLocationId OR p.comm_location_id IS NULL OR p.comm_location_id = 0) " +
@@ -83,7 +83,7 @@ public class SpecialRuleLookupService {
         try {
             return query.getResultList();
         } catch (Exception e) {
-            log.error("Error finding PBX special rule candidates for commLocationId: {}, direction: {}", commLocationId, direction, e);
+            log.info("Error finding PBX special rule candidates for commLocationId: {}, direction: {}", commLocationId, direction, e);
             return Collections.emptyList();
         }
     }
@@ -95,7 +95,7 @@ public class SpecialRuleLookupService {
         Long effectiveOperatorId = operatorId != null ? operatorId : 0L;
         Long effectiveBandId = bandId != null ? bandId : 0L;
 
-        log.debug("Finding special rate values for ttId: {}, opId: {}, bandId: {}, effectiveOriginIndId: {}, dateTime: {}",
+        log.info("Finding special rate values for ttId: {}, opId: {}, bandId: {}, effectiveOriginIndId: {}, dateTime: {}",
                 effectiveTelephonyTypeId, effectiveOperatorId, effectiveBandId, effectiveOriginIndicatorId, callDateTime);
 
         int dayOfWeek = callDateTime.getDayOfWeek().getValue();
@@ -111,7 +111,7 @@ public class SpecialRuleLookupService {
             case 6: dayColumn = "srv.saturday_enabled"; break;
             case 7: dayColumn = "srv.sunday_enabled"; break;
             default:
-                log.error("Invalid day of week: {}", dayOfWeek);
+                log.info("Invalid day of week: {}", dayOfWeek);
                 return Collections.emptyList();
         }
 
@@ -160,10 +160,10 @@ public class SpecialRuleLookupService {
                 map.put("prefix_vat_value", row[6]);
                 mappedResults.add(map);
             }
-            log.trace("Found {} special rate candidates", mappedResults.size());
+            log.info("Found {} special rate candidates", mappedResults.size());
             return mappedResults;
         } catch (Exception e) {
-            log.error("Error finding special rate values for ttId: {}, opId: {}, bandId: {}, originIndId: {}, dateTime: {}",
+            log.info("Error finding special rate values for ttId: {}, opId: {}, bandId: {}, originIndId: {}, dateTime: {}",
                     effectiveTelephonyTypeId, effectiveOperatorId, effectiveBandId, effectiveOriginIndicatorId, callDateTime, e);
             return Collections.emptyList();
         }
@@ -171,11 +171,11 @@ public class SpecialRuleLookupService {
 
     public Optional<SpecialService> findSpecialService(String phoneNumber, Long indicatorId, Long originCountryId) {
         if (!StringUtils.hasText(phoneNumber) || originCountryId == null) {
-            log.trace("findSpecialService - Invalid input: phone={}, indId={}, ocId={}", phoneNumber, indicatorId, originCountryId);
+            log.info("findSpecialService - Invalid input: phone={}, indId={}, ocId={}", phoneNumber, indicatorId, originCountryId);
             return Optional.empty();
         }
         Long effectiveIndicatorId = indicatorId != null ? indicatorId : 0L;
-        log.debug("Finding special service for number: {}, effectiveIndicatorId: {}, originCountryId: {}", phoneNumber, effectiveIndicatorId, originCountryId);
+        log.info("Finding special service for number: {}, effectiveIndicatorId: {}, originCountryId: {}", phoneNumber, effectiveIndicatorId, originCountryId);
 
         String sql = "SELECT ss.* FROM special_service ss " +
                 "WHERE ss.active = true " +
@@ -192,10 +192,10 @@ public class SpecialRuleLookupService {
             SpecialService service = (SpecialService) query.getSingleResult();
             return Optional.of(service);
         } catch (NoResultException e) {
-            log.trace("No active special service found for number: {}, indId: {}, originId: {}", phoneNumber, effectiveIndicatorId, originCountryId);
+            log.info("No active special service found for number: {}, indId: {}, originId: {}", phoneNumber, effectiveIndicatorId, originCountryId);
             return Optional.empty();
         } catch (Exception e) {
-            log.error("Error finding special service for number: {}, indId: {}, originId: {}", phoneNumber, effectiveIndicatorId, originCountryId, e);
+            log.info("Error finding special service for number: {}, indId: {}, originId: {}", phoneNumber, effectiveIndicatorId, originCountryId, e);
             return Optional.empty();
         }
     }

@@ -43,7 +43,7 @@ public class CdrProcessingService {
 
         Optional<CommunicationLocation> commLocationOpt = entityLookupService.findCommunicationLocationById(metadata.getCommunicationLocationId());
         if (commLocationOpt.isEmpty()) {
-            log.error("Cannot process CDRs: CommunicationLocation with ID {} not found or inactive.", metadata.getCommunicationLocationId());
+            log.info("Cannot process CDRs: CommunicationLocation with ID {} not found or inactive.", metadata.getCommunicationLocationId());
             return;
         }
         CommunicationLocation commLocation = commLocationOpt.get();
@@ -58,7 +58,7 @@ public class CdrProcessingService {
             String line;
             while ((line = reader.readLine()) != null) {
                 long currentLineNum = totalLinesRead.incrementAndGet();
-                log.trace("Processing line {}: {}", currentLineNum, line);
+                log.info("Processing line {}: {}", currentLineNum, line);
 
                 if (line.trim().isEmpty()) { continue; }
 
@@ -67,10 +67,10 @@ public class CdrProcessingService {
                         headerMap = cdrParser.parseHeader(line);
                         log.info("Detected and parsed header line.");
                     } catch (Exception e) {
-                        log.error("Failed to parse header line: {}", line, e);
+                        log.info("Failed to parse header line: {}", line, e);
                         createAndSaveFailure(line, metadata, commLocation, "Header Parsing", "Failed to parse header: " + e.getMessage(), null);
                         failedRecords.incrementAndGet();
-                        log.error("Stopping processing due to header parse failure.");
+                        log.info("Stopping processing due to header parse failure.");
                         break;
                     }
                     continue;
@@ -79,12 +79,12 @@ public class CdrProcessingService {
                 // Skip data type definition line (simple check)
                 String trimmedUpperLine = line.trim().toUpperCase();
                 if (trimmedUpperLine.startsWith("INTEGER,") || trimmedUpperLine.startsWith("VARCHAR(")) {
-                    log.debug("Skipping data type definition line {}: {}", currentLineNum, line.substring(0, Math.min(line.length(), 100)) + "...");
+                    log.info("Skipping data type definition line {}: {}", currentLineNum, line.substring(0, Math.min(line.length(), 100)) + "...");
                     continue;
                 }
 
                 if (headerMap == null) {
-                     log.warn("Skipping line {} because header has not been detected/parsed yet: {}", currentLineNum, line);
+                     log.info("Skipping line {} because header has not been detected/parsed yet: {}", currentLineNum, line);
                      createAndSaveFailure(line, metadata, commLocation, "Parsing", "Header Missing or Not Yet Parsed", null);
                      failedRecords.incrementAndGet();
                      continue;
@@ -109,7 +109,7 @@ public class CdrProcessingService {
 
                         // *** Duplicate Check using hash from DTO ***
                         if (callRecordRepository.existsByCdrHash(cdrHash)) {
-                            log.warn("Skipping duplicate CDR line {} (Hash: {})", currentLineNum, cdrHash);
+                            log.info("Skipping duplicate CDR line {} (Hash: {})", currentLineNum, cdrHash);
                             skippedDuplicateRecords.incrementAndGet();
                             continue; // Skip duplicate
                         }
@@ -130,13 +130,13 @@ public class CdrProcessingService {
 
                         } else {
                             // Enrichment failed
-                            log.warn("Enrichment failed for line {}", currentLineNum);
+                            log.info("Enrichment failed for line {}", currentLineNum);
                             failedRecords.incrementAndGet();
                             createAndSaveFailure(line, metadata, commLocation, failureStep, failureMsg, callingNumForFailure);
                         }
                     } else {
                         // Parser failed for a data line
-                        log.warn("Parser skipped or failed data line {}", currentLineNum);
+                        log.info("Parser skipped or failed data line {}", currentLineNum);
                         failedRecords.incrementAndGet();
                         createAndSaveFailure(line, metadata, commLocation, failureStep, "Invalid or Skipped CDR data line format", null);
                     }
@@ -147,17 +147,17 @@ public class CdrProcessingService {
                         rootCause = rootCause.getCause();
                     }
                     if (rootCause instanceof java.sql.SQLIntegrityConstraintViolationException && rootCause.getMessage().toLowerCase().contains("uk_call_record_cdr_hash")) {
-                         log.warn("Attempted to insert duplicate CDR line {} (Hash constraint violation). Skipping.", currentLineNum);
+                         log.info("Attempted to insert duplicate CDR line {} (Hash constraint violation). Skipping.", currentLineNum);
                          skippedDuplicateRecords.incrementAndGet();
                     } else {
-                        log.error("Exception processing data line {}: {}", currentLineNum, line, e);
+                        log.info("Exception processing data line {}: {}", currentLineNum, line, e);
                         failedRecords.incrementAndGet();
                         createAndSaveFailure(line, metadata, commLocation, failureStep, e.getMessage(), callingNumForFailure);
                     }
                 }
             } // End while loop
         } catch (IOException e) {
-            log.error("IOException while reading CDR stream for source '{}': {}", metadata.getSourceDescription(), e.getMessage(), e);
+            log.info("IOException while reading CDR stream for source '{}': {}", metadata.getSourceDescription(), e.getMessage(), e);
             createAndSaveFailure("IOException reading stream", metadata, commLocation, "Stream Reading", e.getMessage(), null);
             failedRecords.incrementAndGet();
         }
@@ -184,7 +184,7 @@ public class CdrProcessingService {
                     .build();
             persistenceService.saveFailedCallRecord(failure);
         } catch (Exception ex) {
-            log.error("CRITICAL: Failed to save failure record for line: [{}]. Error: {}", line.substring(0, Math.min(line.length(), 100))+"...", ex.getMessage(), ex);
+            log.info("CRITICAL: Failed to save failure record for line: [{}]. Error: {}", line.substring(0, Math.min(line.length(), 100))+"...", ex.getMessage(), ex);
         }
     }
 }

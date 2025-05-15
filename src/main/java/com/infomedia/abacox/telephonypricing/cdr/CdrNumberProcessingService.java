@@ -41,9 +41,9 @@ public class CdrNumberProcessingService {
             int prefixLengthFound = getPrefixLength(currentNumber, pbxPrefixes);
             if (prefixLengthFound > 0) {
                 currentNumber = currentNumber.substring(prefixLengthFound);
-                log.trace("Removed PBX prefix (length {}) from {}, result: {}", prefixLengthFound, originalNumberForLog, currentNumber);
+                log.info("Removed PBX prefix (length {}) from {}, result: {}", prefixLengthFound, originalNumberForLog, currentNumber);
             } else if (prefixLengthFound == 0) { // PHP: $maxCaracterAExtraer == 0 (prefix defined but not found)
-                 log.trace("PBX prefix removal requested for '{}', but no matching prefix found. Number considered invalid for this path.", originalNumberForLog);
+                 log.info("PBX prefix removal requested for '{}', but no matching prefix found. Number considered invalid for this path.", originalNumberForLog);
                  // In PHP, if $maxCaracterAExtraer == 0, $nuevo becomes ''. If $modo_seguro is false, it returns ''.
                  // If $modo_seguro is true, it would return original.
                  // For `procesaSaliente_Complementar` (which calls `evaluarDestino_pos` -> `limpiar_numero`),
@@ -91,7 +91,7 @@ public class CdrNumberProcessingService {
         restOfString = numericRest.toString();
         String cleaned = firstChar + restOfString;
 
-        log.trace("Cleaned number: Original='{}', PBXPrefixes={}, removePbxPrefixIfNeeded={}, Result='{}'", originalNumberForLog, pbxPrefixes, removePbxPrefixIfNeeded, cleaned);
+        log.info("Cleaned number: Original='{}', PBXPrefixes={}, removePbxPrefixIfNeeded={}, Result='{}'", originalNumberForLog, pbxPrefixes, removePbxPrefixIfNeeded, cleaned);
         return cleaned;
     }
 
@@ -147,7 +147,7 @@ public class CdrNumberProcessingService {
                             forcedTelephonyType.setValue(CdrProcessingConfig.TIPOTELE_CELULAR);
                         }
                     } catch (NumberFormatException e) {
-                        log.trace("Non-numeric prefix for 10-digit number starting with 3: {}", firstThree);
+                        log.info("Non-numeric prefix for 10-digit number starting with 3: {}", firstThree);
                     }
                 }
             } else if (number.startsWith("60")) {
@@ -205,7 +205,7 @@ public class CdrNumberProcessingService {
                             forcedTelephonyType.setValue(CdrProcessingConfig.TIPOTELE_CELULAR);
                         }
                     } catch (NumberFormatException e) {
-                        log.trace("Non-numeric prefix for 12-digit mobile: {}", firstThreeOfMobile);
+                        log.info("Non-numeric prefix for 12-digit mobile: {}", firstThreeOfMobile);
                     }
                 }
             } else if (number.startsWith("5760") || number.startsWith("6060")) {
@@ -239,7 +239,7 @@ public class CdrNumberProcessingService {
                             forcedTelephonyType.setValue(CdrProcessingConfig.TIPOTELE_CELULAR);
                         }
                     } catch (NumberFormatException e) {
-                        log.trace("Non-numeric prefix for 11-digit '03...' mobile: {}", firstThreeOfMobile);
+                        log.info("Non-numeric prefix for 11-digit '03...' mobile: {}", firstThreeOfMobile);
                     }
                 }
             } else if (number.startsWith("604")) {
@@ -258,7 +258,7 @@ public class CdrNumberProcessingService {
         }
 
         if (!originalNumberLog.equals(processedNumber)) {
-            log.debug("Preprocessed Colombian number for lookup: {} -> {}. Forced Type: {}", originalNumberLog, processedNumber, forcedTelephonyType.getValue());
+            log.info("Preprocessed Colombian number for lookup: {} -> {}. Forced Type: {}", originalNumberLog, processedNumber, forcedTelephonyType.getValue());
         }
         return processedNumber;
     }

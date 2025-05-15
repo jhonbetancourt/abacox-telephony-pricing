@@ -143,27 +143,27 @@ public class CiscoCm60Parser implements CdrParser {
     @Override
     public Optional<StandardizedCallEventDto> parseLine(String line, Map<String, Integer> headerMap, CdrProcessingRequest metadata) {
         if (line == null || line.trim().isEmpty() || isHeaderLine(line) || line.startsWith(";")) {
-            log.trace("Skipping empty, header, or comment line: {}", line);
+            log.info("Skipping empty, header, or comment line: {}", line);
             return Optional.empty();
         }
         String trimmedUpperLine = line.trim().toUpperCase();
         if (trimmedUpperLine.startsWith("INTEGER,") || trimmedUpperLine.startsWith("VARCHAR(")) {
-            log.debug("Skipping data type definition line: {}", line.substring(0, Math.min(line.length(), 100)) + "...");
+            log.info("Skipping data type definition line: {}", line.substring(0, Math.min(line.length(), 100)) + "...");
             return Optional.empty();
         }
 
         if (headerMap == null || headerMap.isEmpty()) {
-            log.warn("Header map is missing or empty, cannot parse line accurately: {}", line);
+            log.info("Header map is missing or empty, cannot parse line accurately: {}", line);
             return Optional.empty();
         }
          if (!line.contains(DELIMITER)) {
-            log.warn("Line does not contain delimiter '{}': {}", DELIMITER, line);
+            log.info("Line does not contain delimiter '{}': {}", DELIMITER, line);
             return Optional.empty();
         }
 
         String cdrHash = HashUtil.sha256(line);
         if (cdrHash == null) {
-            log.error("CRITICAL: Failed to generate hash for line. Skipping.");
+            log.info("CRITICAL: Failed to generate hash for line. Skipping.");
             return Optional.empty();
         }
 
@@ -174,7 +174,7 @@ public class CiscoCm60Parser implements CdrParser {
 
         int expectedFields = headerMap.values().stream().max(Integer::compareTo).orElse(MIN_EXPECTED_FIELDS -1) + 1;
         if (fields.length < expectedFields && fields.length < MIN_EXPECTED_FIELDS) {
-            log.warn("Line has {} fields, expected at least {} (from header) or {} (static min). Line: {}", fields.length, expectedFields, MIN_EXPECTED_FIELDS, line);
+            log.info("Line has {} fields, expected at least {} (from header) or {} (static min). Line: {}", fields.length, expectedFields, MIN_EXPECTED_FIELDS, line);
             return Optional.empty();
         }
 
@@ -183,14 +183,14 @@ public class CiscoCm60Parser implements CdrParser {
             // --- Raw field extraction ---
             String globalCallId_callId = getField(fields, headerMap, "globalCallID_callId");
             if (Strings.isBlank(globalCallId_callId)) {
-                log.error("Mandatory field 'globalCallID_callId' is blank or missing in CDR line. Skipping. Line: {}", line);
+                log.info("Mandatory field 'globalCallID_callId' is blank or missing in CDR line. Skipping. Line: {}", line);
                 return Optional.empty();
             }
 
             String dateTimeOriginationStr = getField(fields, headerMap, "dateTimeOrigination");
             LocalDateTime dateTimeOrigination = parseTimestamp(dateTimeOriginationStr);
             if (dateTimeOrigination == null) {
-                log.error("Mandatory field 'dateTimeOrigination' is blank, zero, or invalid ('{}') in CDR line. Skipping. Line: {}", dateTimeOriginationStr, line);
+                log.info("Mandatory field 'dateTimeOrigination' is blank, zero, or invalid ('{}') in CDR line. Skipping. Line: {}", dateTimeOriginationStr, line);
                 return Optional.empty();
             }
 
@@ -302,12 +302,12 @@ public class CiscoCm60Parser implements CdrParser {
             }
 
             if (isConference && callingPartyNumber.value.equals(finalCalledPartyNumber.value)) {
-                log.warn("Conference call leg has identical caller and called parties after processing ({}). Skipping.", callingPartyNumber.value);
+                log.info("Conference call leg has identical caller and called parties after processing ({}). Skipping.", callingPartyNumber.value);
                 return Optional.empty();
             }
 
             if (Strings.isNotBlank(finalMobileCalledPartyNumber) && !finalMobileCalledPartyNumber.equals(finalCalledPartyNumber.value)) {
-                log.debug("Mobile redirection. Original final called: {}, Mobile final called: {}", finalCalledPartyNumber.value, finalMobileCalledPartyNumber);
+                log.info("Mobile redirection. Original final called: {}, Mobile final called: {}", finalCalledPartyNumber.value, finalMobileCalledPartyNumber);
                 finalCalledPartyNumber.value = finalMobileCalledPartyNumber;
                 if (transferCause == CallTransferCause.NONE) {
                     transferCause = CallTransferCause.AUTO;
@@ -317,7 +317,7 @@ public class CiscoCm60Parser implements CdrParser {
             if (Strings.isNotBlank(lastRedirectDn.value) &&
                 (lastRedirectDn.value.equals(callingPartyNumber.value) || lastRedirectDn.value.equals(finalCalledPartyNumber.value)) &&
                 transferCause != CallTransferCause.CONFERENCE && transferCause != CallTransferCause.CONFERENCE_NOW && transferCause != CallTransferCause.CONFERENCE_END && transferCause != CallTransferCause.PRE_CONFERENCE_NOW) {
-                log.trace("Clearing redirecting party '{}' as it matches caller or called.", lastRedirectDn.value);
+                log.info("Clearing redirecting party '{}' as it matches caller or called.", lastRedirectDn.value);
                 lastRedirectDn.value = "";
                 // lastRedirectDnPartition.value = ""; // Partition also cleared if number is cleared
                 transferCause = CallTransferCause.NONE;
@@ -349,11 +349,11 @@ public class CiscoCm60Parser implements CdrParser {
             builder.sourceDescription(metadata.getSourceDescription());
 
             StandardizedCallEventDto dto = builder.build();
-            log.trace("Successfully parsed and standardized CDR line into DTO: {}", dto.getGlobalCallId());
+            log.info("Successfully parsed and standardized CDR line into DTO: {}", dto.getGlobalCallId());
             return Optional.of(dto);
 
         } catch (Exception e) {
-            log.error("Failed to parse/standardize CDR line: {} - Error: {}", line, e.getMessage(), e);
+            log.info("Failed to parse/standardize CDR line: {} - Error: {}", line, e.getMessage(), e);
             return Optional.empty();
         }
     }
@@ -370,7 +370,7 @@ public class CiscoCm60Parser implements CdrParser {
                 return HEADER_START_TOKEN.equalsIgnoreCase(firstFieldCleaned);
             }
         } catch (Exception e) {
-            log.warn("Error checking if line is header: {}", line, e);
+            log.info("Error checking if line is header: {}", line, e);
         }
         return false;
     }
@@ -379,7 +379,7 @@ public class CiscoCm60Parser implements CdrParser {
     public Map<String, Integer> parseHeader(String headerLine) {
         Map<String, Integer> headerMap = new HashMap<>();
         if (headerLine == null || !isHeaderLine(headerLine)) {
-            log.warn("Provided line is not a valid header line: {}", headerLine);
+            log.info("Provided line is not a valid header line: {}", headerLine);
             return headerMap;
         }
         String[] headers = headerLine.split(DELIMITER, -1);
@@ -392,7 +392,7 @@ public class CiscoCm60Parser implements CdrParser {
                 headerMap.put(canonicalInternalKey, i);
             }
         }
-        log.debug("Parsed header map: {}", headerMap);
+        log.info("Parsed header map: {}", headerMap);
         return headerMap;
     }
 
@@ -427,7 +427,7 @@ public class CiscoCm60Parser implements CdrParser {
                 return toUpper ? ipConvertedValue.toUpperCase() : ipConvertedValue;
             }
         }
-        log.trace("Header key '{}' not found in header map or index out of bounds.", canonicalInternalFieldName);
+        log.info("Header key '{}' not found in header map or index out of bounds.", canonicalInternalFieldName);
         return "";
     }
 
@@ -440,10 +440,10 @@ public class CiscoCm60Parser implements CdrParser {
             if (epochSeconds == 0) return null;
             return LocalDateTime.ofInstant(Instant.ofEpochSecond(epochSeconds), ZoneOffset.UTC);
         } catch (NumberFormatException e) {
-            log.warn("Could not parse timestamp: '{}'. Returning null.", timestampStr);
+            log.info("Could not parse timestamp: '{}'. Returning null.", timestampStr);
             return null;
         } catch (Exception e) {
-            log.error("Error converting epoch seconds {} to LocalDateTime: {}", timestampStr, e.getMessage());
+            log.info("Error converting epoch seconds {} to LocalDateTime: {}", timestampStr, e.getMessage());
             return null;
         }
     }
@@ -454,12 +454,12 @@ public class CiscoCm60Parser implements CdrParser {
         }
         try {
             if (!intStr.matches("-?\\d+")) {
-                 log.warn("Non-numeric value encountered where integer expected: '{}'. Returning 0.", intStr);
+                 log.info("Non-numeric value encountered where integer expected: '{}'. Returning 0.", intStr);
                  return 0;
             }
             return Integer.parseInt(intStr);
         } catch (NumberFormatException e) {
-            log.warn("Could not parse integer: '{}'. Returning 0.", intStr);
+            log.info("Could not parse integer: '{}'. Returning 0.", intStr);
             return 0;
         }
     }
@@ -470,12 +470,12 @@ public class CiscoCm60Parser implements CdrParser {
         }
         try {
              if (!intStr.matches("-?\\d+")) {
-                 log.warn("Non-numeric value encountered where optional integer expected: '{}'. Returning null.", intStr);
+                 log.info("Non-numeric value encountered where optional integer expected: '{}'. Returning null.", intStr);
                  return null;
             }
             return Integer.parseInt(intStr);
         } catch (NumberFormatException e) {
-            log.warn("Could not parse optional integer: '{}'. Returning null.", intStr);
+            log.info("Could not parse optional integer: '{}'. Returning null.", intStr);
             return null;
         }
     }
@@ -525,10 +525,10 @@ public class CiscoCm60Parser implements CdrParser {
                    Integer.parseInt(hexParts[0], 16);
 
         } catch (NumberFormatException e) {
-            log.warn("Could not parse value '{}' as long for dec2ip conversion. Returning original.", decStr);
+            log.info("Could not parse value '{}' as long for dec2ip conversion. Returning original.", decStr);
             return decStr;
         } catch (Exception e) {
-            log.error("Error in dec2ip for input '{}': {}", decStr, e.getMessage(), e);
+            log.info("Error in dec2ip for input '{}': {}", decStr, e.getMessage(), e);
             return decStr;
         }
     }

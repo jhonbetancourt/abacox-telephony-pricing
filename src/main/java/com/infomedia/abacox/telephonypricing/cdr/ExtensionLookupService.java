@@ -30,7 +30,7 @@ public class ExtensionLookupService {
     }
 
     public Map<String, Integer> findExtensionMinMaxLength(Long commLocationId) {
-        log.debug("Finding min/max extension length for commLocationId: {}", commLocationId);
+        log.info("Finding min/max extension length for commLocationId: {}", commLocationId);
         Map<String, Integer> lengths = new HashMap<>();
         lengths.put("min", Integer.MAX_VALUE);
         lengths.put("max", 0);
@@ -61,8 +61,8 @@ public class ExtensionLookupService {
 
             if (minEmp != null && minEmp < lengths.get("min")) lengths.put("min", minEmp);
             if (maxEmp != null && maxEmp > lengths.get("max")) lengths.put("max", maxEmp);
-            log.trace("Employee ext lengths for loc {}: min={}, max={}", commLocationId, minEmp, maxEmp);
-        } catch (Exception e) { log.warn("Could not determine extension lengths from employees for loc {}: {}", commLocationId, e.getMessage()); }
+            log.info("Employee ext lengths for loc {}: min={}, max={}", commLocationId, minEmp, maxEmp);
+        } catch (Exception e) { log.info("Could not determine extension lengths from employees for loc {}: {}", commLocationId, e.getMessage()); }
 
         StringBuilder sqlRange = new StringBuilder();
         sqlRange.append("SELECT COALESCE(MIN(LENGTH(CAST(er.range_start AS TEXT))), NULL) AS min_len, COALESCE(MAX(LENGTH(CAST(er.range_end AS TEXT))), NULL) AS max_len ");
@@ -89,17 +89,17 @@ public class ExtensionLookupService {
 
             if (minRange != null && minRange < lengths.get("min")) lengths.put("min", minRange);
             if (maxRange != null && maxRange > lengths.get("max")) lengths.put("max", maxRange);
-            log.trace("Range ext lengths for loc {}: min={}, max={}", commLocationId, minRange, maxRange);
-        } catch (Exception e) { log.warn("Could not determine extension lengths from ranges for loc {}: {}", commLocationId, e.getMessage()); }
+            log.info("Range ext lengths for loc {}: min={}, max={}", commLocationId, minRange, maxRange);
+        } catch (Exception e) { log.info("Could not determine extension lengths from ranges for loc {}: {}", commLocationId, e.getMessage()); }
 
         if (lengths.get("min") == Integer.MAX_VALUE) lengths.put("min", CdrProcessingConfig.DEFAULT_MIN_EXT_LENGTH_FALLBACK);
         if (lengths.get("max") == 0) lengths.put("max", CdrProcessingConfig.DEFAULT_MAX_EXT_LENGTH_FALLBACK);
         if (lengths.get("min") > lengths.get("max")) {
-            log.warn("Calculated min length ({}) > max length ({}) for loc {}, adjusting min to max.", lengths.get("min"), lengths.get("max"), commLocationId);
+            log.info("Calculated min length ({}) > max length ({}) for loc {}, adjusting min to max.", lengths.get("min"), lengths.get("max"), commLocationId);
             lengths.put("min", lengths.get("max"));
         }
 
-        log.debug("Final determined extension lengths for loc {}: min={}, max={}", commLocationId, lengths.get("min"), lengths.get("max"));
+        log.info("Final determined extension lengths for loc {}: min={}, max={}", commLocationId, lengths.get("min"), lengths.get("max"));
         return lengths;
     }
 }

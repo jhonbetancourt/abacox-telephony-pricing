@@ -33,10 +33,10 @@ public class TrunkLookupService {
 
     public Optional<Trunk> findTrunkByCode(String trunkCode, Long commLocationId) {
         if (!StringUtils.hasText(trunkCode) || commLocationId == null) {
-            log.trace("findTrunkByCode - Invalid input: trunkCode={}, commLocationId={}", trunkCode, commLocationId);
+            log.info("findTrunkByCode - Invalid input: trunkCode={}, commLocationId={}", trunkCode, commLocationId);
             return Optional.empty();
         }
-        log.debug("Finding trunk by code: '{}', commLocationId: {}", trunkCode, commLocationId);
+        log.info("Finding trunk by code: '{}', commLocationId: {}", trunkCode, commLocationId);
         String sql = "SELECT t.* FROM trunk t " +
                 "WHERE t.active = true " +
                 "  AND UPPER(t.name) = UPPER(:trunkCode) " +
@@ -50,20 +50,20 @@ public class TrunkLookupService {
             Trunk trunk = (Trunk) query.getSingleResult();
             return Optional.of(trunk);
         } catch (NoResultException e) {
-            log.trace("No active trunk found for code '{}' at location {} or globally", trunkCode, commLocationId);
+            log.info("No active trunk found for code '{}' at location {} or globally", trunkCode, commLocationId);
             return Optional.empty();
         } catch (Exception e) {
-            log.error("Error finding trunk for code: '{}', loc: {}", trunkCode, commLocationId, e);
+            log.info("Error finding trunk for code: '{}', loc: {}", trunkCode, commLocationId, e);
             return Optional.empty();
         }
     }
 
     public Optional<TrunkRate> findTrunkRate(Long trunkId, Long operatorId, Long telephonyTypeId) {
         if (trunkId == null || operatorId == null || telephonyTypeId == null) {
-            log.trace("findTrunkRate - Invalid input: trunkId={}, opId={}, ttId={}", trunkId, operatorId, telephonyTypeId);
+            log.info("findTrunkRate - Invalid input: trunkId={}, opId={}, ttId={}", trunkId, operatorId, telephonyTypeId);
             return Optional.empty();
         }
-        log.debug("Finding trunk rate for trunkId: {}, operatorId: {}, telephonyTypeId: {}", trunkId, operatorId, telephonyTypeId);
+        log.info("Finding trunk rate for trunkId: {}, operatorId: {}, telephonyTypeId: {}", trunkId, operatorId, telephonyTypeId);
         String sql = "SELECT tr.* FROM trunk_rate tr " +
                 "WHERE tr.active = true " +
                 "  AND tr.trunk_id = :trunkId " +
@@ -78,23 +78,23 @@ public class TrunkLookupService {
             TrunkRate rate = (TrunkRate) query.getSingleResult();
             return Optional.of(rate);
         } catch (NoResultException e) {
-            log.trace("No active TrunkRate found for trunkId: {}, opId: {}, ttId: {}", trunkId, operatorId, telephonyTypeId);
+            log.info("No active TrunkRate found for trunkId: {}, opId: {}, ttId: {}", trunkId, operatorId, telephonyTypeId);
             return Optional.empty();
         } catch (Exception e) {
-            log.error("Error finding trunk rate for trunkId: {}, opId: {}, ttId: {}", trunkId, operatorId, telephonyTypeId, e);
+            log.info("Error finding trunk rate for trunkId: {}, opId: {}, ttId: {}", trunkId, operatorId, telephonyTypeId, e);
             return Optional.empty();
         }
     }
 
     public Optional<TrunkRule> findTrunkRule(String trunkName, Long telephonyTypeId, Long indicatorId, Long originCommLocationIndicatorId) {
         if (telephonyTypeId == null) {
-            log.trace("findTrunkRule - Invalid input: ttId is null");
+            log.info("findTrunkRule - Invalid input: ttId is null");
             return Optional.empty();
         }
         Long effectiveOriginIndicatorId = originCommLocationIndicatorId != null ? originCommLocationIndicatorId : 0L;
         String indicatorIdStr = (indicatorId != null && indicatorId > 0) ? String.valueOf(indicatorId) : null;
 
-        log.debug("Finding trunk rule for trunkName: '{}', ttId: {}, indIdStr: {}, effectiveOriginIndId: {}",
+        log.info("Finding trunk rule for trunkName: '{}', ttId: {}, indIdStr: {}, effectiveOriginIndId: {}",
                 trunkName, telephonyTypeId, indicatorIdStr, effectiveOriginIndicatorId);
 
         StringBuilder sqlBuilder = new StringBuilder();
@@ -143,20 +143,20 @@ public class TrunkLookupService {
             TrunkRule rule = (TrunkRule) query.getSingleResult();
             return Optional.of(rule);
         } catch (NoResultException e) {
-            log.trace("No matching TrunkRule found for trunk: '{}', ttId: {}, indId: {}, originIndId: {}", trunkName, telephonyTypeId, indicatorIdStr, effectiveOriginIndicatorId);
+            log.info("No matching TrunkRule found for trunk: '{}', ttId: {}, indId: {}, originIndId: {}", trunkName, telephonyTypeId, indicatorIdStr, effectiveOriginIndicatorId);
             return Optional.empty();
         } catch (Exception e) {
-            log.error("Error finding trunk rule for trunk: '{}', ttId: {}, indId: {}, originIndId: {}", trunkName, telephonyTypeId, indicatorIdStr, effectiveOriginIndicatorId, e);
+            log.info("Error finding trunk rule for trunk: '{}', ttId: {}, indId: {}, originIndId: {}", trunkName, telephonyTypeId, indicatorIdStr, effectiveOriginIndicatorId, e);
             return Optional.empty();
         }
     }
 
     public Set<Long> getAllowedTelephonyTypesForTrunk(Long trunkId) {
         if (trunkId == null || trunkId <= 0) {
-            log.trace("getAllowedTelephonyTypesForTrunk - Invalid trunkId: {}", trunkId);
+            log.info("getAllowedTelephonyTypesForTrunk - Invalid trunkId: {}", trunkId);
             return Collections.emptySet();
         }
-        log.debug("Fetching allowed telephony types for trunkId: {}", trunkId);
+        log.info("Fetching allowed telephony types for trunkId: {}", trunkId);
         String sql = "SELECT DISTINCT tr.telephony_type_id FROM trunk_rate tr WHERE tr.trunk_id = :trunkId AND tr.active = true";
         Query query = entityManager.createNativeQuery(sql);
         query.setParameter("trunkId", trunkId);
@@ -166,10 +166,10 @@ public class TrunkLookupService {
             Set<Long> typeIds = results.stream()
                                        .map(Number::longValue)
                                        .collect(Collectors.toSet());
-            log.trace("Found {} allowed telephony types for trunkId {}", typeIds.size(), trunkId);
+            log.info("Found {} allowed telephony types for trunkId {}", typeIds.size(), trunkId);
             return typeIds;
         } catch (Exception e) {
-            log.error("Error fetching allowed telephony types for trunkId {}: {}", trunkId, e.getMessage(), e);
+            log.info("Error fetching allowed telephony types for trunkId {}: {}", trunkId, e.getMessage(), e);
             return Collections.emptySet();
         }
     }

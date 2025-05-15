@@ -21,7 +21,7 @@ public class HashUtil {
         if (input == null) {
             // Decide how to handle null input - return null, empty string, or hash of empty string?
             // Returning null seems reasonable to indicate invalid input for hashing.
-            log.warn("Input string for SHA-256 hashing is null.");
+            log.info("Input string for SHA-256 hashing is null.");
             return null;
         }
         try {
@@ -29,7 +29,7 @@ public class HashUtil {
             byte[] hashBytes = digest.digest(input.getBytes(StandardCharsets.UTF_8));
             return bytesToHex(hashBytes);
         } catch (NoSuchAlgorithmException e) {
-            log.error("SHA-256 algorithm not found!", e);
+            log.info("SHA-256 algorithm not found!", e);
             // This is a critical environment error. Re-throwing as RuntimeException.
             throw new RuntimeException("SHA-256 hashing algorithm unavailable", e);
         }

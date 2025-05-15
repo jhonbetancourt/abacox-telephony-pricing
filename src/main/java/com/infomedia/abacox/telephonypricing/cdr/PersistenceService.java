@@ -29,11 +29,11 @@ package com.infomedia.abacox.telephonypricing.cdr;
      public CallRecord saveCallRecord(CallRecord callRecord) {
          try {
              CallRecord savedRecord = callRecordRepository.save(callRecord);
-             log.debug("Successfully saved CallRecord with ID: {}", savedRecord.getId());
+             log.info("Successfully saved CallRecord with ID: {}", savedRecord.getId());
              return savedRecord;
          } catch (Exception e) {
              // Log the error and the record that failed
-             log.error("Error saving CallRecord: ID={}, ServiceDate={}, Ext={}, Dest={}, Error: {}",
+             log.info("Error saving CallRecord: ID={}, ServiceDate={}, Ext={}, Dest={}, Error: {}",
                      callRecord.getId(), // Will be null if new
                      callRecord.getServiceDate(),
                      callRecord.getEmployeeExtension(),
@@ -56,15 +56,15 @@ package com.infomedia.abacox.telephonypricing.cdr;
          try {
              // Add a check for excessively long CDR strings if necessary, though TEXT should handle it
              if (failedRecord.getCdrString() != null && failedRecord.getCdrString().length() > 8000) { // Example limit
-                 log.warn("Truncating long CDR string before saving to FailedCallRecord. Original length: {}", failedRecord.getCdrString().length());
+                 log.info("Truncating long CDR string before saving to FailedCallRecord. Original length: {}", failedRecord.getCdrString().length());
                  failedRecord.setCdrString(failedRecord.getCdrString().substring(0, 8000) + "...");
              }
              FailedCallRecord savedRecord = failedCallRecordRepository.save(failedRecord);
-             log.warn("Saved FailedCallRecord with ID: {}, Error Type: {}, Step: {}", savedRecord.getId(), savedRecord.getErrorType(), savedRecord.getProcessingStep());
+             log.info("Saved FailedCallRecord with ID: {}, Error Type: {}, Step: {}", savedRecord.getId(), savedRecord.getErrorType(), savedRecord.getProcessingStep());
              return savedRecord;
          } catch (Exception e) {
              // Log error during quarantine saving, but don't stop main processing
-             log.error("CRITICAL: Error saving FailedCallRecord for CommLocation {}, Ext {}: {}",
+             log.info("CRITICAL: Error saving FailedCallRecord for CommLocation {}, Ext {}: {}",
                      failedRecord.getCommLocationId(), failedRecord.getEmployeeExtension(), e.getMessage(), e);
              // Return null to indicate failure, allows main process to continue if possible
              return null;

@@ -28,17 +28,17 @@ public class ConfigurationLookupService {
 
     public Optional<String> findPbxPrefixByCommLocationId(Long commLocationId) {
         if (commLocationId == null) return Optional.empty();
-        log.debug("Finding PBX prefix for commLocationId: {}", commLocationId);
+        log.info("Finding PBX prefix for commLocationId: {}", commLocationId);
         String sql = "SELECT pbx_prefix FROM communication_location WHERE id = :id AND active = true";
         Query query = entityManager.createNativeQuery(sql, String.class);
         query.setParameter("id", commLocationId);
         try {
             return Optional.ofNullable((String) query.getSingleResult());
         } catch (NoResultException e) {
-            log.trace("No active CommunicationLocation found for ID: {}", commLocationId);
+            log.info("No active CommunicationLocation found for ID: {}", commLocationId);
             return Optional.empty();
         } catch (Exception e) {
-            log.error("Error finding PBX prefix for commLocationId: {}", commLocationId, e);
+            log.info("Error finding PBX prefix for commLocationId: {}", commLocationId, e);
             return Optional.empty();
         }
     }
@@ -48,7 +48,7 @@ public class ConfigurationLookupService {
         config.put("min", 0); config.put("max", 0);
         if (telephonyTypeId == null || originCountryId == null) return config;
 
-        log.debug("Finding min/max config for telephonyTypeId: {}, originCountryId: {}", telephonyTypeId, originCountryId);
+        log.info("Finding min/max config for telephonyTypeId: {}, originCountryId: {}", telephonyTypeId, originCountryId);
         String sql = "SELECT min_value, max_value FROM telephony_type_config " +
                 "WHERE telephony_type_id = :telephonyTypeId AND origin_country_id = :originCountryId AND active = true " +
                 "LIMIT 1";
@@ -60,16 +60,16 @@ public class ConfigurationLookupService {
             config.put("min", result[0] != null ? ((Number) result[0]).intValue() : 0);
             config.put("max", result[1] != null ? ((Number) result[1]).intValue() : 0);
         } catch (NoResultException e) {
-            log.trace("No active TelephonyTypeConfig found for type {}, country {}. Using defaults 0,0.", telephonyTypeId, originCountryId);
+            log.info("No active TelephonyTypeConfig found for type {}, country {}. Using defaults 0,0.", telephonyTypeId, originCountryId);
         } catch (Exception e) {
-            log.error("Error finding min/max config for telephonyTypeId: {}, originCountryId: {}", telephonyTypeId, originCountryId, e);
+            log.info("Error finding min/max config for telephonyTypeId: {}, originCountryId: {}", telephonyTypeId, originCountryId, e);
         }
         return config;
     }
 
     public Optional<Operator> findOperatorByTelephonyTypeAndOrigin(Long telephonyTypeId, Long originCountryId) {
         if (telephonyTypeId == null || originCountryId == null) return Optional.empty();
-        log.debug("Finding operator for telephonyTypeId: {}, originCountryId: {}", telephonyTypeId, originCountryId);
+        log.info("Finding operator for telephonyTypeId: {}, originCountryId: {}", telephonyTypeId, originCountryId);
         String sql = "SELECT op.* FROM operator op " +
                 "JOIN prefix p ON p.operator_id = op.id " +
                 "WHERE p.telephone_type_id = :telephonyTypeId " +
@@ -85,17 +85,17 @@ public class ConfigurationLookupService {
             Operator operator = (Operator) query.getSingleResult();
             return Optional.of(operator);
         } catch (NoResultException e) {
-            log.trace("No active operator found linked to telephony type {} for origin {}", telephonyTypeId, originCountryId);
+            log.info("No active operator found linked to telephony type {} for origin {}", telephonyTypeId, originCountryId);
             return Optional.empty();
         } catch (Exception e) {
-            log.error("Error finding operator for telephonyTypeId: {}, originCountryId: {}", telephonyTypeId, originCountryId, e);
+            log.info("Error finding operator for telephonyTypeId: {}, originCountryId: {}", telephonyTypeId, originCountryId, e);
             return Optional.empty();
         }
     }
 
     public Optional<Map<String, Object>> findInternalTariff(Long telephonyTypeId) {
         if (telephonyTypeId == null) return Optional.empty();
-        log.debug("Finding internal tariff for telephonyTypeId: {}", telephonyTypeId);
+        log.info("Finding internal tariff for telephonyTypeId: {}", telephonyTypeId);
         String sql = "SELECT p.base_value, p.vat_included, p.vat_value, tt.name as telephony_type_name " +
                 "FROM prefix p " +
                 "JOIN telephony_type tt ON p.telephone_type_id = tt.id " +
@@ -117,10 +117,10 @@ public class ConfigurationLookupService {
             map.put("valor_inicial_iva", false);
             return Optional.of(map);
         } catch (NoResultException e) {
-            log.warn("No active prefix found defining internal tariff for telephonyTypeId: {}", telephonyTypeId);
+            log.info("No active prefix found defining internal tariff for telephonyTypeId: {}", telephonyTypeId);
             return Optional.empty();
         } catch (Exception e) {
-            log.error("Error finding internal tariff for telephonyTypeId: {}", telephonyTypeId, e);
+            log.info("Error finding internal tariff for telephonyTypeId: {}", telephonyTypeId, e);
             return Optional.empty();
         }
     }

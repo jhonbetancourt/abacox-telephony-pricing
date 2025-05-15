@@ -1,9 +1,13 @@
+// FILE: com/infomedia/abacox/telephonypricing/cdr/CdrProcessingConfig.java
 package com.infomedia.abacox.telephonypricing.cdr;
 
 import com.infomedia.abacox.telephonypricing.entity.Operator;
 import com.infomedia.abacox.telephonypricing.entity.TelephonyType;
 import com.infomedia.abacox.telephonypricing.repository.OperatorRepository;
 import com.infomedia.abacox.telephonypricing.repository.TelephonyTypeRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+import jakarta.persistence.Query;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
@@ -19,6 +23,13 @@ public class CdrProcessingConfig {
 
     private final OperatorRepository operatorRepository;
     private final TelephonyTypeRepository telephonyTypeRepository;
+    private final ConfigurationLookupService configurationLookupService;
+    private final EntityLookupService entityLookupService;
+    private final ExtensionLookupService extensionLookupService;
+
+    @PersistenceContext
+    private EntityManager entityManager;
+
 
     // --- Constants based on PHP defines/usage ---
     public static final long TIPOTELE_LOCAL = 3L;
@@ -38,32 +49,27 @@ public class CdrProcessingConfig {
     public static final long TIPOTELE_PAGO_REVERTIDO = 13L;
     public static final long TIPOTELE_SERVICIOS_VARIOS = 6L;
 
-    // Default values if DB lookup fails or returns invalid ranges
     public static final int DEFAULT_MIN_EXT_LENGTH_FALLBACK = 2;
     public static final int DEFAULT_MAX_EXT_LENGTH_FALLBACK = 7;
-    public static final int MAX_POSSIBLE_EXTENSION_VALUE = 9999999; // Max value for a 7-digit extension
+    public static final int MAX_POSSIBLE_EXTENSION_VALUE = 9999999;
 
     public static final Long COLOMBIA_ORIGIN_COUNTRY_ID = 1L;
-    public static final Long NATIONAL_REFERENCE_PREFIX_ID = 7000012L;
+    public static final Long NATIONAL_REFERENCE_PREFIX_ID = 7000012L; // Example, should be configurable or derived
 
 
     private static Set<Long> internalTelephonyTypeIds;
     private static Long defaultInternalCallTypeId;
     private static Set<String> ignoredAuthCodes;
-    private static int minCallDurationForBilling = 0; // Default to 0, can be configured
+    private static int minCallDurationForBilling = 0;
 
     private static List<Long> incomingTelephonyTypeClassificationOrder;
 
 
-    private final ConfigurationLookupService configurationLookupService;
-    private final EntityLookupService entityLookupService;
-    private final ExtensionLookupService extensionLookupService;
-
     @Getter
     public static class ExtensionLengthConfig {
-        private final int minNumericValue; // Derived from min length
-        private final int maxNumericValue; // Derived from max length
-        private final Set<String> specialSyntaxExtensions; // PHP's $_LIM_INTERNAS['full']
+        private final int minNumericValue;
+        private final int maxNumericValue;
+        private final Set<String> specialSyntaxExtensions;
 
         public ExtensionLengthConfig(int minNumericValue, int maxNumericValue, Set<String> specialSyntaxExtensions) {
             this.minNumericValue = minNumericValue;
@@ -110,28 +116,28 @@ public class CdrProcessingConfig {
     }
 
     public List<String> getPbxPrefixes(Long communicationLocationId) {
-        log.debug("Fetching PBX prefixes for commLocationId: {}", communicationLocationId);
+        log.info("Fetching PBX prefixes for commLocationId: {}", communicationLocationId);
         Optional<String> prefixStringOpt = configurationLookupService.findPbxPrefixByCommLocationId(communicationLocationId);
         if (prefixStringOpt.isPresent() && !prefixStringOpt.get().isEmpty()) {
             List<String> prefixes = Arrays.stream(prefixStringOpt.get().split(","))
                     .map(String::trim)
                     .filter(s -> !s.isEmpty())
                     .collect(Collectors.toList());
-            log.trace("Found PBX prefixes: {}", prefixes);
+            log.info("Found PBX prefixes: {}", prefixes);
             return prefixes;
         }
-        log.trace("No PBX prefixes found for commLocationId: {}", communicationLocationId);
+        log.info("No PBX prefixes found for commLocationId: {}", communicationLocationId);
         return Collections.emptyList();
     }
 
     public Map<String, Integer> getTelephonyTypeMinMax(Long telephonyTypeId, Long originCountryId) {
-        log.debug("Fetching min/max length config for telephonyTypeId: {}, originCountryId: {}", telephonyTypeId, originCountryId);
+        log.info("Fetching min/max length config for telephonyTypeId: {}, originCountryId: {}", telephonyTypeId, originCountryId);
         return configurationLookupService.findTelephonyTypeMinMaxConfig(telephonyTypeId, originCountryId);
     }
 
 
     public Optional<Operator> getOperatorInternal(Long telephonyTypeId, Long originCountryId) {
-        log.debug("Fetching internal operator for telephonyTypeId: {}, originCountryId: {}", telephonyTypeId, originCountryId);
+        log.info("Fetching internal operator for telephonyTypeId: {}, originCountryId: {}", telephonyTypeId, originCountryId);
         return configurationLookupService.findOperatorByTelephonyTypeAndOrigin(telephonyTypeId, originCountryId);
     }
 
@@ -155,21 +161,18 @@ public class CdrProcessingConfig {
 
     private int deriveNumericValueFromLength(int length, boolean isMin) {
         if (length <= 0) return 0;
-        // Cap length to avoid overflow for int, assuming extensions don't exceed 9 digits for this calculation
         int safeLength = Math.min(length, 9);
 
         if (isMin) {
-            if (safeLength == 1) return 0; // Min 1-digit can be 0 (PHP logic for operadora)
-            // Calculate 10^(length-1)
+            if (safeLength == 1) return 0;
             return (int) Math.pow(10, safeLength - 1);
         } else {
-            // Calculate (10^length) - 1
             return (int) (Math.pow(10, safeLength) - 1);
         }
     }
 
     public ExtensionLengthConfig getExtensionLengthConfig(Long commLocationId) {
-        log.debug("Fetching extension length config for commLocationId: {}", commLocationId);
+        log.info("Fetching extension length config for commLocationId: {}", commLocationId);
         Map<String, Integer> dbLengths = extensionLookupService.findExtensionMinMaxLength(commLocationId);
 
         int minDbLength = dbLengths.getOrDefault("min", 0);
@@ -189,36 +192,61 @@ public class CdrProcessingConfig {
             finalMaxNumeric = deriveNumericValueFromLength(DEFAULT_MAX_EXT_LENGTH_FALLBACK, false);
         }
 
-        if (finalMinNumeric > finalMaxNumeric && finalMaxNumeric > 0) { // if max is 0, min can be 0
-             log.warn("Derived min numeric value {} is greater than max {}. Setting min to max.", finalMinNumeric, finalMaxNumeric);
+        if (finalMinNumeric > finalMaxNumeric && finalMaxNumeric > 0) {
+             log.info("Derived min numeric value {} is greater than max {}. Setting min to max.", finalMinNumeric, finalMaxNumeric);
              finalMinNumeric = finalMaxNumeric;
         } else if (finalMinNumeric > finalMaxNumeric && finalMaxNumeric == 0) {
-            // This case can happen if maxDbLength was 0 or invalid, leading to finalMaxNumeric = 0
-            // and minDbLength was also 0 or invalid, leading to finalMinNumeric (e.g. for length 1 -> 0)
-            // or if minDbLength was 1 (->0) and maxDbLength was 0 (->0).
-            // If min is 0 and max is 0, it's a valid state for single digit '0' extension.
+            // Valid state for single digit '0' extension if minDbLength was 1 and maxDbLength was 0 or 1.
         }
         
         finalMaxNumeric = Math.min(finalMaxNumeric, MAX_POSSIBLE_EXTENSION_VALUE);
         finalMinNumeric = Math.min(finalMinNumeric, finalMaxNumeric);
 
 
-        Set<String> specialSyntaxExtensions = getSpecialSyntaxExtensions(commLocationId);
+        Set<String> specialSyntaxExtensions = getSpecialSyntaxExtensions(commLocationId, COLOMBIA_ORIGIN_COUNTRY_ID); // Assuming Colombia for now
 
-        log.debug("Extension config for commLocationId {}: minVal={}, maxVal={}, specialCount={}",
+        log.info("Extension config for commLocationId {}: minVal={}, maxVal={}, specialCount={}",
                 commLocationId, finalMinNumeric, finalMaxNumeric, specialSyntaxExtensions.size());
         return new ExtensionLengthConfig(finalMinNumeric, finalMaxNumeric, specialSyntaxExtensions);
     }
 
-    private Set<String> getSpecialSyntaxExtensions(Long commLocationId) {
-        // In a real system, this would query a DB table or configuration source
-        // specific to the commLocationId or globally.
-        // Example: "SELECT extension_code FROM special_extensions WHERE comm_location_id = :commLocationId OR is_global = true"
-        // For now, returning a hardcoded example set.
-        log.trace("getSpecialSyntaxExtensions for commLocationId {} (currently returns example set)", commLocationId);
-        // This should be dynamic based on PHP's `ObtenerExtensionesEspeciales`
-        // For now, returning empty as per previous implementation.
-        return Collections.emptySet();
+    private Set<String> getSpecialSyntaxExtensions(Long commLocationId, Long originCountryId) {
+        log.info("Fetching special syntax extensions for commLocationId: {}, originCountryId: {}", commLocationId, originCountryId);
+        // Mimics PHP's ObtenerExtensionesEspeciales
+        String sql = "SELECT DISTINCT e.extension FROM employee e " +
+                     "JOIN communication_location cl ON e.communication_location_id = cl.id " +
+                     "JOIN indicator i ON cl.indicator_id = i.id " +
+                     "WHERE e.active = true AND cl.active = true AND i.active = true " +
+                     "  AND e.extension IS NOT NULL AND e.extension NOT LIKE '%-%' " + // Not containing hyphen
+                     "  AND (LENGTH(e.extension) >= :maxLengthThreshold " + // Longer than typical or...
+                     "       OR e.extension LIKE '0%' " +                // Starts with 0 or...
+                     "       OR e.extension LIKE '*%' " +                // Starts with * or...
+                     "       OR e.extension LIKE '#%') ";                  // Starts with #
+
+        Map<String, Object> params = new HashMap<>();
+        params.put("maxLengthThreshold", String.valueOf(MAX_POSSIBLE_EXTENSION_VALUE).length());
+
+        if (commLocationId != null && commLocationId > 0) {
+            sql += " AND e.communication_location_id = :commLocationId ";
+            params.put("commLocationId", commLocationId);
+        }
+        if (originCountryId != null && originCountryId > 0) {
+            sql += " AND i.origin_country_id = :originCountryId ";
+            params.put("originCountryId", originCountryId);
+        }
+
+        Query query = entityManager.createNativeQuery(sql, String.class);
+        params.forEach(query::setParameter);
+
+        try {
+            List<String> results = query.getResultList();
+            Set<String> specialExtensions = new HashSet<>(results);
+            log.info("Found {} special syntax extensions.", specialExtensions.size());
+            return specialExtensions;
+        } catch (Exception e) {
+            log.info("Error fetching special syntax extensions: {}", e.getMessage(), e);
+            return Collections.emptySet();
+        }
     }
 
 
@@ -227,6 +255,7 @@ public class CdrProcessingConfig {
     }
 
     public int getMinCallDurationForBilling() {
+        // This could be fetched from a configuration table or property
         return minCallDurationForBilling;
     }
 

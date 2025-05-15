@@ -33,7 +33,7 @@ public class CdrPricingService {
     public Optional<Map<String, Object>> findRateInfo(Long prefixId, Long indicatorId, Long originIndicatorId, boolean bandOk) {
         Optional<Map<String, Object>> baseRateOpt = prefixInfoLookupService.findBaseRateForPrefix(prefixId);
         if (baseRateOpt.isEmpty()) {
-            log.warn("Base rate info not found for prefixId: {}", prefixId);
+            log.info("Base rate info not found for prefixId: {}", prefixId);
             return Optional.empty();
         }
         Map<String, Object> rateInfo = new HashMap<>(baseRateOpt.get());
@@ -49,7 +49,7 @@ public class CdrPricingService {
 
         boolean useEffectiveBandLookup = bandOk && ( (indicatorId != null && indicatorId > 0) || isLocalTypeForBandCheck );
 
-        log.trace("findRateInfo: prefixId={}, indicatorId={}, originIndicatorId={}, bandOk={}, isLocalType={}, useEffectiveBandLookup={}",
+        log.info("findRateInfo: prefixId={}, indicatorId={}, originIndicatorId={}, bandOk={}, isLocalType={}, useEffectiveBandLookup={}",
                 prefixId, indicatorId, originIndicatorId, bandOk, isLocalTypeForBandCheck, useEffectiveBandLookup);
 
         if (useEffectiveBandLookup) {
@@ -64,13 +64,13 @@ public class CdrPricingService {
                 rateInfo.put("vat_included", bandInfo.get("band_vat_included"));
                 rateInfo.put("band_id", bandInfo.get("band_id"));
                 rateInfo.put("band_name", bandInfo.get("band_name"));
-                log.trace("Using band rate for prefix {}, effective indicator {}: BandID={}, Value={}, VatIncluded={}",
+                log.info("Using band rate for prefix {}, effective indicator {}: BandID={}, Value={}, VatIncluded={}",
                         prefixId, indicatorForBandLookup, bandInfo.get("band_id"), bandInfo.get("band_value"), bandInfo.get("band_vat_included"));
             } else {
-                log.trace("Band lookup enabled for prefix {} but no matching band found for effective indicator {}", prefixId, indicatorForBandLookup);
+                log.info("Band lookup enabled for prefix {} but no matching band found for effective indicator {}", prefixId, indicatorForBandLookup);
             }
         } else {
-            log.trace("Using base rate for prefix {} (Bands not applicable or indicator missing/null for non-local)", prefixId);
+            log.info("Using base rate for prefix {} (Bands not applicable or indicator missing/null for non-local)", prefixId);
         }
         // Ensure these fields are populated from either band or prefix base rate, for consistent structure
         rateInfo.putIfAbsent("valor_minuto", rateInfo.get("base_value"));
@@ -95,7 +95,7 @@ public class CdrPricingService {
         callBuilder.pricePerMinute(price.setScale(4, RoundingMode.HALF_UP));
         callBuilder.initialPrice(BigDecimal.ZERO); // Special services in PHP didn't seem to have initial/base charge distinct from value
         callBuilder.billedAmount(calculatedBilledAmount.setScale(4, RoundingMode.HALF_UP));
-        log.debug("Applied Special Service pricing: Rate={}, Billed={}", price, calculatedBilledAmount);
+        log.info("Applied Special Service pricing: Rate={}, Billed={}", price, calculatedBilledAmount);
     }
 
     public void applyInternalPricing(Long internalCallTypeId, CallRecord.CallRecordBuilder callBuilder, int duration) {
@@ -109,10 +109,10 @@ public class CdrPricingService {
             tariff.putIfAbsent("valor_inicial", BigDecimal.ZERO); // PHP's PREFIJO_CARGO_BASICO equivalent
             tariff.putIfAbsent("valor_inicial_iva", false); // PHP's PREFIJO_CB_IVAINC equivalent
             tariff.putIfAbsent("ensegundos", false);
-            log.debug("Applying internal tariff for type {}: {}", internalCallTypeId, tariff);
+            log.info("Applying internal tariff for type {}: {}", internalCallTypeId, tariff);
             applyFinalPricing(tariff, duration, callBuilder);
         } else {
-            log.warn("No internal tariff found for type {}, setting cost to zero.", internalCallTypeId);
+            log.info("No internal tariff found for type {}, setting cost to zero.", internalCallTypeId);
             callBuilder.pricePerMinute(BigDecimal.ZERO);
             callBuilder.initialPrice(BigDecimal.ZERO);
             callBuilder.billedAmount(BigDecimal.ZERO);
@@ -134,7 +134,7 @@ public class CdrPricingService {
 
         if (applicableRateMapOpt.isPresent()) {
             Map<String, Object> rateMap = applicableRateMapOpt.get();
-            log.debug("Applying SpecialRateValue (ID: {})", rateMap.get("id"));
+            log.info("Applying SpecialRateValue (ID: {})", rateMap.get("id"));
             BigDecimal originalRate = (BigDecimal) currentRateInfo.get("valor_minuto");
             boolean originalVatIncluded = (Boolean) currentRateInfo.get("valor_minuto_iva");
 
@@ -158,11 +158,11 @@ public class CdrPricingService {
                 currentRateInfo.put("valor_minuto", currentRateNoVat.multiply(discountMultiplier));
                 currentRateInfo.put("valor_minuto_iva", false); // Rate is now net, VAT will be added by calculateBilledAmount
                 currentRateInfo.put("descuento_p", discountPercentage);
-                log.trace("Applied percentage discount {}% from SpecialRateValue {}", discountPercentage, rateMap.get("id"));
+                log.info("Applied percentage discount {}% from SpecialRateValue {}", discountPercentage, rateMap.get("id"));
             } else { // Fixed value
                 currentRateInfo.put("valor_minuto", Optional.ofNullable(rateValueFromSpecial).orElse(BigDecimal.ZERO));
                 currentRateInfo.put("valor_minuto_iva", Optional.ofNullable(includesVatInSpecial).orElse(false));
-                log.trace("Applied fixed rate {} from SpecialRateValue {}", currentRateInfo.get("valor_minuto"), rateMap.get("id"));
+                log.info("Applied fixed rate {} from SpecialRateValue {}", currentRateInfo.get("valor_minuto"), rateMap.get("id"));
             }
             currentRateInfo.put("iva", prefixVatValue); // Use the VAT rate from the associated prefix
             currentRateInfo.put("ensegundos", false); // Special rates in PHP are typically per minute
@@ -172,7 +172,7 @@ public class CdrPricingService {
                 currentRateInfo.put("telephony_type_name", currentTypeName + " (xTarifaEsp)");
             }
         } else {
-            log.debug("No applicable special rate found, current rate info remains.");
+            log.info("No applicable special rate found, current rate info remains.");
             // Ensure initial price fields are set if not already (PHP's Guardar_ValorInicial behavior)
             currentRateInfo.putIfAbsent("valor_inicial", currentRateInfo.get("valor_minuto"));
             currentRateInfo.putIfAbsent("valor_inicial_iva", currentRateInfo.get("valor_minuto_iva"));
@@ -197,7 +197,7 @@ public class CdrPricingService {
         callBuilder.pricePerMinute(pricePerMinute.setScale(4, RoundingMode.HALF_UP));
         callBuilder.initialPrice(initialPrice.setScale(4, RoundingMode.HALF_UP)); // PHP stores this
         callBuilder.billedAmount(calculatedBilledAmount);
-        log.trace("Final pricing applied: Rate={}, Initial={}, Billed={}", pricePerMinute, initialPrice, calculatedBilledAmount);
+        log.info("Final pricing applied: Rate={}, Initial={}, Billed={}", pricePerMinute, initialPrice, calculatedBilledAmount);
     }
 
     public void applyTrunkRuleOverrides(Trunk trunk, Map<String, Object> currentRateInfo, int duration, Long originIndicatorId, CallRecord.CallRecordBuilder callBuilder) {
@@ -209,7 +209,7 @@ public class CdrPricingService {
 
         if (trunkRuleOpt.isPresent()) {
             TrunkRule rule = trunkRuleOpt.get();
-            log.debug("Applying TrunkRule {} for trunk {}", rule.getId(), trunk.getName());
+            log.info("Applying TrunkRule {} for trunk {}", rule.getId(), trunk.getName());
 
             // PHP: Guardar_ValorInicial($infovalor, $infovalor_pre);
             if (!currentRateInfo.containsKey("valor_inicial") || ((BigDecimal)currentRateInfo.get("valor_inicial")).compareTo(BigDecimal.ZERO) == 0) {
@@ -241,7 +241,7 @@ public class CdrPricingService {
                     .ifPresentOrElse(
                             p -> currentRateInfo.put("iva", p.getVatValue()),
                             () -> {
-                                log.warn("No prefix found for rule-defined type {} / operator {}. Using default IVA 0.", effectiveFinalTelephonyTypeId, effectiveFinalOperatorId);
+                                log.info("No prefix found for rule-defined type {} / operator {}. Using default IVA 0.", effectiveFinalTelephonyTypeId, effectiveFinalOperatorId);
                                 currentRateInfo.put("iva", BigDecimal.ZERO);
                             }
                     );
@@ -251,7 +251,7 @@ public class CdrPricingService {
             }
             currentRateInfo.put("applied_trunk_pricing_by_rule", true); // Flag that a trunk rule specifically set this rate
         } else {
-            log.trace("No TrunkRule found for trunk {}, type {}, indicator {}, originInd {}. Current rate info remains.",
+            log.info("No TrunkRule found for trunk {}, type {}, indicator {}, originInd {}. Current rate info remains.",
                     trunk.getName(), telephonyTypeId, indicatorId, originIndicatorId);
         }
     }
@@ -302,7 +302,7 @@ public class CdrPricingService {
         }
         BigDecimal vatDivisor = BigDecimal.ONE.add(vatPercentage.divide(new BigDecimal("100"), 10, RoundingMode.HALF_UP));
         if (vatDivisor.compareTo(BigDecimal.ZERO) == 0) {
-            log.warn("VAT divisor is zero, cannot remove VAT from {}", value);
+            log.info("VAT divisor is zero, cannot remove VAT from {}", value);
             return value.setScale(4, RoundingMode.HALF_UP);
         }
         return value.divide(vatDivisor, 4, RoundingMode.HALF_UP); // Scale result

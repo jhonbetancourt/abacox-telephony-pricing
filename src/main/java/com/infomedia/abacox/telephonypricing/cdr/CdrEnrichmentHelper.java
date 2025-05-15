@@ -26,14 +26,14 @@ public class CdrEnrichmentHelper {
     public boolean isInternalCall(String callingNumber, String dialedNumber, CdrProcessingConfig.ExtensionLengthConfig extConfig) {
         boolean callingIsExt = isLikelyExtension(callingNumber, extConfig);
         boolean dialedIsExt = isLikelyExtension(dialedNumber, extConfig);
-        log.trace("isInternalCall check: Caller '{}' (isExt: {}) -> Dialed '{}' (isExt: {})", callingNumber, callingIsExt, dialedNumber, dialedIsExt);
+        log.info("isInternalCall check: Caller '{}' (isExt: {}) -> Dialed '{}' (isExt: {})", callingNumber, callingIsExt, dialedNumber, dialedIsExt);
         return callingIsExt && dialedIsExt;
     }
 
     public boolean isLikelyExtension(String number, CdrProcessingConfig.ExtensionLengthConfig extConfig) {
         if (!StringUtils.hasText(number)) return false;
         if (extConfig == null) {
-            log.warn("isLikelyExtension called with null extConfig for number '{}'. Falling back to basic numeric check.", number);
+            log.info("isLikelyExtension called with null extConfig for number '{}'. Falling back to basic numeric check.", number);
             // Fallback to a very basic check if config is missing, though this shouldn't happen.
             return number.matches("\\d{2,7}"); // Example basic fallback
         }
@@ -41,14 +41,14 @@ public class CdrEnrichmentHelper {
 
         // Check against special syntax extensions first
         if (extConfig.getSpecialSyntaxExtensions().contains(number)) {
-            log.trace("isLikelyExtension: '{}' matched a special syntax extension.", number);
+            log.info("isLikelyExtension: '{}' matched a special syntax extension.", number);
             return true;
         }
 
         String effectiveNumber = number.startsWith("+") ? number.substring(1) : number;
 
         if (!effectiveNumber.matches("\\d+")) {
-            log.trace("isLikelyExtension: '{}' is not purely numeric and not in special syntax list.", number);
+            log.info("isLikelyExtension: '{}' is not purely numeric and not in special syntax list.", number);
             return false;
         }
 
@@ -62,12 +62,12 @@ public class CdrEnrichmentHelper {
                 if (extConfig.getMinNumericValue() == 0 && effectiveNumber.equals("0")) {
                     // Allow '0' if minNumericValue is 0
                 } else {
-                    log.trace("isLikelyExtension: '{}' (length {}) is shorter than min expected numeric value's length (derived from min length).", number, effectiveNumber.length());
+                    log.info("isLikelyExtension: '{}' (length {}) is shorter than min expected numeric value's length (derived from min length).", number, effectiveNumber.length());
                     return false;
                 }
             }
             if (effectiveNumber.length() > String.valueOf(extConfig.getMaxNumericValue()).length()) {
-                 log.trace("isLikelyExtension: '{}' (length {}) is longer than max expected numeric value's length (derived from max length).", number, effectiveNumber.length());
+                 log.info("isLikelyExtension: '{}' (length {}) is longer than max expected numeric value's length (derived from max length).", number, effectiveNumber.length());
                 return false;
             }
 
@@ -75,13 +75,13 @@ public class CdrEnrichmentHelper {
             boolean inRange = (numValue >= extConfig.getMinNumericValue() && numValue <= extConfig.getMaxNumericValue());
 
             if (inRange) {
-                log.trace("isLikelyExtension: '{}' (value {}) is within numeric range ({}-{}).", number, numValue, extConfig.getMinNumericValue(), extConfig.getMaxNumericValue());
+                log.info("isLikelyExtension: '{}' (value {}) is within numeric range ({}-{}).", number, numValue, extConfig.getMinNumericValue(), extConfig.getMaxNumericValue());
             } else {
-                log.trace("isLikelyExtension: '{}' (value {}) is outside numeric range ({}-{}).", number, numValue, extConfig.getMinNumericValue(), extConfig.getMaxNumericValue());
+                log.info("isLikelyExtension: '{}' (value {}) is outside numeric range ({}-{}).", number, numValue, extConfig.getMinNumericValue(), extConfig.getMaxNumericValue());
             }
             return inRange;
         } catch (NumberFormatException e) {
-            log.warn("isLikelyExtension: '{}' (effective '{}') failed numeric parse despite regex match.", number, effectiveNumber);
+            log.info("isLikelyExtension: '{}' (effective '{}') failed numeric parse despite regex match.", number, effectiveNumber);
             return false;
         }
     }
@@ -104,10 +104,10 @@ public class CdrEnrichmentHelper {
                     empIndicatorId = empLoc.getIndicatorId() != null ? empLoc.getIndicatorId() : defaultIndicatorId;
                     Long empLocCountryId = getOriginCountryId(empLoc);
                     empOriginCountryId = empLocCountryId != null ? empLocCountryId : defaultOriginCountryId;
-                    log.trace("Using location info from Employee's CommLocation {}: Indicator={}, Country={}", employee.getCommunicationLocationId(), empIndicatorId, empOriginCountryId);
+                    log.info("Using location info from Employee's CommLocation {}: Indicator={}, Country={}", employee.getCommunicationLocationId(), empIndicatorId, empOriginCountryId);
                     return new LocationInfo(empIndicatorId, empOriginCountryId, empOfficeId);
                 } else {
-                    log.warn("Employee {} has CommLocationId {} assigned, but location not found or inactive. Using defaults/fallback.", employee.getId(), employee.getCommunicationLocationId());
+                    log.info("Employee {} has CommLocationId {} assigned, but location not found or inactive. Using defaults/fallback.", employee.getId(), employee.getCommunicationLocationId());
                 }
             }
 
@@ -126,15 +126,15 @@ public class CdrEnrichmentHelper {
                     }
                     if (!commLocProvidedCountry) { 
                          empOriginCountryId = ccOpt.get().getOriginCountryId();
-                         log.trace("Using OriginCountry {} from Employee's CostCenter {} as employee's comm_location did not specify one or was default.", empOriginCountryId, employee.getCostCenterId());
+                         log.info("Using OriginCountry {} from Employee's CostCenter {} as employee's comm_location did not specify one or was default.", empOriginCountryId, employee.getCostCenterId());
                     }
                 }
             }
-            log.trace("Final location info for Employee {}: Indicator={}, Country={}, Office={}", employee.getId(), empIndicatorId, empOriginCountryId, empOfficeId);
+            log.info("Final location info for Employee {}: Indicator={}, Country={}, Office={}", employee.getId(), empIndicatorId, empOriginCountryId, empOfficeId);
             return new LocationInfo(empIndicatorId, empOriginCountryId, empOfficeId);
         }
 
-        log.trace("Using default location info: Indicator={}, Country={}, Office={}", defaultIndicatorId, defaultOriginCountryId, defaultOfficeId);
+        log.info("Using default location info: Indicator={}, Country={}, Office={}", defaultIndicatorId, defaultOriginCountryId, defaultOfficeId);
         return new LocationInfo(defaultIndicatorId, defaultOriginCountryId, defaultOfficeId);
     }
 
@@ -157,14 +157,14 @@ public class CdrEnrichmentHelper {
                         int end = Integer.parseInt(parts[1].trim());
                         if (callHour >= start && callHour <= end) return true;
                     } else {
-                        log.warn("Invalid hour range format: {}", range);
+                        log.info("Invalid hour range format: {}", range);
                     }
                 } else if (!range.isEmpty()) {
                     if (callHour == Integer.parseInt(range)) return true;
                 }
             }
         } catch (Exception e) {
-            log.error("Error parsing hoursSpecification: '{}'. Assuming not applicable.", hoursSpecification, e);
+            log.info("Error parsing hoursSpecification: '{}'. Assuming not applicable.", hoursSpecification, e);
             return false; 
         }
         return false; 
@@ -172,14 +172,14 @@ public class CdrEnrichmentHelper {
 
     public Long findEffectiveTrunkOperator(Trunk trunk, Long telephonyTypeId, String prefixCode, Long actualOperatorId, Long originCountryId) {
         if (trunk == null || telephonyTypeId == null || actualOperatorId == null || originCountryId == null) {
-            log.trace("findEffectiveTrunkOperator - Invalid input: trunk={}, ttId={}, actualOpId={}, ocId={}",
+            log.info("findEffectiveTrunkOperator - Invalid input: trunk={}, ttId={}, actualOpId={}, ocId={}",
                     trunk != null ? trunk.getId() : "null", telephonyTypeId, actualOperatorId, originCountryId);
             return null; 
         }
 
         Optional<TrunkRate> specificRateOpt = trunkLookupService.findTrunkRate(trunk.getId(), actualOperatorId, telephonyTypeId);
         if (specificRateOpt.isPresent()) {
-            log.trace("Found specific TrunkRate for trunk {}, op {}, type {}. Using operator {}.",
+            log.info("Found specific TrunkRate for trunk {}, op {}, type {}. Using operator {}.",
                     trunk.getId(), actualOperatorId, telephonyTypeId, actualOperatorId);
             return actualOperatorId; 
         }
@@ -196,16 +196,16 @@ public class CdrEnrichmentHelper {
                 if (actualOperatorId > 0 &&
                         !actualOperatorId.equals(defaultTrunkOperatorId) &&
                         isPrefixUnique) {
-                    log.trace("Global TrunkRate for trunk {} type {} has noPrefix. Actual op {} differs from default op {} for a unique prefix {}. Rule not applicable, returning null (PHP equivalent of -2).",
+                    log.info("Global TrunkRate for trunk {} type {} has noPrefix. Actual op {} differs from default op {} for a unique prefix {}. Rule not applicable, returning null (PHP equivalent of -2).",
                             trunk.getId(), telephonyTypeId, actualOperatorId, defaultTrunkOperatorId, prefixCode);
                     return null; 
                 }
             }
-            log.trace("Found global TrunkRate for trunk {}, type {}. Using operator 0.", trunk.getId(), telephonyTypeId);
+            log.info("Found global TrunkRate for trunk {}, type {}. Using operator 0.", trunk.getId(), telephonyTypeId);
             return 0L; 
         }
 
-        log.trace("No specific or global TrunkRate found for trunk {}, op {}, type {}. No effective trunk operator rule, returning null (PHP equivalent of -1).",
+        log.info("No specific or global TrunkRate found for trunk {}, op {}, type {}. No effective trunk operator rule, returning null (PHP equivalent of -1).",
                 trunk.getId(), actualOperatorId, telephonyTypeId);
         return null; 
     }
@@ -217,7 +217,7 @@ public class CdrEnrichmentHelper {
 
     public Long getOriginCountryId(CommunicationLocation commLocation) {
         if (commLocation == null) {
-            log.warn("getOriginCountryId called with null commLocation, falling back to default {}", CdrProcessingConfig.COLOMBIA_ORIGIN_COUNTRY_ID);
+            log.info("getOriginCountryId called with null commLocation, falling back to default {}", CdrProcessingConfig.COLOMBIA_ORIGIN_COUNTRY_ID);
             return CdrProcessingConfig.COLOMBIA_ORIGIN_COUNTRY_ID;
         }
         
@@ -231,12 +231,12 @@ public class CdrEnrichmentHelper {
             if (indicatorOpt.isPresent() && indicatorOpt.get().getOriginCountryId() != null) {
                 return indicatorOpt.get().getOriginCountryId();
             } else {
-                log.warn("Indicator {} linked to CommLocation {} not found or has no OriginCountryId.", commLocation.getIndicatorId(), commLocation.getId());
+                log.info("Indicator {} linked to CommLocation {} not found or has no OriginCountryId.", commLocation.getIndicatorId(), commLocation.getId());
             }
         } else {
-            log.warn("CommLocation {} has no IndicatorId.", commLocation.getId());
+            log.info("CommLocation {} has no IndicatorId.", commLocation.getId());
         }
-        log.warn("Falling back to default OriginCountryId {} for CommLocation {}", CdrProcessingConfig.COLOMBIA_ORIGIN_COUNTRY_ID, commLocation.getId());
+        log.info("Falling back to default OriginCountryId {} for CommLocation {}", CdrProcessingConfig.COLOMBIA_ORIGIN_COUNTRY_ID, commLocation.getId());
         return CdrProcessingConfig.COLOMBIA_ORIGIN_COUNTRY_ID;
     }
 
