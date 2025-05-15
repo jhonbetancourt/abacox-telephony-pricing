@@ -1,10 +1,15 @@
+// FILE: com/infomedia/abacox/telephonypricing/cdr/PrefixInfoLookupService.java
 package com.infomedia.abacox.telephonypricing.cdr;
 
+import com.infomedia.abacox.telephonypricing.entity.CommunicationLocation;
+import com.infomedia.abacox.telephonypricing.entity.Operator;
 import com.infomedia.abacox.telephonypricing.entity.Prefix;
+import com.infomedia.abacox.telephonypricing.entity.TelephonyType;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.NoResultException;
 import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.Query;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,20 +21,40 @@ import java.util.*;
 @Service
 @Log4j2
 @Transactional(readOnly = true)
+@RequiredArgsConstructor
 public class PrefixInfoLookupService {
 
     @PersistenceContext
-    private EntityManager entityManager;
+    private final EntityManager entityManager;
     private final CdrProcessingConfig configService; // For TIPOTELE_ constants and getTelephonyTypeMinMax
 
-    public PrefixInfoLookupService(EntityManager entityManager, CdrProcessingConfig configService) {
-        this.entityManager = entityManager;
-        this.configService = configService;
-    }
+    /**
+     * Finds matching prefixes based on the processed number and call context.
+     *
+     * @param processedNumber                      The number to match against, potentially preprocessed.
+     * @param originCountryId                      The origin country ID for filtering.
+     * @param isTrunkCall                          True if the call is via a trunk, affecting prefix selection logic.
+     * @param allowedTelephonyTypeIdsForTrunk      If isTrunkCall, this set contains TelephonyType IDs allowed by the trunk.
+     * @param forcedTelephonyTypeIdFromPreprocessing Optional TelephonyType ID determined during preprocessing.
+     * @param commLocation                         The communication location, used for local fallback context.
+     * @return A list of maps, each representing a matching prefix and its related details.
+     */
+    public List<Map<String, Object>> findMatchingPrefixes(
+            String processedNumber,
+            Long originCountryId,
+            boolean isTrunkCall,
+            Set<Long> allowedTelephonyTypeIdsForTrunk,
+            Long forcedTelephonyTypeIdFromPreprocessing,
+            CommunicationLocation commLocation
+    ) {
+        if (originCountryId == null || !StringUtils.hasText(processedNumber)) {
+            log.warn("findMatchingPrefixes - Invalid input: processedNumber or originCountryId is null/empty.");
+            return Collections.emptyList();
+        }
 
-    public List<Map<String, Object>> findPrefixesByNumber(String number, Long originCountryId) {
-        if (originCountryId == null || !StringUtils.hasText(number)) return Collections.emptyList();
-        log.debug("Finding prefixes for number starting with: {}, originCountryId: {}", number.substring(0, Math.min(number.length(), 6))+"...", originCountryId);
+        log.debug("Finding matching prefixes for number: '{}...', originCountryId: {}, isTrunkCall: {}, allowedTrunkTypes: {}, forcedType: {}",
+                processedNumber.substring(0, Math.min(processedNumber.length(), 6)),
+                originCountryId, isTrunkCall, allowedTelephonyTypeIdsForTrunk, forcedTelephonyTypeIdFromPreprocessing);
 
         StringBuilder sqlBuilder = new StringBuilder();
         sqlBuilder.append("SELECT ");
@@ -44,16 +69,34 @@ public class PrefixInfoLookupService {
         sqlBuilder.append("JOIN operator op ON p.operator_id = op.id ");
         sqlBuilder.append("LEFT JOIN telephony_type_config ttc ON ttc.telephony_type_id = tt.id AND ttc.origin_country_id = :originCountryId AND ttc.active = true ");
         sqlBuilder.append("WHERE p.active = true AND tt.active = true AND op.active = true ");
-        sqlBuilder.append("  AND :number LIKE p.code || '%' ");
         sqlBuilder.append("  AND op.origin_country_id = :originCountryId ");
         sqlBuilder.append("  AND tt.id != :specialCallsType ");
+
+        Map<String, Object> queryParams = new HashMap<>();
+        queryParams.put("originCountryId", originCountryId);
+        queryParams.put("specialCallsType", CdrProcessingConfig.TIPOTELE_ESPECIALES);
+
+        if (isTrunkCall && allowedTelephonyTypeIdsForTrunk != null && !allowedTelephonyTypeIdsForTrunk.isEmpty()) {
+            sqlBuilder.append("  AND p.telephone_type_id IN (:allowedTelephonyTypeIdsForTrunk) ");
+            queryParams.put("allowedTelephonyTypeIdsForTrunk", allowedTelephonyTypeIdsForTrunk);
+            log.trace("Trunk call: Filtering prefixes by allowed TelephonyType IDs: {}", allowedTelephonyTypeIdsForTrunk);
+        } else {
+            // Not a trunk call, or no specific types for trunk, so match by prefix code
+            sqlBuilder.append("  AND :number LIKE p.code || '%' ");
+            queryParams.put("number", processedNumber);
+            log.trace("Non-trunk call or no specific trunk types: Matching prefixes by code against number: '{}...'", processedNumber.substring(0, Math.min(processedNumber.length(), 6)));
+        }
+
+        if (forcedTelephonyTypeIdFromPreprocessing != null) {
+            sqlBuilder.append("  AND p.telephone_type_id = :forcedTelephonyTypeId ");
+            queryParams.put("forcedTelephonyTypeId", forcedTelephonyTypeIdFromPreprocessing);
+            log.trace("Further filtering prefixes by forced TelephonyType ID: {}", forcedTelephonyTypeIdFromPreprocessing);
+        }
+
         sqlBuilder.append("ORDER BY LENGTH(p.code) DESC, COALESCE(ttc.min_value, 0) DESC, tt.id ASC");
 
-
         Query query = entityManager.createNativeQuery(sqlBuilder.toString());
-        query.setParameter("number", number);
-        query.setParameter("originCountryId", originCountryId);
-        query.setParameter("specialCallsType", CdrProcessingConfig.TIPOTELE_ESPECIALES);
+        queryParams.forEach(query::setParameter);
 
         List<Object[]> results = query.getResultList();
         List<Map<String, Object>> mappedResults = new ArrayList<>();
@@ -74,10 +117,56 @@ public class PrefixInfoLookupService {
             map.put("telephony_type_max", row[12] != null ? ((Number)row[12]).intValue() : 0);
             mappedResults.add(map);
         }
-        log.trace("Found {} prefixes for number lookup", mappedResults.size());
+
+        log.trace("Found {} candidate prefixes for number lookup (isTrunk: {})", mappedResults.size(), isTrunkCall);
+
+        // Local Prefix Fallback (PHP logic: if ($id_local > 0 && !in_array($id_local, $arr_prefijo_id) && $existe_troncal === false))
+        if (!isTrunkCall && mappedResults.isEmpty() &&
+                (forcedTelephonyTypeIdFromPreprocessing == null || forcedTelephonyTypeIdFromPreprocessing.equals(CdrProcessingConfig.TIPOTELE_LOCAL))) {
+            log.debug("No prefixes found for non-trunk call, attempting local prefix fallback for number: {}", processedNumber);
+
+            Optional<Operator> localInternalOperatorOpt = configService.getOperatorInternal(CdrProcessingConfig.TIPOTELE_LOCAL, originCountryId);
+            if (localInternalOperatorOpt.isPresent()) {
+                Long localOperatorId = localInternalOperatorOpt.get().getId();
+                Optional<Prefix> localPrefixOpt = findPrefixByTypeOperatorOrigin(CdrProcessingConfig.TIPOTELE_LOCAL, localOperatorId, originCountryId);
+
+                if (localPrefixOpt.isPresent()) {
+                    Prefix localPrefix = localPrefixOpt.get();
+                    Map<String, Integer> localTypeConfig = configService.getTelephonyTypeMinMax(CdrProcessingConfig.TIPOTELE_LOCAL, originCountryId);
+                    int minLengthForLocal = localTypeConfig.getOrDefault("min", 0);
+
+                    if (processedNumber.length() >= minLengthForLocal) {
+                        Map<String, Object> localPrefixMap = new HashMap<>();
+                        localPrefixMap.put("prefix_id", localPrefix.getId());
+                        localPrefixMap.put("prefix_code", localPrefix.getCode());
+                        localPrefixMap.put("prefix_base_value", localPrefix.getBaseValue());
+                        localPrefixMap.put("prefix_vat_included", localPrefix.isVatIncluded());
+                        localPrefixMap.put("prefix_vat_value", localPrefix.getVatValue());
+                        localPrefixMap.put("prefix_band_ok", localPrefix.isBandOk());
+                        localPrefixMap.put("telephony_type_id", CdrProcessingConfig.TIPOTELE_LOCAL);
+                        localPrefixMap.put("telephony_type_name", configService.getTelephonyTypeById(CdrProcessingConfig.TIPOTELE_LOCAL).map(TelephonyType::getName).orElse("Local"));
+                        localPrefixMap.put("telephony_type_uses_trunks", configService.getTelephonyTypeById(CdrProcessingConfig.TIPOTELE_LOCAL).map(TelephonyType::isUsesTrunks).orElse(false));
+                        localPrefixMap.put("operator_id", localOperatorId);
+                        localPrefixMap.put("operator_name", localInternalOperatorOpt.get().getName());
+                        localPrefixMap.put("telephony_type_min", minLengthForLocal);
+                        localPrefixMap.put("telephony_type_max", localTypeConfig.getOrDefault("max", 0));
+                        mappedResults.add(localPrefixMap);
+                        log.info("Added local prefix fallback for number: {}", processedNumber);
+                    } else {
+                        log.debug("Local prefix fallback: number {} length {} is less than min length {} for local type.", processedNumber, processedNumber.length(), minLengthForLocal);
+                    }
+                } else {
+                    log.warn("Local prefix fallback: Could not find prefix definition for TIPOTELE_LOCAL, Operator {}, Country {}.", localOperatorId, originCountryId);
+                }
+            } else {
+                log.warn("Local prefix fallback: Could not find internal operator for TIPOTELE_LOCAL in Country {}.", originCountryId);
+            }
+        }
         return mappedResults;
     }
 
+
+    // --- Other methods from PrefixInfoLookupService remain the same ---
     public Optional<Prefix> findPrefixByTypeOperatorOrigin(Long telephonyTypeId, Long operatorId, Long originCountryId) {
         if (telephonyTypeId == null || operatorId == null || originCountryId == null) {
             log.trace("findPrefixByTypeOperatorOrigin - Invalid input: ttId={}, opId={}, ocId={}", telephonyTypeId, operatorId, originCountryId);
@@ -110,7 +199,7 @@ public class PrefixInfoLookupService {
             return Optional.empty();
         }
     }
-    
+
     public Optional<Prefix> findPrefixById(Long prefixId) {
         if (prefixId == null || prefixId <= 0) return Optional.empty();
         String sql = "SELECT p.* FROM prefix p WHERE p.id = :id AND p.active = true";
@@ -210,7 +299,7 @@ public class PrefixInfoLookupService {
 
 
             if (ndcStr.matches("\\d*") && subscriberNumberStr.matches("\\d+")) {
-                Integer ndc = ndcStr.isEmpty() ? null : Integer.parseInt(ndcStr);
+                String ndcParam = ndcStr.isEmpty() ? "0" : ndcStr; // Use "0" for SQL if ndcStr is empty
                 long subscriberNumber = Long.parseLong(subscriberNumberStr);
 
                 StringBuilder sqlBuilder = new StringBuilder();
@@ -231,11 +320,8 @@ public class PrefixInfoLookupService {
 
                 sqlBuilder.append("  AND i.active = true AND s.active = true ");
                 sqlBuilder.append("  AND i.telephony_type_id = :telephonyTypeId ");
-                if (ndc != null) {
-                    sqlBuilder.append("  AND s.ndc = :ndc ");
-                } else {
-                    sqlBuilder.append("  AND (s.ndc = 0 OR s.ndc IS NULL) ");
-                }
+                sqlBuilder.append("  AND s.ndc = :ndc "); // ndcParam will be "0" if ndcStr was empty
+
                 if (telephonyTypeId != CdrProcessingConfig.TIPOTELE_INTERNACIONAL && telephonyTypeId != CdrProcessingConfig.TIPOTELE_SATELITAL) {
                     sqlBuilder.append(" AND i.origin_country_id = :originCountryId ");
                 } else {
@@ -243,25 +329,23 @@ public class PrefixInfoLookupService {
                 }
 
                 if (!isPrefixBandOk && currentPrefixId != null) {
-                     sqlBuilder.append(" AND (i.operator_id = 0 OR i.operator_id IS NULL OR i.operator_id IN (SELECT p_sub.operator_id FROM prefix p_sub WHERE p_sub.id = :currentPrefixId)) ");
+                    sqlBuilder.append(" AND (i.operator_id = 0 OR i.operator_id IS NULL OR i.operator_id IN (SELECT p_sub.operator_id FROM prefix p_sub WHERE p_sub.id = :currentPrefixId)) ");
                 }
 
-                sqlBuilder.append("  AND s.initial_number <= :subscriberNum AND s.final_number >= :subscriberNum ");
+                sqlBuilder.append("  AND CAST(s.initial_number AS BIGINT) <= :subscriberNum AND CAST(s.final_number AS BIGINT) >= :subscriberNum ");
                 sqlBuilder.append("ORDER BY i.origin_country_id DESC, ");
                 if (isPrefixBandOk) {
                     sqlBuilder.append(" b.origin_indicator_id DESC, ");
                 }
                 if (ndcLength > 0) {
-                    sqlBuilder.append(" LENGTH(CAST(s.ndc AS TEXT)) DESC, ");
+                    sqlBuilder.append(" LENGTH(s.ndc) DESC, ");
                 }
-                sqlBuilder.append(" (s.final_number - s.initial_number) ASC ");
+                sqlBuilder.append(" (CAST(s.final_number AS BIGINT) - CAST(s.initial_number AS BIGINT)) ASC ");
                 sqlBuilder.append("LIMIT 1");
 
                 Query query = entityManager.createNativeQuery(sqlBuilder.toString());
                 query.setParameter("telephonyTypeId", telephonyTypeId);
-                if (ndc != null) {
-                    query.setParameter("ndc", ndc);
-                }
+                query.setParameter("ndc", ndcParam);
                 query.setParameter("originCountryId", originCountryId);
                 query.setParameter("subscriberNum", subscriberNumber);
                 if (isPrefixBandOk) {
@@ -306,8 +390,8 @@ public class PrefixInfoLookupService {
 
         log.debug("Finding min/max NDC length for telephonyTypeId: {}, originCountryId: {}", telephonyTypeId, originCountryId);
         StringBuilder sqlBuilder = new StringBuilder();
-        sqlBuilder.append("SELECT COALESCE(MIN(CASE WHEN s.ndc = 0 THEN 0 ELSE LENGTH(CAST(s.ndc AS TEXT)) END), 0) as min_len, ");
-        sqlBuilder.append("       COALESCE(MAX(CASE WHEN s.ndc = 0 THEN 0 ELSE LENGTH(CAST(s.ndc AS TEXT)) END), 0) as max_len ");
+        sqlBuilder.append("SELECT COALESCE(MIN(CASE WHEN s.ndc = '0' THEN 0 ELSE LENGTH(s.ndc) END), 0) as min_len, ");
+        sqlBuilder.append("       COALESCE(MAX(CASE WHEN s.ndc = '0' THEN 0 ELSE LENGTH(s.ndc) END), 0) as max_len ");
         sqlBuilder.append("FROM series s ");
         sqlBuilder.append("JOIN indicator i ON s.indicator_id = i.id ");
         sqlBuilder.append("WHERE i.active = true AND s.active = true ");
@@ -343,15 +427,15 @@ public class PrefixInfoLookupService {
         sqlBuilder.append("WHERE i.active = true AND s.active = true ");
         sqlBuilder.append("  AND i.telephony_type_id = :nationalTelephonyTypeId ");
         sqlBuilder.append("  AND s.ndc = :ndc ");
-        sqlBuilder.append("  AND s.initial_number <= :subscriberNum AND s.final_number >= :subscriberNum ");
+        sqlBuilder.append("  AND CAST(s.initial_number AS BIGINT) <= :subscriberNum AND CAST(s.final_number AS BIGINT) >= :subscriberNum ");
         sqlBuilder.append("  AND i.origin_country_id IN (0, :originCountryId) ");
 
-        sqlBuilder.append("ORDER BY i.origin_country_id DESC, LENGTH(CAST(s.ndc AS TEXT)) DESC, (s.final_number - s.initial_number) ASC ");
+        sqlBuilder.append("ORDER BY i.origin_country_id DESC, LENGTH(s.ndc) DESC, (CAST(s.final_number AS BIGINT) - CAST(s.initial_number AS BIGINT)) ASC ");
         sqlBuilder.append("LIMIT 1");
 
         Query query = entityManager.createNativeQuery(sqlBuilder.toString(), String.class);
         query.setParameter("nationalTelephonyTypeId", nationalTelephonyTypeId);
-        query.setParameter("ndc", ndc);
+        query.setParameter("ndc", String.valueOf(ndc)); // NDC is string in DB
         query.setParameter("subscriberNum", subscriberNumber);
         query.setParameter("originCountryId", originCountryId);
 
@@ -412,7 +496,7 @@ public class PrefixInfoLookupService {
         sqlBuilder.append("WHERE b.active = true ");
         sqlBuilder.append("  AND b.prefix_id = :prefixId ");
         if (effectiveIndicatorId == null || effectiveIndicatorId <= 0) {
-             sqlBuilder.append(" AND NOT EXISTS (SELECT 1 FROM band_indicator bi_check WHERE bi_check.band_id = b.id) ");
+            sqlBuilder.append(" AND NOT EXISTS (SELECT 1 FROM band_indicator bi_check WHERE bi_check.band_id = b.id) ");
         }
         sqlBuilder.append("  AND b.origin_indicator_id IN (0, :originIndicatorId) ");
         sqlBuilder.append("ORDER BY b.origin_indicator_id DESC ");
@@ -446,11 +530,11 @@ public class PrefixInfoLookupService {
     public Optional<Integer> findLocalNdcForIndicator(Long indicatorId) {
         if (indicatorId == null || indicatorId <= 0) return Optional.empty();
         log.debug("Finding local NDC for indicatorId: {}", indicatorId);
-        String sql = "SELECT s.ndc FROM series s " +
+        String sql = "SELECT CAST(s.ndc AS INTEGER) FROM series s " + // Ensure ndc is treated as integer for ordering
                 "WHERE s.indicator_id = :indicatorId " +
-                "  AND s.ndc IS NOT NULL AND s.ndc > 0 " +
+                "  AND s.ndc IS NOT NULL AND s.ndc != '0' AND s.ndc ~ '^[1-9][0-9]*$' " + // Ensure it's a positive number string
                 "GROUP BY s.ndc " +
-                "ORDER BY COUNT(*) DESC, s.ndc ASC " +
+                "ORDER BY COUNT(*) DESC, CAST(s.ndc AS INTEGER) ASC " + // Order by numeric value of NDC
                 "LIMIT 1";
         Query query = entityManager.createNativeQuery(sql, Integer.class);
         query.setParameter("indicatorId", indicatorId);
@@ -459,7 +543,7 @@ public class PrefixInfoLookupService {
             log.trace("Found local NDC {} for indicator {}", ndc, indicatorId);
             return Optional.ofNullable(ndc);
         } catch (NoResultException e) {
-            log.warn("No positive NDC found for indicatorId: {}", indicatorId);
+            log.warn("No positive numeric NDC found for indicatorId: {}", indicatorId);
             return Optional.empty();
         } catch (Exception e) {
             log.error("Error finding local NDC for indicatorId: {}", indicatorId, e);
@@ -472,10 +556,10 @@ public class PrefixInfoLookupService {
             return false;
         }
         log.debug("Checking if NDC {} is local extended for origin indicator {}", destinationNdc, originIndicatorId);
-        String sql = "SELECT COUNT(s.id) FROM series s WHERE s.indicator_id = :originIndicatorId AND s.ndc = :destinationNdc AND s.active = true";
+        String sql = "SELECT COUNT(s.id) FROM series s WHERE s.indicator_id = :originIndicatorId AND s.ndc = :destinationNdcStr AND s.active = true";
         Query query = entityManager.createNativeQuery(sql, Long.class);
         query.setParameter("originIndicatorId", originIndicatorId);
-        query.setParameter("destinationNdc", destinationNdc);
+        query.setParameter("destinationNdcStr", String.valueOf(destinationNdc)); // NDC is string in DB
         try {
             Long count = (Long) query.getSingleResult();
             boolean isExtended = count != null && count > 0;

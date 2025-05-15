@@ -1,3 +1,4 @@
+// FILE: com/infomedia/abacox/telephonypricing/cdr/TrunkLookupService.java
 package com.infomedia.abacox.telephonypricing.cdr;
 
 import com.infomedia.abacox.telephonypricing.entity.Trunk;
@@ -12,7 +13,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @Log4j2
@@ -120,7 +125,7 @@ public class TrunkLookupService {
         } else {
              sqlBuilder.append("     CASE WHEN tr.indicator_ids = '' OR tr.indicator_ids IS NULL THEN 0 ELSE 1 END ASC, ");
         }
-        sqlBuilder.append("     LENGTH(tr.indicator_ids) DESC ");
+        sqlBuilder.append("     LENGTH(tr.indicator_ids) DESC "); // PHP logic implies longer, more specific indicator_ids strings might be preferred if other criteria are equal.
         sqlBuilder.append("LIMIT 1");
 
         Query query = entityManager.createNativeQuery(sqlBuilder.toString(), TrunkRule.class);
@@ -143,6 +148,29 @@ public class TrunkLookupService {
         } catch (Exception e) {
             log.error("Error finding trunk rule for trunk: '{}', ttId: {}, indId: {}, originIndId: {}", trunkName, telephonyTypeId, indicatorIdStr, effectiveOriginIndicatorId, e);
             return Optional.empty();
+        }
+    }
+
+    public Set<Long> getAllowedTelephonyTypesForTrunk(Long trunkId) {
+        if (trunkId == null || trunkId <= 0) {
+            log.trace("getAllowedTelephonyTypesForTrunk - Invalid trunkId: {}", trunkId);
+            return Collections.emptySet();
+        }
+        log.debug("Fetching allowed telephony types for trunkId: {}", trunkId);
+        String sql = "SELECT DISTINCT tr.telephony_type_id FROM trunk_rate tr WHERE tr.trunk_id = :trunkId AND tr.active = true";
+        Query query = entityManager.createNativeQuery(sql);
+        query.setParameter("trunkId", trunkId);
+        try {
+            @SuppressWarnings("unchecked") // Native query returns List of Number or BigInteger
+            List<Number> results = query.getResultList();
+            Set<Long> typeIds = results.stream()
+                                       .map(Number::longValue)
+                                       .collect(Collectors.toSet());
+            log.trace("Found {} allowed telephony types for trunkId {}", typeIds.size(), trunkId);
+            return typeIds;
+        } catch (Exception e) {
+            log.error("Error fetching allowed telephony types for trunkId {}: {}", trunkId, e.getMessage(), e);
+            return Collections.emptySet();
         }
     }
 }
