@@ -31,7 +31,7 @@ public class PrefixInfoLookupService {
     /**
      * Finds matching prefixes based on the processed number and call context.
      * This version is refined to more closely match the PHP `buscarPrefijo` logic,
-     * especially in how candidate prefixes are ordered.
+     * especially in how candidate prefixes are ordered and how local prefixes are handled.
      *
      * @param processedNumber                      The number to match against, potentially preprocessed.
      * @param originCountryId                      The origin country ID for filtering.
@@ -64,8 +64,8 @@ public class PrefixInfoLookupService {
         sqlBuilder.append(" p.vat_included as prefix_vat_included, p.vat_value as prefix_vat_value, p.band_ok as prefix_band_ok, ");
         sqlBuilder.append(" tt.id as telephony_type_id, tt.name as telephony_type_name, tt.uses_trunks as telephony_type_uses_trunks, ");
         sqlBuilder.append(" op.id as operator_id, op.name as operator_name, ");
-        sqlBuilder.append(" COALESCE(ttc.min_value, 0) as telephony_type_min, "); // Default to 0 if no config
-        sqlBuilder.append(" COALESCE(ttc.max_value, 0) as telephony_type_max ");  // Default to 0 if no config
+        sqlBuilder.append(" COALESCE(ttc.min_value, 0) as telephony_type_min, ");
+        sqlBuilder.append(" COALESCE(ttc.max_value, 0) as telephony_type_max ");
         sqlBuilder.append("FROM prefix p ");
         sqlBuilder.append("JOIN telephony_type tt ON p.telephone_type_id = tt.id ");
         sqlBuilder.append("JOIN operator op ON p.operator_id = op.id ");
@@ -95,8 +95,8 @@ public class PrefixInfoLookupService {
             log.trace("Further filtering prefixes by forced TelephonyType ID: {}", forcedTelephonyTypeIdFromPreprocessing);
         }
 
-        // Refined ORDER BY to match PHP's krsort logic on prefix code and CargarPrefijos internal sort
-        sqlBuilder.append("ORDER BY LENGTH(p.code) DESC, p.code DESC, COALESCE(ttc.min_value, 0) DESC, p.id ASC");
+        // ORDER BY to match PHP's CargarPrefijos and krsort logic on sprintf key
+        sqlBuilder.append("ORDER BY LENGTH(p.code) DESC, p.code DESC, COALESCE(ttc.min_value, 0) DESC, tt.id ASC, p.id ASC");
 
         Query query = entityManager.createNativeQuery(sqlBuilder.toString());
         queryParams.forEach(query::setParameter);
@@ -121,48 +121,56 @@ public class PrefixInfoLookupService {
             mappedResults.add(map);
         }
 
-        log.trace("Found {} candidate prefixes for number lookup (isTrunk: {})", mappedResults.size(), isTrunkCall);
+        log.trace("Found {} candidate prefixes from SQL for number lookup (isTrunk: {})", mappedResults.size(), isTrunkCall);
 
-        // Local Prefix Fallback (PHP logic: if ($id_local > 0 && !in_array($id_local, $arr_prefijo_id) && $existe_troncal === false))
-        // This is attempted if the main query yields no results for a non-trunk call.
-        if (!isTrunkCall && mappedResults.isEmpty()) {
-            log.debug("No prefixes found from main query for non-trunk call, attempting local prefix fallback for number: {}", numberForLog);
+        // Explicit Local Prefix Addition (for non-trunk calls), mimicking PHP's logic
+        if (!isTrunkCall) {
+            boolean localPrefixFoundInSqlResults = mappedResults.stream()
+                .anyMatch(map -> Long.valueOf(CdrProcessingConfig.TIPOTELE_LOCAL).equals(map.get("telephony_type_id")));
 
-            Optional<Operator> localInternalOperatorOpt = configService.getOperatorInternal(CdrProcessingConfig.TIPOTELE_LOCAL, originCountryId);
-            if (localInternalOperatorOpt.isPresent()) {
-                Long localOperatorId = localInternalOperatorOpt.get().getId();
-                Optional<Prefix> localPrefixOpt = findPrefixByTypeOperatorOrigin(CdrProcessingConfig.TIPOTELE_LOCAL, localOperatorId, originCountryId);
+            if (!localPrefixFoundInSqlResults) {
+                log.debug("TIPOTELE_LOCAL not found in SQL results for non-trunk call, attempting explicit add for number: {}", numberForLog);
 
-                if (localPrefixOpt.isPresent()) {
-                    Prefix localPrefix = localPrefixOpt.get();
-                    Map<String, Integer> localTypeConfig = configService.getTelephonyTypeMinMax(CdrProcessingConfig.TIPOTELE_LOCAL, originCountryId);
-                    int minLengthForLocal = localTypeConfig.getOrDefault("min", 0);
+                Optional<Operator> localInternalOperatorOpt = configService.getOperatorInternal(CdrProcessingConfig.TIPOTELE_LOCAL, originCountryId);
+                if (localInternalOperatorOpt.isPresent()) {
+                    Long localOperatorId = localInternalOperatorOpt.get().getId();
+                    Optional<Prefix> localPrefixOpt = findPrefixByTypeOperatorOrigin(CdrProcessingConfig.TIPOTELE_LOCAL, localOperatorId, originCountryId);
 
-                    if (processedNumber.length() >= minLengthForLocal) {
-                        Map<String, Object> localPrefixMap = new HashMap<>();
-                        localPrefixMap.put("prefix_id", localPrefix.getId());
-                        localPrefixMap.put("prefix_code", localPrefix.getCode()); // Might be empty for local
-                        localPrefixMap.put("prefix_base_value", localPrefix.getBaseValue());
-                        localPrefixMap.put("prefix_vat_included", localPrefix.isVatIncluded());
-                        localPrefixMap.put("prefix_vat_value", localPrefix.getVatValue());
-                        localPrefixMap.put("prefix_band_ok", localPrefix.isBandOk());
-                        localPrefixMap.put("telephony_type_id", CdrProcessingConfig.TIPOTELE_LOCAL);
-                        localPrefixMap.put("telephony_type_name", configService.getTelephonyTypeById(CdrProcessingConfig.TIPOTELE_LOCAL).map(TelephonyType::getName).orElse("Local"));
-                        localPrefixMap.put("telephony_type_uses_trunks", configService.getTelephonyTypeById(CdrProcessingConfig.TIPOTELE_LOCAL).map(TelephonyType::isUsesTrunks).orElse(false));
-                        localPrefixMap.put("operator_id", localOperatorId);
-                        localPrefixMap.put("operator_name", localInternalOperatorOpt.get().getName());
-                        localPrefixMap.put("telephony_type_min", minLengthForLocal);
-                        localPrefixMap.put("telephony_type_max", localTypeConfig.getOrDefault("max", 0));
-                        mappedResults.add(localPrefixMap); // Add to results
-                        log.info("Added local prefix fallback for number: {}", numberForLog);
+                    if (localPrefixOpt.isPresent()) {
+                        Prefix localPrefix = localPrefixOpt.get();
+                        Map<String, Integer> localTypeConfig = configService.getTelephonyTypeMinMax(CdrProcessingConfig.TIPOTELE_LOCAL, originCountryId);
+                        int minLengthForLocal = localTypeConfig.getOrDefault("min", 0);
+
+                        // PHP: if ($lnumero >= $arreglo_local['tipotele_min'])
+                        if (processedNumber.length() >= minLengthForLocal) {
+                            Map<String, Object> localPrefixMap = new HashMap<>();
+                            localPrefixMap.put("prefix_id", localPrefix.getId());
+                            localPrefixMap.put("prefix_code", localPrefix.getCode()); // Might be empty for local
+                            localPrefixMap.put("prefix_base_value", localPrefix.getBaseValue());
+                            localPrefixMap.put("prefix_vat_included", localPrefix.isVatIncluded());
+                            localPrefixMap.put("prefix_vat_value", localPrefix.getVatValue());
+                            localPrefixMap.put("prefix_band_ok", localPrefix.isBandOk());
+                            localPrefixMap.put("telephony_type_id", CdrProcessingConfig.TIPOTELE_LOCAL);
+                            localPrefixMap.put("telephony_type_name", configService.getTelephonyTypeById(CdrProcessingConfig.TIPOTELE_LOCAL).map(TelephonyType::getName).orElse("Local"));
+                            localPrefixMap.put("telephony_type_uses_trunks", configService.getTelephonyTypeById(CdrProcessingConfig.TIPOTELE_LOCAL).map(TelephonyType::isUsesTrunks).orElse(false));
+                            localPrefixMap.put("operator_id", localOperatorId);
+                            localPrefixMap.put("operator_name", localInternalOperatorOpt.get().getName());
+                            localPrefixMap.put("telephony_type_min", minLengthForLocal);
+                            localPrefixMap.put("telephony_type_max", localTypeConfig.getOrDefault("max", 0));
+                            
+                            mappedResults.add(localPrefixMap); // Add to end of results
+                            log.info("Explicitly added TIPOTELE_LOCAL prefix to candidates for number: {}", numberForLog);
+                        } else {
+                            log.debug("Explicit local prefix add: number {} length {} is less than min length {} for local type.", numberForLog, processedNumber.length(), minLengthForLocal);
+                        }
                     } else {
-                        log.debug("Local prefix fallback: number {} length {} is less than min length {} for local type.", numberForLog, processedNumber.length(), minLengthForLocal);
+                        log.warn("Explicit local prefix add: Could not find prefix definition for TIPOTELE_LOCAL ({}), Operator {}, Country {}.", CdrProcessingConfig.TIPOTELE_LOCAL, localOperatorId, originCountryId);
                     }
                 } else {
-                    log.warn("Local prefix fallback: Could not find prefix definition for TIPOTELE_LOCAL ({}), Operator {}, Country {}.", CdrProcessingConfig.TIPOTELE_LOCAL, localOperatorId, originCountryId);
+                    log.warn("Explicit local prefix add: Could not find internal operator for TIPOTELE_LOCAL ({}) in Country {}.", CdrProcessingConfig.TIPOTELE_LOCAL, originCountryId);
                 }
             } else {
-                log.warn("Local prefix fallback: Could not find internal operator for TIPOTELE_LOCAL ({}) in Country {}.", CdrProcessingConfig.TIPOTELE_LOCAL, originCountryId);
+                 log.debug("TIPOTELE_LOCAL was already found in SQL results. No explicit add needed.");
             }
         }
         return mappedResults;
@@ -274,7 +282,7 @@ public class PrefixInfoLookupService {
             return Optional.empty();
         }
         if (checkLocalFallback) {
-            minNdcLength = 0; maxNdcLength = 0; // Effective NDC length is 0 for local lookups where series.ndc might be '0'
+            minNdcLength = 0; maxNdcLength = 0; 
             log.trace("Treating as LOCAL type lookup (effective NDC length 0 for series.ndc='0')");
         }
 
@@ -289,11 +297,10 @@ public class PrefixInfoLookupService {
             if (ndcLength > 0 && numberWithoutPrefix.length() >= ndcLength) {
                 ndcStr = numberWithoutPrefix.substring(0, ndcLength);
                 subscriberNumberStr = numberWithoutPrefix.substring(ndcLength);
-            } else if (ndcLength > 0) { // number is shorter than current ndcLength being checked
+            } else if (ndcLength > 0) { 
                 continue;
             }
-            // If ndcLength is 0 (local fallback case), ndcStr remains "" and subscriberNumberStr is the full number.
-
+            
             int minSubscriberLength = Math.max(0, typeMinDigits - ndcLength);
             if (subscriberNumberStr.length() < minSubscriberLength) {
                 log.trace("Subscriber part {} (from num {}) too short for NDC {} (min subscriber length {})", subscriberNumberStr, numberWithoutPrefix, ndcStr, minSubscriberLength);
@@ -301,8 +308,8 @@ public class PrefixInfoLookupService {
             }
 
 
-            if (ndcStr.matches("\\d*") && subscriberNumberStr.matches("\\d+")) { // ndcStr can be empty, subscriber must be digits
-                String ndcParam = ndcStr.isEmpty() ? "0" : ndcStr; // Use "0" for SQL if ndcStr was empty (local case)
+            if (ndcStr.matches("\\d*") && subscriberNumberStr.matches("\\d+")) { 
+                String ndcParam = ndcStr.isEmpty() ? "0" : ndcStr; 
                 long subscriberNumber = Long.parseLong(subscriberNumberStr);
 
                 StringBuilder sqlBuilder = new StringBuilder();
@@ -328,27 +335,22 @@ public class PrefixInfoLookupService {
                 if (telephonyTypeId != CdrProcessingConfig.TIPOTELE_INTERNACIONAL && telephonyTypeId != CdrProcessingConfig.TIPOTELE_SATELITAL) {
                     sqlBuilder.append(" AND i.origin_country_id = :originCountryId ");
                 } else {
-                    // For international/satellite, allow origin_country_id = 0 (global) or matching current origin
                     sqlBuilder.append(" AND i.origin_country_id IN (0, :originCountryId) ");
                 }
 
-                // If not using bands (isPrefixBandOk=false), but a prefix is involved,
-                // ensure the indicator's operator is compatible with the prefix's operator.
                 if (!isPrefixBandOk && currentPrefixId != null) {
                     sqlBuilder.append(" AND (i.operator_id = 0 OR i.operator_id IS NULL OR i.operator_id IN (SELECT p_sub.operator_id FROM prefix p_sub WHERE p_sub.id = :currentPrefixId)) ");
                 }
 
                 sqlBuilder.append("  AND CAST(s.initial_number AS BIGINT) <= :subscriberNum AND CAST(s.final_number AS BIGINT) >= :subscriberNum ");
-                // PHP: ORDER BY SERIE_NDC DESC,$orden_cond SERIE_INICIAL, SERIE_FINAL
-                // $orden_cond was BANDA_INDICAORIGEN_ID DESC
-                sqlBuilder.append("ORDER BY i.origin_country_id DESC, "); // Prefer specific country over global
+                sqlBuilder.append("ORDER BY i.origin_country_id DESC, "); 
                 if (isPrefixBandOk) {
-                    sqlBuilder.append(" b.origin_indicator_id DESC, "); // Prefer specific origin band over global band
+                    sqlBuilder.append(" b.origin_indicator_id DESC, "); 
                 }
-                if (ndcLength > 0) { // Only sort by NDC length if NDC is part of the match
+                if (ndcLength > 0) { 
                     sqlBuilder.append(" LENGTH(s.ndc) DESC, ");
                 }
-                sqlBuilder.append(" (CAST(s.final_number AS BIGINT) - CAST(s.initial_number AS BIGINT)) ASC "); // Prefer narrower series range
+                sqlBuilder.append(" (CAST(s.final_number AS BIGINT) - CAST(s.initial_number AS BIGINT)) ASC "); 
                 sqlBuilder.append("LIMIT 1");
 
                 Query query = entityManager.createNativeQuery(sqlBuilder.toString());
@@ -368,7 +370,7 @@ public class PrefixInfoLookupService {
                     Object[] result = (Object[]) query.getSingleResult();
                     Map<String, Object> map = new HashMap<>();
                     Long indicatorIdVal = (result[0] instanceof Number) ? ((Number) result[0]).longValue() : null;
-                    map.put("indicator_id", (indicatorIdVal != null && indicatorIdVal > 0) ? indicatorIdVal : null); // Ensure null if 0
+                    map.put("indicator_id", (indicatorIdVal != null && indicatorIdVal > 0) ? indicatorIdVal : null); 
                     map.put("department_country", result[1]);
                     map.put("city_name", result[2]);
                     map.put("indicator_operator_id", result[3]);
@@ -398,20 +400,18 @@ public class PrefixInfoLookupService {
 
         log.debug("Finding min/max NDC length for telephonyTypeId: {}, originCountryId: {}", telephonyTypeId, originCountryId);
         StringBuilder sqlBuilder = new StringBuilder();
-        // Ensure '0' NDC is treated as length 0 for min/max calculations if it represents local/no NDC
         sqlBuilder.append("SELECT COALESCE(MIN(CASE WHEN s.ndc = '0' THEN 0 ELSE LENGTH(s.ndc) END), 0) as min_len, ");
         sqlBuilder.append("       COALESCE(MAX(CASE WHEN s.ndc = '0' THEN 0 ELSE LENGTH(s.ndc) END), 0) as max_len ");
         sqlBuilder.append("FROM series s ");
         sqlBuilder.append("JOIN indicator i ON s.indicator_id = i.id ");
         sqlBuilder.append("WHERE i.active = true AND s.active = true ");
         sqlBuilder.append("  AND i.telephony_type_id = :telephonyTypeId ");
-        // For international/satellite, allow origin_country_id = 0 (global) or matching current origin
         if (telephonyTypeId.equals(CdrProcessingConfig.TIPOTELE_INTERNACIONAL) || telephonyTypeId.equals(CdrProcessingConfig.TIPOTELE_SATELITAL)) {
             sqlBuilder.append("  AND i.origin_country_id IN (0, :originCountryId) ");
         } else {
             sqlBuilder.append("  AND i.origin_country_id = :originCountryId ");
         }
-        sqlBuilder.append("  AND s.ndc IS NOT NULL "); // Ensure ndc is not null
+        sqlBuilder.append("  AND s.ndc IS NOT NULL "); 
 
         Query query = entityManager.createNativeQuery(sqlBuilder.toString());
         query.setParameter("telephonyTypeId", telephonyTypeId);
@@ -442,14 +442,14 @@ public class PrefixInfoLookupService {
         sqlBuilder.append("  AND i.telephony_type_id = :nationalTelephonyTypeId ");
         sqlBuilder.append("  AND s.ndc = :ndc ");
         sqlBuilder.append("  AND CAST(s.initial_number AS BIGINT) <= :subscriberNum AND CAST(s.final_number AS BIGINT) >= :subscriberNum ");
-        sqlBuilder.append("  AND i.origin_country_id IN (0, :originCountryId) "); // Allow global or specific origin
+        sqlBuilder.append("  AND i.origin_country_id IN (0, :originCountryId) "); 
 
         sqlBuilder.append("ORDER BY i.origin_country_id DESC, LENGTH(s.ndc) DESC, (CAST(s.final_number AS BIGINT) - CAST(s.initial_number AS BIGINT)) ASC ");
         sqlBuilder.append("LIMIT 1");
 
         Query query = entityManager.createNativeQuery(sqlBuilder.toString(), String.class);
         query.setParameter("nationalTelephonyTypeId", nationalTelephonyTypeId);
-        query.setParameter("ndc", String.valueOf(ndc)); // NDC is string in DB
+        query.setParameter("ndc", String.valueOf(ndc)); 
         query.setParameter("subscriberNum", subscriberNumber);
         query.setParameter("originCountryId", originCountryId);
 
@@ -480,7 +480,7 @@ public class PrefixInfoLookupService {
             map.put("vat_included", result[1] != null ? result[1] : false);
             map.put("vat_value", result[2] != null ? result[2] : BigDecimal.ZERO);
             map.put("band_ok", result[3] != null ? result[3] : false);
-            map.put("telephony_type_id", result[4]); // Used by CdrPricingService
+            map.put("telephony_type_id", result[4]); 
             return Optional.of(map);
         } catch (NoResultException e) {
             log.warn("No active prefix found for ID: {}", prefixId);
@@ -496,30 +496,24 @@ public class PrefixInfoLookupService {
             log.trace("findBandByPrefixAndIndicator - Invalid input: prefixId is null");
             return Optional.empty();
         }
-        // In PHP, BANDA_INDICAORIGEN_ID in (0, COMUBICACION_INDICATIVO_ID)
-        // If originIndicatorId is null (e.g. global prefix), it should match bands with origin_indicator_id = 0
         Long effectiveOriginIndicatorId = originIndicatorId != null ? originIndicatorId : 0L;
-        Long effectiveIndicatorId = indicatorId; // Can be null if not applicable (e.g. local with no specific sub-indicator)
+        Long effectiveIndicatorId = indicatorId; 
 
         log.debug("Finding band for prefixId: {}, effectiveIndicatorId: {}, effectiveOriginIndicatorId: {}", prefixId, effectiveIndicatorId, effectiveOriginIndicatorId);
 
         StringBuilder sqlBuilder = new StringBuilder();
         sqlBuilder.append("SELECT b.id as band_id, b.value as band_value, b.vat_included as band_vat_included, b.name as band_name ");
         sqlBuilder.append("FROM band b ");
-        // If an indicatorId is provided (not null and > 0), join with band_indicator
         if (effectiveIndicatorId != null && effectiveIndicatorId > 0) {
             sqlBuilder.append("JOIN band_indicator bi ON b.id = bi.band_id AND bi.indicator_id = :indicatorId ");
         }
         sqlBuilder.append("WHERE b.active = true ");
         sqlBuilder.append("  AND b.prefix_id = :prefixId ");
-        // If no specific indicatorId is provided (e.g., for local calls where band might be defined just for prefix and origin),
-        // then we should only match bands that do NOT have any specific band_indicator entries.
         if (effectiveIndicatorId == null || effectiveIndicatorId <= 0) {
             sqlBuilder.append(" AND NOT EXISTS (SELECT 1 FROM band_indicator bi_check WHERE bi_check.band_id = b.id) ");
         }
-        sqlBuilder.append("  AND b.origin_indicator_id IN (0, :originIndicatorId) "); // Match global (0) or specific origin
-        // PHP: ORDER BY BANDA_INDICAORIGEN_ID DESC
-        sqlBuilder.append("ORDER BY b.origin_indicator_id DESC "); // Prefer specific origin_indicator_id over global (0)
+        sqlBuilder.append("  AND b.origin_indicator_id IN (0, :originIndicatorId) "); 
+        sqlBuilder.append("ORDER BY b.origin_indicator_id DESC "); 
         sqlBuilder.append("LIMIT 1");
 
         Query query = entityManager.createNativeQuery(sqlBuilder.toString());
@@ -550,17 +544,11 @@ public class PrefixInfoLookupService {
     public Optional<Integer> findLocalNdcForIndicator(Long indicatorId) {
         if (indicatorId == null || indicatorId <= 0) return Optional.empty();
         log.debug("Finding local NDC for indicatorId: {}", indicatorId);
-        // PHP: 'SELECT SERIE_NDC, count(*) as N FROM serie WHERE SERIE_INDICATIVO_ID = '.$indicativo_id.
-        //      ' GROUP BY SERIE_NDC'.
-        //      ' ORDER BY N DESC, SERIE_NDC';
-        // This implies the most frequent NDC for an indicator is its "local" NDC.
-        // If multiple NDCs have the same frequency, the numerically smallest is chosen.
-        // We need to ensure ndc is treated as a number for sorting if it's stored as string.
-        String sql = "SELECT CAST(s.ndc AS INTEGER) FROM series s " + // Ensure ndc is treated as integer for ordering
+        String sql = "SELECT CAST(s.ndc AS INTEGER) FROM series s " + 
                 "WHERE s.indicator_id = :indicatorId " +
-                "  AND s.ndc IS NOT NULL AND s.ndc != '0' AND s.ndc ~ '^[1-9][0-9]*$' " + // Ensure it's a positive number string
+                "  AND s.ndc IS NOT NULL AND s.ndc != '0' AND s.ndc ~ '^[1-9][0-9]*$' " + 
                 "GROUP BY s.ndc " +
-                "ORDER BY COUNT(*) DESC, CAST(s.ndc AS INTEGER) ASC " + // Order by numeric value of NDC
+                "ORDER BY COUNT(*) DESC, CAST(s.ndc AS INTEGER) ASC " + 
                 "LIMIT 1";
         Query query = entityManager.createNativeQuery(sql, Integer.class);
         query.setParameter("indicatorId", indicatorId);
@@ -582,14 +570,10 @@ public class PrefixInfoLookupService {
             return false;
         }
         log.debug("Checking if NDC {} is local extended for origin indicator {}", destinationNdc, originIndicatorId);
-        // PHP: Checks if the destinationNdc is among the NDCs associated with the originIndicatorId.
-        //      SELECT distinct(SERIE_NDC) as SERIE_NDC FROM serie WHERE SERIE_INDICATIVO_ID = '.$indicativolocal_id;
-        //      $localext = in_array($indicativo, $_indicativos_extendida[$indicativolocal_id]);
-        //      where $indicativo is the destinationNdc and $_indicativos_extendida[$indicativolocal_id] is the list of NDCs for origin.
         String sql = "SELECT COUNT(s.id) FROM series s WHERE s.indicator_id = :originIndicatorId AND s.ndc = :destinationNdcStr AND s.active = true";
         Query query = entityManager.createNativeQuery(sql, Long.class);
         query.setParameter("originIndicatorId", originIndicatorId);
-        query.setParameter("destinationNdcStr", String.valueOf(destinationNdc)); // NDC is string in DB
+        query.setParameter("destinationNdcStr", String.valueOf(destinationNdc)); 
         try {
             Long count = (Long) query.getSingleResult();
             boolean isExtended = count != null && count > 0;
@@ -603,11 +587,9 @@ public class PrefixInfoLookupService {
 
     public boolean isPrefixUniqueToOperator(String prefixCode, Long telephonyTypeId, Long originCountryId) {
         if (!StringUtils.hasText(prefixCode) || telephonyTypeId == null || originCountryId == null) {
-            return false; // Or throw IllegalArgumentException
+            return false; 
         }
         log.debug("Checking if prefix {} is unique for type {} in country {}", prefixCode, telephonyTypeId, originCountryId);
-        // PHP: count($_lista_Prefijos['ctlope'][$prefijo]) == 1
-        // This checks if the given prefix code (for any operator) is associated with only one operator for the given telephony type and origin country.
         String sql = "SELECT COUNT(DISTINCT p.operator_id) " +
                 "FROM prefix p " +
                 "JOIN operator op ON p.operator_id = op.id " +
@@ -626,7 +608,7 @@ public class PrefixInfoLookupService {
             return isUnique;
         } catch (Exception e) {
             log.error("Error checking prefix uniqueness for code {}, type {}, country {}: {}", prefixCode, telephonyTypeId, originCountryId, e.getMessage(), e);
-            return false; // Default to not unique on error
+            return false; 
         }
     }
 }
