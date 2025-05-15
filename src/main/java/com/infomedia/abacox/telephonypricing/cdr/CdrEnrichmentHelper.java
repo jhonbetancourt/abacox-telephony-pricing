@@ -1,4 +1,3 @@
-// FILE: com/infomedia/abacox/telephonypricing/cdr/CdrEnrichmentHelper.java
 package com.infomedia.abacox.telephonypricing.cdr;
 
 import com.infomedia.abacox.telephonypricing.entity.*;
@@ -7,6 +6,7 @@ import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
+import java.math.BigDecimal;
 import java.util.Map;
 import java.util.Optional;
 
@@ -32,28 +32,48 @@ public class CdrEnrichmentHelper {
 
     public boolean isLikelyExtension(String number, CdrProcessingConfig.ExtensionLengthConfig extConfig) {
         if (!StringUtils.hasText(number)) return false;
+        if (extConfig == null) {
+            log.warn("isLikelyExtension called with null extConfig for number '{}'. Falling back to basic numeric check.", number);
+            // Fallback to a very basic check if config is missing, though this shouldn't happen.
+            return number.matches("\\d{2,7}"); // Example basic fallback
+        }
 
-        // Check against special syntax extensions first (PHP's $_LIM_INTERNAS['full'])
+
+        // Check against special syntax extensions first
         if (extConfig.getSpecialSyntaxExtensions().contains(number)) {
             log.trace("isLikelyExtension: '{}' matched a special syntax extension.", number);
             return true;
         }
 
-        // Proceed with numeric checks if not a special syntax extension
         String effectiveNumber = number.startsWith("+") ? number.substring(1) : number;
 
-        // PHP's ExtensionPosible checks if numeric and within derived numeric min/max.
-        // It doesn't explicitly check for non-digit characters if it's not in 'full'.
-        // However, the derived min/max are based on lengths of *numeric* extensions.
-        // So, if it's not purely numeric, it wouldn't match the numeric range.
         if (!effectiveNumber.matches("\\d+")) {
             log.trace("isLikelyExtension: '{}' is not purely numeric and not in special syntax list.", number);
             return false;
         }
 
         try {
+            // Ensure the number itself (as a value) is within the derived min/max numeric values
+            // This handles cases like min length 3 (value 100) and max length 4 (value 9999).
+            // A number like "50" would be rejected if min length is 3.
+            // A number like "12345" would be rejected if max length is 4.
+            if (effectiveNumber.length() < String.valueOf(extConfig.getMinNumericValue()).length() && extConfig.getMinNumericValue() != 0) {
+                 // Special case for minNumericValue = 0 (e.g. for single digit '0' extension)
+                if (extConfig.getMinNumericValue() == 0 && effectiveNumber.equals("0")) {
+                    // Allow '0' if minNumericValue is 0
+                } else {
+                    log.trace("isLikelyExtension: '{}' (length {}) is shorter than min expected numeric value's length (derived from min length).", number, effectiveNumber.length());
+                    return false;
+                }
+            }
+            if (effectiveNumber.length() > String.valueOf(extConfig.getMaxNumericValue()).length()) {
+                 log.trace("isLikelyExtension: '{}' (length {}) is longer than max expected numeric value's length (derived from max length).", number, effectiveNumber.length());
+                return false;
+            }
+
             long numValue = Long.parseLong(effectiveNumber);
             boolean inRange = (numValue >= extConfig.getMinNumericValue() && numValue <= extConfig.getMaxNumericValue());
+
             if (inRange) {
                 log.trace("isLikelyExtension: '{}' (value {}) is within numeric range ({}-{}).", number, numValue, extConfig.getMinNumericValue(), extConfig.getMaxNumericValue());
             } else {
@@ -70,14 +90,13 @@ public class CdrEnrichmentHelper {
     public LocationInfo getLocationInfo(Employee employee, CommunicationLocation defaultLocation) {
         Long defaultIndicatorId = defaultLocation.getIndicatorId();
         Long defaultOriginCountryId = getOriginCountryId(defaultLocation);
-        Long defaultOfficeId = null; // Office ID is typically subdivision_id from Employee
+        Long defaultOfficeId = null; 
 
         if (employee != null) {
-            Long empOfficeId = employee.getSubdivisionId(); // This is the "office"
-            Long empOriginCountryId = defaultOriginCountryId; // Start with default
-            Long empIndicatorId = defaultIndicatorId;     // Start with default
+            Long empOfficeId = employee.getSubdivisionId(); 
+            Long empOriginCountryId = defaultOriginCountryId; 
+            Long empIndicatorId = defaultIndicatorId;     
 
-            // Prefer employee's specific communication location if set
             if (employee.getCommunicationLocationId() != null && employee.getCommunicationLocationId() > 0) {
                 Optional<CommunicationLocation> empLocOpt = entityLookupService.findCommunicationLocationById(employee.getCommunicationLocationId());
                 if (empLocOpt.isPresent()) {
@@ -92,20 +111,22 @@ public class CdrEnrichmentHelper {
                 }
             }
 
-            // If no specific employee comm_location, try Cost Center's origin country
-            // PHP logic: if ($subdireccionOrigen != '' && $oficinaBuscadaOrigen != $oficinaBuscadaDestino)
-            // This implies that if an employee is found, their subdivision (office) and its country/indicator are primary.
-            // The PHP code doesn't explicitly show Cost Center overriding an employee's direct location info,
-            // but rather uses it if other info is missing.
-            // Here, if employee's comm_location wasn't used, we can check cost center's country.
-            // The indicator would still likely be the default or employee's comm_location's indicator if that was resolved.
             if (employee.getCostCenterId() != null && employee.getCostCenterId() > 0) {
                 Optional<CostCenter> ccOpt = entityLookupService.findCostCenterById(employee.getCostCenterId());
                 if (ccOpt.isPresent() && ccOpt.get().getOriginCountryId() != null) {
-                    // Only override if the employee's specific comm_location didn't provide a country
-                    if (empOriginCountryId == null || empOriginCountryId.equals(defaultOriginCountryId)) { // Check if it's still the default
+                    boolean commLocProvidedCountry = false;
+                    if (employee.getCommunicationLocationId() != null && employee.getCommunicationLocationId() > 0) {
+                         Optional<CommunicationLocation> empLocOpt = entityLookupService.findCommunicationLocationById(employee.getCommunicationLocationId());
+                         if (empLocOpt.isPresent()) {
+                             Long empLocCountryId = getOriginCountryId(empLocOpt.get());
+                             if(empLocCountryId != null && !empLocCountryId.equals(defaultOriginCountryId)) {
+                                 commLocProvidedCountry = true;
+                             }
+                         }
+                    }
+                    if (!commLocProvidedCountry) { 
                          empOriginCountryId = ccOpt.get().getOriginCountryId();
-                         log.trace("Using OriginCountry {} from Employee's CostCenter {} as employee's comm_location did not specify one.", empOriginCountryId, employee.getCostCenterId());
+                         log.trace("Using OriginCountry {} from Employee's CostCenter {} as employee's comm_location did not specify one or was default.", empOriginCountryId, employee.getCostCenterId());
                     }
                 }
             }
@@ -125,7 +146,7 @@ public class CdrEnrichmentHelper {
     }
 
     public boolean isHourApplicable(String hoursSpecification, int callHour) {
-        if (!StringUtils.hasText(hoursSpecification)) return true; // No spec means applicable all hours
+        if (!StringUtils.hasText(hoursSpecification)) return true; 
         try {
             for (String part : hoursSpecification.split(",")) {
                 String range = part.trim();
@@ -144,32 +165,29 @@ public class CdrEnrichmentHelper {
             }
         } catch (Exception e) {
             log.error("Error parsing hoursSpecification: '{}'. Assuming not applicable.", hoursSpecification, e);
-            return false; // Error in parsing means not applicable
+            return false; 
         }
-        return false; // No matching range/hour found
+        return false; 
     }
 
     public Long findEffectiveTrunkOperator(Trunk trunk, Long telephonyTypeId, String prefixCode, Long actualOperatorId, Long originCountryId) {
         if (trunk == null || telephonyTypeId == null || actualOperatorId == null || originCountryId == null) {
             log.trace("findEffectiveTrunkOperator - Invalid input: trunk={}, ttId={}, actualOpId={}, ocId={}",
                     trunk != null ? trunk.getId() : "null", telephonyTypeId, actualOperatorId, originCountryId);
-            return null; // Or throw IllegalArgumentException
+            return null; 
         }
 
-        // PHP: if (isset($existe_troncal['operador_destino'][$operador_id][$tipotele_id]))
         Optional<TrunkRate> specificRateOpt = trunkLookupService.findTrunkRate(trunk.getId(), actualOperatorId, telephonyTypeId);
         if (specificRateOpt.isPresent()) {
             log.trace("Found specific TrunkRate for trunk {}, op {}, type {}. Using operator {}.",
                     trunk.getId(), actualOperatorId, telephonyTypeId, actualOperatorId);
-            return actualOperatorId; // Use the actual operator if a specific rate exists for it
+            return actualOperatorId; 
         }
 
-        // PHP: else { $operador_troncal = 0; ... if ($existe_troncal['operador_destino'][$operador_troncal][$tipotele_id]['noprefijo'] > 0) ... }
         Optional<TrunkRate> globalRateOpt = trunkLookupService.findTrunkRate(trunk.getId(), 0L, telephonyTypeId); // 0L for global/default operator
         if (globalRateOpt.isPresent()) {
             TrunkRate globalRate = globalRateOpt.get();
             if (globalRate.getNoPrefix() != null && globalRate.getNoPrefix()) {
-                // PHP: if ($operador_id > 0 && $operador_id != $_lista_Troncales['opxdefecto'][$tipotele_id] && count($_lista_Prefijos['ctlope'][$prefijo]) == 1)
                 Optional<Operator> defaultTrunkOperatorOpt = configService.getOperatorInternal(telephonyTypeId, originCountryId);
                 Long defaultTrunkOperatorId = defaultTrunkOperatorOpt.map(Operator::getId).orElse(null);
 
@@ -180,16 +198,16 @@ public class CdrEnrichmentHelper {
                         isPrefixUnique) {
                     log.trace("Global TrunkRate for trunk {} type {} has noPrefix. Actual op {} differs from default op {} for a unique prefix {}. Rule not applicable, returning null (PHP equivalent of -2).",
                             trunk.getId(), telephonyTypeId, actualOperatorId, defaultTrunkOperatorId, prefixCode);
-                    return null; // PHP returns -2, interpreted as not applicable
+                    return null; 
                 }
             }
             log.trace("Found global TrunkRate for trunk {}, type {}. Using operator 0.", trunk.getId(), telephonyTypeId);
-            return 0L; // Use global/default operator 0
+            return 0L; 
         }
 
         log.trace("No specific or global TrunkRate found for trunk {}, op {}, type {}. No effective trunk operator rule, returning null (PHP equivalent of -1).",
                 trunk.getId(), actualOperatorId, telephonyTypeId);
-        return null; // PHP returns -1, no rule applicable
+        return null; 
     }
 
     public int maxNdcLength(Long telephonyTypeId, Long originCountryId) {
@@ -202,12 +220,12 @@ public class CdrEnrichmentHelper {
             log.warn("getOriginCountryId called with null commLocation, falling back to default {}", CdrProcessingConfig.COLOMBIA_ORIGIN_COUNTRY_ID);
             return CdrProcessingConfig.COLOMBIA_ORIGIN_COUNTRY_ID;
         }
-        // Prefer loaded entity if available
+        
         Indicator indicatorEntity = commLocation.getIndicator();
         if (indicatorEntity != null && indicatorEntity.getOriginCountryId() != null) {
             return indicatorEntity.getOriginCountryId();
         }
-        // Fallback to ID lookup if entity not loaded or lacks country
+        
         if (commLocation.getIndicatorId() != null && commLocation.getIndicatorId() > 0) {
             Optional<Indicator> indicatorOpt = entityLookupService.findIndicatorById(commLocation.getIndicatorId());
             if (indicatorOpt.isPresent() && indicatorOpt.get().getOriginCountryId() != null) {
@@ -223,14 +241,12 @@ public class CdrEnrichmentHelper {
     }
 
     public boolean isRateAssumedOrError(Map<String, Object> rateInfo, Long telephonyTypeId) {
-        if (rateInfo == null || telephonyTypeId == null) return true; // Treat null info as error/assumed
+        if (rateInfo == null || telephonyTypeId == null) return true; 
         if (telephonyTypeId.equals(CdrProcessingConfig.TIPOTELE_ERRORES)) return true;
 
         String destName = (String) rateInfo.getOrDefault("destination_name", "");
         String typeName = (String) rateInfo.getOrDefault("telephony_type_name", "");
-
-        // PHP: strpos($infovalor['destino'], _ASUMIDO) !== false || strpos($infovalor['tipotele_nombre'], _ASUMIDO) !== false
-        // Assuming _ASUMIDO is "(Assumed)"
+        
         boolean isAssumed = destName.toLowerCase().contains("(assumed)") || typeName.toLowerCase().contains("(assumed)");
         boolean isNoTelephonyType = (Long) rateInfo.getOrDefault("telephony_type_id", 0L) <= 0;
 

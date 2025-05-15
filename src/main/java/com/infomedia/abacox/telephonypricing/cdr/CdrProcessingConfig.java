@@ -1,4 +1,3 @@
-// FILE: com/infomedia/abacox/telephonypricing/cdr/CdrProcessingConfig.java
 package com.infomedia.abacox.telephonypricing.cdr;
 
 import com.infomedia.abacox.telephonypricing.entity.Operator;
@@ -69,7 +68,7 @@ public class CdrProcessingConfig {
         public ExtensionLengthConfig(int minNumericValue, int maxNumericValue, Set<String> specialSyntaxExtensions) {
             this.minNumericValue = minNumericValue;
             this.maxNumericValue = maxNumericValue;
-            this.specialSyntaxExtensions = specialSyntaxExtensions != null ? specialSyntaxExtensions : Collections.emptySet();
+            this.specialSyntaxExtensions = specialSyntaxExtensions != null ? Collections.unmodifiableSet(new HashSet<>(specialSyntaxExtensions)) : Collections.emptySet();
         }
     }
 
@@ -103,8 +102,6 @@ public class CdrProcessingConfig {
             return "";
         }
         for (Map.Entry<String, String> entry : COMPANY_TO_NATIONAL_OPERATOR_PREFIX_MAP.entrySet()) {
-            // Case-insensitive comparison and check if the companyName *contains* the key,
-            // as DB values might have extra details.
             if (companyName.toUpperCase().contains(entry.getKey().toUpperCase())) {
                 return entry.getValue();
             }
@@ -158,12 +155,16 @@ public class CdrProcessingConfig {
 
     private int deriveNumericValueFromLength(int length, boolean isMin) {
         if (length <= 0) return 0;
-        if (length > 9) length = 9; // Cap length to avoid overflow for int
+        // Cap length to avoid overflow for int, assuming extensions don't exceed 9 digits for this calculation
+        int safeLength = Math.min(length, 9);
+
         if (isMin) {
-            if (length == 1) return 0; // Min 1-digit can be 0 (PHP logic for operadora)
-            return Integer.parseInt("1" + "0".repeat(Math.max(0, length - 1)));
+            if (safeLength == 1) return 0; // Min 1-digit can be 0 (PHP logic for operadora)
+            // Calculate 10^(length-1)
+            return (int) Math.pow(10, safeLength - 1);
         } else {
-            return Integer.parseInt("9".repeat(Math.max(0, length)));
+            // Calculate (10^length) - 1
+            return (int) (Math.pow(10, safeLength) - 1);
         }
     }
 
@@ -187,17 +188,21 @@ public class CdrProcessingConfig {
         } else {
             finalMaxNumeric = deriveNumericValueFromLength(DEFAULT_MAX_EXT_LENGTH_FALLBACK, false);
         }
+
+        if (finalMinNumeric > finalMaxNumeric && finalMaxNumeric > 0) { // if max is 0, min can be 0
+             log.warn("Derived min numeric value {} is greater than max {}. Setting min to max.", finalMinNumeric, finalMaxNumeric);
+             finalMinNumeric = finalMaxNumeric;
+        } else if (finalMinNumeric > finalMaxNumeric && finalMaxNumeric == 0) {
+            // This case can happen if maxDbLength was 0 or invalid, leading to finalMaxNumeric = 0
+            // and minDbLength was also 0 or invalid, leading to finalMinNumeric (e.g. for length 1 -> 0)
+            // or if minDbLength was 1 (->0) and maxDbLength was 0 (->0).
+            // If min is 0 and max is 0, it's a valid state for single digit '0' extension.
+        }
         
-        // Ensure min is not greater than max, and cap at MAX_POSSIBLE_EXTENSION_VALUE
-        if (finalMinNumeric > finalMaxNumeric) finalMinNumeric = finalMaxNumeric;
         finalMaxNumeric = Math.min(finalMaxNumeric, MAX_POSSIBLE_EXTENSION_VALUE);
         finalMinNumeric = Math.min(finalMinNumeric, finalMaxNumeric);
 
 
-        // Placeholder for special syntax extensions (PHP's $_LIM_INTERNAS['full'])
-        // This would typically be loaded from a configuration or a specific DB query
-        // if there are extensions like "0", "*123", "#456" that are considered valid extensions
-        // but don't fit the numeric min/max length criteria.
         Set<String> specialSyntaxExtensions = getSpecialSyntaxExtensions(commLocationId);
 
         log.debug("Extension config for commLocationId {}: minVal={}, maxVal={}, specialCount={}",
@@ -205,13 +210,14 @@ public class CdrProcessingConfig {
         return new ExtensionLengthConfig(finalMinNumeric, finalMaxNumeric, specialSyntaxExtensions);
     }
 
-    // Placeholder: Implement this method to fetch extensions like "0", "*100", etc.
-    // This would be equivalent to PHP's `ObtenerExtensionesEspeciales`
     private Set<String> getSpecialSyntaxExtensions(Long commLocationId) {
-        // Example: Query a table or use a fixed list for extensions that are valid
-        // but might not be purely numeric or within the standard length-derived numeric range.
-        // For now, returning an empty set.
-        log.trace("getSpecialSyntaxExtensions for commLocationId {} (currently returns empty set)", commLocationId);
+        // In a real system, this would query a DB table or configuration source
+        // specific to the commLocationId or globally.
+        // Example: "SELECT extension_code FROM special_extensions WHERE comm_location_id = :commLocationId OR is_global = true"
+        // For now, returning a hardcoded example set.
+        log.trace("getSpecialSyntaxExtensions for commLocationId {} (currently returns example set)", commLocationId);
+        // This should be dynamic based on PHP's `ObtenerExtensionesEspeciales`
+        // For now, returning empty as per previous implementation.
         return Collections.emptySet();
     }
 
@@ -221,7 +227,6 @@ public class CdrProcessingConfig {
     }
 
     public int getMinCallDurationForBilling() {
-        // This could be fetched from a dynamic configuration source if needed
         return minCallDurationForBilling;
     }
 
