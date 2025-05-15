@@ -228,19 +228,6 @@ public class PrefixInfoLookupService {
         }
     }
 
-    public Optional<Prefix> findPrefixById(Long prefixId) {
-        if (prefixId == null || prefixId <= 0) return Optional.empty();
-        String sql = "SELECT p.* FROM prefix p WHERE p.id = :id AND p.active = true";
-        Query query = entityManager.createNativeQuery(sql, Prefix.class);
-        query.setParameter("id", prefixId);
-        try {
-            return Optional.of((Prefix) query.getSingleResult());
-        } catch (NoResultException e) {
-            log.warn("No active prefix found for ID: {}", prefixId);
-            return Optional.empty();
-        }
-    }
-
     public Optional<Map<String, Object>> findInternalPrefixMatch(String number, Long originCountryId) {
         if (originCountryId == null || !StringUtils.hasText(number)) return Optional.empty();
         String numberForLog = number.length() > 6 ? number.substring(0, 6) + "..." : number;
@@ -456,43 +443,6 @@ public class PrefixInfoLookupService {
         }
         log.trace("NDC lengths for type {}: min={}, max={}", telephonyTypeId, lengths.get("min"), lengths.get("max"));
         return lengths;
-    }
-
-    public Optional<String> findCompanyForNationalSeries(int ndc, long subscriberNumber, Long originCountryId) {
-        if (originCountryId == null) return Optional.empty();
-        log.debug("Finding company for national series: NDC={}, Subscriber={}, OriginCountryId={}", ndc, subscriberNumber, originCountryId);
-
-        Long nationalTelephonyTypeId = CdrProcessingConfig.TIPOTELE_NACIONAL;
-
-        StringBuilder sqlBuilder = new StringBuilder();
-        sqlBuilder.append("SELECT s.company as series_company ");
-        sqlBuilder.append("FROM series s ");
-        sqlBuilder.append("JOIN indicator i ON s.indicator_id = i.id ");
-        sqlBuilder.append("WHERE i.active = true AND s.active = true ");
-        sqlBuilder.append("  AND i.telephony_type_id = :nationalTelephonyTypeId ");
-        sqlBuilder.append("  AND s.ndc = :ndc ");
-        sqlBuilder.append("  AND CAST(s.initial_number AS BIGINT) <= :subscriberNum AND CAST(s.final_number AS BIGINT) >= :subscriberNum ");
-        sqlBuilder.append("  AND i.origin_country_id IN (0, :originCountryId) "); // National can be global or country-specific
-
-        sqlBuilder.append("ORDER BY i.origin_country_id DESC, LENGTH(s.ndc) DESC, (CAST(s.final_number AS BIGINT) - CAST(s.initial_number AS BIGINT)) ASC ");
-        sqlBuilder.append("LIMIT 1");
-
-        Query query = entityManager.createNativeQuery(sqlBuilder.toString(), String.class);
-        query.setParameter("nationalTelephonyTypeId", nationalTelephonyTypeId);
-        query.setParameter("ndc", String.valueOf(ndc));
-        query.setParameter("subscriberNum", subscriberNumber);
-        query.setParameter("originCountryId", originCountryId);
-
-        try {
-            String company = (String) query.getSingleResult();
-            return Optional.ofNullable(company);
-        } catch (NoResultException e) {
-            log.trace("No series company found for national lookup: NDC={}, Subscriber={}, OriginCountryId={}", ndc, subscriberNumber, originCountryId);
-            return Optional.empty();
-        } catch (Exception e) {
-            log.error("Error finding series company for national lookup: NDC={}, Subscriber={}, OriginCountryId={}: {}", ndc, subscriberNumber, originCountryId, e.getMessage(), e);
-            return Optional.empty();
-        }
     }
 
     public Optional<Map<String, Object>> findBaseRateForPrefix(Long prefixId) {

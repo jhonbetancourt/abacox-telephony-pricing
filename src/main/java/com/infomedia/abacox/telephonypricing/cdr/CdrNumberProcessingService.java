@@ -9,7 +9,6 @@ import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -29,48 +28,6 @@ public class CdrNumberProcessingService {
     public static class FieldWrapper<T> {
         T value;
         public FieldWrapper(T v) { this.value = v; }
-    }
-
-    public String cleanNumber(String number, List<String> pbxPrefixes, boolean removePrefix) {
-        if (!StringUtils.hasText(number)) return "";
-        String currentNumber = number.trim();
-        int prefixLengthToRemove = 0;
-
-        if (removePrefix && pbxPrefixes != null && !pbxPrefixes.isEmpty()) {
-            prefixLengthToRemove = getPrefixLength(currentNumber, pbxPrefixes);
-            if (prefixLengthToRemove > 0) {
-                currentNumber = currentNumber.substring(prefixLengthToRemove);
-                log.trace("Removed PBX prefix (length {}) from {}, result: {}", prefixLengthToRemove, number, currentNumber);
-            } else {
-                log.trace("Prefix removal requested for '{}', PBX prefixes defined, but no matching prefix found. Returning empty as per PHP logic (non-modo_seguro).", number);
-                return "";
-            }
-        }
-
-        String firstChar = "";
-        String restOfString = currentNumber;
-        if (!currentNumber.isEmpty()) {
-            firstChar = currentNumber.substring(0, 1);
-            restOfString = currentNumber.substring(1);
-        }
-
-        if ("+".equals(firstChar)) {
-            firstChar = "";
-        }
-
-        StringBuilder numericRest = new StringBuilder();
-        for (char c : restOfString.toCharArray()) {
-            if (Character.isDigit(c)) {
-                numericRest.append(c);
-            } else {
-                break;
-            }
-        }
-        restOfString = numericRest.toString();
-        String cleaned = firstChar + restOfString;
-
-        log.trace("Cleaned number (version 1): Original='{}', PBXPrefixes={}, removePrefix={}, Result='{}'", number, pbxPrefixes, removePrefix, cleaned);
-        return cleaned;
     }
 
     public String cleanNumber(String number, List<String> pbxPrefixes, boolean removePbxPrefixIfNeeded, CdrProcessingConfig.ExtensionLengthConfig extConfig) {
@@ -243,37 +200,5 @@ public class CdrNumberProcessingService {
             log.debug("Preprocessed Colombian number for lookup: {} -> {}. Forced Type: {}", originalNumber, processedNumber, forcedTelephonyType.getValue());
         }
         return processedNumber;
-    }
-
-    public String determineNationalPrefix(String number10DigitStartingWith60, Long originCountryId) {
-        if (number10DigitStartingWith60 == null || !number10DigitStartingWith60.startsWith("60") || number10DigitStartingWith60.length() != 10) {
-            return null;
-        }
-        String ndcStr;
-        if (number10DigitStartingWith60.length() >=3) {
-            ndcStr = number10DigitStartingWith60.substring(2, 3);
-        } else {
-            return null;
-        }
-        String subscriberNumberStr = number10DigitStartingWith60.substring(3);
-
-        if (!ndcStr.matches("\\d") || !subscriberNumberStr.matches("\\d{7}")) {
-            log.warn("Invalid NDC or subscriber number format in determineNationalPrefix: NDC={}, Sub={}", ndcStr, subscriberNumberStr);
-            return null;
-        }
-        try {
-            long subscriberNumber = Long.parseLong(subscriberNumberStr);
-            Optional<Map<String, String>> seriesDetailsOpt = prefixInfoLookupService.findNationalSeriesDetailsByNdcAndSubscriber(ndcStr, subscriberNumber, originCountryId);
-
-            if (seriesDetailsOpt.isPresent()) {
-                String company = seriesDetailsOpt.get().get("company");
-                return configService.mapCompanyToNationalOperatorPrefix(company);
-            } else {
-                log.trace("No company found for NDC {}, Sub {} to determine national operator prefix.", ndcStr, subscriberNumber);
-            }
-        } catch (NumberFormatException e) {
-            log.warn("Error parsing Subscriber number for national operator prefix determination: Sub={}", subscriberNumberStr, e);
-        }
-        return ""; // Return empty if no specific mapping, caller will default to "09"
     }
 }

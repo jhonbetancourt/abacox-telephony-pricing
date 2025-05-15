@@ -118,16 +118,6 @@ public class CdrProcessingConfig {
         return Collections.emptyList();
     }
 
-
-    public Set<Long> getInternalTelephonyTypeIds() {
-        return internalTelephonyTypeIds;
-    }
-
-    public boolean isInternalTelephonyType(Long telephonyTypeId) {
-        return telephonyTypeId != null && internalTelephonyTypeIds.contains(telephonyTypeId);
-    }
-
-
     public Map<String, Integer> getTelephonyTypeMinMax(Long telephonyTypeId, Long originCountryId) {
         log.debug("Fetching min/max length config for telephonyTypeId: {}, originCountryId: {}", telephonyTypeId, originCountryId);
         return configurationLookupService.findTelephonyTypeMinMaxConfig(telephonyTypeId, originCountryId);
