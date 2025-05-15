@@ -4,7 +4,6 @@ import com.infomedia.abacox.telephonypricing.entity.CallRecord;
 import com.infomedia.abacox.telephonypricing.entity.CommunicationLocation;
 import com.infomedia.abacox.telephonypricing.entity.FailedCallRecord;
 import com.infomedia.abacox.telephonypricing.repository.CallRecordRepository;
-// HashUtil no longer needed here if hash is in StandardizedCallEventDto
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -29,8 +28,8 @@ public class CdrProcessingService {
 
     private final CdrEnrichmentService enrichmentService;
     private final PersistenceService persistenceService;
-    private final LookupService lookupService;
     private final CallRecordRepository callRecordRepository;
+    private final EntityLookupService entityLookupService;
 
     /**
      * Processes a stream of CDR data.
@@ -42,7 +41,7 @@ public class CdrProcessingService {
         log.info("Starting CDR processing for source: '{}', CommLocationID: {}",
                 metadata.getSourceDescription(), metadata.getCommunicationLocationId());
 
-        Optional<CommunicationLocation> commLocationOpt = lookupService.findCommunicationLocationById(metadata.getCommunicationLocationId());
+        Optional<CommunicationLocation> commLocationOpt = entityLookupService.findCommunicationLocationById(metadata.getCommunicationLocationId());
         if (commLocationOpt.isEmpty()) {
             log.error("Cannot process CDRs: CommunicationLocation with ID {} not found or inactive.", metadata.getCommunicationLocationId());
             return;

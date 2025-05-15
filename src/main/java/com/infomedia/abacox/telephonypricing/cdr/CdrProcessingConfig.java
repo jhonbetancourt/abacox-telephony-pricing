@@ -6,7 +6,6 @@ import com.infomedia.abacox.telephonypricing.repository.TelephonyTypeRepository;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -19,7 +18,6 @@ public class CdrProcessingConfig {
 
     private final OperatorRepository operatorRepository;
     private final TelephonyTypeRepository telephonyTypeRepository;
-    private final LookupService lookupService;
 
     // --- Constants based on PHP defines/usage ---
     public static final long TIPOTELE_LOCAL = 3L;
@@ -47,6 +45,9 @@ public class CdrProcessingConfig {
     private static Long defaultInternalCallTypeId;
     private static Set<String> ignoredAuthCodes;
     private static int minCallDurationForBilling = 0; // Default: bill even 0-second calls if rate applies
+    private final ConfigurationLookupService configurationLookupService;
+    private final EntityLookupService entityLookupService;
+    private final ExtensionLookupService extensionLookupService;
 
     @Getter
     public static class ExtensionLengthConfig {
@@ -71,10 +72,10 @@ public class CdrProcessingConfig {
         // minCallDurationForBilling can be loaded from DB or properties if needed
     }
 
-    @Cacheable("pbxPrefixes")
+    
     public List<String> getPbxPrefixes(Long communicationLocationId) {
         log.debug("Fetching PBX prefixes for commLocationId: {}", communicationLocationId);
-        Optional<String> prefixStringOpt = lookupService.findPbxPrefixByCommLocationId(communicationLocationId);
+        Optional<String> prefixStringOpt = configurationLookupService.findPbxPrefixByCommLocationId(communicationLocationId);
         if (prefixStringOpt.isPresent() && !prefixStringOpt.get().isEmpty()) {
             List<String> prefixes = Arrays.stream(prefixStringOpt.get().split(","))
                                           .map(String::trim)
@@ -87,7 +88,7 @@ public class CdrProcessingConfig {
         return Collections.emptyList();
     }
 
-    @Cacheable("internalTelephonyTypes")
+    
     public Set<Long> getInternalTelephonyTypeIds() {
         return internalTelephonyTypeIds;
     }
@@ -96,26 +97,26 @@ public class CdrProcessingConfig {
         return telephonyTypeId != null && internalTelephonyTypeIds.contains(telephonyTypeId);
     }
 
-    @Cacheable("telephonyTypeMinMax")
+    
     public Map<String, Integer> getTelephonyTypeMinMax(Long telephonyTypeId, Long originCountryId) {
         log.debug("Fetching min/max length config for telephonyTypeId: {}, originCountryId: {}", telephonyTypeId, originCountryId);
-        return lookupService.findTelephonyTypeMinMaxConfig(telephonyTypeId, originCountryId);
+        return configurationLookupService.findTelephonyTypeMinMaxConfig(telephonyTypeId, originCountryId);
     }
 
-    @Cacheable(value = "internalOperator", key = "#telephonyTypeId + '-' + #originCountryId")
+    
     public Optional<Operator> getOperatorInternal(Long telephonyTypeId, Long originCountryId) {
         log.debug("Fetching internal operator for telephonyTypeId: {}, originCountryId: {}", telephonyTypeId, originCountryId);
-        return lookupService.findOperatorByTelephonyTypeAndOrigin(telephonyTypeId, originCountryId);
+        return configurationLookupService.findOperatorByTelephonyTypeAndOrigin(telephonyTypeId, originCountryId);
     }
 
-    @Cacheable("telephonyTypeById")
+    
     public Optional<TelephonyType> getTelephonyTypeById(Long id) {
-        return lookupService.findTelephonyTypeById(id);
+        return entityLookupService.findTelephonyTypeById(id);
     }
 
-    @Cacheable("operatorById")
+    
     public Optional<Operator> getOperatorById(Long id) {
-        return lookupService.findOperatorById(id);
+        return entityLookupService.findOperatorById(id);
     }
 
     public static Set<Long> getInternalIpCallTypeIds() {
@@ -126,10 +127,10 @@ public class CdrProcessingConfig {
         return defaultInternalCallTypeId;
     }
 
-    @Cacheable(value = "extensionLengthConfig", key = "{#commLocationId}")
+    
     public ExtensionLengthConfig getExtensionLengthConfig(Long commLocationId) {
         log.debug("Fetching extension length config for commLocationId: {}", commLocationId);
-        Map<String, Integer> lengths = lookupService.findExtensionMinMaxLength(commLocationId);
+        Map<String, Integer> lengths = extensionLookupService.findExtensionMinMaxLength(commLocationId);
         int minLength = lengths.getOrDefault("min", DEFAULT_MIN_EXT_LENGTH);
         int maxLength = lengths.getOrDefault("max", DEFAULT_MAX_EXT_LENGTH);
         int maxExtensionValue = MAX_POSSIBLE_EXTENSION_VALUE;
