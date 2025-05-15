@@ -301,7 +301,7 @@ public class PrefixInfoLookupService {
             return Optional.empty();
         }
         if (checkLocalFallback) {
-            minNdcLength = 0; maxNdcLength = 0;
+            minNdcLength = 0; maxNdcLength = 0; // For local, NDC can be effectively '0' or empty string
             log.trace("Treating as LOCAL type lookup (effective NDC length 0 for series.ndc='0')");
         }
 
@@ -316,9 +316,10 @@ public class PrefixInfoLookupService {
             if (ndcLength > 0 && numberWithoutPrefix.length() >= ndcLength) {
                 ndcStr = numberWithoutPrefix.substring(0, ndcLength);
                 subscriberNumberStr = numberWithoutPrefix.substring(ndcLength);
-            } else if (ndcLength > 0) {
+            } else if (ndcLength > 0) { // Not enough digits for this NDC length
                 continue;
             }
+            // If ndcLength is 0 (local fallback), ndcStr remains empty, subscriberNumberStr is the full number.
 
             int minSubscriberLength = Math.max(0, typeMinDigits - ndcLength);
             if (subscriberNumberStr.length() < minSubscriberLength) {
@@ -326,85 +327,95 @@ public class PrefixInfoLookupService {
                 continue;
             }
 
-            if (ndcStr.matches("\\d*") && subscriberNumberStr.matches("\\d+")) {
-                String ndcParam = ndcStr.isEmpty() ? "0" : ndcStr;
-                long subscriberNumber = Long.parseLong(subscriberNumberStr);
+            // Ensure ndcStr (if not empty) and subscriberNumberStr are numeric.
+            // ndcStr can be empty for local calls (NDC='0'). subscriberNumberStr must be numeric.
+            if ((!ndcStr.isEmpty() && !ndcStr.matches("\\d*")) || !subscriberNumberStr.matches("\\d+")) {
+                 log.trace("Skipping NDC check: NDC '{}' or Subscriber '{}' is not numeric.", ndcStr, subscriberNumberStr);
+                 continue;
+            }
+            
+            String ndcParam = ndcStr.isEmpty() ? "0" : ndcStr; // Use "0" for empty NDC (local)
+            long subscriberNumber = Long.parseLong(subscriberNumberStr);
 
-                StringBuilder sqlBuilder = new StringBuilder();
-                sqlBuilder.append("SELECT ");
-                sqlBuilder.append(" i.id as indicator_id, i.department_country, i.city_name, i.operator_id as indicator_operator_id, ");
-                sqlBuilder.append(" s.ndc as series_ndc, s.initial_number as series_initial, s.final_number as series_final, ");
-                sqlBuilder.append(" s.company as series_company ");
-                sqlBuilder.append("FROM series s ");
-                sqlBuilder.append("JOIN indicator i ON s.indicator_id = i.id ");
+            StringBuilder sqlBuilder = new StringBuilder();
+            sqlBuilder.append("SELECT ");
+            sqlBuilder.append(" i.id as indicator_id, i.department_country, i.city_name, i.operator_id as indicator_operator_id, ");
+            sqlBuilder.append(" s.ndc as series_ndc, s.initial_number as series_initial, s.final_number as series_final, ");
+            sqlBuilder.append(" s.company as series_company ");
+            sqlBuilder.append("FROM series s ");
+            sqlBuilder.append("JOIN indicator i ON s.indicator_id = i.id ");
 
-                if (isPrefixBandOk) {
-                    sqlBuilder.append("JOIN band b ON b.prefix_id = :currentPrefixId AND b.active = true ");
-                    sqlBuilder.append("JOIN band_indicator bi ON bi.band_id = b.id AND bi.indicator_id = i.id ");
-                    sqlBuilder.append("WHERE b.origin_indicator_id IN (0, :originCommLocationIndicatorId) ");
-                } else {
-                    sqlBuilder.append("WHERE 1=1 ");
-                }
+            String bandJoinAndWhere = "";
+            if (isPrefixBandOk) {
+                sqlBuilder.append("JOIN band b ON b.prefix_id = :currentPrefixId AND b.active = true ");
+                sqlBuilder.append("JOIN band_indicator bi ON bi.band_id = b.id AND bi.indicator_id = i.id ");
+                bandJoinAndWhere = " AND b.origin_indicator_id IN (0, :originCommLocationIndicatorId) ";
+            }
 
-                sqlBuilder.append("  AND i.active = true AND s.active = true ");
-                sqlBuilder.append("  AND i.telephony_type_id = :telephonyTypeId ");
-                sqlBuilder.append("  AND s.ndc = :ndc ");
+            sqlBuilder.append("WHERE i.active = true AND s.active = true ");
+            sqlBuilder.append(bandJoinAndWhere); // Add band conditions here
+            sqlBuilder.append("  AND i.telephony_type_id = :telephonyTypeId ");
+            sqlBuilder.append("  AND s.ndc = :ndc ");
 
-                if (telephonyTypeId != CdrProcessingConfig.TIPOTELE_INTERNACIONAL && telephonyTypeId != CdrProcessingConfig.TIPOTELE_SATELITAL) {
-                    sqlBuilder.append(" AND i.origin_country_id = :originCountryId ");
-                } else {
-                    sqlBuilder.append(" AND i.origin_country_id IN (0, :originCountryId) ");
-                }
-
-                if (!isPrefixBandOk && currentPrefixId != null) {
-                    sqlBuilder.append(" AND (i.operator_id = 0 OR i.operator_id IS NULL OR i.operator_id IN (SELECT p_sub.operator_id FROM prefix p_sub WHERE p_sub.id = :currentPrefixId)) ");
-                }
-
-                sqlBuilder.append("  AND CAST(s.initial_number AS BIGINT) <= :subscriberNum AND CAST(s.final_number AS BIGINT) >= :subscriberNum ");
-                sqlBuilder.append("ORDER BY i.origin_country_id DESC, ");
-                if (isPrefixBandOk) {
-                    sqlBuilder.append(" b.origin_indicator_id DESC, ");
-                }
-                if (ndcLength > 0) {
-                    sqlBuilder.append(" LENGTH(s.ndc) DESC, ");
-                }
-                sqlBuilder.append(" (CAST(s.final_number AS BIGINT) - CAST(s.initial_number AS BIGINT)) ASC ");
-                sqlBuilder.append("LIMIT 1");
-
-                Query query = entityManager.createNativeQuery(sqlBuilder.toString());
-                query.setParameter("telephonyTypeId", telephonyTypeId);
-                query.setParameter("ndc", ndcParam);
-                query.setParameter("originCountryId", originCountryId);
-                query.setParameter("subscriberNum", subscriberNumber);
-                if (isPrefixBandOk) {
-                    query.setParameter("currentPrefixId", currentPrefixId);
-                    query.setParameter("originCommLocationIndicatorId", originCommLocationIndicatorId != null ? originCommLocationIndicatorId : 0L);
-                } else if (currentPrefixId != null) {
-                    query.setParameter("currentPrefixId", currentPrefixId);
-                }
-
-
-                try {
-                    Object[] result = (Object[]) query.getSingleResult();
-                    Map<String, Object> map = new HashMap<>();
-                    Long indicatorIdVal = (result[0] instanceof Number) ? ((Number) result[0]).longValue() : null;
-                    map.put("indicator_id", (indicatorIdVal != null && indicatorIdVal > 0) ? indicatorIdVal : null);
-                    map.put("department_country", result[1]);
-                    map.put("city_name", result[2]);
-                    map.put("indicator_operator_id", result[3]);
-                    map.put("series_ndc", result[4]);
-                    map.put("series_initial", result[5]);
-                    map.put("series_final", result[6]);
-                    map.put("series_company", result[7]);
-                    log.trace("Found indicator info for num {} (NDC: {}): ID={}", numberWithoutPrefix, ndcStr, map.get("indicator_id"));
-                    return Optional.of(map);
-                } catch (NoResultException e) {
-                    log.trace("No indicator found for NDC '{}', subscriber '{}'", ndcStr, subscriberNumberStr);
-                } catch (Exception e) {
-                    log.error("Error finding indicator for num: {}, ndc: {}: {}", numberWithoutPrefix, ndcStr, e.getMessage(), e);
-                }
+            if (telephonyTypeId != CdrProcessingConfig.TIPOTELE_INTERNACIONAL && telephonyTypeId != CdrProcessingConfig.TIPOTELE_SATELITAL) {
+                sqlBuilder.append(" AND i.origin_country_id = :originCountryId ");
             } else {
-                log.trace("Skipping NDC check: NDC '{}' or Subscriber '{}' is not numeric.", ndcStr, subscriberNumberStr);
+                // For international/satellite, allow global indicators (origin_country_id = 0) or specific match
+                sqlBuilder.append(" AND i.origin_country_id IN (0, :originCountryId) ");
+            }
+
+            if (!isPrefixBandOk && currentPrefixId != null) {
+                // If not using bands, ensure indicator's operator is compatible with prefix's operator
+                // (or indicator has no specific operator)
+                sqlBuilder.append(" AND (i.operator_id = 0 OR i.operator_id IS NULL OR i.operator_id IN (SELECT p_sub.operator_id FROM prefix p_sub WHERE p_sub.id = :currentPrefixId)) ");
+            }
+
+            sqlBuilder.append("  AND CAST(s.initial_number AS BIGINT) <= :subscriberNum AND CAST(s.final_number AS BIGINT) >= :subscriberNum ");
+
+            // Revised ORDER BY
+            sqlBuilder.append("ORDER BY ");
+            sqlBuilder.append("  CASE WHEN s.ndc ~ '^[0-9]+$' AND CAST(s.ndc AS INTEGER) >= 0 THEN 0 ELSE 1 END ASC, "); // Prioritize non-negative NDCs
+            sqlBuilder.append("  i.origin_country_id DESC, "); // Specific country over global for INT/SAT
+            if (isPrefixBandOk) {
+                sqlBuilder.append(" b.origin_indicator_id DESC, "); // Specific origin band over global band
+            }
+            if (ndcLength > 0) { // Only consider NDC length if it's not a local (NDC=0) check
+                sqlBuilder.append(" LENGTH(s.ndc) DESC, ");
+            }
+            sqlBuilder.append("  (CAST(s.final_number AS BIGINT) - CAST(s.initial_number AS BIGINT)) ASC "); // Smallest range first
+            sqlBuilder.append("LIMIT 1");
+
+
+            Query query = entityManager.createNativeQuery(sqlBuilder.toString());
+            query.setParameter("telephonyTypeId", telephonyTypeId);
+            query.setParameter("ndc", ndcParam);
+            query.setParameter("originCountryId", originCountryId);
+            query.setParameter("subscriberNum", subscriberNumber);
+            if (isPrefixBandOk) {
+                query.setParameter("currentPrefixId", currentPrefixId);
+                query.setParameter("originCommLocationIndicatorId", originCommLocationIndicatorId != null ? originCommLocationIndicatorId : 0L);
+            } else if (currentPrefixId != null) {
+                query.setParameter("currentPrefixId", currentPrefixId);
+            }
+
+            try {
+                Object[] result = (Object[]) query.getSingleResult();
+                Map<String, Object> map = new HashMap<>();
+                Long indicatorIdVal = (result[0] instanceof Number) ? ((Number) result[0]).longValue() : null;
+                map.put("indicator_id", (indicatorIdVal != null && indicatorIdVal > 0) ? indicatorIdVal : null);
+                map.put("department_country", result[1]);
+                map.put("city_name", result[2]);
+                map.put("indicator_operator_id", result[3]);
+                map.put("series_ndc", result[4]);
+                map.put("series_initial", result[5]);
+                map.put("series_final", result[6]);
+                map.put("series_company", result[7]);
+                log.trace("Found indicator info for num {} (NDC: {}): ID={}", numberWithoutPrefix, ndcStr, map.get("indicator_id"));
+                return Optional.of(map);
+            } catch (NoResultException e) {
+                log.trace("No indicator found for NDC '{}', subscriber '{}'", ndcStr, subscriberNumberStr);
+            } catch (Exception e) {
+                log.error("Error finding indicator for num: {}, ndc: {}: {}", numberWithoutPrefix, ndcStr, e.getMessage(), e);
             }
         }
         log.trace("No indicator found for number: {}", numberWithoutPrefix);
@@ -418,6 +429,7 @@ public class PrefixInfoLookupService {
 
         log.debug("Finding min/max NDC length for telephonyTypeId: {}, originCountryId: {}", telephonyTypeId, originCountryId);
         StringBuilder sqlBuilder = new StringBuilder();
+        // Ensure NDC='0' (for local) results in length 0, other NDCs use their actual length.
         sqlBuilder.append("SELECT COALESCE(MIN(CASE WHEN s.ndc = '0' THEN 0 ELSE LENGTH(s.ndc) END), 0) as min_len, ");
         sqlBuilder.append("       COALESCE(MAX(CASE WHEN s.ndc = '0' THEN 0 ELSE LENGTH(s.ndc) END), 0) as max_len ");
         sqlBuilder.append("FROM series s ");
@@ -429,7 +441,7 @@ public class PrefixInfoLookupService {
         } else {
             sqlBuilder.append("  AND i.origin_country_id = :originCountryId ");
         }
-        sqlBuilder.append("  AND s.ndc IS NOT NULL ");
+        sqlBuilder.append("  AND s.ndc IS NOT NULL "); // Ensure ndc is not null for LENGTH function
 
         Query query = entityManager.createNativeQuery(sqlBuilder.toString());
         query.setParameter("telephonyTypeId", telephonyTypeId);
@@ -460,7 +472,7 @@ public class PrefixInfoLookupService {
         sqlBuilder.append("  AND i.telephony_type_id = :nationalTelephonyTypeId ");
         sqlBuilder.append("  AND s.ndc = :ndc ");
         sqlBuilder.append("  AND CAST(s.initial_number AS BIGINT) <= :subscriberNum AND CAST(s.final_number AS BIGINT) >= :subscriberNum ");
-        sqlBuilder.append("  AND i.origin_country_id IN (0, :originCountryId) ");
+        sqlBuilder.append("  AND i.origin_country_id IN (0, :originCountryId) "); // National can be global or country-specific
 
         sqlBuilder.append("ORDER BY i.origin_country_id DESC, LENGTH(s.ndc) DESC, (CAST(s.final_number AS BIGINT) - CAST(s.initial_number AS BIGINT)) ASC ");
         sqlBuilder.append("LIMIT 1");
@@ -515,7 +527,7 @@ public class PrefixInfoLookupService {
             return Optional.empty();
         }
         Long effectiveOriginIndicatorId = originIndicatorId != null ? originIndicatorId : 0L;
-        Long effectiveIndicatorId = indicatorId;
+        Long effectiveIndicatorId = indicatorId; // Can be null or 0 for bands not specific to a destination indicator
 
         log.debug("Finding band for prefixId: {}, effectiveIndicatorId: {}, effectiveOriginIndicatorId: {}", prefixId, effectiveIndicatorId, effectiveOriginIndicatorId);
 
@@ -523,16 +535,18 @@ public class PrefixInfoLookupService {
         sqlBuilder.append("SELECT b.id as band_id, b.value as band_value, b.vat_included as band_vat_included, b.name as band_name ");
         sqlBuilder.append("FROM band b ");
         if (effectiveIndicatorId != null && effectiveIndicatorId > 0) {
+            // Join with band_indicator only if a specific destination indicator is being checked
             sqlBuilder.append("JOIN band_indicator bi ON b.id = bi.band_id AND bi.indicator_id = :indicatorId ");
         }
         sqlBuilder.append("WHERE b.active = true ");
         sqlBuilder.append("  AND b.prefix_id = :prefixId ");
         if (effectiveIndicatorId == null || effectiveIndicatorId <= 0) {
-            // If no specific indicator, look for bands not linked to any specific indicator via band_indicator
+            // If no specific indicator (or global indicator 0), look for bands not linked to any specific indicator via band_indicator.
+            // These are bands applicable to the prefix generally, or for a specific origin, but not a specific destination.
             sqlBuilder.append(" AND NOT EXISTS (SELECT 1 FROM band_indicator bi_check WHERE bi_check.band_id = b.id) ");
         }
-        sqlBuilder.append("  AND b.origin_indicator_id IN (0, :originIndicatorId) ");
-        sqlBuilder.append("ORDER BY b.origin_indicator_id DESC ");
+        sqlBuilder.append("  AND b.origin_indicator_id IN (0, :originIndicatorId) "); // Match specific origin or global (0)
+        sqlBuilder.append("ORDER BY b.origin_indicator_id DESC "); // Prioritize specific origin over global
         sqlBuilder.append("LIMIT 1");
 
         Query query = entityManager.createNativeQuery(sqlBuilder.toString());
@@ -549,10 +563,10 @@ public class PrefixInfoLookupService {
             map.put("band_value", result[1] != null ? result[1] : BigDecimal.ZERO);
             map.put("band_vat_included", result[2] != null ? result[2] : false);
             map.put("band_name", result[3]);
-            log.trace("Found band {} for prefix {}, indicator {}", map.get("band_id"), prefixId, effectiveIndicatorId);
+            log.trace("Found band {} for prefix {}, effective indicator {}", map.get("band_id"), prefixId, effectiveIndicatorId);
             return Optional.of(map);
         } catch (NoResultException e) {
-            log.trace("No matching band found for prefix {}, indicator {}", prefixId, effectiveIndicatorId);
+            log.trace("No matching band found for prefix {}, effective indicator {}", prefixId, effectiveIndicatorId);
             return Optional.empty();
         } catch (Exception e) {
             log.error("Error finding band for prefixId: {}, indicatorId: {}, originIndicatorId: {}", prefixId, effectiveIndicatorId, effectiveOriginIndicatorId, e);
@@ -563,22 +577,30 @@ public class PrefixInfoLookupService {
     public Optional<Integer> findLocalNdcForIndicator(Long indicatorId) {
         if (indicatorId == null || indicatorId <= 0) return Optional.empty();
         log.debug("Finding local NDC for indicatorId: {}", indicatorId);
-        String sql = "SELECT CAST(s.ndc AS INTEGER) FROM series s " +
+        // Ensure NDC is treated as a number for ordering and filtering, but selected as string for flexibility
+        // The PHP logic `ORDER BY N DESC, SERIE_NDC` on a VARCHAR SERIE_NDC would sort '10' before '2'.
+        // To achieve numeric sort, we cast.
+        String sql = "SELECT s.ndc FROM series s " +
                 "WHERE s.indicator_id = :indicatorId " +
                 "  AND s.ndc IS NOT NULL AND s.ndc != '0' AND s.ndc ~ '^[1-9][0-9]*$' " + // Ensure ndc is a positive number string
                 "GROUP BY s.ndc " +
-                "ORDER BY COUNT(*) DESC, CAST(s.ndc AS INTEGER) ASC " + // Ensure numeric sort for ndc
+                "ORDER BY COUNT(*) DESC, CAST(s.ndc AS INTEGER) ASC " +
                 "LIMIT 1";
-        Query query = entityManager.createNativeQuery(sql, Integer.class);
+        Query query = entityManager.createNativeQuery(sql, String.class); // Expecting String NDC
         query.setParameter("indicatorId", indicatorId);
         try {
-            Integer ndc = (Integer) query.getSingleResult();
+            String ndcStr = (String) query.getSingleResult();
+            Integer ndc = Integer.parseInt(ndcStr); // Convert to Integer after fetching
             log.trace("Found local NDC {} for indicator {}", ndc, indicatorId);
-            return Optional.ofNullable(ndc);
+            return Optional.of(ndc);
         } catch (NoResultException e) {
             log.warn("No positive numeric NDC found for indicatorId: {}", indicatorId);
             return Optional.empty();
-        } catch (Exception e) {
+        } catch (NumberFormatException nfe) {
+             log.error("NDC value fetched for indicatorId {} is not a valid integer: {}", indicatorId, nfe.getMessage());
+             return Optional.empty();
+        }
+        catch (Exception e) {
             log.error("Error finding local NDC for indicatorId: {}", indicatorId, e);
             return Optional.empty();
         }
@@ -589,13 +611,6 @@ public class PrefixInfoLookupService {
             return false;
         }
         log.debug("Checking if NDC {} is local extended for origin indicator {}", destinationNdc, originIndicatorId);
-        // PHP: $_indicativos_extendida[$indicativolocal_id][] = $row['SERIE_NDC'];
-        // This means it checks if the destinationNdc is one of the NDCs associated with the originIndicatorId.
-        // The original PHP logic was:
-        // $query = 'SELECT distinct(SERIE_NDC) as SERIE_NDC FROM serie WHERE SERIE_INDICATIVO_ID = '.$indicativolocal_id;
-        // $localext = in_array($indicativo, $_indicativos_extendida[$indicativolocal_id]);
-        // where $indicativo is the NDC of the *destination* and $indicativolocal_id is the ID of the *origin* indicator.
-        // So, it checks if the destination's NDC is among the NDCs served by the origin's indicator.
         String sql = "SELECT COUNT(s.id) FROM series s WHERE s.indicator_id = :originIndicatorId AND s.ndc = :destinationNdcStr AND s.active = true";
         Query query = entityManager.createNativeQuery(sql, Long.class);
         query.setParameter("originIndicatorId", originIndicatorId);
@@ -613,7 +628,7 @@ public class PrefixInfoLookupService {
 
     public boolean isPrefixUniqueToOperator(String prefixCode, Long telephonyTypeId, Long originCountryId) {
         if (!StringUtils.hasText(prefixCode) || telephonyTypeId == null || originCountryId == null) {
-            return false; // Or throw IllegalArgumentException if inputs are critical
+            return false;
         }
         log.debug("Checking if prefix {} is unique for type {} in country {}", prefixCode, telephonyTypeId, originCountryId);
         String sql = "SELECT COUNT(DISTINCT p.operator_id) " +
@@ -634,7 +649,7 @@ public class PrefixInfoLookupService {
             return isUnique;
         } catch (Exception e) {
             log.error("Error checking prefix uniqueness for code {}, type {}, country {}: {}", prefixCode, telephonyTypeId, originCountryId, e.getMessage(), e);
-            return false; // Default to not unique on error
+            return false;
         }
     }
 }
