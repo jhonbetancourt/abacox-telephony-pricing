@@ -1,3 +1,4 @@
+// FILE: com/infomedia/abacox/telephonypricing/cdr/CdrProcessingConfig.java
 package com.infomedia.abacox.telephonypricing.cdr;
 
 import com.infomedia.abacox.telephonypricing.entity.Operator;
@@ -38,8 +39,9 @@ public class CdrProcessingConfig {
     public static final long TIPOTELE_PAGO_REVERTIDO = 13L;
     public static final long TIPOTELE_SERVICIOS_VARIOS = 6L;
 
-    public static final int DEFAULT_MIN_EXT_LENGTH = 2;
-    public static final int DEFAULT_MAX_EXT_LENGTH = 7;
+    // Default values if DB lookup fails or returns invalid ranges
+    public static final int DEFAULT_MIN_EXT_LENGTH_FALLBACK = 2;
+    public static final int DEFAULT_MAX_EXT_LENGTH_FALLBACK = 7;
     public static final int MAX_POSSIBLE_EXTENSION_VALUE = 9999999; // Max value for a 7-digit extension
 
     public static final Long COLOMBIA_ORIGIN_COUNTRY_ID = 1L;
@@ -49,9 +51,8 @@ public class CdrProcessingConfig {
     private static Set<Long> internalTelephonyTypeIds;
     private static Long defaultInternalCallTypeId;
     private static Set<String> ignoredAuthCodes;
-    private static int minCallDurationForBilling = 0;
+    private static int minCallDurationForBilling = 0; // Default to 0, can be configured
 
-    // New: Order for incoming call classification
     private static List<Long> incomingTelephonyTypeClassificationOrder;
 
 
@@ -61,14 +62,14 @@ public class CdrProcessingConfig {
 
     @Getter
     public static class ExtensionLengthConfig {
-        private final int minLength;
-        private final int maxLength;
-        private final int maxExtensionValue;
+        private final int minNumericValue; // Derived from min length
+        private final int maxNumericValue; // Derived from max length
+        private final Set<String> specialSyntaxExtensions; // PHP's $_LIM_INTERNAS['full']
 
-        public ExtensionLengthConfig(int minLength, int maxLength, int maxExtensionValue) {
-            this.minLength = minLength;
-            this.maxLength = maxLength;
-            this.maxExtensionValue = maxExtensionValue;
+        public ExtensionLengthConfig(int minNumericValue, int maxNumericValue, Set<String> specialSyntaxExtensions) {
+            this.minNumericValue = minNumericValue;
+            this.maxNumericValue = maxNumericValue;
+            this.specialSyntaxExtensions = specialSyntaxExtensions != null ? specialSyntaxExtensions : Collections.emptySet();
         }
     }
 
@@ -81,21 +82,14 @@ public class CdrProcessingConfig {
         defaultInternalCallTypeId = TIPOTELE_INTERNA_IP;
         ignoredAuthCodes = Set.of("Invalid Authorization Code", "Invalid Authorization Level");
 
-        // Order based on typical specificity and PHP's implicit ordering by min/max lengths
-        // This order might need tuning based on specific country numbering plans if this becomes generic.
-        // PHP's $_lista_Prefijos['in']['orden'] was sorted by (min_length_after_prefix_strip) DESC.
-        // For incoming, we don't strip operator prefixes, so it's more about the nature of the number.
         incomingTelephonyTypeClassificationOrder = List.of(
-                TIPOTELE_INTERNACIONAL, // Longest, most distinct
-                TIPOTELE_SATELITAL,     // Also distinct
-                TIPOTELE_CELULAR,       // Common distinct patterns
-                TIPOTELE_NACIONAL,      // Usually includes area code
-                TIPOTELE_LOCAL_EXT,     // Specific local variation
-                TIPOTELE_LOCAL          // Most general for fixed lines
-                // TIPOTELE_CELUFIJO is less common for *incoming* origin classification directly,
-                // often it's an outgoing prefix or a special destination type.
+                TIPOTELE_INTERNACIONAL,
+                TIPOTELE_SATELITAL,
+                TIPOTELE_CELULAR,
+                TIPOTELE_NACIONAL,
+                TIPOTELE_LOCAL_EXT,
+                TIPOTELE_LOCAL
         );
-
 
         COMPANY_TO_NATIONAL_OPERATOR_PREFIX_MAP = new HashMap<>();
         COMPANY_TO_NATIONAL_OPERATOR_PREFIX_MAP.put("TELMEX TELECOMUNICACIONES S.A. ESP", "0456");
@@ -109,7 +103,9 @@ public class CdrProcessingConfig {
             return "";
         }
         for (Map.Entry<String, String> entry : COMPANY_TO_NATIONAL_OPERATOR_PREFIX_MAP.entrySet()) {
-            if (companyName.equalsIgnoreCase(entry.getKey())) {
+            // Case-insensitive comparison and check if the companyName *contains* the key,
+            // as DB values might have extra details.
+            if (companyName.toUpperCase().contains(entry.getKey().toUpperCase())) {
                 return entry.getValue();
             }
         }
@@ -160,39 +156,72 @@ public class CdrProcessingConfig {
         return defaultInternalCallTypeId;
     }
 
+    private int deriveNumericValueFromLength(int length, boolean isMin) {
+        if (length <= 0) return 0;
+        if (length > 9) length = 9; // Cap length to avoid overflow for int
+        if (isMin) {
+            if (length == 1) return 0; // Min 1-digit can be 0 (PHP logic for operadora)
+            return Integer.parseInt("1" + "0".repeat(Math.max(0, length - 1)));
+        } else {
+            return Integer.parseInt("9".repeat(Math.max(0, length)));
+        }
+    }
 
     public ExtensionLengthConfig getExtensionLengthConfig(Long commLocationId) {
         log.debug("Fetching extension length config for commLocationId: {}", commLocationId);
-        Map<String, Integer> lengths = extensionLookupService.findExtensionMinMaxLength(commLocationId);
-        int minLength = lengths.getOrDefault("min", DEFAULT_MIN_EXT_LENGTH);
-        int maxLength = lengths.getOrDefault("max", DEFAULT_MAX_EXT_LENGTH);
-        int maxExtensionValue = MAX_POSSIBLE_EXTENSION_VALUE;
+        Map<String, Integer> dbLengths = extensionLookupService.findExtensionMinMaxLength(commLocationId);
 
-        if (minLength <= 0) minLength = DEFAULT_MIN_EXT_LENGTH;
-        if (maxLength <= 0 || maxLength < minLength) maxLength = Math.max(minLength, DEFAULT_MAX_EXT_LENGTH);
+        int minDbLength = dbLengths.getOrDefault("min", 0);
+        int maxDbLength = dbLengths.getOrDefault("max", 0);
 
-        if (maxLength > 0 && maxLength < String.valueOf(Integer.MAX_VALUE).length()) {
-            try {
-                maxExtensionValue = Integer.parseInt("9".repeat(Math.max(0, maxLength)));
-            } catch (NumberFormatException | OutOfMemoryError e) {
-                log.warn("Could not calculate max extension value for length {}, using default {}. Error: {}", maxLength, MAX_POSSIBLE_EXTENSION_VALUE, e.getMessage());
-                maxExtensionValue = MAX_POSSIBLE_EXTENSION_VALUE;
-            }
-        } else if (maxLength >= String.valueOf(Integer.MAX_VALUE).length()) {
-            maxExtensionValue = MAX_POSSIBLE_EXTENSION_VALUE;
-            log.warn("Extension maxLength {} is too large, capping max extension value at {}", maxLength, maxExtensionValue);
+        int finalMinNumeric, finalMaxNumeric;
+
+        if (minDbLength > 0) {
+            finalMinNumeric = deriveNumericValueFromLength(minDbLength, true);
+        } else {
+            finalMinNumeric = deriveNumericValueFromLength(DEFAULT_MIN_EXT_LENGTH_FALLBACK, true);
         }
 
+        if (maxDbLength > 0) {
+            finalMaxNumeric = deriveNumericValueFromLength(maxDbLength, false);
+        } else {
+            finalMaxNumeric = deriveNumericValueFromLength(DEFAULT_MAX_EXT_LENGTH_FALLBACK, false);
+        }
+        
+        // Ensure min is not greater than max, and cap at MAX_POSSIBLE_EXTENSION_VALUE
+        if (finalMinNumeric > finalMaxNumeric) finalMinNumeric = finalMaxNumeric;
+        finalMaxNumeric = Math.min(finalMaxNumeric, MAX_POSSIBLE_EXTENSION_VALUE);
+        finalMinNumeric = Math.min(finalMinNumeric, finalMaxNumeric);
 
-        log.debug("Extension config for commLocationId {}: minLen={}, maxLen={}, maxVal={}", commLocationId, minLength, maxLength, maxExtensionValue);
-        return new ExtensionLengthConfig(minLength, maxLength, maxExtensionValue);
+
+        // Placeholder for special syntax extensions (PHP's $_LIM_INTERNAS['full'])
+        // This would typically be loaded from a configuration or a specific DB query
+        // if there are extensions like "0", "*123", "#456" that are considered valid extensions
+        // but don't fit the numeric min/max length criteria.
+        Set<String> specialSyntaxExtensions = getSpecialSyntaxExtensions(commLocationId);
+
+        log.debug("Extension config for commLocationId {}: minVal={}, maxVal={}, specialCount={}",
+                commLocationId, finalMinNumeric, finalMaxNumeric, specialSyntaxExtensions.size());
+        return new ExtensionLengthConfig(finalMinNumeric, finalMaxNumeric, specialSyntaxExtensions);
     }
+
+    // Placeholder: Implement this method to fetch extensions like "0", "*100", etc.
+    // This would be equivalent to PHP's `ObtenerExtensionesEspeciales`
+    private Set<String> getSpecialSyntaxExtensions(Long commLocationId) {
+        // Example: Query a table or use a fixed list for extensions that are valid
+        // but might not be purely numeric or within the standard length-derived numeric range.
+        // For now, returning an empty set.
+        log.trace("getSpecialSyntaxExtensions for commLocationId {} (currently returns empty set)", commLocationId);
+        return Collections.emptySet();
+    }
+
 
     public Set<String> getIgnoredAuthCodes() {
         return ignoredAuthCodes;
     }
 
     public int getMinCallDurationForBilling() {
+        // This could be fetched from a dynamic configuration source if needed
         return minCallDurationForBilling;
     }
 

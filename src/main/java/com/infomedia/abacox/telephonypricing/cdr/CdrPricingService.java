@@ -1,10 +1,10 @@
+// FILE: com/infomedia/abacox/telephonypricing/cdr/CdrPricingService.java
 package com.infomedia.abacox.telephonypricing.cdr;
 
 import com.infomedia.abacox.telephonypricing.entity.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -37,39 +37,30 @@ public class CdrPricingService {
             return Optional.empty();
         }
         Map<String, Object> rateInfo = new HashMap<>(baseRateOpt.get());
-        rateInfo.put("band_id", 0L);
+        rateInfo.put("band_id", 0L); // Default if no band found
         rateInfo.put("band_name", "");
         rateInfo.putIfAbsent("base_value", BigDecimal.ZERO);
         rateInfo.putIfAbsent("vat_included", false);
         rateInfo.putIfAbsent("vat_value", BigDecimal.ZERO);
 
-        Long telephonyTypeIdFromPrefix = (Long) rateInfo.get("telephony_type_id"); // Get from baseRateOpt content
+        Long telephonyTypeIdFromPrefix = (Long) rateInfo.get("telephony_type_id");
         boolean isLocalTypeForBandCheck = (telephonyTypeIdFromPrefix != null &&
                 telephonyTypeIdFromPrefix.equals(CdrProcessingConfig.TIPOTELE_LOCAL));
 
-        // PHP: $usar_bandas = (1 * $info_indica['PREFIJO_BANDAOK'] > 0);
-        // PHP: if ($usar_bandas && ($indicadestino > 0 || $es_local))
         boolean useEffectiveBandLookup = bandOk && ( (indicatorId != null && indicatorId > 0) || isLocalTypeForBandCheck );
 
         log.trace("findRateInfo: prefixId={}, indicatorId={}, originIndicatorId={}, bandOk={}, isLocalType={}, useEffectiveBandLookup={}",
                 prefixId, indicatorId, originIndicatorId, bandOk, isLocalTypeForBandCheck, useEffectiveBandLookup);
 
         if (useEffectiveBandLookup) {
-            // For local calls where no specific destination indicator is found (indicatorId is null or 0),
-            // the band lookup should use the originIndicatorId as the effective "destination" for bands defined at origin.
-            // PHP: $adcondicion = " AND BANDA_ID = BANDAINDICA_BANDA_ID AND BANDAINDICA_INDICATIVO_ID = $indicadestino";
-            // PHP: if (!$es_local) { ... } else { // for local, bandaindica is not joined }
             Long indicatorForBandLookup = (isLocalTypeForBandCheck && (indicatorId == null || indicatorId <= 0))
                                           ? originIndicatorId
                                           : indicatorId;
-            // If it's local and no specific dest indicator, bands are typically defined against origin or globally for that prefix.
-            // If it's not local, indicatorId must be > 0 for band_indicator join.
-            // The query in findBandByPrefixAndIndicator handles the join conditionally.
 
             Optional<Map<String, Object>> bandOpt = prefixInfoLookupService.findBandByPrefixAndIndicator(prefixId, indicatorForBandLookup, originIndicatorId);
             if (bandOpt.isPresent()) {
                  Map<String, Object> bandInfo = bandOpt.get();
-                rateInfo.put("base_value", bandInfo.get("band_value")); // Band value overrides prefix base_value
+                rateInfo.put("base_value", bandInfo.get("band_value"));
                 rateInfo.put("vat_included", bandInfo.get("band_vat_included"));
                 rateInfo.put("band_id", bandInfo.get("band_id"));
                 rateInfo.put("band_name", bandInfo.get("band_name"));
@@ -81,7 +72,7 @@ public class CdrPricingService {
         } else {
             log.trace("Using base rate for prefix {} (Bands not applicable or indicator missing/null for non-local)", prefixId);
         }
-        // Ensure these fields are populated from either band or prefix base rate
+        // Ensure these fields are populated from either band or prefix base rate, for consistent structure
         rateInfo.putIfAbsent("valor_minuto", rateInfo.get("base_value"));
         rateInfo.putIfAbsent("valor_minuto_iva", rateInfo.get("vat_included"));
         rateInfo.putIfAbsent("iva", rateInfo.get("vat_value")); // VAT rate comes from prefix
@@ -97,15 +88,12 @@ public class CdrPricingService {
 
         BigDecimal price = Optional.ofNullable(specialService.getValue()).orElse(BigDecimal.ZERO);
         boolean vatIncluded = Optional.ofNullable(specialService.getVatIncluded()).orElse(false);
-        // In PHP, SERVESPECIAL_IVA was the VAT *amount*, not percentage.
-        // If it's percentage, logic is fine. If it's amount, pricing needs adjustment.
-        // Assuming SERVESPECIAL_IVA is percentage for now, matching the structure of prefix.vat_value.
         BigDecimal vatPercentage = Optional.ofNullable(specialService.getVatAmount()).orElse(BigDecimal.ZERO);
 
         BigDecimal calculatedBilledAmount = calculateBilledAmount(duration, price, vatIncluded, vatPercentage, false, BigDecimal.ZERO, false);
 
         callBuilder.pricePerMinute(price.setScale(4, RoundingMode.HALF_UP));
-        callBuilder.initialPrice(BigDecimal.ZERO);
+        callBuilder.initialPrice(BigDecimal.ZERO); // Special services in PHP didn't seem to have initial/base charge distinct from value
         callBuilder.billedAmount(calculatedBilledAmount.setScale(4, RoundingMode.HALF_UP));
         log.debug("Applied Special Service pricing: Rate={}, Billed={}", price, calculatedBilledAmount);
     }
@@ -114,11 +102,12 @@ public class CdrPricingService {
         Optional<Map<String, Object>> tariffOpt = configurationLookupService.findInternalTariff(internalCallTypeId);
         if (tariffOpt.isPresent()) {
             Map<String, Object> tariff = tariffOpt.get();
+            // Ensure all necessary keys are present with defaults if not returned by DB
             tariff.putIfAbsent("valor_minuto", BigDecimal.ZERO);
             tariff.putIfAbsent("valor_minuto_iva", false);
             tariff.putIfAbsent("iva", BigDecimal.ZERO);
-            tariff.putIfAbsent("valor_inicial", BigDecimal.ZERO);
-            tariff.putIfAbsent("valor_inicial_iva", false);
+            tariff.putIfAbsent("valor_inicial", BigDecimal.ZERO); // PHP's PREFIJO_CARGO_BASICO equivalent
+            tariff.putIfAbsent("valor_inicial_iva", false); // PHP's PREFIJO_CB_IVAINC equivalent
             tariff.putIfAbsent("ensegundos", false);
             log.debug("Applying internal tariff for type {}: {}", internalCallTypeId, tariff);
             applyFinalPricing(tariff, duration, callBuilder);
@@ -133,7 +122,7 @@ public class CdrPricingService {
     public void applySpecialPricing(Map<String, Object> currentRateInfo, LocalDateTime callDateTime, int duration, Long originIndicatorId, CallRecord.CallRecordBuilder callBuilder) {
         Long telephonyTypeId = (Long) currentRateInfo.get("telephony_type_id");
         Long operatorId = (Long) currentRateInfo.get("operator_id");
-        Long bandId = (Long) currentRateInfo.get("band_id"); // band_id is already in currentRateInfo from findRateInfo
+        Long bandId = (Long) currentRateInfo.get("band_id");
 
         List<Map<String, Object>> specialRatesMaps = specialRuleLookupService.findSpecialRateValues(
                 telephonyTypeId, operatorId, bandId, originIndicatorId, callDateTime
@@ -141,7 +130,7 @@ public class CdrPricingService {
 
         Optional<Map<String, Object>> applicableRateMapOpt = specialRatesMaps.stream()
                 .filter(rateMap -> cdrEnrichmentHelper.isHourApplicable((String) rateMap.get("hours_specification"), callDateTime.getHour()))
-                .findFirst();
+                .findFirst(); // PHP logic implies taking the first most specific match
 
         if (applicableRateMapOpt.isPresent()) {
             Map<String, Object> rateMap = applicableRateMapOpt.get();
@@ -156,37 +145,38 @@ public class CdrPricingService {
             }
 
             Integer valueType = (Integer) rateMap.get("value_type"); // 0 = fixed value, 1 = percentage
-            BigDecimal rateValue = (BigDecimal) rateMap.get("rate_value");
-            Boolean includesVat = (Boolean) rateMap.get("includes_vat");
-            BigDecimal prefixVatValue = (BigDecimal) rateMap.get("prefix_vat_value"); // This is the VAT rate
+            BigDecimal rateValueFromSpecial = (BigDecimal) rateMap.get("rate_value");
+            Boolean includesVatInSpecial = (Boolean) rateMap.get("includes_vat");
+            BigDecimal prefixVatValue = (BigDecimal) rateMap.get("prefix_vat_value"); // This is the VAT rate from associated prefix
 
             if (valueType != null && valueType == 1) { // Percentage discount
-                BigDecimal discountPercentage = Optional.ofNullable(rateValue).orElse(BigDecimal.ZERO);
+                BigDecimal discountPercentage = Optional.ofNullable(rateValueFromSpecial).orElse(BigDecimal.ZERO);
                 // PHP: $valor_minuto = ValorSinIVA($infovalor);
+                // $infovalor here is currentRateInfo *before* applying special rate
                 BigDecimal currentRateNoVat = calculateValueWithoutVat(originalRate, (BigDecimal) currentRateInfo.get("iva"), originalVatIncluded);
                 BigDecimal discountMultiplier = BigDecimal.ONE.subtract(discountPercentage.divide(new BigDecimal("100"), 10, RoundingMode.HALF_UP));
                 currentRateInfo.put("valor_minuto", currentRateNoVat.multiply(discountMultiplier));
                 currentRateInfo.put("valor_minuto_iva", false); // Rate is now net, VAT will be added by calculateBilledAmount
-                currentRateInfo.put("descuento_p", discountPercentage); // Store for info
+                currentRateInfo.put("descuento_p", discountPercentage);
                 log.trace("Applied percentage discount {}% from SpecialRateValue {}", discountPercentage, rateMap.get("id"));
             } else { // Fixed value
-                currentRateInfo.put("valor_minuto", Optional.ofNullable(rateValue).orElse(BigDecimal.ZERO));
-                currentRateInfo.put("valor_minuto_iva", Optional.ofNullable(includesVat).orElse(false));
+                currentRateInfo.put("valor_minuto", Optional.ofNullable(rateValueFromSpecial).orElse(BigDecimal.ZERO));
+                currentRateInfo.put("valor_minuto_iva", Optional.ofNullable(includesVatInSpecial).orElse(false));
                 log.trace("Applied fixed rate {} from SpecialRateValue {}", currentRateInfo.get("valor_minuto"), rateMap.get("id"));
             }
             currentRateInfo.put("iva", prefixVatValue); // Use the VAT rate from the associated prefix
-            currentRateInfo.put("ensegundos", false); // Special rates are typically per minute
+            currentRateInfo.put("ensegundos", false); // Special rates in PHP are typically per minute
 
             String currentTypeName = (String) currentRateInfo.getOrDefault("telephony_type_name", "Unknown Type");
-            if (!currentTypeName.contains("(xTarifaEsp)")) {
+            if (!currentTypeName.contains("(xTarifaEsp)")) { // Avoid appending multiple times
                 currentRateInfo.put("telephony_type_name", currentTypeName + " (xTarifaEsp)");
             }
         } else {
             log.debug("No applicable special rate found, current rate info remains.");
-            // Ensure initial price fields are set if not already
+            // Ensure initial price fields are set if not already (PHP's Guardar_ValorInicial behavior)
             currentRateInfo.putIfAbsent("valor_inicial", currentRateInfo.get("valor_minuto"));
             currentRateInfo.putIfAbsent("valor_inicial_iva", currentRateInfo.get("valor_minuto_iva"));
-            currentRateInfo.putIfAbsent("ensegundos", false);
+            currentRateInfo.putIfAbsent("ensegundos", false); // Default for non-special rates
         }
     }
 
@@ -195,16 +185,18 @@ public class CdrPricingService {
         boolean vatIncluded = Optional.ofNullable((Boolean) rateInfo.get("valor_minuto_iva")).orElse(false);
         BigDecimal vatPercentage = Optional.ofNullable((BigDecimal) rateInfo.get("iva")).orElse(BigDecimal.ZERO);
         boolean chargePerSecond = Optional.ofNullable((Boolean) rateInfo.get("ensegundos")).orElse(false);
+        // PHP's $valor_original is $infovalor['valor_inicial'] after Guardar_ValorInicial
         BigDecimal initialPrice = Optional.ofNullable((BigDecimal) rateInfo.get("valor_inicial")).orElse(BigDecimal.ZERO);
-        boolean initialVatIncluded = Optional.ofNullable((Boolean) rateInfo.get("valor_inicial_iva")).orElse(false);
+        // boolean initialVatIncluded = Optional.ofNullable((Boolean) rateInfo.get("valor_inicial_iva")).orElse(false);
 
         BigDecimal calculatedBilledAmount = calculateBilledAmount(
-                duration, pricePerMinute, vatIncluded, vatPercentage, chargePerSecond, initialPrice, initialVatIncluded
+                duration, pricePerMinute, vatIncluded, vatPercentage, chargePerSecond,
+                initialPrice, (Boolean)rateInfo.getOrDefault("valor_inicial_iva", false) // Use the stored initial VAT flag
         );
 
         callBuilder.pricePerMinute(pricePerMinute.setScale(4, RoundingMode.HALF_UP));
-        callBuilder.initialPrice(initialPrice.setScale(4, RoundingMode.HALF_UP));
-        callBuilder.billedAmount(calculatedBilledAmount); // Already scaled by calculateBilledAmount
+        callBuilder.initialPrice(initialPrice.setScale(4, RoundingMode.HALF_UP)); // PHP stores this
+        callBuilder.billedAmount(calculatedBilledAmount);
         log.trace("Final pricing applied: Rate={}, Initial={}, Billed={}", pricePerMinute, initialPrice, calculatedBilledAmount);
     }
 
@@ -220,7 +212,6 @@ public class CdrPricingService {
             log.debug("Applying TrunkRule {} for trunk {}", rule.getId(), trunk.getName());
 
             // PHP: Guardar_ValorInicial($infovalor, $infovalor_pre);
-            // If valor_inicial is not set or zero, set it to the current valor_minuto before overriding.
             if (!currentRateInfo.containsKey("valor_inicial") || ((BigDecimal)currentRateInfo.get("valor_inicial")).compareTo(BigDecimal.ZERO) == 0) {
                 currentRateInfo.put("valor_inicial", currentRateInfo.get("valor_minuto"));
                 currentRateInfo.put("valor_inicial_iva", currentRateInfo.get("valor_minuto_iva"));
@@ -230,36 +221,35 @@ public class CdrPricingService {
             currentRateInfo.put("valor_minuto_iva", Optional.ofNullable(rule.getIncludesVat()).orElse(false));
             currentRateInfo.put("ensegundos", rule.getSeconds() != null && rule.getSeconds() > 0);
 
-            Long finalOperatorId = (Long) currentRateInfo.get("operator_id"); // Start with current
-            Long finalTelephonyTypeId = telephonyTypeId; // Start with current
+            Long finalOperatorId = (Long) currentRateInfo.get("operator_id");
+            Long finalTelephonyTypeId = telephonyTypeId;
 
             if (rule.getNewOperatorId() != null && rule.getNewOperatorId() > 0) {
                 finalOperatorId = rule.getNewOperatorId();
-                callBuilder.operatorId(finalOperatorId); // Update CallRecord
+                callBuilder.operatorId(finalOperatorId);
                 entityLookupService.findOperatorById(finalOperatorId).ifPresent(op -> currentRateInfo.put("operator_name", op.getName()));
             }
             if (rule.getNewTelephonyTypeId() != null && rule.getNewTelephonyTypeId() > 0) {
                 finalTelephonyTypeId = rule.getNewTelephonyTypeId();
-                callBuilder.telephonyTypeId(finalTelephonyTypeId); // Update CallRecord
+                callBuilder.telephonyTypeId(finalTelephonyTypeId);
                 entityLookupService.findTelephonyTypeById(finalTelephonyTypeId).ifPresent(tt -> currentRateInfo.put("telephony_type_name", tt.getName()));
             }
 
-            // Fetch VAT for the (potentially new) operator and telephony type
-            Long finalTelephonyTypeId1 = finalTelephonyTypeId; // effectively final for lambda
-            Long finalOperatorId1 = finalOperatorId; // effectively final for lambda
+            Long effectiveFinalTelephonyTypeId = finalTelephonyTypeId;
+            Long effectiveFinalOperatorId = finalOperatorId;
             prefixInfoLookupService.findPrefixByTypeOperatorOrigin(finalTelephonyTypeId, finalOperatorId, originCountryId)
                     .ifPresentOrElse(
                             p -> currentRateInfo.put("iva", p.getVatValue()),
                             () -> {
-                                log.warn("No prefix found for rule-defined type {} / operator {}. Using default IVA 0.", finalTelephonyTypeId1, finalOperatorId1);
+                                log.warn("No prefix found for rule-defined type {} / operator {}. Using default IVA 0.", effectiveFinalTelephonyTypeId, effectiveFinalOperatorId);
                                 currentRateInfo.put("iva", BigDecimal.ZERO);
                             }
                     );
             String currentTypeName = (String) currentRateInfo.getOrDefault("telephony_type_name", "Unknown Type");
-            if (!currentTypeName.contains("(xRegla)")) { // Avoid appending multiple times
+            if (!currentTypeName.contains("(xRegla)")) {
                 currentRateInfo.put("telephony_type_name", currentTypeName + " (xRegla)");
             }
-            currentRateInfo.put("applied_trunk_pricing", true); // Indicate that trunk logic (rule) has set the rate
+            currentRateInfo.put("applied_trunk_pricing_by_rule", true); // Flag that a trunk rule specifically set this rate
         } else {
             log.trace("No TrunkRule found for trunk {}, type {}, indicator {}, originInd {}. Current rate info remains.",
                     trunk.getName(), telephonyTypeId, indicatorId, originIndicatorId);
@@ -277,10 +267,16 @@ public class CdrPricingService {
         } else {
             // PHP: $duracion_minuto = Duracion_Minuto($duracion, $ensegundos);
             // Duracion_Minuto rounds up to the next minute if any seconds exist.
-            durationUnits = new BigDecimal(durationSeconds).divide(SIXTY, 10, RoundingMode.CEILING); // Use high precision for division
-            durationUnits = durationUnits.setScale(0, RoundingMode.CEILING); // Then round up to whole minute
-            if (durationUnits.compareTo(BigDecimal.ZERO) == 0 && durationSeconds > 0) {
-                durationUnits = BigDecimal.ONE; // Minimum 1 minute if any duration
+            if (durationSeconds == 0) {
+                durationUnits = BigDecimal.ZERO;
+            } else {
+                // Equivalent to ceil(durationSeconds / 60.0)
+                durationUnits = new BigDecimal(durationSeconds)
+                        .divide(SIXTY, 10, RoundingMode.CEILING) // Use high precision for division
+                        .setScale(0, RoundingMode.CEILING); // Then round up to whole minute
+                if (durationUnits.compareTo(BigDecimal.ZERO) == 0 && durationSeconds > 0) {
+                     durationUnits = BigDecimal.ONE; // Minimum 1 minute if any duration > 0
+                }
             }
         }
 
@@ -291,11 +287,10 @@ public class CdrPricingService {
             totalCost = totalCost.multiply(vatMultiplier);
         }
 
-        // PHP logic for cargo_basico is omitted as it was removed from entities.
-        // If initialRateValue is used (e.g. first minute different rate), it would be handled here.
-        // The current PHP logic doesn't show a distinct initial charge separate from per-minute.
-        // If `valor_inicial` was meant to be a fixed first-minute charge, this logic would need adjustment.
-        // For now, assuming `valor_minuto` applies to all units.
+        // PHP's PREFIJO_CARGO_BASICO logic is omitted as it's not in the new entities/flow.
+        // The `initialRateValue` and `initialRateVatIncluded` are available if a different
+        // first-minute charge logic were to be implemented, but current PHP `Calcular_Valor`
+        // doesn't show a separate distinct initial charge application beyond the per-minute rate.
 
         return totalCost.setScale(4, RoundingMode.HALF_UP);
     }
@@ -303,13 +298,13 @@ public class CdrPricingService {
     public BigDecimal calculateValueWithoutVat(BigDecimal value, BigDecimal vatPercentage, boolean vatIncluded) {
         if (value == null) return BigDecimal.ZERO;
         if (!vatIncluded || vatPercentage == null || vatPercentage.compareTo(BigDecimal.ZERO) <= 0) {
-            return value.setScale(4, RoundingMode.HALF_UP);
+            return value.setScale(4, RoundingMode.HALF_UP); // Return as is, scaled
         }
-        BigDecimal vatDivisor = BigDecimal.ONE.add(vatPercentage.divide(new BigDecimal("100"), 10, RoundingMode.HALF_UP)); // Increased precision for divisor
+        BigDecimal vatDivisor = BigDecimal.ONE.add(vatPercentage.divide(new BigDecimal("100"), 10, RoundingMode.HALF_UP));
         if (vatDivisor.compareTo(BigDecimal.ZERO) == 0) {
             log.warn("VAT divisor is zero, cannot remove VAT from {}", value);
-            return value.setScale(4, RoundingMode.HALF_UP); // Return original if divisor is zero
+            return value.setScale(4, RoundingMode.HALF_UP);
         }
-        return value.divide(vatDivisor, 4, RoundingMode.HALF_UP);
+        return value.divide(vatDivisor, 4, RoundingMode.HALF_UP); // Scale result
     }
 }

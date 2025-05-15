@@ -35,20 +35,34 @@ public class CdrNumberProcessingService {
     public String cleanNumber(String number, List<String> pbxPrefixes, boolean removePbxPrefixIfNeeded, CdrProcessingConfig.ExtensionLengthConfig extConfig) {
         if (!StringUtils.hasText(number)) return "";
         String currentNumber = number.trim();
+        String originalNumberForLog = number; // For logging
 
         if (removePbxPrefixIfNeeded && pbxPrefixes != null && !pbxPrefixes.isEmpty()) {
-            int prefixLengthToRemove = getPrefixLength(currentNumber, pbxPrefixes);
-            if (prefixLengthToRemove > 0) {
-                currentNumber = currentNumber.substring(prefixLengthToRemove);
-                log.trace("Removed PBX prefix (length {}) from {}, result: {}", prefixLengthToRemove, number, currentNumber);
-            } else if (prefixLengthToRemove == 0 && !pbxPrefixes.isEmpty()) { // prefix was defined but not found
-                 log.trace("PBX prefix removal requested for '{}', but no matching prefix found. Processing original number.", number);
-                 // In PHP, if maxCaracterAExtraer == 0, it means a prefix was defined but not found,
-                 // and $nuevo would be set to ''. If $modo_seguro is true and $nuevo is '', it resets to original.
-                 // Here, if prefix not found, we continue with currentNumber. If mode_seguro logic is needed,
-                 // it implies that if a prefix *should* have been there but wasn't, the number is invalid.
-                 // For now, this matches the "else" part of PHP's `limpiar_numero` where it processes the number as is if prefix not stripped.
+            int prefixLengthFound = getPrefixLength(currentNumber, pbxPrefixes);
+            if (prefixLengthFound > 0) {
+                currentNumber = currentNumber.substring(prefixLengthFound);
+                log.trace("Removed PBX prefix (length {}) from {}, result: {}", prefixLengthFound, originalNumberForLog, currentNumber);
+            } else if (prefixLengthFound == 0) { // PHP: $maxCaracterAExtraer == 0 (prefix defined but not found)
+                 log.trace("PBX prefix removal requested for '{}', but no matching prefix found. Number considered invalid for this path.", originalNumberForLog);
+                 // In PHP, if $maxCaracterAExtraer == 0, $nuevo becomes ''. If $modo_seguro is false, it returns ''.
+                 // If $modo_seguro is true, it would return original.
+                 // For `procesaSaliente_Complementar` (which calls `evaluarDestino_pos` -> `limpiar_numero`),
+                 // `modo_seguro` is effectively true if it's not a trunk call or if trunk allows PBX prefix.
+                 // If a prefix *should* have been stripped but wasn't, the number might be invalid.
+                 // For now, if prefix was expected but not found, we treat the number as potentially invalid for further processing
+                 // by returning empty, unless modo_seguro (which is implicitly true for this method's typical use)
+                 // would revert to original.
+                 // To align with PHP's $nuevo = '' when $maxCaracterAExtraer == 0 and $modo_seguro is false:
+                 // This path is tricky. PHP's `limpiar_numero` with `modo_seguro=false` (which is not the common case for `evaluarDestino_pos`)
+                 // would return "" if prefix was defined but not found.
+                 // If `modo_seguro=true`, it returns the original number.
+                 // This Java method's `removePbxPrefixIfNeeded` implies `modo_seguro` behavior.
+                 // If `removePbxPrefixIfNeeded` is true, and prefixes are defined, but none match,
+                 // PHP's `limpiar_numero` (with `modo_seguro=true`) would return the original number.
+                 // So, if `prefixLengthFound == 0`, we continue with `currentNumber` (which is still the original).
+                 // The log above is sufficient.
             }
+            // if prefixLengthFound == -1 (no prefixes defined), currentNumber remains original.
         }
 
 
@@ -60,7 +74,7 @@ public class CdrNumberProcessingService {
         }
 
         if ("+".equals(firstChar)) {
-            firstChar = "";
+            firstChar = ""; // Remove leading '+'
         }
 
         StringBuilder numericRest = new StringBuilder();
@@ -77,74 +91,69 @@ public class CdrNumberProcessingService {
         restOfString = numericRest.toString();
         String cleaned = firstChar + restOfString;
 
-        log.trace("Cleaned number: Original='{}', PBXPrefixes={}, removePbxPrefixIfNeeded={}, Result='{}'", number, pbxPrefixes, removePbxPrefixIfNeeded, cleaned);
+        log.trace("Cleaned number: Original='{}', PBXPrefixes={}, removePbxPrefixIfNeeded={}, Result='{}'", originalNumberForLog, pbxPrefixes, removePbxPrefixIfNeeded, cleaned);
         return cleaned;
     }
 
 
+    /**
+     * Determines the length of the first matching PBX prefix found in the number.
+     * Mirrors PHP's `Validar_prefijoSalida`.
+     *
+     * @param number      The number to check.
+     * @param pbxPrefixes A list of PBX prefixes to check against.
+     * @return Length of the first matching prefix.
+     *         0 if prefixes are defined but none match.
+     *         -1 if pbxPrefixes is null or empty (no prefixes to check).
+     */
     public int getPrefixLength(String number, List<String> pbxPrefixes) {
-        int longestMatchLength = -1; // PHP: $maxCaracterAExtraer = -1; (return -1 if no prefixes to check)
-        if (number == null || pbxPrefixes == null) {
-            return -1;
+        if (number == null) return -1; // Or 0, depending on how null number should be treated
+        if (pbxPrefixes == null || pbxPrefixes.isEmpty()) {
+            return -1; // No prefixes to check
         }
-        if (pbxPrefixes.isEmpty()) return -1;
 
-        longestMatchLength = 0; // PHP: if a prefix is defined, default to 0 if not found
-        boolean prefixFoundThisIteration = false;
         for (String prefix : pbxPrefixes) {
             String trimmedPrefix = prefix != null ? prefix.trim() : "";
             if (!trimmedPrefix.isEmpty() && number.startsWith(trimmedPrefix)) {
-                if (trimmedPrefix.length() > longestMatchLength) {
-                    longestMatchLength = trimmedPrefix.length();
-                }
-                prefixFoundThisIteration = true;
+                return trimmedPrefix.length(); // Found a match, return its length
             }
         }
-        // PHP: if $valorpbx == $prefijoAComparar, break and return $maxCaracterAExtraer (length of found prefix)
-        // PHP: if loop finishes and no match, $maxCaracterAExtraer remains 0 (if prefixes were checked)
-        return prefixFoundThisIteration ? longestMatchLength : 0;
+        return 0; // Prefixes were defined, but none matched
     }
 
-    /**
-     * Preprocesses a dialed number, primarily for Colombian numbering plan changes.
-     * This method mirrors the logic of PHP's `_esCelular_fijo`.
-     *
-     * @param number              The original dialed number.
-     * @param originCountryId     The origin country ID.
-     * @param forcedTelephonyType Wrapper to return a potentially forced TelephonyType ID.
-     * @param commLocation        The communication location for context (city/department).
-     * @return The processed number, possibly transformed.
-     */
     public String preprocessNumberForLookup(String number, Long originCountryId, FieldWrapper<Long> forcedTelephonyType, CommunicationLocation commLocation) {
         if (number == null || originCountryId == null || !originCountryId.equals(CdrProcessingConfig.COLOMBIA_ORIGIN_COUNTRY_ID)) {
-            return number; // Only apply for Colombia and non-null numbers
+            return number;
         }
 
-        String originalNumberLog = number; // For logging
+        String originalNumberLog = number;
         String processedNumber = number;
         int len = number.length();
 
-        // Reset forcedTelephonyType at the beginning if it's meant to be an output of this specific call only
-        // forcedTelephonyType.setValue(null); // Caller should initialize if needed.
+        // Ensure forcedTelephonyType is not null for setting value
+        if (forcedTelephonyType == null) {
+            forcedTelephonyType = new FieldWrapper<>(null); // Should not happen if called correctly
+        }
+
 
         if (len == 10) {
             if (number.startsWith("3")) {
-                if (number.matches("^\\d{10}$")) { // Ensure it's all digits
+                if (number.matches("^\\d{10}$")) {
                     String firstThree = number.substring(0, 3);
                     try {
                         int prefixVal = Integer.parseInt(firstThree);
-                        if (prefixVal >= 300 && prefixVal <= 350) { // PHP: $n3 >= 300 && $n3 <= 350
-                            processedNumber = "03" + number; // PHP: $g_numero = "03".$numero;
-                            forcedTelephonyType.setValue(CdrProcessingConfig.TIPOTELE_CELULAR); // PHP: $g_tipotele = 2;
+                        if (prefixVal >= 300 && prefixVal <= 350) {
+                            processedNumber = "03" + number;
+                            forcedTelephonyType.setValue(CdrProcessingConfig.TIPOTELE_CELULAR);
                         }
                     } catch (NumberFormatException e) {
                         log.trace("Non-numeric prefix for 10-digit number starting with 3: {}", firstThree);
                     }
                 }
             } else if (number.startsWith("60")) {
-                if (number.matches("^60\\d{8}$")) { // Ensure pattern 60XXXXXXXX
+                if (number.matches("^60\\d{8}$")) {
                     String ndcFromNumber = number.substring(2, 3);
-                    String subscriberPart = number.substring(3); // Last 7 digits
+                    String subscriberPart = number.substring(3);
 
                     Optional<Map<String, String>> seriesDetailsOpt = prefixInfoLookupService.findNationalSeriesDetailsByNdcAndSubscriber(
                             ndcFromNumber, Long.parseLong(subscriberPart), originCountryId
@@ -162,38 +171,38 @@ public class CdrNumberProcessingService {
                         String commCity = commLocationIndicatorOpt.map(Indicator::getCityName).orElse("");
 
                         if (seriesDep.equalsIgnoreCase(commDep) && seriesCity.equalsIgnoreCase(commCity)) {
-                            processedNumber = subscriberPart; // PHP: $g_numero = substr($numero, 3);
+                            processedNumber = subscriberPart;
                             forcedTelephonyType.setValue(CdrProcessingConfig.TIPOTELE_LOCAL);
-                        } else if (seriesDep.equalsIgnoreCase(commDep)) { // Local Extended
-                            processedNumber = subscriberPart; // PHP: $g_numero = substr($numero, 3);
+                        } else if (seriesDep.equalsIgnoreCase(commDep)) {
+                            processedNumber = subscriberPart;
                             forcedTelephonyType.setValue(CdrProcessingConfig.TIPOTELE_LOCAL_EXT);
                         } else {
                             String nationalOpPrefix = configService.mapCompanyToNationalOperatorPrefix(seriesCompany);
-                            String numWithout60 = number.substring(2); // number without "60"
+                            String numWithout60 = number.substring(2);
                             if (StringUtils.hasText(nationalOpPrefix)) {
-                                processedNumber = nationalOpPrefix + numWithout60; // PHP: $g_numero = $ind.$numero; (where $numero was number without "60")
+                                processedNumber = nationalOpPrefix + numWithout60;
                             } else {
                                 processedNumber = "09" + numWithout60; // PHP Default
                             }
                             forcedTelephonyType.setValue(CdrProcessingConfig.TIPOTELE_NACIONAL);
                         }
-                    } else { // No series details found, default to national with "09"
+                    } else {
                         String numWithout60 = number.substring(2);
-                        processedNumber = "09" + numWithout60; // PHP: $g_numero = '09'.$numero;
+                        processedNumber = "09" + numWithout60;
                         forcedTelephonyType.setValue(CdrProcessingConfig.TIPOTELE_NACIONAL);
                     }
                 }
             }
         } else if (len == 12) {
             if (number.startsWith("573") || number.startsWith("603")) {
-                String mobilePartAfterPrefix = number.substring(2); // e.g., "3151234567" from "57315..."
+                 String mobilePartAfterPrefix = number.substring(2);
                 if (mobilePartAfterPrefix.length() == 10 && mobilePartAfterPrefix.matches("^\\d{10}$")) {
-                    String firstThreeOfMobile = mobilePartAfterPrefix.substring(0, 3);
+                     String firstThreeOfMobile = mobilePartAfterPrefix.substring(0, 3);
                     try {
                         int mobilePrefixVal = Integer.parseInt(firstThreeOfMobile);
                         if (mobilePrefixVal >= 300 && mobilePrefixVal <= 350) {
-                            processedNumber = mobilePartAfterPrefix; // PHP: $telefono = substr($telefono, -10); $g_numero = $telefono;
-                            forcedTelephonyType.setValue(CdrProcessingConfig.TIPOTELE_CELULAR); // PHP: $g_tipotele = 2;
+                            processedNumber = mobilePartAfterPrefix;
+                            forcedTelephonyType.setValue(CdrProcessingConfig.TIPOTELE_CELULAR);
                         }
                     } catch (NumberFormatException e) {
                         log.trace("Non-numeric prefix for 12-digit mobile: {}", firstThreeOfMobile);
@@ -201,48 +210,48 @@ public class CdrNumberProcessingService {
                 }
             } else if (number.startsWith("5760") || number.startsWith("6060")) {
                 if (number.matches("^(5760|6060)\\d{8}$")) {
-                    String ndcAndSubscriber = number.substring(4); // Last 8 digits
+                    String ndcAndSubscriber = number.substring(4);
                     String ndcFromNumber = ndcAndSubscriber.substring(0, 1);
-                    String subscriberPart = ndcAndSubscriber.substring(1); // Last 7 digits
+                    String subscriberPart = ndcAndSubscriber.substring(1);
 
                     Optional<Integer> localNdcOpt = Optional.ofNullable(commLocation.getIndicatorId())
                             .flatMap(entityLookupService::findIndicatorById)
                             .flatMap(ind -> prefixInfoLookupService.findLocalNdcForIndicator(ind.getId()));
 
                     if (localNdcOpt.isPresent() && String.valueOf(localNdcOpt.get()).equals(ndcFromNumber)) {
-                        processedNumber = subscriberPart; // PHP: $g_numero = $subscriberPart;
+                        processedNumber = subscriberPart;
                         forcedTelephonyType.setValue(CdrProcessingConfig.TIPOTELE_LOCAL);
                     } else {
-                        processedNumber = "09" + ndcAndSubscriber; // PHP: $g_numero = "09" + $ndcAndSubscriber;
+                        processedNumber = "09" + ndcAndSubscriber;
                         forcedTelephonyType.setValue(CdrProcessingConfig.TIPOTELE_NACIONAL);
                     }
                 }
             }
         } else if (len == 11) {
             if (number.startsWith("03")) {
-                String mobilePart = number.substring(1); // Number without leading "0", e.g., "3151234567"
+                String mobilePart = number.substring(1);
                 if (mobilePart.length() == 10 && mobilePart.matches("^\\d{10}$")) {
                     String firstThreeOfMobile = mobilePart.substring(0, 3);
-                    try {
+                     try {
                         int mobilePrefixVal = Integer.parseInt(firstThreeOfMobile);
                         if (mobilePrefixVal >= 300 && mobilePrefixVal <= 350) {
-                            processedNumber = mobilePart; // PHP: $telefono = substr($telefono, -10); $g_numero = $telefono;
-                            forcedTelephonyType.setValue(CdrProcessingConfig.TIPOTELE_CELULAR); // PHP: $g_tipotele = 2;
+                            processedNumber = mobilePart;
+                            forcedTelephonyType.setValue(CdrProcessingConfig.TIPOTELE_CELULAR);
                         }
                     } catch (NumberFormatException e) {
                         log.trace("Non-numeric prefix for 11-digit '03...' mobile: {}", firstThreeOfMobile);
                     }
                 }
             } else if (number.startsWith("604")) {
-                if (number.matches("^604\\d{8}$")) {
-                    processedNumber = number.substring(3); // Remove "604" -> PHP: $telefono = substr($telefono, -8); $g_numero = $telefono;
-                    // PHP does not set $g_tipotele here, Java also doesn't force.
+                 if (number.matches("^604\\d{8}$")) {
+                    processedNumber = number.substring(3);
+                    // No forced type in PHP for this specific case
                 }
             }
         } else if (len == 9) {
             if (number.startsWith("60")) {
                 if (number.matches("^60\\d{7}$")) {
-                    processedNumber = number.substring(2); // Remove "60" -> PHP: $telefono = substr($telefono, -7); $g_numero = $telefono;
+                    processedNumber = number.substring(2);
                     forcedTelephonyType.setValue(CdrProcessingConfig.TIPOTELE_LOCAL);
                 }
             }
