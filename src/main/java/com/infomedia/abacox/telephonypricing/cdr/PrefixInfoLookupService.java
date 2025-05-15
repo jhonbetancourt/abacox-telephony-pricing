@@ -17,6 +17,7 @@ import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @Log4j2
@@ -102,7 +103,7 @@ public class PrefixInfoLookupService {
         queryParams.forEach(query::setParameter);
 
         List<Object[]> results = query.getResultList();
-        List<Map<String, Object>> mappedResults = new ArrayList<>();
+        List<Map<String, Object>> initialMappedResults = new ArrayList<>();
         for (Object[] row : results) {
             Map<String, Object> map = new HashMap<>();
             map.put("prefix_id", row[0]);
@@ -118,18 +119,36 @@ public class PrefixInfoLookupService {
             map.put("operator_name", row[10]);
             map.put("telephony_type_min", row[11] != null ? ((Number)row[11]).intValue() : 0);
             map.put("telephony_type_max", row[12] != null ? ((Number)row[12]).intValue() : 0);
-            mappedResults.add(map);
+            initialMappedResults.add(map);
         }
 
-        log.trace("Found {} candidate prefixes from SQL for number lookup (isTrunk: {})", mappedResults.size(), isTrunkCall);
+        log.trace("Found {} candidate prefixes from SQL for number lookup (isTrunk: {})", initialMappedResults.size(), isTrunkCall);
+
+        List<Map<String, Object>> finalResults = new ArrayList<>(initialMappedResults);
+
+        if (!isTrunkCall && !finalResults.isEmpty()) {
+            String longestMatchingPrefixCode = (String) finalResults.get(0).get("prefix_code");
+            // Handle null prefix code case, treat as empty string for comparison
+            final String effectiveLongestCode = (longestMatchingPrefixCode == null) ? "" : longestMatchingPrefixCode;
+
+            finalResults = finalResults.stream()
+                    .filter(map -> {
+                        String currentCode = (String) map.get("prefix_code");
+                        return (currentCode == null ? "" : currentCode).equals(effectiveLongestCode);
+                    })
+                    .collect(Collectors.toList());
+            log.debug("Non-trunk call: Filtered to {} prefixes matching the longest code '{}'", finalResults.size(), effectiveLongestCode);
+        }
+
 
         // Explicit Local Prefix Addition (for non-trunk calls), mimicking PHP's logic
         if (!isTrunkCall) {
-            boolean localPrefixFoundInSqlResults = mappedResults.stream()
+            // Check if a prefix with TIPOTELE_LOCAL was already included in the filtered results
+            boolean localPrefixFoundInFilteredResults = finalResults.stream()
                 .anyMatch(map -> Long.valueOf(CdrProcessingConfig.TIPOTELE_LOCAL).equals(map.get("telephony_type_id")));
 
-            if (!localPrefixFoundInSqlResults) {
-                log.debug("TIPOTELE_LOCAL not found in SQL results for non-trunk call, attempting explicit add for number: {}", numberForLog);
+            if (!localPrefixFoundInFilteredResults) {
+                log.debug("TIPOTELE_LOCAL not found in filtered results for non-trunk call, attempting explicit add for number: {}", numberForLog);
 
                 Optional<Operator> localInternalOperatorOpt = configService.getOperatorInternal(CdrProcessingConfig.TIPOTELE_LOCAL, originCountryId);
                 if (localInternalOperatorOpt.isPresent()) {
@@ -157,8 +176,8 @@ public class PrefixInfoLookupService {
                             localPrefixMap.put("operator_name", localInternalOperatorOpt.get().getName());
                             localPrefixMap.put("telephony_type_min", minLengthForLocal);
                             localPrefixMap.put("telephony_type_max", localTypeConfig.getOrDefault("max", 0));
-                            
-                            mappedResults.add(localPrefixMap); // Add to end of results
+
+                            finalResults.add(localPrefixMap); // Add to end of results
                             log.info("Explicitly added TIPOTELE_LOCAL prefix to candidates for number: {}", numberForLog);
                         } else {
                             log.debug("Explicit local prefix add: number {} length {} is less than min length {} for local type.", numberForLog, processedNumber.length(), minLengthForLocal);
@@ -170,10 +189,10 @@ public class PrefixInfoLookupService {
                     log.warn("Explicit local prefix add: Could not find internal operator for TIPOTELE_LOCAL ({}) in Country {}.", CdrProcessingConfig.TIPOTELE_LOCAL, originCountryId);
                 }
             } else {
-                 log.debug("TIPOTELE_LOCAL was already found in SQL results. No explicit add needed.");
+                 log.debug("TIPOTELE_LOCAL was already found in filtered results. No explicit add needed.");
             }
         }
-        return mappedResults;
+        return finalResults;
     }
 
     public Optional<Prefix> findPrefixByTypeOperatorOrigin(Long telephonyTypeId, Long operatorId, Long originCountryId) {
@@ -282,7 +301,7 @@ public class PrefixInfoLookupService {
             return Optional.empty();
         }
         if (checkLocalFallback) {
-            minNdcLength = 0; maxNdcLength = 0; 
+            minNdcLength = 0; maxNdcLength = 0;
             log.trace("Treating as LOCAL type lookup (effective NDC length 0 for series.ndc='0')");
         }
 
@@ -297,19 +316,18 @@ public class PrefixInfoLookupService {
             if (ndcLength > 0 && numberWithoutPrefix.length() >= ndcLength) {
                 ndcStr = numberWithoutPrefix.substring(0, ndcLength);
                 subscriberNumberStr = numberWithoutPrefix.substring(ndcLength);
-            } else if (ndcLength > 0) { 
+            } else if (ndcLength > 0) {
                 continue;
             }
-            
+
             int minSubscriberLength = Math.max(0, typeMinDigits - ndcLength);
             if (subscriberNumberStr.length() < minSubscriberLength) {
                 log.trace("Subscriber part {} (from num {}) too short for NDC {} (min subscriber length {})", subscriberNumberStr, numberWithoutPrefix, ndcStr, minSubscriberLength);
                 continue;
             }
 
-
-            if (ndcStr.matches("\\d*") && subscriberNumberStr.matches("\\d+")) { 
-                String ndcParam = ndcStr.isEmpty() ? "0" : ndcStr; 
+            if (ndcStr.matches("\\d*") && subscriberNumberStr.matches("\\d+")) {
+                String ndcParam = ndcStr.isEmpty() ? "0" : ndcStr;
                 long subscriberNumber = Long.parseLong(subscriberNumberStr);
 
                 StringBuilder sqlBuilder = new StringBuilder();
@@ -343,14 +361,14 @@ public class PrefixInfoLookupService {
                 }
 
                 sqlBuilder.append("  AND CAST(s.initial_number AS BIGINT) <= :subscriberNum AND CAST(s.final_number AS BIGINT) >= :subscriberNum ");
-                sqlBuilder.append("ORDER BY i.origin_country_id DESC, "); 
+                sqlBuilder.append("ORDER BY i.origin_country_id DESC, ");
                 if (isPrefixBandOk) {
-                    sqlBuilder.append(" b.origin_indicator_id DESC, "); 
+                    sqlBuilder.append(" b.origin_indicator_id DESC, ");
                 }
-                if (ndcLength > 0) { 
+                if (ndcLength > 0) {
                     sqlBuilder.append(" LENGTH(s.ndc) DESC, ");
                 }
-                sqlBuilder.append(" (CAST(s.final_number AS BIGINT) - CAST(s.initial_number AS BIGINT)) ASC "); 
+                sqlBuilder.append(" (CAST(s.final_number AS BIGINT) - CAST(s.initial_number AS BIGINT)) ASC ");
                 sqlBuilder.append("LIMIT 1");
 
                 Query query = entityManager.createNativeQuery(sqlBuilder.toString());
@@ -370,7 +388,7 @@ public class PrefixInfoLookupService {
                     Object[] result = (Object[]) query.getSingleResult();
                     Map<String, Object> map = new HashMap<>();
                     Long indicatorIdVal = (result[0] instanceof Number) ? ((Number) result[0]).longValue() : null;
-                    map.put("indicator_id", (indicatorIdVal != null && indicatorIdVal > 0) ? indicatorIdVal : null); 
+                    map.put("indicator_id", (indicatorIdVal != null && indicatorIdVal > 0) ? indicatorIdVal : null);
                     map.put("department_country", result[1]);
                     map.put("city_name", result[2]);
                     map.put("indicator_operator_id", result[3]);
@@ -411,7 +429,7 @@ public class PrefixInfoLookupService {
         } else {
             sqlBuilder.append("  AND i.origin_country_id = :originCountryId ");
         }
-        sqlBuilder.append("  AND s.ndc IS NOT NULL "); 
+        sqlBuilder.append("  AND s.ndc IS NOT NULL ");
 
         Query query = entityManager.createNativeQuery(sqlBuilder.toString());
         query.setParameter("telephonyTypeId", telephonyTypeId);
@@ -442,14 +460,14 @@ public class PrefixInfoLookupService {
         sqlBuilder.append("  AND i.telephony_type_id = :nationalTelephonyTypeId ");
         sqlBuilder.append("  AND s.ndc = :ndc ");
         sqlBuilder.append("  AND CAST(s.initial_number AS BIGINT) <= :subscriberNum AND CAST(s.final_number AS BIGINT) >= :subscriberNum ");
-        sqlBuilder.append("  AND i.origin_country_id IN (0, :originCountryId) "); 
+        sqlBuilder.append("  AND i.origin_country_id IN (0, :originCountryId) ");
 
         sqlBuilder.append("ORDER BY i.origin_country_id DESC, LENGTH(s.ndc) DESC, (CAST(s.final_number AS BIGINT) - CAST(s.initial_number AS BIGINT)) ASC ");
         sqlBuilder.append("LIMIT 1");
 
         Query query = entityManager.createNativeQuery(sqlBuilder.toString(), String.class);
         query.setParameter("nationalTelephonyTypeId", nationalTelephonyTypeId);
-        query.setParameter("ndc", String.valueOf(ndc)); 
+        query.setParameter("ndc", String.valueOf(ndc));
         query.setParameter("subscriberNum", subscriberNumber);
         query.setParameter("originCountryId", originCountryId);
 
@@ -480,7 +498,7 @@ public class PrefixInfoLookupService {
             map.put("vat_included", result[1] != null ? result[1] : false);
             map.put("vat_value", result[2] != null ? result[2] : BigDecimal.ZERO);
             map.put("band_ok", result[3] != null ? result[3] : false);
-            map.put("telephony_type_id", result[4]); 
+            map.put("telephony_type_id", result[4]);
             return Optional.of(map);
         } catch (NoResultException e) {
             log.warn("No active prefix found for ID: {}", prefixId);
@@ -497,7 +515,7 @@ public class PrefixInfoLookupService {
             return Optional.empty();
         }
         Long effectiveOriginIndicatorId = originIndicatorId != null ? originIndicatorId : 0L;
-        Long effectiveIndicatorId = indicatorId; 
+        Long effectiveIndicatorId = indicatorId;
 
         log.debug("Finding band for prefixId: {}, effectiveIndicatorId: {}, effectiveOriginIndicatorId: {}", prefixId, effectiveIndicatorId, effectiveOriginIndicatorId);
 
@@ -510,10 +528,11 @@ public class PrefixInfoLookupService {
         sqlBuilder.append("WHERE b.active = true ");
         sqlBuilder.append("  AND b.prefix_id = :prefixId ");
         if (effectiveIndicatorId == null || effectiveIndicatorId <= 0) {
+            // If no specific indicator, look for bands not linked to any specific indicator via band_indicator
             sqlBuilder.append(" AND NOT EXISTS (SELECT 1 FROM band_indicator bi_check WHERE bi_check.band_id = b.id) ");
         }
-        sqlBuilder.append("  AND b.origin_indicator_id IN (0, :originIndicatorId) "); 
-        sqlBuilder.append("ORDER BY b.origin_indicator_id DESC "); 
+        sqlBuilder.append("  AND b.origin_indicator_id IN (0, :originIndicatorId) ");
+        sqlBuilder.append("ORDER BY b.origin_indicator_id DESC ");
         sqlBuilder.append("LIMIT 1");
 
         Query query = entityManager.createNativeQuery(sqlBuilder.toString());
@@ -544,11 +563,11 @@ public class PrefixInfoLookupService {
     public Optional<Integer> findLocalNdcForIndicator(Long indicatorId) {
         if (indicatorId == null || indicatorId <= 0) return Optional.empty();
         log.debug("Finding local NDC for indicatorId: {}", indicatorId);
-        String sql = "SELECT CAST(s.ndc AS INTEGER) FROM series s " + 
+        String sql = "SELECT CAST(s.ndc AS INTEGER) FROM series s " +
                 "WHERE s.indicator_id = :indicatorId " +
-                "  AND s.ndc IS NOT NULL AND s.ndc != '0' AND s.ndc ~ '^[1-9][0-9]*$' " + 
+                "  AND s.ndc IS NOT NULL AND s.ndc != '0' AND s.ndc ~ '^[1-9][0-9]*$' " + // Ensure ndc is a positive number string
                 "GROUP BY s.ndc " +
-                "ORDER BY COUNT(*) DESC, CAST(s.ndc AS INTEGER) ASC " + 
+                "ORDER BY COUNT(*) DESC, CAST(s.ndc AS INTEGER) ASC " + // Ensure numeric sort for ndc
                 "LIMIT 1";
         Query query = entityManager.createNativeQuery(sql, Integer.class);
         query.setParameter("indicatorId", indicatorId);
@@ -570,10 +589,17 @@ public class PrefixInfoLookupService {
             return false;
         }
         log.debug("Checking if NDC {} is local extended for origin indicator {}", destinationNdc, originIndicatorId);
+        // PHP: $_indicativos_extendida[$indicativolocal_id][] = $row['SERIE_NDC'];
+        // This means it checks if the destinationNdc is one of the NDCs associated with the originIndicatorId.
+        // The original PHP logic was:
+        // $query = 'SELECT distinct(SERIE_NDC) as SERIE_NDC FROM serie WHERE SERIE_INDICATIVO_ID = '.$indicativolocal_id;
+        // $localext = in_array($indicativo, $_indicativos_extendida[$indicativolocal_id]);
+        // where $indicativo is the NDC of the *destination* and $indicativolocal_id is the ID of the *origin* indicator.
+        // So, it checks if the destination's NDC is among the NDCs served by the origin's indicator.
         String sql = "SELECT COUNT(s.id) FROM series s WHERE s.indicator_id = :originIndicatorId AND s.ndc = :destinationNdcStr AND s.active = true";
         Query query = entityManager.createNativeQuery(sql, Long.class);
         query.setParameter("originIndicatorId", originIndicatorId);
-        query.setParameter("destinationNdcStr", String.valueOf(destinationNdc)); 
+        query.setParameter("destinationNdcStr", String.valueOf(destinationNdc));
         try {
             Long count = (Long) query.getSingleResult();
             boolean isExtended = count != null && count > 0;
@@ -587,7 +613,7 @@ public class PrefixInfoLookupService {
 
     public boolean isPrefixUniqueToOperator(String prefixCode, Long telephonyTypeId, Long originCountryId) {
         if (!StringUtils.hasText(prefixCode) || telephonyTypeId == null || originCountryId == null) {
-            return false; 
+            return false; // Or throw IllegalArgumentException if inputs are critical
         }
         log.debug("Checking if prefix {} is unique for type {} in country {}", prefixCode, telephonyTypeId, originCountryId);
         String sql = "SELECT COUNT(DISTINCT p.operator_id) " +
@@ -608,7 +634,7 @@ public class PrefixInfoLookupService {
             return isUnique;
         } catch (Exception e) {
             log.error("Error checking prefix uniqueness for code {}, type {}, country {}: {}", prefixCode, telephonyTypeId, originCountryId, e.getMessage(), e);
-            return false; 
+            return false; // Default to not unique on error
         }
     }
 }
