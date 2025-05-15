@@ -4,7 +4,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Component;
 import org.apache.logging.log4j.util.Strings;
-// import org.springframework.util.StringUtils; // Use one consistent String utility
 
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -19,44 +18,120 @@ import java.util.regex.Pattern;
 @RequiredArgsConstructor
 public class CiscoCm60Parser implements CdrParser {
 
-    // --- Constants ---
     private static final Map<String, String> HEADER_MAPPING = Map.ofEntries(
-            // (Keep the existing HEADER_MAPPING as before)
-            Map.entry("callingpartynumberpartition", "callingPartyNumberPartition"),
-            Map.entry("callingpartynumber", "callingPartyNumber"),
-            Map.entry("finalcalledpartynumberpartition", "finalCalledPartyNumberPartition"),
-            Map.entry("finalcalledpartynumber", "finalCalledPartyNumber"),
-            Map.entry("originalcalledpartynumberpartition", "originalCalledPartyNumberPartition"),
-            Map.entry("originalcalledpartynumber", "originalCalledPartyNumber"),
-            Map.entry("lastredirectdnpartition", "lastRedirectDnPartition"),
-            Map.entry("lastredirectdn", "lastRedirectDn"),
-            Map.entry("destmobiledevicename", "destMobileDeviceName"),
-            Map.entry("finalmobilecalledpartynumber", "finalMobileCalledPartyNumber"),
-            Map.entry("lastredirectredirectreason", "lastRedirectRedirectReason"),
+            Map.entry("cdrrecordtype", "cdrRecordType"),
+            Map.entry("globalcallid_callmanagerid", "globalCallID_callManagerId"),
+            Map.entry("globalcallid_callid", "globalCallID_callId"),
+            Map.entry("origlegcallidentifier", "origLegCallIdentifier"),
             Map.entry("datetimeorigination", "dateTimeOrigination"),
+            Map.entry("origdevicename", "origDeviceName"),
+            Map.entry("orignodename", "origNodeName"),
+            Map.entry("origipaddr", "origIpAddr"),
+            Map.entry("callingpartynumber", "callingPartyNumber"),
+            Map.entry("callingpartynumberpartition", "callingPartyNumberPartition"),
+            Map.entry("callingpartyunicodecodingsystem", "callingPartyUnicodeLoginUserID"), // Mapped for consistency if needed
+            Map.entry("callingpartyunicodeloginuserid", "callingPartyUnicodeLoginUserID"),
+            Map.entry("callingpartyipaddr", "callingPartyIpAddr"),
+            Map.entry("originalcalledpartynumber", "originalCalledPartyNumber"),
+            Map.entry("originalcalledpartynumberpartition", "originalCalledPartyNumberPartition"),
+            Map.entry("finalcalledpartynumber", "finalCalledPartyNumber"),
+            Map.entry("finalcalledpartynumberpartition", "finalCalledPartyNumberPartition"),
+            Map.entry("finalcalledpartyunicodeloginuserid", "finalCalledPartyUnicodeLoginUserID"),
+            Map.entry("destlegidentifier", "destLegIdentifier"),
             Map.entry("datetimeconnect", "dateTimeConnect"),
             Map.entry("datetimedisconnect", "dateTimeDisconnect"),
-            Map.entry("origdevicename", "origDeviceName"),
+            Map.entry("lastredirectdn", "lastRedirectDn"),
+            Map.entry("lastredirectdnpartition", "lastRedirectDnPartition"),
+            Map.entry("lastredirectredirectreason", "lastRedirectRedirectReason"),
             Map.entry("destdevicename", "destDeviceName"),
+            Map.entry("destnodename", "destNodeName"),
+            Map.entry("destipaddr", "destIpAddr"),
+            Map.entry("duration", "duration"),
+            Map.entry("origcalledpartyredirectonbehalfof", "origCalledPartyRedirectOnBehalfOf"),
+            Map.entry("finalcalledpartyredirectonbehalfof", "finalCalledPartyRedirectOnBehalfOf"),
+            Map.entry("destcallterminationonbehalfof", "destCallTerminationOnBehalfOf"),
+            Map.entry("authcodedescription", "authCodeDescription"),
+            Map.entry("authorizationlevel", "authorizationLevel"),
+            Map.entry("clientmattercode", "clientMatterCode"),
+            Map.entry("origconversationid", "origConversationID"),
+            Map.entry("destconversationid", "destConversationID"),
+            Map.entry("joinonbehalfof", "joinOnBehalfOf"),
+            Map.entry("comment", "comment"),
+            Map.entry("origmobileidentity", "origMobileIdentity"),
+            Map.entry("destmobileidentity", "destMobileIdentity"),
+            Map.entry("origdevicemobilityprecedence", "origDeviceMobilityPrecedence"),
+            Map.entry("destdevicemobilityprecedence", "destDeviceMobilityPrecedence"),
+            Map.entry("origmobilecalltype", "origMobileCallType"),
+            Map.entry("destmobilecalltype", "destMobileCallType"),
+            Map.entry("origcalledpartyipaddr", "origCalledPartyIpAddr"),
+            Map.entry("finalcalledpartyipaddr", "finalCalledPartyIpAddr"),
             Map.entry("origvideocap_codec", "origVideoCap_Codec"),
             Map.entry("origvideocap_bandwidth", "origVideoCap_Bandwidth"),
             Map.entry("origvideocap_resolution", "origVideoCap_Resolution"),
+            Map.entry("origvideotransportaddress_ip", "origVideoTransportAddress_IP"),
+            Map.entry("origvideotransportaddress_port", "origVideoTransportAddress_Port"),
+            Map.entry("origvideochannel_payloadtype", "origVideoChannel_PayloadType"),
+            Map.entry("origvideocap_maxframespersecond", "origVideoCap_MaxFramesPerSecond"),
             Map.entry("destvideocap_codec", "destVideoCap_Codec"),
             Map.entry("destvideocap_bandwidth", "destVideoCap_Bandwidth"),
             Map.entry("destvideocap_resolution", "destVideoCap_Resolution"),
-            Map.entry("joinonbehalfof", "joinOnBehalfOf"),
-            Map.entry("destcallterminationonbehalfof", "destCallTerminationOnBehalfOf"),
-            Map.entry("destconversationid", "destConversationId"),
-            Map.entry("globalcallid_callid", "globalCallID_callId"),
-            Map.entry("duration", "duration"),
-            Map.entry("authcodedescription", "authCodeDescription")
+            Map.entry("destvideotransportaddress_ip", "destVideoTransportAddress_IP"),
+            Map.entry("destvideotransportaddress_port", "destVideoTransportAddress_Port"),
+            Map.entry("destvideochannel_payloadtype", "destVideoChannel_PayloadType"),
+            Map.entry("destvideocap_maxframespersecond", "destVideoCap_MaxFramesPerSecond"),
+            Map.entry("outpulsedcallingpartynumber", "outpulsedCallingPartyNumber"),
+            Map.entry("outpulsedcalledpartynumber", "outpulsedCalledPartyNumber"),
+            Map.entry("huntpilotdn", "huntPilotDN"),
+            Map.entry("huntpilotpartition", "huntPilotPartition"),
+            Map.entry("pkid", "pKID"),
+            Map.entry("origcalledpartyredirectreason", "origCalledPartyRedirectReason"),
+            Map.entry("finalcalledpartyredirectreason", "finalCalledPartyRedirectReason"),
+            Map.entry("origprecedencelevel", "origPrecedenceLevel"),
+            Map.entry("destprecedencelevel", "destPrecedenceLevel"),
+            Map.entry("releasemethod", "releaseMethod"),
+            Map.entry("transmitcodec", "transmitCodec"),
+            Map.entry("receivecodec", "receiveCodec"),
+            Map.entry("transmitpackets", "transmitPackets"),
+            Map.entry("transmitbytes", "transmitBytes"),
+            Map.entry("receivepackets", "receivePackets"),
+            Map.entry("receivebytes", "receiveBytes"),
+            Map.entry("origmediacapsignalingprotocol", "origMediaCapSignalingProtocol"),
+            Map.entry("destmediacapsignalingprotocol", "destMediaCapSignalingProtocol"),
+            Map.entry("origvideochannel_role", "origVideoChannel_Role"),
+            Map.entry("destvideochannel_role", "destVideoChannel_Role"),
+            Map.entry("incomingprotocolid", "incomingProtocolID"),
+            Map.entry("outgoingprotocolid", "outgoingProtocolID"),
+            Map.entry("currentroutingreason", "currentRoutingReason"),
+            Map.entry("origroutingreason", "origRoutingReason"),
+            Map.entry("lastredirectroutingreason", "lastRedirectRoutingReason"),
+            Map.entry("callsecuresstatus", "callSecuresStatus"),
+            Map.entry("origdevicemobility", "origDeviceMobility"),
+            Map.entry("destdevicemobility", "destDeviceMobility"),
+            Map.entry("origdeviceipv4addr", "origDeviceIPv4Addr"),
+            Map.entry("destdeviceipv4addr", "destDeviceIPv4Addr"),
+            Map.entry("origdeviceipv6addr", "origDeviceIPv6Addr"),
+            Map.entry("destdeviceipv6addr", "destDeviceIPv6Addr"),
+            Map.entry("origdeviceport", "origDevicePort"),
+            Map.entry("destdeviceport", "destDevicePort"),
+            Map.entry("origdevicemacaddr", "origDeviceMacAddr"),
+            Map.entry("destdevicemacaddr", "destDeviceMacAddr"),
+            Map.entry("origcallsetupcause", "origCallSetupCause"),
+            Map.entry("destcallsetupcause", "destCallSetupCause"),
+            Map.entry("origdtmfmethod", "origDTMFMethod"),
+            Map.entry("destdtmfmethod", "destDTMFMethod"),
+            Map.entry("callidentifier", "callIdentifier"),
+            Map.entry("origspan", "origSpan"),
+            Map.entry("destspan", "destSpan"),
+            Map.entry("origvideotransportaddress_ipv6", "origVideoTransportAddress_IPv6"),
+            Map.entry("destvideotransportaddress_ipv6", "destVideoTransportAddress_IPv6"),
+            Map.entry("finalmobilecalledpartynumberpartition", "finalMobileCalledPartyNumberPartition"),
+            Map.entry("origmobiledevicename", "origMobileDeviceName")
     );
 
     private static final String DELIMITER = ",";
     private static final String HEADER_START_TOKEN = "cdrRecordType";
-    private static final int MIN_EXPECTED_FIELDS = 50;
-    private static final Pattern NUMERIC_PATTERN = Pattern.compile("\\d+");
-    private static final String CONFERENCE_PREFIX = "b";
+    private static final int MIN_EXPECTED_FIELDS = 50; // A reasonable minimum
+    private static final String CONFERENCE_PREFIX = "b"; // As per PHP logic
 
     @Override
     public Optional<StandardizedCallEventDto> parseLine(String line, Map<String, Integer> headerMap, CdrProcessingRequest metadata) {
@@ -64,7 +139,6 @@ public class CiscoCm60Parser implements CdrParser {
             log.trace("Skipping empty, header, or comment line: {}", line);
             return Optional.empty();
         }
-        // Skip data type lines
         String trimmedUpperLine = line.trim().toUpperCase();
         if (trimmedUpperLine.startsWith("INTEGER,") || trimmedUpperLine.startsWith("VARCHAR(")) {
             log.debug("Skipping data type definition line: {}", line.substring(0, Math.min(line.length(), 100)) + "...");
@@ -80,11 +154,9 @@ public class CiscoCm60Parser implements CdrParser {
             return Optional.empty();
         }
 
-        // Calculate hash first from the original line
         String cdrHash = HashUtil.sha256(line);
         if (cdrHash == null) {
             log.error("CRITICAL: Failed to generate hash for line. Skipping.");
-            // Consider quarantining this line with a specific error? For now, just skip.
             return Optional.empty();
         }
 
@@ -94,11 +166,11 @@ public class CiscoCm60Parser implements CdrParser {
         }
 
         try {
-            // --- Extract Raw Fields ---
             String globalCallId = getField(fields, headerMap, "globalcallid_callid");
             LocalDateTime dateTimeOrigination = parseTimestamp(getField(fields, headerMap, "datetimeorigination"));
             LocalDateTime dateTimeConnect = parseTimestamp(getField(fields, headerMap, "datetimeconnect"));
             LocalDateTime dateTimeDisconnect = parseTimestamp(getField(fields, headerMap, "datetimedisconnect"));
+
             String rawCallingPartyNumber = getField(fields, headerMap, "callingpartynumber");
             String rawCallingPartyNumberPartition = getField(fields, headerMap, "callingpartynumberpartition");
             String rawFinalCalledPartyNumber = getField(fields, headerMap, "finalcalledpartynumber");
@@ -106,9 +178,10 @@ public class CiscoCm60Parser implements CdrParser {
             String rawOriginalCalledPartyNumber = getField(fields, headerMap, "originalcalledpartynumber");
             String rawOriginalCalledPartyNumberPartition = getField(fields, headerMap, "originalcalledpartynumberpartition");
             String rawLastRedirectDn = getField(fields, headerMap, "lastredirectdn");
-            String rawLastRedirectDnPartition = getField(fields, headerMap, "lastredirectdnpartition");
-            // String rawDestMobileDeviceName = getField(fields, headerMap, "destmobiledevicename"); // Partitions might be needed later
-            // String rawFinalMobileCalledPartyNumber = getField(fields, headerMap, "finalmobilecalledpartynumber");
+            // String rawLastRedirectDnPartition = getField(fields, headerMap, "lastredirectdnpartition");
+            // String rawDestMobileDeviceName = getField(fields, headerMap, "destmobiledevicename");
+            String rawFinalMobileCalledPartyNumber = getField(fields, headerMap, "finalmobilecalledpartynumber");
+
             int duration = parseInteger(getField(fields, headerMap, "duration"));
             String authCodeDescription = getField(fields, headerMap, "authcodedescription");
             String origDeviceName = getField(fields, headerMap, "origdevicename");
@@ -116,83 +189,130 @@ public class CiscoCm60Parser implements CdrParser {
             int lastRedirectRedirectReason = parseInteger(getField(fields, headerMap, "lastredirectredirectreason"));
             Integer joinOnBehalfOf = parseOptionalInteger(getField(fields, headerMap, "joinonbehalfof"));
             Integer destCallTerminationOnBehalfOf = parseOptionalInteger(getField(fields, headerMap, "destcallterminationonbehalfof"));
-            // Integer destConversationId = parseOptionalInteger(getField(fields, headerMap, "destconversationid"));
+            Integer destConversationId = parseOptionalInteger(getField(fields, headerMap, "destconversationid"));
 
-            // --- Cisco-Specific Interpretation ---
 
-            // 1. Determine effective called number (fallback)
+            // --- Cisco-Specific Interpretation Logic (mirroring PHP's CM_FormatoCDR) ---
+
             String effectiveCalledNumber = Strings.isBlank(rawFinalCalledPartyNumber) ? rawOriginalCalledPartyNumber : rawFinalCalledPartyNumber;
             // String effectiveCalledPartition = Strings.isBlank(rawFinalCalledPartyNumber) ? rawOriginalCalledPartyNumberPartition : rawFinalCalledPartyNumberPartition;
 
-            // 2. Calculate Ring Duration
             int ringDuration = 0;
             if (dateTimeConnect != null && dateTimeOrigination != null && dateTimeConnect.isAfter(dateTimeOrigination)) {
                 ringDuration = (int) java.time.Duration.between(dateTimeOrigination, dateTimeConnect).getSeconds();
             } else if (dateTimeDisconnect != null && dateTimeOrigination != null && dateTimeDisconnect.isAfter(dateTimeOrigination)) {
                 ringDuration = (int) java.time.Duration.between(dateTimeOrigination, dateTimeDisconnect).getSeconds();
-                duration = 0; // Ensure duration is 0 if call never connected
+                duration = 0;
             }
-            ringDuration = Math.max(0, ringDuration); // Ensure non-negative
+            ringDuration = Math.max(0, ringDuration);
 
-            // 3. Determine Basic Incoming Status
             boolean isCallingExtLikely = isLikelyExtensionBasic(rawCallingPartyNumber);
             boolean isIncoming = (Strings.isBlank(rawCallingPartyNumberPartition) && (Strings.isBlank(rawCallingPartyNumber) || !isCallingExtLikely));
 
-            // 4. Conference Check
-            boolean isConference = isConferenceCallIndicator(effectiveCalledNumber) || (joinOnBehalfOf != null && joinOnBehalfOf == 7);
 
-            // 5. Determine Standardized Caller/Called/Redirect based on conference status
+            boolean isConference = isConferenceCallIndicator(effectiveCalledNumber);
+            CallTransferCause transferCause = CallTransferCause.NONE;
+
+            if (isConference) {
+                transferCause = (joinOnBehalfOf != null && joinOnBehalfOf == 7) ? CallTransferCause.CONFERENCE_NOW : CallTransferCause.CONFERENCE;
+            } else if (isConferenceCallIndicator(rawLastRedirectDn)) {
+                // This is the case of a call leg remaining after a conference ends
+                transferCause = CallTransferCause.CONFERENCE_END;
+            } else if (lastRedirectRedirectReason > 0 && lastRedirectRedirectReason <= 16) {
+                 // Standard transfer reasons (1-16 typically)
+                transferCause = CallTransferCause.fromValue(lastRedirectRedirectReason);
+                if (transferCause == CallTransferCause.NONE && lastRedirectRedirectReason > 0) { // If not directly mapped, consider it normal transfer
+                    transferCause = CallTransferCause.NORMAL;
+                }
+            } else if (destCallTerminationOnBehalfOf != null && destCallTerminationOnBehalfOf == 7 && Strings.isNotBlank(rawLastRedirectDn)) {
+                // This specific condition from PHP (finaliza_union == 7) seems to indicate a pre-conference setup
+                transferCause = CallTransferCause.PRE_CONFERENCE_NOW;
+            } else if (Strings.isNotBlank(rawLastRedirectDn) && !rawLastRedirectDn.equals(effectiveCalledNumber)) {
+                // General auto-transfer if redirect DN is present and different
+                transferCause = CallTransferCause.AUTO;
+            }
+
+
             String finalCallingParty = rawCallingPartyNumber;
             String finalCalledParty = effectiveCalledNumber;
             String finalRedirectingParty = rawLastRedirectDn;
 
             if (isConference) {
-                // For conference, the party *initiating* the conference action (often in lastRedirectDn)
-                // becomes the semantic 'caller' for tracking purposes. The original caller becomes the redirect party.
-                if (Strings.isNotBlank(rawLastRedirectDn)) {
-                    finalCallingParty = rawLastRedirectDn;
-                    finalRedirectingParty = rawCallingPartyNumber; // Store original caller here
-                } else {
-                    // If lastRedirectDn is empty in a conference, log warning but keep original caller
-                    log.warn("Conference detected for CDR {} but LastRedirectDn is empty. Semantic caller/redirect might be inaccurate.", globalCallId);
+                if (transferCause == CallTransferCause.CONFERENCE_NOW) {
+                    // For CONFERENCE_NOW, the initiator is in rawLastRedirectDn
+                    if (Strings.isNotBlank(rawLastRedirectDn)) {
+                        finalCallingParty = rawLastRedirectDn;
+                        finalRedirectingParty = rawCallingPartyNumber;
+                    }
+                    // The 'called' party is the conference bridge ID (effectiveCalledNumber)
+                    // And the redirecting party (if any) becomes the 'b' or 'c' prefixed conference ID
+                    if (Strings.isNotBlank(rawLastRedirectDn) && rawLastRedirectDn.toLowerCase().startsWith("c")) {
+                         finalRedirectingParty = rawLastRedirectDn;
+                    } else if (destConversationId != null && destConversationId > 0) {
+                         finalRedirectingParty = "i" + destConversationId;
+                    }
+
+                } else if (transferCause == CallTransferCause.CONFERENCE) {
+                    // Standard conference: original caller becomes redirecting, lastRedirectDn becomes caller
+                    if (Strings.isNotBlank(rawLastRedirectDn) && !isConferenceCallIndicator(rawLastRedirectDn)) {
+                        finalCallingParty = rawLastRedirectDn;
+                        finalRedirectingParty = rawCallingPartyNumber;
+                    } else {
+                        // If lastRedirectDn is also a conference ID or empty, swap original caller/called
+                        finalCallingParty = effectiveCalledNumber; // Conference bridge
+                        finalCalledParty = rawCallingPartyNumber;  // Actual participant
+                        finalRedirectingParty = rawLastRedirectDn; // Could be another conference ID
+                    }
                 }
-                // The 'called' party remains the conference bridge ID ('b...')
-                finalCalledParty = effectiveCalledNumber;
-                isIncoming = false; // Treat conference legs initiated by internal parties as outgoing semantically
+                isIncoming = false; // Conference legs initiated by internal parties are semantically outgoing
+            } else if (transferCause == CallTransferCause.CONFERENCE_END) {
+                 // Post-conference, if ext-redir was a conference ID, it might have been stored in finalRedirectingParty
+                 // The actual parties are now finalCallingParty and finalCalledParty
+                 // No specific swap needed here beyond what standard parsing does, but the cause is set.
             }
 
-            // --- Build Standardized DTO ---
-            StandardizedCallEventDto.StandardizedCallEventDtoBuilder builder = StandardizedCallEventDto.builder();
 
+            // Handle mobile redirection if it provides a more specific final destination
+            if (Strings.isNotBlank(rawFinalMobileCalledPartyNumber) &&
+                !rawFinalMobileCalledPartyNumber.equals(finalCalledParty)) {
+                log.debug("Mobile redirection detected. Original final called: {}, Mobile final called: {}", finalCalledParty, rawFinalMobileCalledPartyNumber);
+                finalCalledParty = rawFinalMobileCalledPartyNumber;
+                // If it's an outgoing call and was previously considered internal, re-evaluate
+                if (!isIncoming && isLikelyExtensionBasic(finalCalledParty)) {
+                    // It's still an extension, internal status might hold
+                } else if (!isIncoming) {
+                    // It's now likely external due to mobile redirect
+                    isIncoming = false; // Ensure it's outgoing
+                }
+                if (transferCause == CallTransferCause.NONE) { // Only set if no other transfer reason
+                    transferCause = CallTransferCause.AUTO; // Mobile redirect is a form of auto-transfer
+                }
+            }
+
+
+            StandardizedCallEventDto.StandardizedCallEventDtoBuilder builder = StandardizedCallEventDto.builder();
             builder.globalCallId(globalCallId);
             builder.originalRawLine(line);
             builder.cdrHash(cdrHash);
             builder.callingPartyNumber(finalCallingParty);
             builder.calledPartyNumber(finalCalledParty);
             builder.authCode(authCodeDescription);
-
             builder.callStartTime(dateTimeOrigination);
             builder.callConnectTime(dateTimeConnect);
             builder.callEndTime(dateTimeDisconnect);
             builder.durationSeconds(duration);
             builder.ringDurationSeconds(ringDuration);
-
             builder.isIncoming(isIncoming);
-            builder.isConference(isConference);
-            // Basic CallTypeHint (can be refined in enrichment)
+            builder.isConference(isConference || transferCause == CallTransferCause.CONFERENCE_NOW || transferCause == CallTransferCause.PRE_CONFERENCE_NOW);
             builder.callTypeHint(isConference ? StandardizedCallEventDto.CallTypeHint.CONFERENCE : StandardizedCallEventDto.CallTypeHint.UNKNOWN);
-
             builder.sourceTrunkIdentifier(origDeviceName);
             builder.destinationTrunkIdentifier(destDeviceName);
             builder.redirectingPartyNumber(finalRedirectingParty);
-            builder.redirectReason(lastRedirectRedirectReason);
+            builder.redirectReason(transferCause.getValue());
             builder.disconnectCause(destCallTerminationOnBehalfOf);
-
-            // Source Metadata
             builder.communicationLocationId(metadata.getCommunicationLocationId());
             builder.fileInfoId(metadata.getFileInfoId());
             builder.sourceDescription(metadata.getSourceDescription());
-
 
             StandardizedCallEventDto dto = builder.build();
             log.trace("Successfully parsed and standardized CDR line into DTO: {}", dto.getGlobalCallId());
@@ -203,9 +323,6 @@ public class CiscoCm60Parser implements CdrParser {
             return Optional.empty();
         }
     }
-
-    // --- Other CdrParser methods (isHeaderLine, parseHeader, etc.) ---
-    // (Keep implementations from previous step)
 
     @Override
     public boolean isHeaderLine(String line) {
@@ -224,7 +341,7 @@ public class CiscoCm60Parser implements CdrParser {
         return false;
     }
 
-     @Override
+    @Override
     public Map<String, Integer> parseHeader(String headerLine) {
         Map<String, Integer> headerMap = new HashMap<>();
         if (headerLine == null || !isHeaderLine(headerLine)) {
@@ -244,32 +361,35 @@ public class CiscoCm60Parser implements CdrParser {
     }
 
     private String findStandardKey(String cleanedHeader) {
-        for (Map.Entry<String, String> entry : HEADER_MAPPING.entrySet()) {
-            if (entry.getKey().equals(cleanedHeader)) {
-                return entry.getValue().toLowerCase();
-            }
+        // Check direct mapping first
+        if (HEADER_MAPPING.containsKey(cleanedHeader)) {
+            return HEADER_MAPPING.get(cleanedHeader).toLowerCase();
         }
+        // Fallback for keys that might not be in HEADER_MAPPING but are used by getField
+        // This ensures that even if a header isn't in HEADER_MAPPING, if getField uses its lowercase version, it can be found.
+        // However, the primary lookup should be through HEADER_MAPPING.
+        // If a header is consistently used but not in HEADER_MAPPING, it should be added there.
         log.trace("No explicit mapping found for header '{}', using it directly (lowercase).", cleanedHeader);
         return cleanedHeader;
     }
+
 
     @Override
     public int getExpectedMinFields() {
         return MIN_EXPECTED_FIELDS;
     }
 
-     @Override
+    @Override
     public String getDelimiter() {
         return DELIMITER;
     }
 
-    // --- Helper Methods ---
-
     private String getField(String[] fields, Map<String, Integer> headerMap, String standardFieldName) {
+        // standardFieldName is already lowercase if it came from HEADER_MAPPING values
         Integer index = headerMap.get(standardFieldName.toLowerCase());
         if (index != null && index >= 0 && index < fields.length) {
             String value = fields[index];
-             return value != null ? value : "";
+            return value != null ? value : "";
         }
         log.trace("Header key '{}' not found in header map or index out of bounds.", standardFieldName);
         return "";
@@ -281,7 +401,7 @@ public class CiscoCm60Parser implements CdrParser {
         }
         try {
             long epochSeconds = Long.parseLong(timestampStr);
-            if (epochSeconds == 0) return null;
+            if (epochSeconds == 0) return null; // Explicitly handle 0 as null after successful parse
             return LocalDateTime.ofInstant(Instant.ofEpochSecond(epochSeconds), ZoneOffset.UTC);
         } catch (NumberFormatException e) {
             log.warn("Could not parse timestamp: '{}'. Returning null.", timestampStr);
@@ -297,7 +417,7 @@ public class CiscoCm60Parser implements CdrParser {
            return 0;
         }
         try {
-            if (!intStr.matches("-?\\d+")) {
+            if (!intStr.matches("-?\\d+")) { // Allow negative numbers if they can occur
                  log.warn("Non-numeric value encountered where integer expected: '{}'. Returning 0.", intStr);
                  return 0;
             }
@@ -307,8 +427,9 @@ public class CiscoCm60Parser implements CdrParser {
             return 0;
         }
     }
-     private Integer parseOptionalInteger(String intStr) {
-        if (Strings.isBlank(intStr) || "0".equals(intStr)) {
+
+    private Integer parseOptionalInteger(String intStr) {
+        if (Strings.isBlank(intStr) || "0".equals(intStr)) { // Treat "0" as null for optional integers if that's the domain logic
            return null;
         }
         try {
@@ -326,19 +447,24 @@ public class CiscoCm60Parser implements CdrParser {
     private String cleanCsvField(String field) {
         if (field == null) return "";
         String cleaned = field.trim();
+        // Remove surrounding quotes if present
         if (cleaned.startsWith("\"") && cleaned.endsWith("\"") && cleaned.length() >= 2) {
             cleaned = cleaned.substring(1, cleaned.length() - 1);
+            // Replace escaped double quotes "" with a single double quote "
             cleaned = cleaned.replace("\"\"", "\"");
         }
         return cleaned;
     }
 
-     private boolean isLikelyExtensionBasic(String number) {
+    private boolean isLikelyExtensionBasic(String number) {
         if (Strings.isBlank(number)) return false;
         String effectiveNumber = number.startsWith("+") ? number.substring(1) : number;
-        if (!effectiveNumber.matches("[\\d#*]+")) return false;
+        if (!effectiveNumber.matches("[\\d#*]+")) return false; // Allow digits, #, *
+
+        // Using constants from CdrProcessingConfig for default lengths
         int minExtLength = CdrProcessingConfig.DEFAULT_MIN_EXT_LENGTH;
         int maxExtLength = CdrProcessingConfig.DEFAULT_MAX_EXT_LENGTH;
+
         int numLength = effectiveNumber.length();
         return (numLength >= minExtLength && numLength <= maxExtLength);
     }

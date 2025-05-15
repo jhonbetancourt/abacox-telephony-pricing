@@ -17,9 +17,9 @@ import lombok.NoArgsConstructor;
 public class SeriesDto extends ActivableDto {
     private Long id;
     private Long indicatorId;
-    private Integer ndc;
-    private Integer initialNumber;
-    private Integer finalNumber;
+    private String ndc;
+    private String initialNumber;
+    private String finalNumber;
     private String company;
     private IndicatorDto indicator;
 }
