@@ -1,3 +1,4 @@
+// FILE: com/infomedia/abacox/telephonypricing/cdr/CdrProcessingConfig.java
 package com.infomedia.abacox.telephonypricing.cdr;
 
 import com.infomedia.abacox.telephonypricing.entity.Operator;
@@ -43,16 +44,13 @@ public class CdrProcessingConfig {
     public static final int MAX_POSSIBLE_EXTENSION_VALUE = 9999999; // Max value for a 7-digit extension
 
     public static final Long COLOMBIA_ORIGIN_COUNTRY_ID = 1L;
-    // This ID (7000012L) is from the PHP code's SQL query for national number processing.
-    // It likely refers to a specific Prefix record used as a reference for national calls.
-    // Ideally, this would be looked up dynamically or configured more abstractly.
     public static final Long NATIONAL_REFERENCE_PREFIX_ID = 7000012L;
 
 
     private static Set<Long> internalTelephonyTypeIds;
     private static Long defaultInternalCallTypeId;
     private static Set<String> ignoredAuthCodes;
-    private static int minCallDurationForBilling = 0; // Default: bill even 0-second calls if rate applies
+    private static int minCallDurationForBilling = 0;
 
     private final ConfigurationLookupService configurationLookupService;
     private final EntityLookupService entityLookupService;
@@ -80,27 +78,28 @@ public class CdrProcessingConfig {
         defaultInternalCallTypeId = TIPOTELE_INTERNA_IP;
         ignoredAuthCodes = Set.of("Invalid Authorization Code", "Invalid Authorization Level");
 
-        // Initialize company to national operator prefix mapping (from PHP's _esNacional)
         COMPANY_TO_NATIONAL_OPERATOR_PREFIX_MAP = new HashMap<>();
-        COMPANY_TO_NATIONAL_OPERATOR_PREFIX_MAP.put("TELMEX TELECOMUNICACIONES S.A. ESP", "0456"); // CLARO HOGAR FIJO
-        COMPANY_TO_NATIONAL_OPERATOR_PREFIX_MAP.put("COLOMBIA TELECOMUNICACIONES S.A. ESP", "09");   // Movistar Fijo
-        COMPANY_TO_NATIONAL_OPERATOR_PREFIX_MAP.put("UNE EPM TELECOMUNICACIONES S.A. E.S.P. - UNE EPM TELCO S.A.", "05"); // UNE/Tigo Fijo
-        COMPANY_TO_NATIONAL_OPERATOR_PREFIX_MAP.put("EMPRESA DE TELECOMUNICACIONES DE BOGOTÁ S.A. ESP.", "07"); // ETB Fijo
-        // Add more mappings if necessary
+        COMPANY_TO_NATIONAL_OPERATOR_PREFIX_MAP.put("TELMEX TELECOMUNICACIONES S.A. ESP", "0456");
+        COMPANY_TO_NATIONAL_OPERATOR_PREFIX_MAP.put("COLOMBIA TELECOMUNICACIONES S.A. ESP", "09");
+        COMPANY_TO_NATIONAL_OPERATOR_PREFIX_MAP.put("UNE EPM TELECOMUNICACIONES S.A. E.S.P. - UNE EPM TELCO S.A.", "05");
+        COMPANY_TO_NATIONAL_OPERATOR_PREFIX_MAP.put("EMPRESA DE TELECOMUNICACIONES DE BOGOTÁ S.A. ESP.", "07");
     }
 
     public String mapCompanyToNationalOperatorPrefix(String companyName) {
         if (companyName == null || companyName.trim().isEmpty()) {
             return "";
         }
-        // Normalize company name slightly for matching (e.g. uppercase, remove common suffixes if needed)
-        // For now, direct match on known keys
+        // PHP's `==` is case-sensitive and exact.
         for (Map.Entry<String, String> entry : COMPANY_TO_NATIONAL_OPERATOR_PREFIX_MAP.entrySet()) {
-            if (companyName.toUpperCase().contains(entry.getKey().toUpperCase())) {
+            // Using equalsIgnoreCase for a bit more flexibility if DB data has case variations,
+            // but PHP was exact. If exact case-sensitive match is needed, use .equals()
+            if (companyName.equalsIgnoreCase(entry.getKey())) {
                 return entry.getValue();
             }
         }
-        return ""; // No mapping found
+        // If no exact match, PHP's logic didn't have a fallback for partial matches here.
+        // The previous `contains` was more lenient. Sticking to closer PHP logic with `equalsIgnoreCase`.
+        return "";
     }
 
     public List<String> getPbxPrefixes(Long communicationLocationId) {
