@@ -28,7 +28,6 @@ public class PrefixInfoLookupService {
     @PersistenceContext
     private final EntityManager entityManager;
     private final CdrProcessingConfig configService;
-    private final CdrEnrichmentHelper cdrEnrichmentHelper;
 
     /**
      * Pads the string on the left if it's shorter than the target length.
