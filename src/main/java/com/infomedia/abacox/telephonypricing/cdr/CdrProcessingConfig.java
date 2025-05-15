@@ -1,4 +1,3 @@
-// FILE: com/infomedia/abacox/telephonypricing/cdr/CdrProcessingConfig.java
 package com.infomedia.abacox.telephonypricing.cdr;
 
 import com.infomedia.abacox.telephonypricing.entity.Operator;
@@ -52,6 +51,10 @@ public class CdrProcessingConfig {
     private static Set<String> ignoredAuthCodes;
     private static int minCallDurationForBilling = 0;
 
+    // New: Order for incoming call classification
+    private static List<Long> incomingTelephonyTypeClassificationOrder;
+
+
     private final ConfigurationLookupService configurationLookupService;
     private final EntityLookupService entityLookupService;
     private final ExtensionLookupService extensionLookupService;
@@ -78,6 +81,22 @@ public class CdrProcessingConfig {
         defaultInternalCallTypeId = TIPOTELE_INTERNA_IP;
         ignoredAuthCodes = Set.of("Invalid Authorization Code", "Invalid Authorization Level");
 
+        // Order based on typical specificity and PHP's implicit ordering by min/max lengths
+        // This order might need tuning based on specific country numbering plans if this becomes generic.
+        // PHP's $_lista_Prefijos['in']['orden'] was sorted by (min_length_after_prefix_strip) DESC.
+        // For incoming, we don't strip operator prefixes, so it's more about the nature of the number.
+        incomingTelephonyTypeClassificationOrder = List.of(
+                TIPOTELE_INTERNACIONAL, // Longest, most distinct
+                TIPOTELE_SATELITAL,     // Also distinct
+                TIPOTELE_CELULAR,       // Common distinct patterns
+                TIPOTELE_NACIONAL,      // Usually includes area code
+                TIPOTELE_LOCAL_EXT,     // Specific local variation
+                TIPOTELE_LOCAL          // Most general for fixed lines
+                // TIPOTELE_CELUFIJO is less common for *incoming* origin classification directly,
+                // often it's an outgoing prefix or a special destination type.
+        );
+
+
         COMPANY_TO_NATIONAL_OPERATOR_PREFIX_MAP = new HashMap<>();
         COMPANY_TO_NATIONAL_OPERATOR_PREFIX_MAP.put("TELMEX TELECOMUNICACIONES S.A. ESP", "0456");
         COMPANY_TO_NATIONAL_OPERATOR_PREFIX_MAP.put("COLOMBIA TELECOMUNICACIONES S.A. ESP", "09");
@@ -89,16 +108,11 @@ public class CdrProcessingConfig {
         if (companyName == null || companyName.trim().isEmpty()) {
             return "";
         }
-        // PHP's `==` is case-sensitive and exact.
         for (Map.Entry<String, String> entry : COMPANY_TO_NATIONAL_OPERATOR_PREFIX_MAP.entrySet()) {
-            // Using equalsIgnoreCase for a bit more flexibility if DB data has case variations,
-            // but PHP was exact. If exact case-sensitive match is needed, use .equals()
             if (companyName.equalsIgnoreCase(entry.getKey())) {
                 return entry.getValue();
             }
         }
-        // If no exact match, PHP's logic didn't have a fallback for partial matches here.
-        // The previous `contains` was more lenient. Sticking to closer PHP logic with `equalsIgnoreCase`.
         return "";
     }
 
@@ -180,5 +194,9 @@ public class CdrProcessingConfig {
 
     public int getMinCallDurationForBilling() {
         return minCallDurationForBilling;
+    }
+
+    public List<Long> getIncomingTelephonyTypeClassificationOrder() {
+        return incomingTelephonyTypeClassificationOrder;
     }
 }

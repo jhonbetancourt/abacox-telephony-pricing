@@ -1,4 +1,3 @@
-// FILE: com/infomedia/abacox/telephonypricing/cdr/CdrEnrichmentService.java
 package com.infomedia.abacox.telephonypricing.cdr;
 
 import com.infomedia.abacox.telephonypricing.entity.*;
@@ -8,7 +7,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
-import java.util.*;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -30,6 +34,13 @@ public class CdrEnrichmentService {
     private final CdrProcessingConfig configService;
 
     private static final String ASSUMED_SUFFIX = " (Assumed)";
+
+    // Helper class for classifyIncomingCallOrigin result
+    private static class IncomingOriginResult {
+        Long telephonyTypeId;
+        Long operatorId;
+        Long indicatorId; // This is the indicator of the *calling party's origin*
+    }
 
 
     public Optional<CallRecord> enrichCdr(StandardizedCallEventDto standardDto, CommunicationLocation commLocation) {
@@ -249,32 +260,26 @@ public class CdrEnrichmentService {
         }
 
         if (originCountryId != null && commIndicatorId != null) {
-            // For incoming calls, isTrunkCall is false, allowedTelephonyTypeIdsForTrunk is null.
-            // The forcedTelephonyType from preprocessing is passed.
-            List<Map<String, Object>> prefixes = prefixInfoLookupService.findMatchingPrefixes(
-                    preprocessedNumber, originCountryId, false, null, forcedTelephonyType.getValue(), commLocation
+            Optional<IncomingOriginResult> originResultOpt = classifyIncomingCallOrigin(
+                    preprocessedNumber, originCountryId, commIndicatorId
             );
 
-            Optional<Map<String, Object>> bestPrefix = prefixes.stream().findFirst();
+            if (originResultOpt.isPresent()) {
+                IncomingOriginResult originResult = originResultOpt.get();
+                callBuilder.telephonyTypeId(originResult.telephonyTypeId);
+                callBuilder.operatorId(originResult.operatorId);
+                // For an incoming call, the 'indicatorId' on the CallRecord should be the
+                // indicator of the *calling party's origin*, not the commLocation's indicator.
+                // The commLocation's indicator is already known via commLocationId.
+                callBuilder.indicatorId(originResult.indicatorId);
 
-            if (bestPrefix.isPresent()) {
-                Map<String, Object> prefixInfo = bestPrefix.get();
-                Long telephonyTypeId = (Long) prefixInfo.get("telephony_type_id");
-                Long operatorId = (Long) prefixInfo.get("operator_id");
-
-                callBuilder.telephonyTypeId(telephonyTypeId);
-                callBuilder.operatorId(operatorId);
-                callBuilder.indicatorId(commIndicatorId);
-
-                log.debug("Incoming call origin classified as Type ID: {}, Operator ID: {}. Destination Indicator (CommLocation): {}",
-                        telephonyTypeId, operatorId, commIndicatorId);
-
+                log.debug("Incoming call origin classified as Type ID: {}, Operator ID: {}. Originating Indicator ID: {}",
+                        originResult.telephonyTypeId, originResult.operatorId, originResult.indicatorId);
             } else {
-                log.warn("Could not classify incoming call origin for {}, assuming LOCAL", preprocessedNumber);
-                callBuilder.telephonyTypeId(CdrProcessingConfig.TIPOTELE_LOCAL);
-                callBuilder.indicatorId(commIndicatorId);
-                configService.getOperatorInternal(CdrProcessingConfig.TIPOTELE_LOCAL, originCountryId)
-                        .ifPresent(op -> callBuilder.operatorId(op.getId()));
+                // This case should ideally be handled by classifyIncomingCallOrigin's default.
+                log.error("CRITICAL: classifyIncomingCallOrigin returned empty for {}, which should not happen.", preprocessedNumber);
+                callBuilder.telephonyTypeId(CdrProcessingConfig.TIPOTELE_ERRORES);
+                callBuilder.indicatorId(null);
             }
         } else {
             log.warn("Missing Origin Country or Indicator for CommunicationLocation {}, cannot classify incoming call origin.", commLocation.getId());
@@ -282,10 +287,92 @@ public class CdrEnrichmentService {
             callBuilder.indicatorId(null);
         }
 
+        // Incoming calls typically have zero cost from the perspective of the CDR generating system.
         callBuilder.billedAmount(BigDecimal.ZERO);
         callBuilder.pricePerMinute(BigDecimal.ZERO);
         callBuilder.initialPrice(BigDecimal.ZERO);
     }
+
+    /**
+     * Classifies the origin of an incoming call based on the calling number.
+     * This method attempts to determine the TelephonyType, Operator, and Indicator
+     * of the party that initiated the incoming call.
+     *
+     * @param processedNumber             The (potentially preprocessed) calling party number.
+     * @param commLocationOriginCountryId The origin country ID of the system/PBX receiving the call.
+     * @param commLocationIndicatorId     The indicator ID of the system/PBX receiving the call.
+     * @return An Optional containing an IncomingOriginResult if classification is successful.
+     */
+    private Optional<IncomingOriginResult> classifyIncomingCallOrigin(
+            String processedNumber,
+            Long commLocationOriginCountryId,
+            Long commLocationIndicatorId
+    ) {
+        log.debug("Classifying incoming call origin for number: {}, commLocCountry: {}, commLocInd: {}",
+                processedNumber, commLocationOriginCountryId, commLocationIndicatorId);
+
+        List<Long> incomingTypeOrder = configService.getIncomingTelephonyTypeClassificationOrder();
+
+        for (Long currentTelephonyTypeId : incomingTypeOrder) {
+            String numberToLookup = processedNumber;
+            Long typeForLookup = currentTelephonyTypeId;
+
+            // PHP: if (_esLocal($tipotele_id)) { $tipotele_id = _TIPOTELE_NACIONAL; $telefono = $indicativo_origen.$telefono; }
+            if (currentTelephonyTypeId.equals(CdrProcessingConfig.TIPOTELE_LOCAL)) {
+                Optional<Integer> localNdcOpt = prefixInfoLookupService.findLocalNdcForIndicator(commLocationIndicatorId);
+                if (localNdcOpt.isPresent()) {
+                    numberToLookup = localNdcOpt.get() + processedNumber;
+                    typeForLookup = CdrProcessingConfig.TIPOTELE_NACIONAL; // Lookup as national
+                    log.trace("For incoming LOCAL check, prepended commLocation NDC: {} -> {}. Lookup type: {}",
+                            processedNumber, numberToLookup, typeForLookup);
+                } else {
+                    log.warn("Could not find local NDC for commLocationIndicatorId {} to prepend for LOCAL type check of incoming number {}",
+                            commLocationIndicatorId, processedNumber);
+                    // Continue with original number and type, or skip? PHP proceeds.
+                }
+            }
+
+            // Call findIndicatorByNumber. For incoming, isPrefixBandOk = false, currentPrefixId = null.
+            // originCommLocationIndicatorId is the system's indicator, used for context (e.g., Local Extended).
+            Optional<Map<String, Object>> indicatorInfoOpt = prefixInfoLookupService.findIndicatorByNumber(
+                    numberToLookup,
+                    typeForLookup,
+                    commLocationOriginCountryId,
+                    false, // isPrefixBandOk
+                    null,  // currentPrefixId
+                    commLocationIndicatorId
+            );
+
+            if (indicatorInfoOpt.isPresent()) {
+                Map<String, Object> indicatorInfo = indicatorInfoOpt.get();
+                IncomingOriginResult result = new IncomingOriginResult();
+                result.indicatorId = (Long) indicatorInfo.get("indicator_id");
+                result.operatorId = indicatorInfo.get("indicator_operator_id") != null ? ((Number)indicatorInfo.get("indicator_operator_id")).longValue() : 0L;
+                result.telephonyTypeId = currentTelephonyTypeId; // Use the original type we were checking for
+
+                // If we looked up as NATIONAL because it was originally LOCAL, check for Local Extended
+                if (currentTelephonyTypeId.equals(CdrProcessingConfig.TIPOTELE_LOCAL)) {
+                    Integer ndcOfFoundIndicator = indicatorInfo.get("series_ndc") != null ? Integer.parseInt(String.valueOf(indicatorInfo.get("series_ndc"))) : null;
+                    if (prefixInfoLookupService.isLocalExtended(ndcOfFoundIndicator, commLocationIndicatorId)) {
+                        result.telephonyTypeId = CdrProcessingConfig.TIPOTELE_LOCAL_EXT;
+                    }
+                }
+                log.info("Incoming call origin classified: Number '{}' (lookup as '{}') -> Type={}, Op={}, OriginInd={}",
+                        processedNumber, numberToLookup, result.telephonyTypeId, result.operatorId, result.indicatorId);
+                return Optional.of(result);
+            }
+        }
+
+        // PHP Default: If no match, it often defaults to TIPOTELE_LOCAL for incoming.
+        log.warn("Could not classify incoming call origin for '{}'. Defaulting to LOCAL type, using commLocation's indicator as origin.", processedNumber);
+        IncomingOriginResult defaultResult = new IncomingOriginResult();
+        defaultResult.telephonyTypeId = CdrProcessingConfig.TIPOTELE_LOCAL;
+        defaultResult.indicatorId = commLocationIndicatorId; // The origin is considered the same as the PBX's location
+        configService.getOperatorInternal(CdrProcessingConfig.TIPOTELE_LOCAL, commLocationOriginCountryId)
+                .ifPresent(op -> defaultResult.operatorId = op.getId());
+        return Optional.of(defaultResult);
+    }
+
 
     private void processInternalCall(StandardizedCallEventDto standardDto, CommunicationLocation commLocation, CallRecord.CallRecordBuilder callBuilder, String destinationExtension, CdrProcessingConfig.ExtensionLengthConfig extConfig) {
         String sourceExtension = standardDto.getCallingPartyNumber();
