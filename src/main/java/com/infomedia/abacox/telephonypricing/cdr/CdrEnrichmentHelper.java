@@ -1,3 +1,4 @@
+// FILE: com/infomedia/abacox/telephonypricing/cdr/CdrEnrichmentHelper.java
 package com.infomedia.abacox.telephonypricing.cdr;
 
 import com.infomedia.abacox.telephonypricing.entity.*;
@@ -6,7 +7,6 @@ import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
-import java.math.BigDecimal;
 import java.util.Map;
 import java.util.Optional;
 
@@ -34,12 +34,9 @@ public class CdrEnrichmentHelper {
         if (!StringUtils.hasText(number)) return false;
         if (extConfig == null) {
             log.info("isLikelyExtension called with null extConfig for number '{}'. Falling back to basic numeric check.", number);
-            // Fallback to a very basic check if config is missing, though this shouldn't happen.
-            return number.matches("\\d{2,7}"); // Example basic fallback
+            return number.matches("\\d{2,7}");
         }
 
-
-        // Check against special syntax extensions first
         if (extConfig.getSpecialSyntaxExtensions().contains(number)) {
             log.info("isLikelyExtension: '{}' matched a special syntax extension.", number);
             return true;
@@ -51,38 +48,39 @@ public class CdrEnrichmentHelper {
             log.info("isLikelyExtension: '{}' is not purely numeric and not in special syntax list.", number);
             return false;
         }
-
-        try {
-            // Ensure the number itself (as a value) is within the derived min/max numeric values
-            // This handles cases like min length 3 (value 100) and max length 4 (value 9999).
-            // A number like "50" would be rejected if min length is 3.
-            // A number like "12345" would be rejected if max length is 4.
-            if (effectiveNumber.length() < String.valueOf(extConfig.getMinNumericValue()).length() && extConfig.getMinNumericValue() != 0) {
-                 // Special case for minNumericValue = 0 (e.g. for single digit '0' extension)
-                if (extConfig.getMinNumericValue() == 0 && effectiveNumber.equals("0")) {
-                    // Allow '0' if minNumericValue is 0
-                } else {
-                    log.info("isLikelyExtension: '{}' (length {}) is shorter than min expected numeric value's length (derived from min length).", number, effectiveNumber.length());
-                    return false;
-                }
-            }
-            if (effectiveNumber.length() > String.valueOf(extConfig.getMaxNumericValue()).length()) {
-                 log.info("isLikelyExtension: '{}' (length {}) is longer than max expected numeric value's length (derived from max length).", number, effectiveNumber.length());
-                return false;
-            }
-
-            long numValue = Long.parseLong(effectiveNumber);
-            boolean inRange = (numValue >= extConfig.getMinNumericValue() && numValue <= extConfig.getMaxNumericValue());
-
-            if (inRange) {
-                log.info("isLikelyExtension: '{}' (value {}) is within numeric range ({}-{}).", number, numValue, extConfig.getMinNumericValue(), extConfig.getMaxNumericValue());
-            } else {
-                log.info("isLikelyExtension: '{}' (value {}) is outside numeric range ({}-{}).", number, numValue, extConfig.getMinNumericValue(), extConfig.getMaxNumericValue());
-            }
-            return inRange;
-        } catch (NumberFormatException e) {
-            log.info("isLikelyExtension: '{}' (effective '{}') failed numeric parse despite regex match.", number, effectiveNumber);
+        
+        // Check actual length against configured min/max actual lengths
+        int numLength = effectiveNumber.length();
+        if (numLength < extConfig.getMinActualLength() || numLength > extConfig.getMaxActualLength()) {
+            log.info("isLikelyExtension: '{}' (length {}) is outside actual length range ({}-{}).",
+                    number, numLength, extConfig.getMinActualLength(), extConfig.getMaxActualLength());
             return false;
+        }
+
+        // Additionally, check numeric value if lengths are within typical numeric ranges
+        // This helps filter out very large numbers that happen to match length criteria
+        // but are not valid extensions (e.g. if maxActualLength allows up to 7 digits,
+        // but maxNumericValue is 9999, a 7-digit number like "1000000" would be out of numeric range)
+        // However, the primary check should be length based on PHP's $_LIM_INTERNAS behavior.
+        // The numeric value check is more of a sanity check for values within the length constraints.
+        try {
+            long numValue = Long.parseLong(effectiveNumber);
+            boolean inNumericValueRange = (numValue >= extConfig.getMinNumericValue() && numValue <= extConfig.getMaxNumericValue());
+
+            if (inNumericValueRange) {
+                 log.info("isLikelyExtension: '{}' (length {}, value {}) is within actual length range ({}-{}) and numeric value range ({}-{}).",
+                        number, numLength, numValue, extConfig.getMinActualLength(), extConfig.getMaxActualLength(), extConfig.getMinNumericValue(), extConfig.getMaxNumericValue());
+            } else {
+                 log.info("isLikelyExtension: '{}' (length {}, value {}) is within actual length range ({}-{}) but OUTSIDE numeric value range ({}-{}).",
+                        number, numLength, numValue, extConfig.getMinActualLength(), extConfig.getMaxActualLength(), extConfig.getMinNumericValue(), extConfig.getMaxNumericValue());
+                 // If it's within length but outside numeric value, it might still be an extension if it's not a special syntax one.
+                 // PHP's $_LIM_INTERNAS['min'] and ['max'] were numeric values derived from lengths.
+                 // The key is that it must be within the length boundaries derived from DB.
+            }
+            return true; // If it passed length check and is numeric, consider it. Numeric value range is secondary.
+        } catch (NumberFormatException e) {
+            log.info("isLikelyExtension: '{}' (effective '{}') failed numeric parse despite regex match and length check.", number, effectiveNumber);
+            return false; // Should not happen if it passed matches("\\d+")
         }
     }
 

@@ -51,10 +51,11 @@ public class CdrProcessingConfig {
 
     public static final int DEFAULT_MIN_EXT_LENGTH_FALLBACK = 2;
     public static final int DEFAULT_MAX_EXT_LENGTH_FALLBACK = 7;
-    public static final int MAX_POSSIBLE_EXTENSION_VALUE = 9999999;
+    public static final int MAX_POSSIBLE_EXTENSION_VALUE = 9999999; // Max value for a 7-digit extension
 
     public static final Long COLOMBIA_ORIGIN_COUNTRY_ID = 1L;
     public static final Long NATIONAL_REFERENCE_PREFIX_ID = 7000012L; // Example, should be configurable or derived
+    public static final String COLOMBIAN_MOBILE_INTERNAL_PREFIX = "03";
 
 
     private static Set<Long> internalTelephonyTypeIds;
@@ -70,11 +71,16 @@ public class CdrProcessingConfig {
         private final int minNumericValue;
         private final int maxNumericValue;
         private final Set<String> specialSyntaxExtensions;
+        private final int minActualLength; // Store actual min length for direct comparison
+        private final int maxActualLength; // Store actual max length for direct comparison
 
-        public ExtensionLengthConfig(int minNumericValue, int maxNumericValue, Set<String> specialSyntaxExtensions) {
+
+        public ExtensionLengthConfig(int minNumericValue, int maxNumericValue, Set<String> specialSyntaxExtensions, int minActualLength, int maxActualLength) {
             this.minNumericValue = minNumericValue;
             this.maxNumericValue = maxNumericValue;
             this.specialSyntaxExtensions = specialSyntaxExtensions != null ? Collections.unmodifiableSet(new HashSet<>(specialSyntaxExtensions)) : Collections.emptySet();
+            this.minActualLength = minActualLength;
+            this.maxActualLength = maxActualLength;
         }
     }
 
@@ -161,13 +167,16 @@ public class CdrProcessingConfig {
 
     private int deriveNumericValueFromLength(int length, boolean isMin) {
         if (length <= 0) return 0;
+        // Max length of 7 for MAX_POSSIBLE_EXTENSION_VALUE (9,999,999)
+        // Max length of 9 for general numbers (999,999,999)
         int safeLength = Math.min(length, 9);
 
         if (isMin) {
-            if (safeLength == 1) return 0;
+            if (safeLength == 1) return 0; // For single digit '0'
             return (int) Math.pow(10, safeLength - 1);
         } else {
-            return (int) (Math.pow(10, safeLength) - 1);
+            // For max, it's (10^length) - 1
+            return (int) (Math.pow(10, safeLength) -1);
         }
     }
 
@@ -175,39 +184,38 @@ public class CdrProcessingConfig {
         log.info("Fetching extension length config for commLocationId: {}", commLocationId);
         Map<String, Integer> dbLengths = extensionLookupService.findExtensionMinMaxLength(commLocationId);
 
-        int minDbLength = dbLengths.getOrDefault("min", 0);
-        int maxDbLength = dbLengths.getOrDefault("max", 0);
+        int minActualLength = dbLengths.getOrDefault("min", DEFAULT_MIN_EXT_LENGTH_FALLBACK);
+        int maxActualLength = dbLengths.getOrDefault("max", DEFAULT_MAX_EXT_LENGTH_FALLBACK);
 
-        int finalMinNumeric, finalMaxNumeric;
-
-        if (minDbLength > 0) {
-            finalMinNumeric = deriveNumericValueFromLength(minDbLength, true);
-        } else {
-            finalMinNumeric = deriveNumericValueFromLength(DEFAULT_MIN_EXT_LENGTH_FALLBACK, true);
+        if (minActualLength == 0 && maxActualLength == 0) { // No lengths found, use defaults
+            minActualLength = DEFAULT_MIN_EXT_LENGTH_FALLBACK;
+            maxActualLength = DEFAULT_MAX_EXT_LENGTH_FALLBACK;
+        } else if (minActualLength == 0) { // Min not found, use max if valid, else default
+            minActualLength = maxActualLength > 0 ? maxActualLength : DEFAULT_MIN_EXT_LENGTH_FALLBACK;
+        } else if (maxActualLength == 0) { // Max not found, use min if valid, else default
+            maxActualLength = minActualLength > 0 ? minActualLength : DEFAULT_MAX_EXT_LENGTH_FALLBACK;
+        }
+        
+        if (minActualLength > maxActualLength) {
+             minActualLength = maxActualLength;
         }
 
-        if (maxDbLength > 0) {
-            finalMaxNumeric = deriveNumericValueFromLength(maxDbLength, false);
-        } else {
-            finalMaxNumeric = deriveNumericValueFromLength(DEFAULT_MAX_EXT_LENGTH_FALLBACK, false);
-        }
 
-        if (finalMinNumeric > finalMaxNumeric && finalMaxNumeric > 0) {
-             log.info("Derived min numeric value {} is greater than max {}. Setting min to max.", finalMinNumeric, finalMaxNumeric);
-             finalMinNumeric = finalMaxNumeric;
-        } else if (finalMinNumeric > finalMaxNumeric && finalMaxNumeric == 0) {
-            // Valid state for single digit '0' extension if minDbLength was 1 and maxDbLength was 0 or 1.
-        }
+        int finalMinNumeric = deriveNumericValueFromLength(minActualLength, true);
+        int finalMaxNumeric = deriveNumericValueFromLength(maxActualLength, false);
         
         finalMaxNumeric = Math.min(finalMaxNumeric, MAX_POSSIBLE_EXTENSION_VALUE);
         finalMinNumeric = Math.min(finalMinNumeric, finalMaxNumeric);
+        if (finalMinNumeric == 0 && minActualLength > 1) { // e.g. min length 2 should be min val 10, not 0
+            finalMinNumeric = deriveNumericValueFromLength(minActualLength, true);
+        }
 
 
-        Set<String> specialSyntaxExtensions = getSpecialSyntaxExtensions(commLocationId, COLOMBIA_ORIGIN_COUNTRY_ID); // Assuming Colombia for now
+        Set<String> specialSyntaxExtensions = getSpecialSyntaxExtensions(commLocationId, COLOMBIA_ORIGIN_COUNTRY_ID);
 
-        log.info("Extension config for commLocationId {}: minVal={}, maxVal={}, specialCount={}",
-                commLocationId, finalMinNumeric, finalMaxNumeric, specialSyntaxExtensions.size());
-        return new ExtensionLengthConfig(finalMinNumeric, finalMaxNumeric, specialSyntaxExtensions);
+        log.info("Extension config for commLocationId {}: minActualLen={}, maxActualLen={}, minVal={}, maxVal={}, specialCount={}",
+                commLocationId, minActualLength, maxActualLength, finalMinNumeric, finalMaxNumeric, specialSyntaxExtensions.size());
+        return new ExtensionLengthConfig(finalMinNumeric, finalMaxNumeric, specialSyntaxExtensions, minActualLength, maxActualLength);
     }
 
     private Set<String> getSpecialSyntaxExtensions(Long commLocationId, Long originCountryId) {
