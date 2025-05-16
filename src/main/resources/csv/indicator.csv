@@ -1,4 +1,4 @@
-id,telephoneTypeId,departmentCountry,cityName,cityId,isAssociated,originCountryId,operatorId
+id,telephonyTypeId,departmentCountry,cityName,cityId,isAssociated,originCountryId,operatorId
 1,4,Cundinamarca,Agua de Dios,525,0,1,
 2,4,Cundinamarca,Alban,526,0,1,
 3,4,Cundinamarca,Anapoima,527,0,1,
