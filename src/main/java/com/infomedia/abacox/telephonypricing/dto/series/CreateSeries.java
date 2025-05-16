@@ -1,6 +1,5 @@
 package com.infomedia.abacox.telephonypricing.dto.series;
 
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
@@ -18,14 +17,14 @@ import lombok.NoArgsConstructor;
 public class CreateSeries {
     private Long indicatorId;
     
-    @NotBlank
-    private String ndc;
+    @NotNull
+    private Integer ndc;
 
-    @NotBlank
-    private String initialNumber;
+    @NotNull
+    private Integer initialNumber;
 
-    @NotBlank
-    private String finalNumber;
+    @NotNull
+    private Integer finalNumber;
     
     @Size(max = 200)
     private String company;
