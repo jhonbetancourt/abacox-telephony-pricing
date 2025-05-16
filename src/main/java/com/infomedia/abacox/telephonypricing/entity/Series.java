@@ -61,7 +61,7 @@ public class Series extends ActivableEntity {
      */
     @Column(name = "ndc", nullable = false)
     @ColumnDefault("0")
-    private String ndc;
+    private Integer ndc;
 
     /**
      * Initial number in the series range.
@@ -69,7 +69,7 @@ public class Series extends ActivableEntity {
      */
     @Column(name = "initial_number", nullable = false)
     @ColumnDefault("0")
-    private String initialNumber;
+    private Integer initialNumber;
 
     /**
      * Final number in the series range.
@@ -77,7 +77,7 @@ public class Series extends ActivableEntity {
      */
     @Column(name = "final_number", nullable = false)
     @ColumnDefault("0")
-    private String finalNumber;
+    private Integer finalNumber;
 
     /**
      * Company associated with this number series.
