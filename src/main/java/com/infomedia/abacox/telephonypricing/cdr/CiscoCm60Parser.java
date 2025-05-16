@@ -4,7 +4,7 @@ package com.infomedia.abacox.telephonypricing.cdr;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Component;
-import org.apache.logging.log4j.util.Strings; // Ensure this is from Log4j or a similar utility library
+import org.apache.logging.log4j.util.Strings;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -21,7 +21,6 @@ public class CiscoCm60Parser implements CdrParser {
     private final CdrProcessingConfig configService;
     private final CdrEnrichmentHelper cdrEnrichmentHelper;
 
-
     // Mappings from potential CSV header names (lowercase) to standardized internal field names (canonical, case-sensitive)
     private static final Map<String, String> HEADER_MAPPING = Map.ofEntries(
             Map.entry("cdrrecordtype", "cdrRecordType"),
@@ -30,11 +29,11 @@ public class CiscoCm60Parser implements CdrParser {
             Map.entry("origlegcallidentifier", "origLegCallIdentifier"),
             Map.entry("datetimeorigination", "dateTimeOrigination"),
             Map.entry("origdevicename", "origDeviceName"),
-            Map.entry("orignodename", "origNodeName"), // Corrected from origNodeId based on CSV
-            Map.entry("orignodeid", "origNodeName"), // Aliasing origNodeId from CSV to origNodeName
+            Map.entry("orignodename", "origNodeName"),
             Map.entry("origipaddr", "origIpAddr"),
             Map.entry("callingpartynumber", "callingPartyNumber"),
-            Map.entry("callingpartyunicodecodingsystem", "callingPartyUnicodeLoginUserID"),
+            Map.entry("callingpartynumberpartition", "callingPartyNumberPartition"),
+            Map.entry("callingpartyunicodecodingsystem", "callingPartyUnicodeLoginUserID"), // Typo in original mapping?
             Map.entry("callingpartyunicodeloginuserid", "callingPartyUnicodeLoginUserID"),
             Map.entry("callingpartyipaddr", "callingPartyIpAddr"),
             Map.entry("originalcalledpartynumber", "originalCalledPartyNumber"),
@@ -49,8 +48,7 @@ public class CiscoCm60Parser implements CdrParser {
             Map.entry("lastredirectdnpartition", "lastRedirectDnPartition"),
             Map.entry("lastredirectredirectreason", "lastRedirectRedirectReason"),
             Map.entry("destdevicename", "destDeviceName"),
-            Map.entry("destnodename", "destNodeName"), // Corrected from destNodeId
-            Map.entry("destnodeid", "destNodeName"), // Aliasing destNodeId from CSV to destNodeName
+            Map.entry("destnodename", "destNodeName"),
             Map.entry("destipaddr", "destIpAddr"),
             Map.entry("duration", "duration"),
             Map.entry("origcalledpartyredirectonbehalfof", "origCalledPartyRedirectOnBehalfOf"),
@@ -110,8 +108,7 @@ public class CiscoCm60Parser implements CdrParser {
             Map.entry("currentroutingreason", "currentRoutingReason"),
             Map.entry("origroutingreason", "origRoutingReason"),
             Map.entry("lastredirectingroutingreason", "lastRedirectingRoutingReason"),
-            Map.entry("callsecuresstatus", "callSecuredStatus"), // Corrected potential typo
-            Map.entry("callsecuredstatus", "callSecuredStatus"),
+            Map.entry("callsecuresstatus", "callSecuresStatus"), // Typo in original? "callSecuredStatus"
             Map.entry("origdevicemobility", "origDeviceMobility"),
             Map.entry("destdevicemobility", "destDeviceMobility"),
             Map.entry("origdeviceipv4addr", "origDeviceIPv4Addr"),
@@ -131,23 +128,16 @@ public class CiscoCm60Parser implements CdrParser {
             Map.entry("destspan", "destSpan"),
             Map.entry("origvideotransportaddress_ipv6", "origVideoTransportAddress_IPv6"),
             Map.entry("destvideotransportaddress_ipv6", "destVideoTransportAddress_IPv6"),
+            // Added from provided CDR
             Map.entry("finalmobilecalledpartynumber", "finalMobileCalledPartyNumber"),
             Map.entry("finalmobilecalledpartynumberpartition", "finalMobileCalledPartyNumberPartition"),
-            Map.entry("origmobiledevicename", "origMobileDeviceName"),
-            Map.entry("destmobiledevicename", "destMobileDeviceName"),
-            Map.entry("origmobilecallduration", "origMobileCallDuration"),
-            Map.entry("destmobilecallduration", "destMobileCallDuration"),
-            Map.entry("mobilecalltype", "mobileCallType"),
-            Map.entry("originalcalledpartypattern", "originalCalledPartyPattern"),
-            Map.entry("finalcalledpartypattern", "finalCalledPartyPattern"),
-            Map.entry("lastredirectingpartypattern", "lastRedirectingPartyPattern"),
-            Map.entry("huntpilotpattern", "huntPilotPattern")
+            Map.entry("origmobiledevicename", "origMobileDeviceName")
     );
 
 
     private static final String DELIMITER = ",";
-    private static final String HEADER_START_TOKEN = "cdrRecordType";
-    private static final int MIN_EXPECTED_FIELDS = 50; // A reasonable minimum based on common Cisco CDRs
+    private static final String HEADER_START_TOKEN = "cdrRecordType"; // Case-insensitive match done later
+    private static final int MIN_EXPECTED_FIELDS = 50;
     private static final String CONFERENCE_PREFIX = "b";
 
     private static class StringRef { String value; StringRef(String v) { this.value = v; } }
@@ -241,14 +231,18 @@ public class CiscoCm60Parser implements CdrParser {
             }
             ringDuration = Math.max(0, ringDuration);
 
-            String originalLastRedirectDnForCC = lastRedirectDn.value;
+            String originalLastRedirectDnForCC = lastRedirectDn.value; // Store before modification
 
             if (Strings.isBlank(finalCalledPartyNumber.value)) {
                 finalCalledPartyNumber.value = originalCalledPartyNumber;
                 finalCalledPartyNumberPartition.value = originalCalledPartyNumberPartition;
             } else if (!finalCalledPartyNumber.value.equals(originalCalledPartyNumber) && Strings.isNotBlank(originalCalledPartyNumber)) {
+                 // PHP: if ($cdr_extension_fin != $destino_original && $destino_original != '')
+                 // PHP: if (!$esconferencia) // esconferencia is based on finalCalledPartyNumber
                 if (!isConferenceCallIndicator(finalCalledPartyNumber.value)) {
                     lastRedirectDnPartition.value = originalCalledPartyNumberPartition;
+                    // PHP: $info_arr['ext-redir-cc'] = $info_arr['ext-redir']; // Preserva original
+                    // This implies lastRedirectDn.value should be originalCalledPartyNumber
                     lastRedirectDn.value = originalCalledPartyNumber;
                 }
             }
@@ -260,7 +254,7 @@ public class CiscoCm60Parser implements CdrParser {
             if (isConference) {
                 transferCause = (joinOnBehalfOf != null && joinOnBehalfOf == 7) ? CallTransferCause.CONFERENCE_NOW : CallTransferCause.CONFERENCE;
             } else {
-                if (isConferenceCallIndicator(lastRedirectDn.value)) {
+                if (isConferenceCallIndicator(lastRedirectDn.value)) { // Check if the redirect DN is a conference
                     transferCause = CallTransferCause.CONFERENCE_END;
                     invertTrunksForConference = false;
                 }
@@ -318,33 +312,53 @@ public class CiscoCm60Parser implements CdrParser {
                 return Optional.empty();
             }
 
+            // Handle mobile redirection *after* conference logic, as conference logic might swap finalCalledPartyNumber
             if (Strings.isNotBlank(finalMobileCalledPartyNumber) && !finalMobileCalledPartyNumber.equals(finalCalledPartyNumber.value)) {
                 log.info("Mobile redirection. Original final called: {}, Mobile final called: {}", finalCalledPartyNumber.value, finalMobileCalledPartyNumber);
                 finalCalledPartyNumber.value = finalMobileCalledPartyNumber;
+                // If no transfer cause yet, mark as auto. If already conference, keep conference.
                 if (transferCause == CallTransferCause.NONE) {
                     transferCause = CallTransferCause.AUTO;
                 }
             }
             
+            // Clear lastRedirectDn if it matches caller or (final) called, unless it's a conference-related transfer cause
             if (Strings.isNotBlank(lastRedirectDn.value) &&
                 (lastRedirectDn.value.equals(callingPartyNumber.value) || lastRedirectDn.value.equals(finalCalledPartyNumber.value)) &&
                 transferCause != CallTransferCause.CONFERENCE &&
                 transferCause != CallTransferCause.CONFERENCE_NOW &&
                 transferCause != CallTransferCause.CONFERENCE_END &&
-                transferCause != CallTransferCause.PRE_CONFERENCE_NOW ) {
+                transferCause != CallTransferCause.PRE_CONFERENCE_NOW ) { // PRE_CONFERENCE_NOW might be set by logic below
                 log.info("Clearing redirecting party '{}' as it matches caller or called, and not a primary conference event.", lastRedirectDn.value);
                 lastRedirectDn.value = "";
-                if (transferCause != CallTransferCause.AUTO) {
+                // lastRedirectDnPartition.value = ""; // Partition also cleared if number is cleared
+                if (transferCause != CallTransferCause.AUTO) { // Don't override AUTO if it was set by mobile redirect
                      transferCause = CallTransferCause.NONE;
                 }
             }
 
-            if (transferCause == CallTransferCause.NONE && Strings.isNotBlank(lastRedirectDn.value)) {
-                if (lastRedirectRedirectReason > 0 && lastRedirectRedirectReason <= 16) {
-                    transferCause = CallTransferCause.NORMAL;
+            // Final transfer cause determination based on lastRedirectRedirectReason and joinOnBehalfOf
+            // This needs to happen after all number swaps.
+            if (transferCause == CallTransferCause.NONE && Strings.isNotBlank(lastRedirectDn.value)) { // If still no cause but redirect exists
+                if (lastRedirectRedirectReason > 0 && lastRedirectRedirectReason <= 16) { // Standard Cisco redirect reasons
+                    transferCause = CallTransferCause.NORMAL; // Or map specific Cisco reasons if needed
                 } else if (joinOnBehalfOf != null && joinOnBehalfOf == 7 && destCallTerminationOnBehalfOf != null && destCallTerminationOnBehalfOf == 7) {
-                    transferCause = CallTransferCause.PRE_CONFERENCE_NOW;
-                } else if (lastRedirectRedirectReason != 0) {
+                    // This specific combination was identified as PRE_CONFERENCE_NOW in PHP logic
+                    // but it's complex. Let's simplify: if joinOnBehalfOf is 7, it's related to conference setup.
+                    // The distinction between PRE_CONFERENCE_NOW and CONFERENCE_NOW is subtle.
+                    // For now, if it's conference related and not already set, it might be an AUTO transfer
+                    // or a more specific conference setup step.
+                    // PHP's logic for `IMDEX_TRANSFER_PRECONFENOW` was:
+                    // `($info_arr['finaliza-union'] == 7)` which is `destCallTerminationOnBehalfOf == 7`
+                    // AND `($info_arr['info_transfer'] == 0)` which means `transferCause == CallTransferCause.NONE`
+                    // AND `($info_arr['ext-redir'] != '')` which means `lastRedirectDn.value` is not blank.
+                    // This is a very specific condition.
+                    if (destCallTerminationOnBehalfOf != null && destCallTerminationOnBehalfOf == 7 && joinOnBehalfOf == 7) {
+                        transferCause = CallTransferCause.PRE_CONFERENCE_NOW;
+                    } else {
+                        transferCause = CallTransferCause.AUTO; // Default for unclassified redirects
+                    }
+                } else if (lastRedirectRedirectReason != 0) { // Any other non-zero reason
                     transferCause = CallTransferCause.AUTO;
                 }
             }
@@ -412,6 +426,8 @@ public class CiscoCm60Parser implements CdrParser {
         for (int i = 0; i < headers.length; i++) {
             String cleanedCsvHeader = cleanCsvField(headers[i].trim()).toLowerCase();
             if (!cleanedCsvHeader.isEmpty()) {
+                // Use the canonical internal key (value from HEADER_MAPPING, or the cleaned header itself if not mapped)
+                // This key will be used by getField for lookup.
                 String canonicalInternalKey = HEADER_MAPPING.getOrDefault(cleanedCsvHeader, cleanedCsvHeader);
                 headerMap.put(canonicalInternalKey, i);
             }
@@ -441,15 +457,9 @@ public class CiscoCm60Parser implements CdrParser {
             String value = fields[index];
             if (value != null) {
                 String ipConvertedValue = value;
-                 if (canonicalInternalFieldName.toLowerCase().endsWith("ipaddr") ||
-                    canonicalInternalFieldName.toLowerCase().endsWith("_ip")) {
-                    // Only attempt dec2ip if it looks like a decimal IP address (all digits)
-                    if (value.matches("\\d+")) {
-                        ipConvertedValue = dec2ip(value);
-                    } else {
-                        // If it's already in dot-decimal or other format, keep as is
-                        log.info("Field {} ('{}') is not purely decimal, not attempting dec2ip.", canonicalInternalFieldName, value);
-                    }
+                if (canonicalInternalFieldName.toLowerCase().endsWith("ipaddr") || 
+                    canonicalInternalFieldName.toLowerCase().endsWith("_ip")) {   
+                    ipConvertedValue = dec2ip(value);
                 }
                 return toUpper ? ipConvertedValue.toUpperCase() : ipConvertedValue;
             }
@@ -492,7 +502,7 @@ public class CiscoCm60Parser implements CdrParser {
     }
 
     private Integer parseOptionalInteger(String intStr) {
-        if (Strings.isBlank(intStr) || "0".equals(intStr)) {
+        if (Strings.isBlank(intStr) || "0".equals(intStr)) { // Cisco often uses "0" for undefined optional integers
            return null;
         }
         try {
@@ -536,9 +546,12 @@ public class CiscoCm60Parser implements CdrParser {
         if (decStr == null || decStr.isEmpty()) return "";
         try {
             long dec = Long.parseLong(decStr);
-            if (dec == 0) return "0.0.0.0";
+            if (dec == 0) return "0.0.0.0"; // Or "" if that's preferred for zero
 
+            // Ensure it's treated as an unsigned 32-bit integer for IP conversion
+            // Java's Long.toHexString handles negative longs differently than PHP's dechex for large unsigned ints
             String hex = String.format("%08x", dec & 0xFFFFFFFFL);
+
 
             String[] hexParts = new String[4];
             hexParts[0] = hex.substring(0, 2);
