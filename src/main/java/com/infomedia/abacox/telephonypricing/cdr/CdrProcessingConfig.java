@@ -3,271 +3,177 @@ package com.infomedia.abacox.telephonypricing.cdr;
 
 import com.infomedia.abacox.telephonypricing.entity.Operator;
 import com.infomedia.abacox.telephonypricing.entity.TelephonyType;
-import com.infomedia.abacox.telephonypricing.repository.OperatorRepository;
-import com.infomedia.abacox.telephonypricing.repository.TelephonyTypeRepository;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.PersistenceContext;
-import jakarta.persistence.Query;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Service
-@RequiredArgsConstructor
+@Getter
 @Log4j2
+@RequiredArgsConstructor
 public class CdrProcessingConfig {
 
-    private final OperatorRepository operatorRepository;
-    private final TelephonyTypeRepository telephonyTypeRepository;
     private final ConfigurationLookupService configurationLookupService;
     private final EntityLookupService entityLookupService;
-    private final ExtensionLookupService extensionLookupService;
 
-    @PersistenceContext
-    private EntityManager entityManager;
-
-
-    // --- Constants based on PHP defines/usage ---
+    // Telephony Type IDs (based on PHP constants)
+    public static final long TIPOTELE_CELUFIJO = 1L;
+    public static final long TIPOTELE_CELULAR = 2L;
     public static final long TIPOTELE_LOCAL = 3L;
     public static final long TIPOTELE_NACIONAL = 4L;
     public static final long TIPOTELE_INTERNACIONAL = 5L;
-    public static final long TIPOTELE_CELULAR = 2L;
-    public static final long TIPOTELE_CELUFIJO = 1L;
-    public static final long TIPOTELE_ESPECIALES = 11L;
-    public static final long TIPOTELE_LOCAL_EXT = 12L;
-    public static final long TIPOTELE_SATELITAL = 10L;
+    public static final long TIPOTELE_SERVICIOS_VARIOS = 6L; // Includes 01800, 01900
     public static final long TIPOTELE_INTERNA_IP = 7L;
     public static final long TIPOTELE_LOCAL_IP = 8L;
     public static final long TIPOTELE_NACIONAL_IP = 9L;
-    public static final long TIPOTELE_INTERNACIONAL_IP = 14L;
-    public static final long TIPOTELE_SINCONSUMO = 16L;
-    public static final long TIPOTELE_ERRORES = 99L;
+    public static final long TIPOTELE_SATELITAL = 10L;
+    public static final long TIPOTELE_ESPECIALES = 11L; // 11x numbers
+    public static final long TIPOTELE_LOCAL_EXT = 12L;
     public static final long TIPOTELE_PAGO_REVERTIDO = 13L;
-    public static final long TIPOTELE_SERVICIOS_VARIOS = 6L;
+    public static final long TIPOTELE_INTERNACIONAL_IP = 16L;
+    public static final long TIPOTELE_SINCONSUMO = 98L;
+    public static final long TIPOTELE_ERRORES = 99L;
 
-    public static final int DEFAULT_MIN_EXT_LENGTH_FALLBACK = 2;
-    public static final int DEFAULT_MAX_EXT_LENGTH_FALLBACK = 7;
-    public static final int MAX_POSSIBLE_EXTENSION_VALUE = 9999999; // Max value for a 7-digit extension
+    // Special Country IDs
+    public static final long COLOMBIA_ORIGIN_COUNTRY_ID = 1L; // Assuming 1 is Colombia
 
-    public static final Long COLOMBIA_ORIGIN_COUNTRY_ID = 1L;
-    public static final Long NATIONAL_REFERENCE_PREFIX_ID = 7000012L; // Example, should be configurable or derived
+    // Special Prefix IDs (if needed for reference, like for national calls without explicit operator prefix)
+    public static final long NATIONAL_REFERENCE_PREFIX_ID = 7000012L; // Example, from PHP logic for finding national series details
+
+    // Colombian specific prefixes
     public static final String COLOMBIAN_MOBILE_INTERNAL_PREFIX = "03";
 
 
-    private static Set<Long> internalTelephonyTypeIds;
-    private static Long defaultInternalCallTypeId;
-    private static Set<String> ignoredAuthCodes;
-    private static int minCallDurationForBilling = 0;
+    private static final Set<Long> INTERNAL_IP_CALL_TYPES = Set.of(
+            TIPOTELE_INTERNA_IP, TIPOTELE_LOCAL_IP, TIPOTELE_NACIONAL_IP, TIPOTELE_INTERNACIONAL_IP
+    );
 
-    private static List<Long> incomingTelephonyTypeClassificationOrder;
-
+    private static final List<Long> INCOMING_CLASSIFICATION_ORDER = List.of(
+            TIPOTELE_CELULAR,
+            TIPOTELE_NACIONAL,
+            TIPOTELE_INTERNACIONAL,
+            TIPOTELE_SATELITAL,
+            TIPOTELE_LOCAL, // Local is often a fallback
+            TIPOTELE_SERVICIOS_VARIOS // Less common for incoming direct classification
+    );
 
     @Getter
     public static class ExtensionLengthConfig {
-        private final int minNumericValue;
-        private final int maxNumericValue;
-        private final Set<String> specialSyntaxExtensions;
-        private final int minActualLength; // Store actual min length for direct comparison
-        private final int maxActualLength; // Store actual max length for direct comparison
+        private final int minLength;
+        private final int maxLength;
+        private final Set<String> specialLengthExtensions; // For extensions like "0", "*123"
 
-
-        public ExtensionLengthConfig(int minNumericValue, int maxNumericValue, Set<String> specialSyntaxExtensions, int minActualLength, int maxActualLength) {
-            this.minNumericValue = minNumericValue;
-            this.maxNumericValue = maxNumericValue;
-            this.specialSyntaxExtensions = specialSyntaxExtensions != null ? Collections.unmodifiableSet(new HashSet<>(specialSyntaxExtensions)) : Collections.emptySet();
-            this.minActualLength = minActualLength;
-            this.maxActualLength = maxActualLength;
+        public ExtensionLengthConfig(int min, int max, Set<String> special) {
+            this.minLength = min;
+            this.maxLength = max;
+            this.specialLengthExtensions = Collections.unmodifiableSet(new HashSet<>(special));
         }
     }
 
-    private static final Map<String, String> COMPANY_TO_NATIONAL_OPERATOR_PREFIX_MAP;
+    // Cache for extension length configs to avoid repeated DB lookups
+    private final Map<Long, ExtensionLengthConfig> extensionLengthConfigCache = new HashMap<>();
+    private final Map<Long, List<String>> pbxPrefixCache = new HashMap<>();
+    private final Map<Long, Optional<Operator>> internalOperatorCache = new HashMap<>();
+     private final Map<Long, Optional<TelephonyType>> telephonyTypeCache = new HashMap<>();
+     private final Map<Long, Optional<Operator>> operatorCache = new HashMap<>();
+     private final Map<String, Map<String, Integer>> telephonyTypeMinMaxCache = new HashMap<>();
 
-    static {
-        internalTelephonyTypeIds = Set.of(
-                TIPOTELE_INTERNA_IP, TIPOTELE_LOCAL_IP, TIPOTELE_NACIONAL_IP, TIPOTELE_INTERNACIONAL_IP
+
+    public List<String> getPbxPrefixes(Long commLocationId) {
+        return pbxPrefixCache.computeIfAbsent(commLocationId, id ->
+            configurationLookupService.findPbxPrefixByCommLocationId(id)
+                .map(s -> Arrays.asList(s.split(",")))
+                .orElse(Collections.emptyList())
         );
-        defaultInternalCallTypeId = TIPOTELE_INTERNA_IP;
-        ignoredAuthCodes = Set.of("Invalid Authorization Code", "Invalid Authorization Level");
-
-        incomingTelephonyTypeClassificationOrder = List.of(
-                TIPOTELE_INTERNACIONAL,
-                TIPOTELE_SATELITAL,
-                TIPOTELE_CELULAR,
-                TIPOTELE_NACIONAL,
-                TIPOTELE_LOCAL_EXT,
-                TIPOTELE_LOCAL
-        );
-
-        COMPANY_TO_NATIONAL_OPERATOR_PREFIX_MAP = new HashMap<>();
-        COMPANY_TO_NATIONAL_OPERATOR_PREFIX_MAP.put("TELMEX TELECOMUNICACIONES S.A. ESP", "0456");
-        COMPANY_TO_NATIONAL_OPERATOR_PREFIX_MAP.put("COLOMBIA TELECOMUNICACIONES S.A. ESP", "09");
-        COMPANY_TO_NATIONAL_OPERATOR_PREFIX_MAP.put("UNE EPM TELECOMUNICACIONES S.A. E.S.P. - UNE EPM TELCO S.A.", "05");
-        COMPANY_TO_NATIONAL_OPERATOR_PREFIX_MAP.put("EMPRESA DE TELECOMUNICACIONES DE BOGOTÁ S.A. ESP.", "07");
-    }
-
-    public String mapCompanyToNationalOperatorPrefix(String companyName) {
-        if (companyName == null || companyName.trim().isEmpty()) {
-            return "";
-        }
-        for (Map.Entry<String, String> entry : COMPANY_TO_NATIONAL_OPERATOR_PREFIX_MAP.entrySet()) {
-            if (companyName.toUpperCase().contains(entry.getKey().toUpperCase())) {
-                return entry.getValue();
-            }
-        }
-        return "";
-    }
-
-    public List<String> getPbxPrefixes(Long communicationLocationId) {
-        log.info("Fetching PBX prefixes for commLocationId: {}", communicationLocationId);
-        Optional<String> prefixStringOpt = configurationLookupService.findPbxPrefixByCommLocationId(communicationLocationId);
-        if (prefixStringOpt.isPresent() && !prefixStringOpt.get().isEmpty()) {
-            List<String> prefixes = Arrays.stream(prefixStringOpt.get().split(","))
-                    .map(String::trim)
-                    .filter(s -> !s.isEmpty())
-                    .collect(Collectors.toList());
-            log.info("Found PBX prefixes: {}", prefixes);
-            return prefixes;
-        }
-        log.info("No PBX prefixes found for commLocationId: {}", communicationLocationId);
-        return Collections.emptyList();
-    }
-
-    public Map<String, Integer> getTelephonyTypeMinMax(Long telephonyTypeId, Long originCountryId) {
-        log.info("Fetching min/max length config for telephonyTypeId: {}, originCountryId: {}", telephonyTypeId, originCountryId);
-        return configurationLookupService.findTelephonyTypeMinMaxConfig(telephonyTypeId, originCountryId);
-    }
-
-
-    public Optional<Operator> getOperatorInternal(Long telephonyTypeId, Long originCountryId) {
-        log.info("Fetching internal operator for telephonyTypeId: {}, originCountryId: {}", telephonyTypeId, originCountryId);
-        return configurationLookupService.findOperatorByTelephonyTypeAndOrigin(telephonyTypeId, originCountryId);
-    }
-
-
-    public Optional<TelephonyType> getTelephonyTypeById(Long id) {
-        return entityLookupService.findTelephonyTypeById(id);
-    }
-
-
-    public Optional<Operator> getOperatorById(Long id) {
-        return entityLookupService.findOperatorById(id);
-    }
-
-    public static Set<Long> getInternalIpCallTypeIds() {
-        return internalTelephonyTypeIds;
-    }
-
-    public static Long getDefaultInternalCallTypeId() {
-        return defaultInternalCallTypeId;
-    }
-
-    private int deriveNumericValueFromLength(int length, boolean isMin) {
-        if (length <= 0) return 0;
-        // Max length of 7 for MAX_POSSIBLE_EXTENSION_VALUE (9,999,999)
-        // Max length of 9 for general numbers (999,999,999)
-        int safeLength = Math.min(length, 9);
-
-        if (isMin) {
-            if (safeLength == 1) return 0; // For single digit '0'
-            return (int) Math.pow(10, safeLength - 1);
-        } else {
-            // For max, it's (10^length) - 1
-            return (int) (Math.pow(10, safeLength) -1);
-        }
     }
 
     public ExtensionLengthConfig getExtensionLengthConfig(Long commLocationId) {
-        log.info("Fetching extension length config for commLocationId: {}", commLocationId);
-        Map<String, Integer> dbLengths = extensionLookupService.findExtensionMinMaxLength(commLocationId);
-
-        int minActualLength = dbLengths.getOrDefault("min", DEFAULT_MIN_EXT_LENGTH_FALLBACK);
-        int maxActualLength = dbLengths.getOrDefault("max", DEFAULT_MAX_EXT_LENGTH_FALLBACK);
-
-        if (minActualLength == 0 && maxActualLength == 0) { // No lengths found, use defaults
-            minActualLength = DEFAULT_MIN_EXT_LENGTH_FALLBACK;
-            maxActualLength = DEFAULT_MAX_EXT_LENGTH_FALLBACK;
-        } else if (minActualLength == 0) { // Min not found, use max if valid, else default
-            minActualLength = maxActualLength > 0 ? maxActualLength : DEFAULT_MIN_EXT_LENGTH_FALLBACK;
-        } else if (maxActualLength == 0) { // Max not found, use min if valid, else default
-            maxActualLength = minActualLength > 0 ? minActualLength : DEFAULT_MAX_EXT_LENGTH_FALLBACK;
-        }
-        
-        if (minActualLength > maxActualLength) {
-             minActualLength = maxActualLength;
-        }
-
-
-        int finalMinNumeric = deriveNumericValueFromLength(minActualLength, true);
-        int finalMaxNumeric = deriveNumericValueFromLength(maxActualLength, false);
-        
-        finalMaxNumeric = Math.min(finalMaxNumeric, MAX_POSSIBLE_EXTENSION_VALUE);
-        finalMinNumeric = Math.min(finalMinNumeric, finalMaxNumeric);
-        if (finalMinNumeric == 0 && minActualLength > 1) { // e.g. min length 2 should be min val 10, not 0
-            finalMinNumeric = deriveNumericValueFromLength(minActualLength, true);
-        }
-
-
-        Set<String> specialSyntaxExtensions = getSpecialSyntaxExtensions(commLocationId, COLOMBIA_ORIGIN_COUNTRY_ID);
-
-        log.info("Extension config for commLocationId {}: minActualLen={}, maxActualLen={}, minVal={}, maxVal={}, specialCount={}",
-                commLocationId, minActualLength, maxActualLength, finalMinNumeric, finalMaxNumeric, specialSyntaxExtensions.size());
-        return new ExtensionLengthConfig(finalMinNumeric, finalMaxNumeric, specialSyntaxExtensions, minActualLength, maxActualLength);
+        // For now, using a global config. If it needs to be per commLocationId,
+        // this method would fetch/cache it based on that ID.
+        // PHP's $_LIM_INTERNAS seems global after initialization.
+        return extensionLengthConfigCache.computeIfAbsent(0L, id -> { // Using 0L as key for global config
+            // These would be fetched from a configuration source (DB, properties)
+            // For now, hardcoding typical values based on PHP's _ACUMTOTAL_MAXEXT
+            int min = 1; // Smallest extension
+            int max = 7; // Max length of typical extension (before _ACUMTOTAL_MAXEXT)
+                         // _ACUMTOTAL_MAXEXT was 1,000,000, so length 7.
+            Set<String> special = Set.of("0"); // Example for operator
+            log.info("Initialized global extension length config: min={}, max={}, special={}", min, max, special);
+            return new ExtensionLengthConfig(min, max, special);
+        });
     }
-
-    private Set<String> getSpecialSyntaxExtensions(Long commLocationId, Long originCountryId) {
-        log.info("Fetching special syntax extensions for commLocationId: {}, originCountryId: {}", commLocationId, originCountryId);
-        // Mimics PHP's ObtenerExtensionesEspeciales
-        String sql = "SELECT DISTINCT e.extension FROM employee e " +
-                     "JOIN communication_location cl ON e.communication_location_id = cl.id " +
-                     "JOIN indicator i ON cl.indicator_id = i.id " +
-                     "WHERE e.active = true AND cl.active = true AND i.active = true " +
-                     "  AND e.extension IS NOT NULL AND e.extension NOT LIKE '%-%' " + // Not containing hyphen
-                     "  AND (LENGTH(e.extension) >= :maxLengthThreshold " + // Longer than typical or...
-                     "       OR e.extension LIKE '0%' " +                // Starts with 0 or...
-                     "       OR e.extension LIKE '*%' " +                // Starts with * or...
-                     "       OR e.extension LIKE '#%') ";                  // Starts with #
-
-        Map<String, Object> params = new HashMap<>();
-        params.put("maxLengthThreshold", String.valueOf(MAX_POSSIBLE_EXTENSION_VALUE).length());
-
-        if (commLocationId != null && commLocationId > 0) {
-            sql += " AND e.communication_location_id = :commLocationId ";
-            params.put("commLocationId", commLocationId);
-        }
-        if (originCountryId != null && originCountryId > 0) {
-            sql += " AND i.origin_country_id = :originCountryId ";
-            params.put("originCountryId", originCountryId);
-        }
-
-        Query query = entityManager.createNativeQuery(sql, String.class);
-        params.forEach(query::setParameter);
-
-        try {
-            List<String> results = query.getResultList();
-            Set<String> specialExtensions = new HashSet<>(results);
-            log.info("Found {} special syntax extensions.", specialExtensions.size());
-            return specialExtensions;
-        } catch (Exception e) {
-            log.info("Error fetching special syntax extensions: {}", e.getMessage(), e);
-            return Collections.emptySet();
-        }
-    }
-
 
     public Set<String> getIgnoredAuthCodes() {
-        return ignoredAuthCodes;
+        // These would be fetched from a configuration source
+        return Set.of("Invalid Authorization Code", "Invalid Authorization Level");
     }
 
     public int getMinCallDurationForBilling() {
-        // This could be fetched from a configuration table or property
-        return minCallDurationForBilling;
+        // This would be fetched from a configuration source (e.g. TIPOTELECFG_MIN for SINCONSUMO type)
+        // PHP logic for SINCONSUMO is `tiempo <= 0`. So, 0 means it's not billable.
+        return 0; // seconds
+    }
+
+    public static Set<Long> getInternalIpCallTypeIds() {
+        return INTERNAL_IP_CALL_TYPES;
+    }
+
+    public static Long getDefaultInternalCallTypeId() {
+        return TIPOTELE_INTERNA_IP; // Or another configured default
     }
 
     public List<Long> getIncomingTelephonyTypeClassificationOrder() {
-        return incomingTelephonyTypeClassificationOrder;
+        return INCOMING_CLASSIFICATION_ORDER;
     }
+
+    public Optional<Operator> getOperatorInternal(Long telephonyTypeId, Long originCountryId) {
+        if (telephonyTypeId == null || originCountryId == null) return Optional.empty();
+        Long cacheKey = telephonyTypeId * 100000 + originCountryId; // Simple composite key
+        return internalOperatorCache.computeIfAbsent(cacheKey, k ->
+            configurationLookupService.findOperatorByTelephonyTypeAndOrigin(telephonyTypeId, originCountryId)
+        );
+    }
+
+    public Optional<TelephonyType> getTelephonyTypeById(Long id) {
+        if (id == null) return Optional.empty();
+        return telephonyTypeCache.computeIfAbsent(id, entityLookupService::findTelephonyTypeById);
+    }
+     public Optional<Operator> getOperatorById(Long id) {
+        if (id == null) return Optional.empty();
+        return operatorCache.computeIfAbsent(id, entityLookupService::findOperatorById);
+    }
+
+    public Map<String, Integer> getTelephonyTypeMinMax(Long telephonyTypeId, Long originCountryId) {
+        if (telephonyTypeId == null || originCountryId == null) {
+            Map<String, Integer> defaultConfig = new HashMap<>();
+            defaultConfig.put("min", 0);
+            defaultConfig.put("max", 0);
+            return defaultConfig;
+        }
+        String cacheKey = telephonyTypeId + "_" + originCountryId;
+        return telephonyTypeMinMaxCache.computeIfAbsent(cacheKey, k ->
+            configurationLookupService.findTelephonyTypeMinMaxConfig(telephonyTypeId, originCountryId)
+        );
+    }
+
+    public String mapCompanyToNationalOperatorPrefix(String companyName) {
+        // This mapping would ideally come from a configuration table or properties
+        // Based on PHP's _esNacional function
+        if (companyName == null) return "";
+        String upperCompany = companyName.toUpperCase();
+        if (upperCompany.contains("TELMEX") || upperCompany.contains("CLARO")) { // CLARO HOGAR FIJO
+            return "0456"; // Or whatever the current Claro prefix is for national calls
+        } else if (upperCompany.contains("COLOMBIA TELECOMUNICACIONES")) { // Telefonica/Movistar Fijo
+            return "09";
+        } else if (upperCompany.contains("UNE EPM") || upperCompany.contains("UNE TELCO")) { // UNE
+            return "05"; // Or "050" if it's three digits
+        } else if (upperCompany.contains("EMPRESA DE TELECOMUNICACIONES DE BOGOTÁ") || upperCompany.contains("ETB")) { // ETB
+            return "07";
+        }
+        return ""; // Default or no mapping
+    }
+
 }
