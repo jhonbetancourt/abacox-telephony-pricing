@@ -1,4 +1,3 @@
-// FILE: com/infomedia/abacox/telephonypricing/cdr/PrefixInfoLookupService.java
 package com.infomedia.abacox.telephonypricing.cdr;
 
 import com.infomedia.abacox.telephonypricing.entity.CommunicationLocation;
@@ -30,138 +29,65 @@ public class PrefixInfoLookupService {
     private final CdrProcessingConfig configService;
 
     /**
-     * Pads the string on the left if it's shorter than the target length.
-     * If input is null, treats as empty string.
-     * If input length is >= targetLength, returns the original string (no truncation).
-     * Mimics PHP str_pad with STR_PAD_LEFT when input.length < targetLength.
-     */
-    private String padLeft(String input, int targetLength, char padChar) {
-        if (input == null) input = "";
-        int currentLength = input.length();
-
-        if (currentLength >= targetLength) {
-            return input;
-        }
-
-        StringBuilder sb = new StringBuilder(targetLength);
-        for (int i = 0; i < targetLength - currentLength; i++) {
-            sb.append(padChar);
-        }
-        sb.append(input);
-        return sb.toString();
-    }
-
-    /**
-     * Pads the string on the right if it's shorter than the target length.
-     * If input is null, treats as empty string.
-     * If input length is > targetLength, it truncates to targetLength (specific to rellenaSerie logic).
-     * If input length is == targetLength, returns original.
-     * Mimics PHP str_pad with STR_PAD_RIGHT for padding, but includes truncation for this specific use case.
-     */
-    private String padRight(String input, int targetLength, char padChar) {
-        if (input == null) input = "";
-        int currentLength = input.length();
-
-        if (currentLength == targetLength) {
-            return input;
-        } else if (currentLength > targetLength) {
-            return input.substring(0, targetLength);
-        } else { // currentLength < targetLength
-            StringBuilder sb = new StringBuilder(input);
-            for (int i = 0; i < targetLength - currentLength; i++) {
-                sb.append(padChar);
-            }
-            return sb.toString();
-        }
-    }
-
-
-    /**
-     * Adjusts DB series initial and final numbers to match the length of the dialed subscriber number
-     * and then compares if the full dialed number falls within this adjusted range.
-     * Mimics PHP's `rellenaSerie` logic followed by numeric comparison.
+     * Checks if the given dialed number falls within the series range.
+     * Uses integer comparison since the series fields are now integer types.
      *
-     * @param fullDialedNumberWithNdcStr The full number being dialed (after operator prefix, potentially including an NDC).
-     * @param ndcFromDbStr               The NDC associated with the series from the database. Can be "0" for local.
-     * @param seriesInitialFromDbStr     The initial number of the series from the database.
-     * @param seriesFinalFromDbStr       The final number of the series from the database.
-     * @return true if the full dialed number falls within the adjusted series range.
+     * @param fullDialedNumberWithNdc The full number being dialed (after operator prefix, potentially including an NDC).
+     * @param ndcFromDb               The NDC associated with the series from the database. Can be 0 for local.
+     * @param seriesInitialFromDb     The initial number of the series from the database.
+     * @param seriesFinalFromDb       The final number of the series from the database.
+     * @return true if the full dialed number falls within the series range.
      */
-    private boolean adjustAndCompareSeries(String fullDialedNumberWithNdcStr, String ndcFromDbStr,
-                                           String seriesInitialFromDbStr, String seriesFinalFromDbStr) {
+    private boolean isNumberInSeriesRange(String fullDialedNumberWithNdc, Integer ndcFromDb,
+                                        Integer seriesInitialFromDb, Integer seriesFinalFromDb) {
 
-        if (!StringUtils.hasText(fullDialedNumberWithNdcStr) || !StringUtils.hasText(ndcFromDbStr) ||
-                !StringUtils.hasText(seriesInitialFromDbStr) || !StringUtils.hasText(seriesFinalFromDbStr)) {
-            log.info("adjustAndCompareSeries - Invalid string input: num={}, ndc={}, init={}, final={}",
-                    fullDialedNumberWithNdcStr, ndcFromDbStr, seriesInitialFromDbStr, seriesFinalFromDbStr);
+        if (!StringUtils.hasText(fullDialedNumberWithNdc) || ndcFromDb == null ||
+                seriesInitialFromDb == null || seriesFinalFromDb == null) {
+            log.info("isNumberInSeriesRange - Invalid input: num={}, ndc={}, init={}, final={}",
+                    fullDialedNumberWithNdc, ndcFromDb, seriesInitialFromDb, seriesFinalFromDb);
             return false;
         }
-        if (!seriesInitialFromDbStr.matches("\\d+") || !seriesFinalFromDbStr.matches("\\d+")) {
-             log.info("adjustAndCompareSeries - DB series initial or final is not purely numeric: init={}, final={}", seriesInitialFromDbStr, seriesFinalFromDbStr);
+
+        if (!fullDialedNumberWithNdc.matches("\\d+")) {
+            log.info("isNumberInSeriesRange - Dialed number '{}' is not purely numeric.", fullDialedNumberWithNdc);
             return false;
         }
 
         String dialedSubscriberPartStr;
-        if (ndcFromDbStr.equals("0")) {
-            dialedSubscriberPartStr = fullDialedNumberWithNdcStr;
-            if (!fullDialedNumberWithNdcStr.matches("\\d+")) {
-                log.info("adjustAndCompareSeries - Local number (NDC='0') '{}' is not purely numeric.", fullDialedNumberWithNdcStr);
-                return false;
-            }
+        String ndcStr = ndcFromDb.toString();
+        
+        if (ndcFromDb == 0) {
+            dialedSubscriberPartStr = fullDialedNumberWithNdc;
         } else {
-            if (!fullDialedNumberWithNdcStr.startsWith(ndcFromDbStr)) {
-                log.info("adjustAndCompareSeries - Full number '{}' does not start with DB NDC '{}'. This is unexpected if ndcFromDbStr was derived correctly.", fullDialedNumberWithNdcStr, ndcFromDbStr);
+            if (!fullDialedNumberWithNdc.startsWith(ndcStr)) {
+                log.info("isNumberInSeriesRange - Full number '{}' does not start with DB NDC '{}'. This is unexpected if ndcFromDb was derived correctly.", 
+                        fullDialedNumberWithNdc, ndcStr);
                 return false;
             }
-            dialedSubscriberPartStr = fullDialedNumberWithNdcStr.substring(ndcFromDbStr.length());
-            if (!dialedSubscriberPartStr.matches("\\d*")) {
-                log.info("adjustAndCompareSeries - Subscriber part '{}' (from num '{}', ndc '{}') is not numeric.",
-                        dialedSubscriberPartStr, fullDialedNumberWithNdcStr, ndcFromDbStr);
-                return false;
-            }
+            dialedSubscriberPartStr = fullDialedNumberWithNdc.substring(ndcStr.length());
         }
 
-        // PHP Step 1: Equalize lengths of seriesInitialFromDbStr and seriesFinalFromDbStr
-        String currentSeriesInitial = seriesInitialFromDbStr;
-        String currentSeriesFinal = seriesFinalFromDbStr;
-        int lenInitial = currentSeriesInitial.length();
-        int lenFinal = currentSeriesFinal.length();
-
-        if (lenInitial < lenFinal) {
-            currentSeriesInitial = padLeft(currentSeriesInitial, lenFinal, '0');
-        } else if (lenFinal < lenInitial) {
-            currentSeriesFinal = padRight(currentSeriesFinal, lenInitial, '9');
+        if (!dialedSubscriberPartStr.matches("\\d+")) {
+            log.info("isNumberInSeriesRange - Subscriber part '{}' is not numeric.", dialedSubscriberPartStr);
+            return false;
         }
-        // Now, currentSeriesInitial and currentSeriesFinal have the same length.
 
-        // PHP Step 2: Adjust these equalized series parts to match the length of the dialedSubscriberPartStr
-        int dialedSubscriberLength = dialedSubscriberPartStr.length();
-
-        String finalComparableInitialSubPart = padRight(currentSeriesInitial, dialedSubscriberLength, '0');
-        String finalComparableFinalSubPart = padRight(currentSeriesFinal, dialedSubscriberLength, '9');
-
-        // PHP Step 3: Construct full numbers for comparison and compare numerically
-        String comparisonInitialStr = ndcFromDbStr.equals("0") ? finalComparableInitialSubPart : ndcFromDbStr + finalComparableInitialSubPart;
-        String comparisonFinalStr = ndcFromDbStr.equals("0") ? finalComparableFinalSubPart : ndcFromDbStr + finalComparableFinalSubPart;
-
+        // Convert to numbers for comparison
         try {
-            long dialedNumVal = Long.parseLong(fullDialedNumberWithNdcStr);
-            long compInitialVal = Long.parseLong(comparisonInitialStr);
-            long compFinalVal = Long.parseLong(comparisonFinalStr);
-
-            boolean match = (dialedNumVal >= compInitialVal && dialedNumVal <= compFinalVal);
-            log.info("Adjusted series comparison: DialedNum={}, DB_NDC={}, DB_Initial={}, DB_Final={}. AdjustedInitialSub={}, AdjustedFinalSub={}. FullCompInitial={}, FullCompFinal={}. Match: {}",
-                    fullDialedNumberWithNdcStr, ndcFromDbStr, seriesInitialFromDbStr, seriesFinalFromDbStr,
-                    finalComparableInitialSubPart, finalComparableFinalSubPart,
-                    comparisonInitialStr, comparisonFinalStr, match);
+            long dialedSubscriberNum = Long.parseLong(dialedSubscriberPartStr);
+            
+            // Check if the subscriber number is within the range
+            boolean match = (dialedSubscriberNum >= seriesInitialFromDb && dialedSubscriberNum <= seriesFinalFromDb);
+            
+            log.info("Series range comparison: DialedSubscriber={}, DB_NDC={}, DB_Initial={}, DB_Final={}. Match: {}",
+                    dialedSubscriberNum, ndcFromDb, seriesInitialFromDb, seriesFinalFromDb, match);
             return match;
         } catch (NumberFormatException e) {
-            log.info("Numeric conversion error during series comparison. Dialed: '{}', CompInitial: '{}', CompFinal: '{}'. Error: {}",
-                    fullDialedNumberWithNdcStr, comparisonInitialStr, comparisonFinalStr, e.getMessage());
+            log.info("Numeric conversion error during series comparison. Dialed subscriber: '{}'. Error: {}",
+                    dialedSubscriberPartStr, e.getMessage());
             return false;
         }
     }
-
 
     public Optional<Map<String, Object>> findIndicatorByNumber(
             String numberToLookup, // This is the number *after* operator prefix removal, if any
@@ -208,31 +134,36 @@ public class PrefixInfoLookupService {
         Map<String, Object> approximateMatchResult = null;
 
         for (int currentNdcLength = maxNdcLength; currentNdcLength >= minNdcLength; currentNdcLength--) {
-            String ndcStrToMatchInDb;
+            Integer ndcToMatchInDb;
             String subscriberPartForSeriesLookup;
 
             if (currentNdcLength == 0 && effectiveTelephonyTypeId.equals(CdrProcessingConfig.TIPOTELE_LOCAL)) {
-                // For local calls where NDC length might be 0, it means series.ndc = '0'
-                ndcStrToMatchInDb = "0";
+                // For local calls where NDC length might be 0, it means series.ndc = 0
+                ndcToMatchInDb = 0;
                 subscriberPartForSeriesLookup = effectiveNumberForLookup;
             } else if (currentNdcLength > 0) {
                 if (effectiveNumberForLookup.length() < currentNdcLength) continue;
-                ndcStrToMatchInDb = effectiveNumberForLookup.substring(0, currentNdcLength);
-                subscriberPartForSeriesLookup = effectiveNumberForLookup.substring(currentNdcLength);
+                try {
+                    ndcToMatchInDb = Integer.parseInt(effectiveNumberForLookup.substring(0, currentNdcLength));
+                    subscriberPartForSeriesLookup = effectiveNumberForLookup.substring(currentNdcLength);
+                } catch (NumberFormatException e) {
+                    log.info("Could not parse NDC part as integer: {}", effectiveNumberForLookup.substring(0, currentNdcLength));
+                    continue;
+                }
             } else {
-                // Skip if currentNdcLength is 0 but not for a TIPOTELE_LOCAL context (or if effectiveNumberForLookup is too short)
+                // Skip if currentNdcLength is 0 but not for a TIPOTELE_LOCAL context
                 continue;
             }
 
-            if (!ndcStrToMatchInDb.matches("\\d+") || !subscriberPartForSeriesLookup.matches("\\d*")) {
-                log.info("Skipping NDC lookup: NDC to match in DB '{}' or subscriber part '{}' is not valid.", ndcStrToMatchInDb, subscriberPartForSeriesLookup);
+            if (!subscriberPartForSeriesLookup.matches("\\d*")) {
+                log.info("Skipping NDC lookup: subscriber part '{}' is not valid.", subscriberPartForSeriesLookup);
                 continue;
             }
 
             int minSubscriberLengthForThisTypeAndNdc = Math.max(0, typeMinDigits - currentNdcLength);
             if (subscriberPartForSeriesLookup.length() < minSubscriberLengthForThisTypeAndNdc) {
                 log.info("Subscriber part '{}' (from num '{}') too short for NDC '{}' (min subscriber length {})",
-                        subscriberPartForSeriesLookup, effectiveNumberForLookup, ndcStrToMatchInDb, minSubscriberLengthForThisTypeAndNdc);
+                        subscriberPartForSeriesLookup, effectiveNumberForLookup, ndcToMatchInDb, minSubscriberLengthForThisTypeAndNdc);
                 continue;
             }
 
@@ -268,13 +199,13 @@ public class PrefixInfoLookupService {
             if (isPrefixBandOk) {
                 sqlBuilder.append("  b.origin_indicator_id DESC NULLS LAST, ");
             }
-            sqlBuilder.append("  CASE WHEN s.ndc = '-1' THEN 1 ELSE 0 END ASC, ");
-            sqlBuilder.append("  (CASE WHEN s.initial_number ~ E'^\\\\d+$' AND s.final_number ~ E'^\\\\d+$' THEN CAST(s.final_number AS BIGINT) - CAST(s.initial_number AS BIGINT) ELSE NULL END) ASC NULLS LAST, ");
+            sqlBuilder.append("  CASE WHEN s.ndc = -1 THEN 1 ELSE 0 END ASC, ");
+            sqlBuilder.append("  (s.final_number - s.initial_number) ASC, ");
             sqlBuilder.append("  s.id ASC ");
 
             Query query = entityManager.createNativeQuery(sqlBuilder.toString());
             query.setParameter("effectiveTelephonyTypeId", effectiveTelephonyTypeId);
-            query.setParameter("ndcParam", ndcStrToMatchInDb);
+            query.setParameter("ndcParam", ndcToMatchInDb);
             query.setParameter("originCountryId", originCountryId);
 
             if (isPrefixBandOk) {
@@ -301,12 +232,11 @@ public class PrefixInfoLookupService {
                     seriesData.put("band_origin_indicator_id", row[colIdx++]);
                 }
 
+                Integer dbNdc = (Integer) seriesData.get("series_ndc");
+                Integer dbInitial = (Integer) seriesData.get("series_initial");
+                Integer dbFinal = (Integer) seriesData.get("series_final");
 
-                String dbNdc = (String) seriesData.get("series_ndc");
-                String dbInitial = (String) seriesData.get("series_initial");
-                String dbFinal = (String) seriesData.get("series_final");
-
-                if ("-1".equals(dbNdc)) {
+                if (dbNdc != null && dbNdc == -1) {
                     if (approximateMatchResult == null) { // Store first approximate match
                         approximateMatchResult = new HashMap<>(seriesData);
                         approximateMatchResult.put("is_approximate", true);
@@ -315,7 +245,7 @@ public class PrefixInfoLookupService {
                     continue; // Continue to see if a non-approximate match is found for this NDC length
                 }
 
-                if (adjustAndCompareSeries(effectiveNumberForLookup, dbNdc, dbInitial, dbFinal)) {
+                if (isNumberInSeriesRange(effectiveNumberForLookup, dbNdc, dbInitial, dbFinal)) {
                     log.info("Found exact indicator match for num {} (NDC: {}): ID={}", effectiveNumberForLookup, dbNdc, seriesData.get("indicator_id"));
                     return Optional.of(seriesData);
                 }
@@ -331,8 +261,6 @@ public class PrefixInfoLookupService {
         return Optional.empty();
     }
 
-    // Other methods (findNdcMinMaxLength, findBaseRateForPrefix, findBandByPrefixAndIndicator, findLocalNdcForIndicator, isLocalExtended, isPrefixUniqueToOperator, findNationalSeriesDetailsByNdcAndSubscriber) remain the same as previously provided.
-    // ... (rest of the class as previously provided)
     public Map<String, Integer> findNdcMinMaxLength(Long telephonyTypeId, Long originCountryId) {
         Map<String, Integer> lengths = new HashMap<>();
         lengths.put("min", 0); lengths.put("max", 0);
@@ -340,9 +268,9 @@ public class PrefixInfoLookupService {
 
         log.info("Finding min/max NDC length for telephonyTypeId: {}, originCountryId: {}", telephonyTypeId, originCountryId);
         StringBuilder sqlBuilder = new StringBuilder();
-        // Ensure NDC='0' (for local) results in length 0, other NDCs use their actual length.
-        sqlBuilder.append("SELECT COALESCE(MIN(CASE WHEN s.ndc = '0' THEN 0 ELSE LENGTH(s.ndc) END), 0) as min_len, ");
-        sqlBuilder.append("       COALESCE(MAX(CASE WHEN s.ndc = '0' THEN 0 ELSE LENGTH(s.ndc) END), 0) as max_len ");
+        // Ensure NDC=0 (for local) results in length 0, other NDCs use their actual length.
+        sqlBuilder.append("SELECT COALESCE(MIN(CASE WHEN s.ndc = 0 THEN 0 ELSE LENGTH(CAST(s.ndc AS VARCHAR)) END), 0) as min_len, ");
+        sqlBuilder.append("       COALESCE(MAX(CASE WHEN s.ndc = 0 THEN 0 ELSE LENGTH(CAST(s.ndc AS VARCHAR)) END), 0) as max_len ");
         sqlBuilder.append("FROM series s ");
         sqlBuilder.append("JOIN indicator i ON s.indicator_id = i.id ");
         sqlBuilder.append("WHERE i.active = true AND s.active = true ");
@@ -450,25 +378,20 @@ public class PrefixInfoLookupService {
         log.info("Finding local NDC for indicatorId: {}", indicatorId);
         String sql = "SELECT s.ndc FROM series s " +
                 "WHERE s.indicator_id = :indicatorId " +
-                "  AND s.ndc IS NOT NULL AND s.ndc != '0' AND s.ndc ~ '^[1-9][0-9]*$' " +
+                "  AND s.ndc IS NOT NULL AND s.ndc != 0 AND s.ndc > 0 " +
                 "GROUP BY s.ndc " +
-                "ORDER BY COUNT(*) DESC, CAST(s.ndc AS INTEGER) ASC " +
+                "ORDER BY COUNT(*) DESC, s.ndc ASC " +
                 "LIMIT 1";
-        Query query = entityManager.createNativeQuery(sql, String.class);
+        Query query = entityManager.createNativeQuery(sql);
         query.setParameter("indicatorId", indicatorId);
         try {
-            String ndcStr = (String) query.getSingleResult();
-            Integer ndc = Integer.parseInt(ndcStr);
+            Integer ndc = (Integer) query.getSingleResult();
             log.info("Found local NDC {} for indicator {}", ndc, indicatorId);
             return Optional.of(ndc);
         } catch (NoResultException e) {
             log.info("No positive numeric NDC found for indicatorId: {}", indicatorId);
             return Optional.empty();
-        } catch (NumberFormatException nfe) {
-            log.info("NDC value fetched for indicatorId {} is not a valid integer: {}", indicatorId, nfe.getMessage());
-            return Optional.empty();
-        }
-        catch (Exception e) {
+        } catch (Exception e) {
             log.info("Error finding local NDC for indicatorId: {}", indicatorId, e);
             return Optional.empty();
         }
@@ -479,10 +402,10 @@ public class PrefixInfoLookupService {
             return false;
         }
         log.info("Checking if NDC {} is local extended for origin indicator {}", destinationNdc, originIndicatorId);
-        String sql = "SELECT COUNT(s.id) FROM series s WHERE s.indicator_id = :originIndicatorId AND s.ndc = :destinationNdcStr AND s.active = true";
+        String sql = "SELECT COUNT(s.id) FROM series s WHERE s.indicator_id = :originIndicatorId AND s.ndc = :destinationNdc AND s.active = true";
         Query query = entityManager.createNativeQuery(sql, Long.class);
         query.setParameter("originIndicatorId", originIndicatorId);
-        query.setParameter("destinationNdcStr", String.valueOf(destinationNdc));
+        query.setParameter("destinationNdc", destinationNdc);
         try {
             Long count = (Long) query.getSingleResult();
             boolean isExtended = count != null && count > 0;
@@ -521,11 +444,20 @@ public class PrefixInfoLookupService {
         }
     }
 
-    public Optional<Map<String, String>> findNationalSeriesDetailsByNdcAndSubscriber(String ndc, long subscriberNumber, Long originCountryId) {
-        if (!StringUtils.hasText(ndc) || originCountryId == null) {
+    public Optional<Map<String, String>> findNationalSeriesDetailsByNdcAndSubscriber(String ndcStr, long subscriberNumber, Long originCountryId) {
+        if (!StringUtils.hasText(ndcStr) || originCountryId == null) {
             log.info("findNationalSeriesDetails - Invalid input: ndc or originCountryId is null/empty.");
             return Optional.empty();
         }
+        
+        Integer ndc;
+        try {
+            ndc = Integer.parseInt(ndcStr);
+        } catch (NumberFormatException e) {
+            log.info("findNationalSeriesDetails - Could not parse NDC as integer: {}", ndcStr);
+            return Optional.empty();
+        }
+        
         log.info("Finding national series details for NDC: {}, Subscriber: {}, OriginCountryId: {}", ndc, subscriberNumber, originCountryId);
 
         StringBuilder sqlBuilder = new StringBuilder();
@@ -534,11 +466,11 @@ public class PrefixInfoLookupService {
         sqlBuilder.append("JOIN indicator i ON s.indicator_id = i.id ");
         sqlBuilder.append("WHERE i.telephony_type_id = :nationalType ");
         sqlBuilder.append("  AND s.ndc = :ndc ");
-        sqlBuilder.append("  AND CAST(s.initial_number AS BIGINT) <= :subscriberNumber AND CAST(s.final_number AS BIGINT) >= :subscriberNumber ");
+        sqlBuilder.append("  AND s.initial_number <= :subscriberNumber AND s.final_number >= :subscriberNumber ");
         sqlBuilder.append("  AND (i.operator_id = 0 OR i.operator_id IS NULL OR i.operator_id IN (SELECT p_sub.operator_id FROM prefix p_sub WHERE p_sub.id = :nationalRefPrefixId)) ");
         sqlBuilder.append("  AND i.origin_country_id IN (0, :originCountryId) ");
         sqlBuilder.append("  AND s.active = true AND i.active = true ");
-        sqlBuilder.append("ORDER BY i.origin_country_id DESC, LENGTH(s.ndc) DESC, (CAST(s.final_number AS BIGINT) - CAST(s.initial_number AS BIGINT)) ASC ");
+        sqlBuilder.append("ORDER BY i.origin_country_id DESC, (s.final_number - s.initial_number) ASC ");
         sqlBuilder.append("LIMIT 1");
 
         Query query = entityManager.createNativeQuery(sqlBuilder.toString());
