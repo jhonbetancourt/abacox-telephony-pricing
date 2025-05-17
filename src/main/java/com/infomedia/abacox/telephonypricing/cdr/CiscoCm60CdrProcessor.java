@@ -42,7 +42,7 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
     public static final String HDR_DEST_CALL_TERMINATION_ON_BEHALF_OF = "destcallterminationonbehalfof";
     public static final String HDR_DEST_CONVERSATION_ID = "destconversationid";
     public static final String HDR_FINAL_MOBILE_CALLED_PARTY_NUMBER = "finalmobilecalledpartynumber";
-    public static final String HDR_DEST_MOBILE_DEVICE_NAME_PARTITION = "destmobiledevicename";
+    public static final String HDR_DEST_MOBILE_DEVICE_NAME_PARTITION = "destmobiledevicename"; // Corresponds to PHP's partition for mobile redirect
 
     public static final String HDR_ORIG_VIDEO_CAP_CODEC = "origvideocap_codec";
     public static final String HDR_ORIG_VIDEO_CAP_BANDWIDTH = "origvideocap_bandwidth";
@@ -52,7 +52,7 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
     public static final String HDR_DEST_VIDEO_CAP_RESOLUTION = "destvideocap_resolution";
 
     private static final String CDR_DELIMITER = ",";
-    private static final String CONFERENCE_IDENTIFIER_PREFIX = "b"; // PHP: $cm_config['cdr_conferencia']
+    private static final String CONFERENCE_IDENTIFIER_PREFIX = "b";
 
     private final CdrConfigService cdrConfigService;
 
@@ -68,6 +68,7 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
         for (int i = 0; i < headers.length; i++) {
             columnMapping.put(CdrHelper.cleanString(headers[i]).toLowerCase(), i);
         }
+        // Check for a few absolutely essential fields to validate the header
         if (!columnMapping.containsKey(HDR_CALLING_PARTY_NUMBER) ||
             !columnMapping.containsKey(HDR_FINAL_CALLED_PARTY_NUMBER) ||
             !columnMapping.containsKey(HDR_DATETIME_ORIGINATION) ||
@@ -81,7 +82,7 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
 
     @Override
     public RawCdrData parseCdrLine(String cdrLine, CommunicationLocation commLocation, Map<String, Integer> columnMapping) {
-        String[] columns = cdrLine.split(CDR_DELIMITER, -1);
+        String[] columns = cdrLine.split(CDR_DELIMITER, -1); // -1 to keep trailing empty strings
 
         int maxExpectedIndex = columnMapping.values().stream().filter(Objects::nonNull).mapToInt(v -> v).max().orElse(0);
         if (columns.length <= maxExpectedIndex) {
@@ -103,20 +104,24 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
         rawData.setCallingPartyNumber(getColumnValue(columns, columnMapping, HDR_CALLING_PARTY_NUMBER));
         rawData.setCallingPartyNumberPartition(getColumnValue(columns, columnMapping, HDR_CALLING_PARTY_NUMBER_PARTITION).toUpperCase());
 
+        // Store original values that might be used as fallbacks or for specific logic steps
         rawData.setOriginal_finalCalledPartyNumber(getColumnValue(columns, columnMapping, HDR_FINAL_CALLED_PARTY_NUMBER));
         rawData.setOriginal_finalCalledPartyNumberPartition(getColumnValue(columns, columnMapping, HDR_FINAL_CALLED_PARTY_NUMBER_PARTITION).toUpperCase());
         rawData.setOriginal_originalCalledPartyNumber(getColumnValue(columns, columnMapping, HDR_ORIGINAL_CALLED_PARTY_NUMBER));
         rawData.setOriginal_originalCalledPartyNumberPartition(getColumnValue(columns, columnMapping, HDR_ORIGINAL_CALLED_PARTY_NUMBER_PARTITION).toUpperCase());
-        rawData.setOriginal_lastRedirectDn(getColumnValue(columns, columnMapping, HDR_LAST_REDIRECT_DN));
-        rawData.setOriginal_lastRedirectDnPartition(getColumnValue(columns, columnMapping, HDR_LAST_REDIRECT_DN_PARTITION).toUpperCase());
+        
+        // lastRedirectDn is critical and its original value needs to be preserved before certain modifications
+        String originalLastRedirectDn = getColumnValue(columns, columnMapping, HDR_LAST_REDIRECT_DN);
+        rawData.setOriginal_lastRedirectDn(originalLastRedirectDn); // Store the very original value
+        rawData.setPreservedOriginalLastRedirectDnForConferenceLogic(originalLastRedirectDn); // This one is specifically for conference logic checks
+        rawData.setLastRedirectDn(originalLastRedirectDn); // Initialize current lastRedirectDn
 
+        rawData.setOriginal_lastRedirectDnPartition(getColumnValue(columns, columnMapping, HDR_LAST_REDIRECT_DN_PARTITION).toUpperCase());
+        rawData.setLastRedirectDnPartition(rawData.getOriginal_lastRedirectDnPartition()); // Initialize current
+
+        // Initialize finalCalledPartyNumber with its direct parsed value
         rawData.setFinalCalledPartyNumber(rawData.getOriginal_finalCalledPartyNumber());
         rawData.setFinalCalledPartyNumberPartition(rawData.getOriginal_finalCalledPartyNumberPartition());
-        rawData.setLastRedirectDn(rawData.getOriginal_lastRedirectDn());
-        rawData.setLastRedirectDnPartition(rawData.getOriginal_lastRedirectDnPartition());
-        // Preserve the original lastRedirectDn value *before* it might be overwritten by originalCalledParty logic
-        rawData.setPreservedOriginalLastRedirectDnForConferenceLogic(rawData.getOriginal_lastRedirectDn());
-
 
         rawData.setDuration(getIntColumnValue(columns, columnMapping, HDR_DURATION));
         rawData.setAuthCodeDescription(getColumnValue(columns, columnMapping, HDR_AUTH_CODE_DESCRIPTION));
@@ -128,7 +133,6 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
         rawData.setDestConversationId(getLongColumnValue(columns, columnMapping, HDR_DEST_CONVERSATION_ID));
         rawData.setGlobalCallIDCallId(getLongColumnValue(columns, columnMapping, HDR_GLOBAL_CALL_ID_CALL_ID));
 
-        // Parse mobile redirect fields, but their usage for overriding destination is handled later if needed
         rawData.setFinalMobileCalledPartyNumber(getColumnValue(columns, columnMapping, HDR_FINAL_MOBILE_CALLED_PARTY_NUMBER));
         rawData.setDestMobileDeviceNamePartition(getColumnValue(columns, columnMapping, HDR_DEST_MOBILE_DEVICE_NAME_PARTITION).toUpperCase());
 
@@ -139,24 +143,27 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
         rawData.setDestVideoCapBandwidth(getIntColumnValue(columns, columnMapping, HDR_DEST_VIDEO_CAP_BANDWIDTH));
         rawData.setDestVideoCapResolution(getIntColumnValue(columns, columnMapping, HDR_DEST_VIDEO_CAP_RESOLUTION));
 
-        // --- Step 2: Calculate ring time, adjust duration ---
+        // --- Step 2: Calculate ring time, adjust duration if call never connected ---
         if (dateTimeConnectEpoch != null && dateTimeConnectEpoch > 0 && dateTimeOriginationEpoch != null) {
             rawData.setRingTime((int) (dateTimeConnectEpoch - dateTimeOriginationEpoch));
         } else if (dateTimeDisconnectEpoch != null && dateTimeOriginationEpoch != null) {
+            // Call never connected or connected for less than 1s (duration would be 0 from CDR)
             rawData.setRingTime((int) (dateTimeDisconnectEpoch - dateTimeOriginationEpoch));
-            rawData.setDuration(0);
+            rawData.setDuration(0); // Ensure duration is 0 if not connected
         }
         if (rawData.getRingTime() != null && rawData.getRingTime() < 0) rawData.setRingTime(0);
 
-        // --- Step 3: Handle empty finalCalledPartyNumber (use originalCalledPartyNumber) ---
+
+        // --- Step 3: If finalCalledPartyNumber is empty, use originalCalledPartyNumber ---
         if (rawData.getFinalCalledPartyNumber().isEmpty()) {
             rawData.setFinalCalledPartyNumber(rawData.getOriginal_originalCalledPartyNumber());
             rawData.setFinalCalledPartyNumberPartition(rawData.getOriginal_originalCalledPartyNumberPartition());
         }
-        // --- Step 4: Handle finalCalledPartyNumber differing from originalCalledPartyNumber ---
+        // --- Step 4: If finalCalledPartyNumber differs from originalCalledPartyNumber,
+        // and original lastRedirectDn was not a conference ID, update lastRedirectDn to originalCalledPartyNumber
         else if (!rawData.getOriginal_originalCalledPartyNumber().isEmpty() &&
                  !rawData.getFinalCalledPartyNumber().equals(rawData.getOriginal_originalCalledPartyNumber())) {
-            // If lastRedirectDn (original value) was NOT a conference ID, update it
+            // Use the preserved original lastRedirectDn for this check
             if (!isConferenceIdentifier(rawData.getPreservedOriginalLastRedirectDnForConferenceLogic())) {
                 rawData.setLastRedirectDn(rawData.getOriginal_originalCalledPartyNumber());
                 rawData.setLastRedirectDnPartition(rawData.getOriginal_originalCalledPartyNumberPartition());
@@ -164,33 +171,40 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
         }
 
         // --- Step 5 & 6: Conference and Redirect Logic ---
+        // These variables will reflect the current state of numbers/partitions as they are modified
         boolean isCurrentFinalCalledPartyConference = isConferenceIdentifier(rawData.getFinalCalledPartyNumber());
-        boolean isCurrentLastRedirectDnConference = isConferenceIdentifier(rawData.getLastRedirectDn()); // Uses potentially updated lastRedirectDn
+        // For isCurrentLastRedirectDnConference, we use the *current* value of lastRedirectDn,
+        // which might have been updated in Step 4.
+        boolean isCurrentLastRedirectDnConference = isConferenceIdentifier(rawData.getLastRedirectDn());
         Integer joinOnBehalfOf = rawData.getJoinOnBehalfOf();
-        boolean invertTrunksForConference = true;
+        boolean invertTrunksForConference = true; // Flag to control trunk inversion for conference calls
 
         if (isCurrentFinalCalledPartyConference) {
             ImdexTransferCause confCause = (joinOnBehalfOf != null && joinOnBehalfOf == 7) ?
                                            ImdexTransferCause.PRE_CONFERENCE_NOW : ImdexTransferCause.CONFERENCE;
             updateImdexTransferCause(rawData, confCause);
 
-            if (!isCurrentLastRedirectDnConference) {
+            if (!isCurrentLastRedirectDnConference) { // If lastRedirectDn is not itself a conference ID
                 String tempConfId = rawData.getFinalCalledPartyNumber();
                 String tempConfPart = rawData.getFinalCalledPartyNumberPartition();
 
+                // finalCalled becomes what was in lastRedirect
                 rawData.setFinalCalledPartyNumber(rawData.getLastRedirectDn());
                 rawData.setFinalCalledPartyNumberPartition(rawData.getLastRedirectDnPartition());
 
+                // lastRedirect becomes the conference ID
                 rawData.setLastRedirectDn(tempConfId);
                 rawData.setLastRedirectDnPartition(tempConfPart);
 
                 if (confCause == ImdexTransferCause.PRE_CONFERENCE_NOW) {
-                     if (rawData.getDestConversationId() != null) {
+                     if (rawData.getDestConversationId() != null && rawData.getDestConversationId() > 0) {
+                         // PHP: $info_arr['ext-redir']   = 'i'.$info_arr['indice-conferencia'];
                          rawData.setLastRedirectDn("i" + rawData.getDestConversationId());
                     }
                 }
             }
 
+            // If it's a conference and not a "joinOnBehalfOf 7" (conference now), invert caller/callee
             if (joinOnBehalfOf == null || joinOnBehalfOf != 7) {
                 String tempNum = rawData.getCallingPartyNumber();
                 String tempPart = rawData.getCallingPartyNumberPartition();
@@ -199,24 +213,26 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
                 rawData.setFinalCalledPartyNumber(tempNum);
                 rawData.setFinalCalledPartyNumberPartition(tempPart);
             }
-        } else {
-            if (isCurrentLastRedirectDnConference) { // Check current lastRedirectDn
+        } else { // finalCalledPartyNumber is NOT a conference ID
+            // Check if lastRedirectDn IS a conference ID (call ending from a conference)
+            if (isCurrentLastRedirectDnConference) {
                 if (updateImdexTransferCause(rawData, ImdexTransferCause.CONFERENCE_END)) {
-                    invertTrunksForConference = false;
+                    invertTrunksForConference = false; // Do not invert trunks for conference_end scenario
                 }
             }
         }
 
-        // --- Step 7: Self-Call Discard (PHP: $ignorar = ($cdr_extension_fin == $cdr_extension_ori && $cdr_particion_fin == $cdr_particion_ori);) ---
-        // This check uses the state of numbers/partitions *after* the conference logic above, but *before* incoming call detection swaps.
+        // --- Step 7: Self-Call Discard ---
+        // Uses the state of numbers/partitions *after* the conference logic above
         if (Objects.equals(rawData.getCallingPartyNumber(), rawData.getFinalCalledPartyNumber()) &&
             Objects.equals(rawData.getCallingPartyNumberPartition(), rawData.getFinalCalledPartyNumberPartition())) {
             log.warn("Self-call detected after conference processing. CDR: {}", cdrLine);
+            // In PHP, this would lead to the record being skipped. Here, we throw to indicate failure.
             throw new CdrProcessingException("Self-call detected: " + cdrLine);
         }
 
         // --- Step 8: Incoming Call Detection ---
-        rawData.setIncomingCall(false); // Default
+        rawData.setIncomingCall(false); // Default to outgoing
         InternalExtensionLimitsDto limits = cdrConfigService.getInternalExtensionLimits(
             commLocation.getIndicator() != null ? commLocation.getIndicator().getOriginCountryId() : null,
             commLocation.getId()
@@ -227,51 +243,59 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
         String currentCallingPart = rawData.getCallingPartyNumberPartition();
         String currentFinalCalledNum = rawData.getFinalCalledPartyNumber();
         String currentFinalCalledPart = rawData.getFinalCalledPartyNumberPartition();
-        String currentLastRedirectNum = rawData.getLastRedirectDn(); // This is the one that might be 'bXXXX'
+        String currentLastRedirectNum = rawData.getLastRedirectDn();
         String currentLastRedirectPart = rawData.getLastRedirectDnPartition();
 
         ImdexTransferCause currentTransferCause = rawData.getImdexTransferCause();
+
         if (currentTransferCause == ImdexTransferCause.CONFERENCE ||
             currentTransferCause == ImdexTransferCause.PRE_CONFERENCE_NOW ||
             currentTransferCause == ImdexTransferCause.CONFERENCE_END) {
-
+            // For conference-related calls, incoming status is determined differently
             boolean isEffectivelyIncomingForConference =
                 (currentFinalCalledPart == null || currentFinalCalledPart.isEmpty()) &&
                 (currentFinalCalledNum.isEmpty() || !CdrHelper.isPotentialExtension(currentFinalCalledNum, limits));
 
             if (isEffectivelyIncomingForConference) {
                 rawData.setIncomingCall(true);
-            } else if (invertTrunksForConference) {
+            } else if (invertTrunksForConference) { // If not incoming and trunks should be inverted
                 String tempTrunk = rawData.getOrigDeviceName();
                 rawData.setOrigDeviceName(rawData.getDestDeviceName());
                 rawData.setDestDeviceName(tempTrunk);
             }
-        } else {
+        } else { // Non-conference related call direction determination
             boolean isOriginInternal = isInternalParty(currentCallingNum, currentCallingPart, limits);
             boolean isDestinationInternal = isInternalParty(currentFinalCalledNum, currentFinalCalledPart, limits);
-            // For incoming, PHP also checks redirect. If destination is not internal but redirect is, it's still incoming.
             boolean isRedirectInternal = isInternalParty(currentLastRedirectNum, currentLastRedirectPart, limits);
 
             if (!isOriginInternal && (isDestinationInternal || isRedirectInternal)) {
                 rawData.setIncomingCall(true);
-                // PHP: _invertir($info_arr['dial_number'], $info_arr['ext']); // Partitions NOT swapped here
+                // Swap callingPartyNumber and finalCalledPartyNumber (partitions remain with their original numbers)
                 String tempNum = rawData.getCallingPartyNumber(); // This is the external number
+                // String tempPartForFinal = rawData.getCallingPartyNumberPartition(); // Partition of external
+
                 rawData.setCallingPartyNumber(rawData.getFinalCalledPartyNumber()); // This becomes the internal extension
-                // rawData.setCallingPartyNumberPartition(...); // Partition remains that of finalCalledParty
+                // rawData.setCallingPartyNumberPartition(...); // Partition remains that of finalCalledParty (internal)
+
                 rawData.setFinalCalledPartyNumber(tempNum); // This becomes the external number
-                // rawData.setFinalCalledPartyNumberPartition(...); // Partition remains that of callingParty
+                // rawData.setFinalCalledPartyNumberPartition(tempPartForFinal); // Partition becomes that of external
             }
         }
 
-        // --- Step 9: Final Transfer Cause (non-conference redirects) ---
-        if (rawData.getImdexTransferCause() == ImdexTransferCause.NO_TRANSFER) {
+        // --- Step 9: Final Transfer Cause (for non-conference redirects) ---
+        if (rawData.getImdexTransferCause() == ImdexTransferCause.NO_TRANSFER) { // Only if not already set by conference logic
             if (currentLastRedirectNum != null && !currentLastRedirectNum.isEmpty()) {
-                String effectiveDestForTransferCheck = rawData.isIncomingCall() ? rawData.getCallingPartyNumber() : rawData.getFinalCalledPartyNumber();
+                // Determine the "effective" destination of the call *before* this potential redirect
+                String effectiveDestForTransferCheck = rawData.isIncomingCall() ?
+                                                       rawData.getCallingPartyNumber() : // If incoming, callingPartyNum is the internal ext
+                                                       rawData.getFinalCalledPartyNumber();
+
                 if (!Objects.equals(effectiveDestForTransferCheck, currentLastRedirectNum)) {
                     Integer redirectReason = rawData.getLastRedirectRedirectReason();
-                    if (redirectReason != null && redirectReason > 0 && redirectReason <= 16) {
+                    if (redirectReason != null && redirectReason > 0 && redirectReason <= 16) { // Cisco defined redirect reasons
                         updateImdexTransferCause(rawData, ImdexTransferCause.NORMAL);
                     } else {
+                        // destCallTerminationOnBehalfOf = 7 means "Park" which PHP maps to PRE_CONFERENCE_NOW for some reason
                         ImdexTransferCause autoCause = (rawData.getDestCallTerminationOnBehalfOf() != null && rawData.getDestCallTerminationOnBehalfOf() == 7) ?
                                                        ImdexTransferCause.PRE_CONFERENCE_NOW : ImdexTransferCause.AUTO_TRANSFER;
                         updateImdexTransferCause(rawData, autoCause);
@@ -279,14 +303,14 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
                 }
             }
         }
-
+        
         // --- Step 10: Set Final Effective Numbers in rawData ---
         // These are the numbers after all parsing logic, to be used by EnrichmentService
         rawData.setEffectiveOriginatingNumber(rawData.getCallingPartyNumber());
         rawData.setEffectiveOriginatingPartition(rawData.getCallingPartyNumberPartition());
         rawData.setEffectiveDestinationNumber(rawData.getFinalCalledPartyNumber());
         rawData.setEffectiveDestinationPartition(rawData.getFinalCalledPartyNumberPartition());
-        
+
         return rawData;
     }
 
@@ -295,7 +319,7 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
         if (index != null && index >= 0 && index < columns.length) {
             return CdrHelper.cleanString(columns[index]);
         }
-        log.trace("Header key '{}' not found or index out of bounds. Returning empty string.", headerKey);
+        log.trace("Header key '{}' not found or index out of bounds for line. Returning empty string.", headerKey);
         return "";
     }
 
@@ -303,10 +327,11 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
         String val = getColumnValue(columns, columnMapping, headerKey);
         if (!val.isEmpty()) {
             try {
+                // Remove any non-numeric characters before parsing, as some fields might have them (e.g. IPs in decimal)
                 String numericPart = val.replaceAll("[^0-9]", "");
                 if (!numericPart.isEmpty()) return Long.parseLong(numericPart);
             } catch (NumberFormatException e) {
-                 log.warn("NFE for long key '{}': val '{}', original column value '{}'", headerKey, val, columns[columnMapping.get(headerKey.toLowerCase())]);
+                log.warn("NumberFormatException for long key '{}': val '{}', original column value '{}'", headerKey, val, columns[columnMapping.get(headerKey.toLowerCase())]);
             }
         }
         return null;
@@ -316,10 +341,11 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
         String val = getColumnValue(columns, columnMapping, headerKey);
         if (!val.isEmpty()) {
              try {
-                String numericPart = val.replaceAll("[^0-9-]", ""); // Allow negative for some codes
+                // Allow negative sign for some codes, remove other non-numerics
+                String numericPart = val.replaceAll("[^0-9-]", "");
                 if (!numericPart.isEmpty() && !"-".equals(numericPart)) return Integer.parseInt(numericPart);
             } catch (NumberFormatException e) {
-                log.warn("NFE for int key '{}': val '{}', original column value '{}'", headerKey, val, columns[columnMapping.get(headerKey.toLowerCase())]);
+                log.warn("NumberFormatException for int key '{}': val '{}', original column value '{}'", headerKey, val, columns[columnMapping.get(headerKey.toLowerCase())]);
             }
         }
         return null;
@@ -330,28 +356,33 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
         String prefixLower = CONFERENCE_IDENTIFIER_PREFIX.toLowerCase();
         if (number.toLowerCase().startsWith(prefixLower)) {
             String restOfNumber = number.substring(prefixLower.length());
+            // Ensure the rest of the number is not empty and is purely numeric
             return !restOfNumber.isEmpty() && CdrHelper.isNumeric(restOfNumber);
         }
         return false;
     }
 
     private boolean isInternalParty(String number, String partition, InternalExtensionLimitsDto limits) {
-        // PHP: ($info_arr['partorigen'] != '' && ExtensionPosible($info_arr['ext']))
+        // An internal party is identified by having a non-empty partition AND being a potential extension
         return (partition != null && !partition.isEmpty()) && CdrHelper.isPotentialExtension(number, limits);
     }
 
+    /**
+     * Updates the ImdexTransferCause in RawCdrData.
+     * If current cause is NO_TRANSFER, it's updated.
+     * If current cause is same as newCause, no change.
+     * Otherwise (current cause is set and different from newCause), no change (PHP logic).
+     * @return true if the cause was set (either newly or to the same value), false otherwise.
+     */
     private boolean updateImdexTransferCause(RawCdrData rawData, ImdexTransferCause newCause) {
-        // PHP: if ($info_arr['info_transfer'] == 0 || $info_arr['info_transfer'] == $causa)
         if (rawData.getImdexTransferCause() == ImdexTransferCause.NO_TRANSFER) {
             rawData.setImdexTransferCause(newCause);
             return true;
         }
-        // If already set, only update if it's the same cause (idempotency) or perhaps a more specific one.
-        // For now, simple "set if not set" or "set if same".
         if (rawData.getImdexTransferCause() == newCause) {
             return true;
         }
-        // If a cause is already set and the new one is different, PHP logic implies it doesn't overwrite.
+        // If already set to a different cause, PHP logic doesn't seem to overwrite.
         return false;
     }
 }
