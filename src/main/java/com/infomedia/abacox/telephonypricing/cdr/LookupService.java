@@ -15,7 +15,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 @Service
 @Log4j2
@@ -35,19 +34,8 @@ public class LookupService {
             return Optional.empty();
         }
     }
-    
-    private InternalExtensionLimitsDto currentInternalLimits = null;
-    private Long currentLimitsOriginCountryId = null;
-    private Long currentLimitsCommLocationId = null;
 
     public InternalExtensionLimitsDto getInternalExtensionLimits(Long originCountryId, Long commLocationId) {
-        // Check if limits for this context are already computed in this request lifecycle
-        if (currentInternalLimits != null &&
-            (originCountryId == null || originCountryId.equals(currentLimitsOriginCountryId)) && // null originCountryId means global limits
-            (commLocationId == null || commLocationId.equals(currentLimitsCommLocationId))) {    // null commLocationId means not specific to a location
-            return currentInternalLimits;
-        }
-
 
         int minLength = 100; // Default high to find true min
         int maxLength = 0;   // Default low to find true max
@@ -121,11 +109,8 @@ public class LookupService {
         
         @SuppressWarnings("unchecked")
         List<String> specialExtensions = specialExtQuery.getResultList();
-        
-        currentInternalLimits = new InternalExtensionLimitsDto(minLength, maxLength, minNumericValue, maxNumericValue, specialExtensions);
-        currentLimitsOriginCountryId = originCountryId;
-        currentLimitsCommLocationId = commLocationId;
-        
+
+        InternalExtensionLimitsDto currentInternalLimits = new InternalExtensionLimitsDto(minLength, maxLength, minNumericValue, maxNumericValue, specialExtensions);
         log.debug("Calculated InternalExtensionLimits for originCountryId={}, commLocationId={}: {}", originCountryId, commLocationId, currentInternalLimits);
         return currentInternalLimits;
     }
