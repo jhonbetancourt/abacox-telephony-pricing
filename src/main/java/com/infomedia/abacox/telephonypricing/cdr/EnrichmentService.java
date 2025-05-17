@@ -32,24 +32,6 @@ public class EnrichmentService {
         assignEmployee(callRecord, rawData, commLocation, internalLimits);
         determineCallTypeAndPricing(callRecord, rawData, commLocation, internalLimits);
 
-        // Handle Mobile Redirect logic here if it's a general rule or if RawCdrData indicates it
-        if (rawData.getFinalMobileCalledPartyNumber() != null && !rawData.getFinalMobileCalledPartyNumber().isEmpty()) {
-            String currentEffectiveDest = callRecord.isIncoming() ? callRecord.getEmployeeExtension() : callRecord.getDial();
-            if (!Objects.equals(currentEffectiveDest, rawData.getFinalMobileCalledPartyNumber())) {
-                // This implies a redirection to mobile happened.
-                // The callRecord.dial might need to be updated to finalMobileCalledPartyNumber
-                // and telephony type might change. This is complex and needs specific business rules.
-                // For now, we log it.
-                log.debug("Mobile redirection detected. Original effective dest: {}, mobile dest: {}. CDR Hash: {}",
-                    currentEffectiveDest, rawData.getFinalMobileCalledPartyNumber(), callRecord.getCdrHash());
-                // If this redirection means the call is now external and should be priced differently:
-                // callRecord.setDial(rawData.getFinalMobileCalledPartyNumber());
-                // And then re-evaluate pricing based on this new number.
-                // This is a placeholder for potentially significant logic.
-            }
-        }
-
-
         if (callRecord.getDuration() != null && callRecord.getDuration() == 0 &&
             callRecord.getTelephonyTypeId() != null &&
             !Objects.equals(callRecord.getTelephonyTypeId(), TelephonyTypeConstants.ERRORES) &&

@@ -15,36 +15,40 @@ public class RawCdrData {
     private LocalDateTime dateTimeConnect;
     private LocalDateTime dateTimeDisconnect;
 
-    // These fields will be manipulated during parsing based on conference/redirect logic
+    // These fields will be manipulated during parsing based on conference/redirect logic.
+    // They represent the "current" state of these numbers/partitions during parsing.
     private String callingPartyNumber;
     private String callingPartyNumberPartition;
     private String finalCalledPartyNumber;
     private String finalCalledPartyNumberPartition;
-    private String lastRedirectDn; // Stores the last redirect destination number
-    private String lastRedirectDnPartition; // Stores the partition for lastRedirectDn
+    private String lastRedirectDn;
+    private String lastRedirectDnPartition;
 
-    // Store original values for specific logic steps
+    // Store original values for specific logic steps and fallbacks
+    private String original_callingPartyNumber; // To restore if swaps happen
+    private String original_callingPartyNumberPartition;
     private String original_finalCalledPartyNumber;
     private String original_finalCalledPartyNumberPartition;
     private String original_originalCalledPartyNumber;
     private String original_originalCalledPartyNumberPartition;
-    private String original_lastRedirectDn; // Preserves initial value of lastRedirectDn before modifications
+    private String original_lastRedirectDn; // Stores the value of lastRedirectDn as read from CDR
     private String original_lastRedirectDnPartition;
 
+    // Mobile redirection fields
     private String finalMobileCalledPartyNumber;
-    private String destMobileDeviceNamePartition; // Partition for finalMobileCalledPartyNumber
+    private String destMobileDeviceName; // This is the "partition" field for mobile number in PHP
 
     private Integer duration;
     private String authCodeDescription;
-    private Integer lastRedirectRedirectReason;
-    private String origDeviceName;
-    private String destDeviceName;
-    private Integer joinOnBehalfOf;
-    private Integer destCallTerminationOnBehalfOf;
-    private Long destConversationId;
-    private Long globalCallIDCallId;
+    private Integer lastRedirectRedirectReason; // Cisco's reason code for redirection
+    private String origDeviceName; // Trunk/Device
+    private String destDeviceName; // Trunk/Device
+    private Integer joinOnBehalfOf; // Reason for joining a call (e.g., conference, park pickup)
+    private Integer destCallTerminationOnBehalfOf; // Reason for call termination
+    private Long destConversationId; // Conference ID
+    private Long globalCallIDCallId; // Unique call ID
 
-    // Video related fields (can be null if not present)
+    // Video related fields
     private Integer origVideoCapCodec;
     private Integer origVideoCapBandwidth;
     private Integer origVideoCapResolution;
@@ -58,11 +62,9 @@ public class RawCdrData {
     private ImdexTransferCause imdexTransferCause = ImdexTransferCause.NO_TRANSFER;
 
     // Final "effective" numbers and partitions to be used by EnrichmentService
+    // These are set at the end of the parsing logic.
     private String effectiveOriginatingNumber;
     private String effectiveOriginatingPartition;
     private String effectiveDestinationNumber;
     private String effectiveDestinationPartition;
-
-    // Helper to preserve original lastRedirectDn if it was modified due to originalCalledParty logic
-    private String preservedOriginalLastRedirectDnForConferenceLogic;
 }
