@@ -8,15 +8,19 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+
 
 public class CdrHelper {
 
     private static final Pattern NUMERIC_PATTERN = Pattern.compile("^[0-9]+$");
     private static final DateTimeFormatter CISCO_DATE_FORMATTER = DateTimeFormatter.ofPattern("MMM dd HH:mm:ss yyyy z", Locale.ENGLISH)
-            .withZone(ZoneId.of("UTC"));
+            .withZone(ZoneId.of("UTC")); // Assuming Cisco CDR dates are UTC
 
 
     public static String calculateSha256(String input) {
@@ -51,21 +55,13 @@ public class CdrHelper {
         if (input == null) return "";
         return input.trim().replace("\"", "");
     }
-
-    /**
-     * Cleans a phone number by removing non-essential characters and optionally stripping PBX prefixes.
-     * Mimics PHP's limpiar_numero.
-     * @param number The raw number string.
-     * @param pbxPrefixes List of PBX prefixes to strip.
-     * @param safeMode If true and a PBX prefix is defined but not found, returns original number (for further processing).
-     *                 If false and PBX prefix defined but not found, returns empty string.
-     * @return Cleaned number.
-     */
+    
     public static String cleanAndStripPhoneNumber(String number, List<String> pbxPrefixes, boolean safeMode) {
         if (number == null) return "";
         String currentNumber = number.trim();
+        boolean pbxPrefixesAvailable = pbxPrefixes != null && !pbxPrefixes.isEmpty();
 
-        if (pbxPrefixes != null && !pbxPrefixes.isEmpty()) {
+        if (pbxPrefixesAvailable) {
             boolean prefixFound = false;
             for (String pbxPrefix : pbxPrefixes) {
                 if (pbxPrefix != null && !pbxPrefix.isEmpty() && currentNumber.startsWith(pbxPrefix)) {
@@ -74,32 +70,26 @@ public class CdrHelper {
                     break;
                 }
             }
-            if (!prefixFound && !safeMode) { // If prefix was expected (not safe mode) but not found
-                return ""; // PHP logic implies returning empty if prefix mandatory and not found
+            if (!prefixFound && !safeMode) {
+                return ""; 
             }
         }
         
-        // PHP: Elimina si y solo si encuentra "#" o "*" en una posicion cualquiera posterior al primer caracter
         if (currentNumber.length() > 1) {
             String firstChar = currentNumber.substring(0, 1);
             String rest = currentNumber.substring(1);
             
             StringBuilder cleanedRest = new StringBuilder();
-            boolean nonNumericFound = false;
             for (char c : rest.toCharArray()) {
-                if (Character.isDigit(c)) {
-                    cleanedRest.append(c);
-                } else if (c == '#' || c == '*') { // Allow these specific chars
+                if (Character.isDigit(c) || c == '#' || c == '*') {
                     cleanedRest.append(c);
                 } else {
-                    nonNumericFound = true; // Mark that a non-allowed char was found
-                    break; // Stop at the first non-allowed, non-numeric char
+                    break; 
                 }
             }
             currentNumber = firstChar + cleanedRest.toString();
         }
         
-        // Remove leading '+' if present (PHP: if ($primercar == '+') { $primercar = ''; })
         if (currentNumber.startsWith("+")) {
             currentNumber = currentNumber.substring(1);
         }
@@ -107,11 +97,10 @@ public class CdrHelper {
         return currentNumber;
     }
     
-    public static String cleanPhoneNumber(String number) { // Simpler version if no PBX stripping needed
+    public static String cleanPhoneNumber(String number) {
         if (number == null) return "";
         return number.replaceAll("[^0-9#*+]", "");
     }
-
 
     public static int durationToSeconds(String durationString) {
         if (durationString == null || durationString.trim().isEmpty()) {
@@ -121,18 +110,18 @@ public class CdrHelper {
         String[] parts = cleanDuration.split(":");
         int seconds = 0;
         try {
-            if (parts.length == 3) { // HH:MM:SS
+            if (parts.length == 3) { 
                 seconds = Integer.parseInt(parts[0].trim()) * 3600 +
                           Integer.parseInt(parts[1].trim()) * 60 +
                           Integer.parseInt(parts[2].trim());
-            } else if (parts.length == 2) { // MM:SS
+            } else if (parts.length == 2) { 
                 seconds = Integer.parseInt(parts[0].trim()) * 60 +
                           Integer.parseInt(parts[1].trim());
-            } else if (parts.length == 1 && isNumeric(parts[0].trim())) { // Seconds
+            } else if (parts.length == 1 && isNumeric(parts[0].trim())) { 
                 seconds = Integer.parseInt(parts[0].trim());
             }
         } catch (NumberFormatException e) {
-             System.err.println("Could not parse duration string: " + durationString);
+            System.err.println("Could not parse duration string: " + durationString);
             return 0;
         }
         return seconds;
@@ -155,30 +144,64 @@ public class CdrHelper {
             return true;
         }
 
-        if (isNumeric(cleanedExtension) && !cleanedExtension.startsWith("0")) {
+        if (isNumeric(cleanedExtension) && !cleanedExtension.startsWith("0")) { // PHP: not(FUNCIONARIO_EXTENSION LIKE '0%')
             try {
-                long numericExt = Long.parseLong(cleanedExtension);
                 // PHP logic: $extension >= $_LIM_INTERNAS['min'] && $extension <= $_LIM_INTERNAS['max']
                 // Where min/max are numeric values derived from lengths (e.g. minLength 4 -> 1000)
+                // The PHP logic for min/max numeric values based on length is:
+                // min: '1' + '0'.repeat(length-1)
+                // max: '9'.repeat(length)
+                // This was simplified to just length check in previous Java. Reinstating numeric value check.
+                long numericExt = Long.parseLong(cleanedExtension);
                 return numericExt >= limits.getMinNumericValue() && numericExt <= limits.getMaxNumericValue() &&
                        cleanedExtension.length() >= limits.getMinLength() && cleanedExtension.length() <= limits.getMaxLength();
             } catch (NumberFormatException e) {
-                return false;
+                return false; // Not a valid long, so not a typical numeric extension
             }
         }
         return false;
     }
 
-    public static String padSeries(String seriesPart, int targetLength, boolean padWithZerosAtEnd) {
-        if (seriesPart == null) seriesPart = "";
-        if (seriesPart.length() >= targetLength) {
-            return seriesPart.substring(0, targetLength);
+    public static PaddedSeriesDto rellenaSerie(String telefono, String ndc, String serieInicialStr, String serieFinalStr) {
+        // Convert series parts to string, handle nulls
+        String initial = (serieInicialStr == null) ? "" : String.valueOf(serieInicialStr);
+        String finalNum = (serieFinalStr == null) ? "" : String.valueOf(serieFinalStr);
+
+        int lenInitial = initial.length();
+        int lenFinal = finalNum.length();
+        int diff = lenFinal - lenInitial;
+
+        if (diff > 0) { // Initial < Final, pad initial with leading zeros
+            initial = String.join("", Collections.nCopies(diff, "0")) + initial;
+        } else if (diff < 0) { // Initial > Final, pad final with trailing nines
+            finalNum = finalNum + String.join("", Collections.nCopies(-diff, "9"));
         }
-        char padChar = padWithZerosAtEnd ? '0' : '9'; // PHP uses 0 for initial_number padding, 9 for final_number
-        StringBuilder sb = new StringBuilder(seriesPart);
-        while (sb.length() < targetLength) {
-            sb.append(padChar);
+        // Now initial and finalNum have the same conceptual length for comparison base
+
+        int lenSeries = initial.length(); // Length of the series part
+        int lenNdc = (ndc == null) ? 0 : ndc.length();
+        int lenTelefono = (telefono == null) ? 0 : telefono.length();
+
+        int diffLenTelefonoSeries = lenTelefono - lenNdc; // This is the length of the part of 'telefono' that should match the series
+
+        if (diffLenTelefonoSeries != lenSeries) {
+            if (diffLenTelefonoSeries < 0) { // Should not happen if NDC is shorter than phone
+                 return new PaddedSeriesDto(ndc + initial, ndc + finalNum); // Or handle error
+            }
+            // Pad series to match the length of the comparable part of 'telefono'
+            initial = initial + String.join("", Collections.nCopies(diffLenTelefonoSeries - lenSeries, "0"));
+            finalNum = finalNum + String.join("", Collections.nCopies(diffLenTelefonoSeries - lenSeries, "9"));
         }
-        return sb.toString();
+        return new PaddedSeriesDto(ndc + initial, ndc + finalNum);
+    }
+
+    public static int duracionMinuto(int durationSeconds, boolean billedInSeconds) {
+        if (billedInSeconds) {
+            return durationSeconds; // Each second is a unit
+        }
+        if (durationSeconds <= 0) {
+            return 0; // Or 1 if minimum billing is 1 minute even for 0 second calls (PHP implies 0 if duration <=0)
+        }
+        return (int) Math.ceil((double) durationSeconds / 60.0);
     }
 }
