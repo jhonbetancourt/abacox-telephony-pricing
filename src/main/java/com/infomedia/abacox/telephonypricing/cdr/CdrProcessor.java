@@ -23,4 +23,6 @@ public interface CdrProcessor {
      * @throws CdrProcessingException if header is invalid.
      */
     Map<String, Integer> establishColumnMapping(String headerLine);
+
+    String getCdrDelimiter();
 }

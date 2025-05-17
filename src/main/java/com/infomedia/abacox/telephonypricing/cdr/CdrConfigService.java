@@ -3,7 +3,6 @@ package com.infomedia.abacox.telephonypricing.cdr;
 import com.infomedia.abacox.telephonypricing.entity.CommunicationLocation;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
-import jakarta.persistence.Query;
 import lombok.Getter;
 import org.springframework.stereotype.Service;
 
@@ -14,7 +13,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Service
-public class ConfigurationService {
+public class CdrConfigService {
 
     @PersistenceContext
     private EntityManager entityManager;

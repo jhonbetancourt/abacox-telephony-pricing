@@ -8,7 +8,6 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -20,7 +19,7 @@ import java.util.regex.Pattern;
 public class EnrichmentService {
 
     private final LookupService lookupService;
-    private final ConfigurationService configurationService;
+    private final CdrConfigService cdrConfigService;
 
     public void enrichCallRecord(CallRecord callRecord, RawCiscoCdrData rawData, CommunicationLocation commLocation) {
         assignEmployee(callRecord, rawData, commLocation);
@@ -32,7 +31,7 @@ public class EnrichmentService {
         Optional<Employee> employeeOpt = Optional.empty();
         ImdexAssignmentCause assignmentCause = ImdexAssignmentCause.NOT_ASSIGNED;
 
-        List<String> ignoredAuthCodes = configurationService.getIgnoredAuthCodes();
+        List<String> ignoredAuthCodes = cdrConfigService.getIgnoredAuthCodes();
 
         if (rawData.getAuthCodeDescription() != null && !rawData.getAuthCodeDescription().isEmpty() &&
             !ignoredAuthCodes.contains(rawData.getAuthCodeDescription())) {
@@ -167,7 +166,7 @@ public class EnrichmentService {
         // This is where the main `evaluarDestino` logic from PHP applies.
         // It involves looking up Prefix, Band, Indicator, Operator, TelephonyTypeConfig, SpecialRateValue.
 
-        List<String> pbxPrefixes = configurationService.getPbxOutputPrefixes(commLocation);
+        List<String> pbxPrefixes = cdrConfigService.getPbxOutputPrefixes(commLocation);
         String numberToLookup = CdrHelper.stripPbxPrefix(dialedNumber, pbxPrefixes);
         
         Long originCountryId = commLocation.getIndicator().getOriginCountryId();

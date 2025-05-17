@@ -1,5 +1,6 @@
 package com.infomedia.abacox.telephonypricing.controller;
 
+import com.infomedia.abacox.telephonypricing.cdr.CdrProcessingService;
 import com.infomedia.abacox.telephonypricing.dto.generic.MessageResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
@@ -30,11 +31,7 @@ public class CdrTestController {
                                        @RequestParam("communicationLocationId") Long communicationLocationId) {
         log.info("Processing CDR file: {}", file.getOriginalFilename());
         try {
-            cdrProcessingService.processCdrStream(file.getInputStream(),
-                    CdrProcessingRequest.builder()
-                            .communicationLocationId(communicationLocationId)
-                            .sourceDescription(file.getOriginalFilename())
-                            .build());
+            cdrProcessingService.processCdrStream(file.getOriginalFilename(), file.getInputStream(), communicationLocationId);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
