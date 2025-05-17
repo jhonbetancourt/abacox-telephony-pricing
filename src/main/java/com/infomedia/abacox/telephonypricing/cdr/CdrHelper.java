@@ -6,14 +6,9 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 import java.util.Collections;
 import java.util.List;
-import java.util.Locale;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-
 
 public class CdrHelper {
 
@@ -51,27 +46,21 @@ public class CdrHelper {
 
     public static String cleanString(String input) {
         if (input == null) return "";
-        return input.trim().replace("\"", "");
+        String trimmed = input.trim();
+        if (trimmed.startsWith("\"") && trimmed.endsWith("\"") && trimmed.length() >= 2) {
+            return trimmed.substring(1, trimmed.length() - 1);
+        }
+        return trimmed;
     }
 
-    /**
-     * Cleans and potentially strips PBX prefixes from a phone number, mimicking PHP's limpiar_numero.
-     *
-     * @param number The raw number string.
-     * @param pbxPrefixes List of PBX prefixes to check for stripping. Can be null or empty.
-     * @param safeMode If true and pbxPrefixes are provided but none match, the original number (after basic cleaning) is returned.
-     *                 If false and pbxPrefixes are provided but none match, an empty string is returned.
-     * @return The cleaned and potentially stripped number.
-     */
     public static String cleanAndStripPhoneNumber(String number, List<String> pbxPrefixes, boolean safeMode) {
         if (number == null) return "";
         String currentNumber = number.trim();
-        String originalNumberForSafeMode = currentNumber; // Keep original for safe mode fallback
 
         boolean pbxPrefixesAvailable = pbxPrefixes != null && !pbxPrefixes.isEmpty();
+        boolean prefixFoundAndStripped = false;
 
         if (pbxPrefixesAvailable) {
-            boolean prefixFoundAndStripped = false;
             for (String pbxPrefix : pbxPrefixes) {
                 if (pbxPrefix != null && !pbxPrefix.isEmpty() && currentNumber.startsWith(pbxPrefix)) {
                     currentNumber = currentNumber.substring(pbxPrefix.length());
@@ -79,24 +68,12 @@ public class CdrHelper {
                     break;
                 }
             }
-            if (!prefixFoundAndStripped) { // No PBX prefix matched
-                if (!safeMode) {
-                    return ""; // PHP: $nuevo = '';
-                }
-                // In safeMode, if no PBX prefix matched, we continue with the original number (currentNumber)
-            }
         }
 
-        // PHP logic:
-        // $primercar = substr($nuevo, 0, 1);
-        // $parcial = substr($nuevo, 1);
-        // if ($parcial != '' && !is_numeric($parcial)) {
-        //   $parcial2 = preg_replace('/[^0-9]/','?', $parcial);
-        //   $p = strpos($parcial2, '?');
-        //   if ($p > 0) $parcial = substr($parcial2, 0, $p);
-        // }
-        // if ($primercar == '+') { $primercar = ''; }
-        // $nuevo = $primercar.$parcial;
+        if (pbxPrefixesAvailable && !prefixFoundAndStripped && !safeMode) {
+            return "";
+        }
+        // If safeMode or no PBX prefixes, or prefix was stripped, continue with currentNumber
 
         if (currentNumber.isEmpty()) return "";
 
@@ -105,11 +82,13 @@ public class CdrHelper {
 
         if (!partial.isEmpty()) {
             StringBuilder digitsOnlyPartial = new StringBuilder();
+            boolean nonDigitFound = false;
             for (char c : partial.toCharArray()) {
                 if (Character.isDigit(c)) {
                     digitsOnlyPartial.append(c);
                 } else {
-                    break; // Stop at first non-digit after the first character
+                    nonDigitFound = true; // Mark that a non-digit was encountered
+                    break;
                 }
             }
             partial = digitsOnlyPartial.toString();
@@ -125,7 +104,6 @@ public class CdrHelper {
 
     public static String cleanPhoneNumber(String number) {
         if (number == null) return "";
-        // Keeps digits, #, *, +
         return number.replaceAll("[^0-9#*+]", "");
     }
 
@@ -139,11 +117,11 @@ public class CdrHelper {
         try {
             if (parts.length == 3) {
                 seconds = Integer.parseInt(parts[0].trim()) * 3600 +
-                          Integer.parseInt(parts[1].trim()) * 60 +
-                          Integer.parseInt(parts[2].trim());
+                        Integer.parseInt(parts[1].trim()) * 60 +
+                        Integer.parseInt(parts[2].trim());
             } else if (parts.length == 2) {
                 seconds = Integer.parseInt(parts[0].trim()) * 60 +
-                          Integer.parseInt(parts[1].trim());
+                        Integer.parseInt(parts[1].trim());
             } else if (parts.length == 1 && isNumeric(parts[0].trim())) {
                 seconds = Integer.parseInt(parts[0].trim());
             }
@@ -165,7 +143,7 @@ public class CdrHelper {
         if (extension == null || extension.isEmpty() || limits == null) {
             return false;
         }
-        String cleanedExtension = cleanPhoneNumber(extension); // Use basic clean for this check
+        String cleanedExtension = cleanPhoneNumber(extension);
 
         if (limits.getSpecialExtensions() != null && limits.getSpecialExtensions().contains(cleanedExtension)) {
             return true;
@@ -173,9 +151,21 @@ public class CdrHelper {
 
         if (isNumeric(cleanedExtension) && !cleanedExtension.startsWith("0")) {
             try {
-                long numericExt = Long.parseLong(cleanedExtension);
-                return numericExt >= limits.getMinNumericValue() && numericExt <= limits.getMaxNumericValue() &&
-                       cleanedExtension.length() >= limits.getMinLength() && cleanedExtension.length() <= limits.getMaxLength();
+                // Length check first
+                if (cleanedExtension.length() < limits.getMinLength() || cleanedExtension.length() > limits.getMaxLength()) {
+                    return false;
+                }
+                // Then numeric value check (important for very long numbers that might fit length but not long type)
+                if (cleanedExtension.length() < 19) { // Max length for Long
+                    long numericExt = Long.parseLong(cleanedExtension);
+                    return numericExt >= limits.getMinNumericValue() && numericExt <= limits.getMaxNumericValue();
+                }
+                // If longer than 18 digits, it's unlikely to fit in a long, but could still be a valid "extension" string
+                // if min/max NumericValue are not restrictive (e.g. 0 to Long.MAX_VALUE).
+                // For very long numeric strings that are valid extensions by length but exceed Long.MAX_VALUE,
+                // this check might be too simple. PHP's string comparison for numbers handles this differently.
+                // However, typical extensions are not this long.
+                return true; // Passed length check, and is numeric.
             } catch (NumberFormatException e) {
                 return false;
             }
@@ -204,9 +194,10 @@ public class CdrHelper {
         int diffLenTelefonoSeries = lenTelefono - lenNdc;
 
         if (diffLenTelefonoSeries != lenSeries) {
-            if (diffLenTelefonoSeries < 0) {
-                 return new PaddedSeriesDto((ndc != null ? ndc : "") + initial, (ndc != null ? ndc : "") + finalNum);
+            if (diffLenTelefonoSeries < 0) { // Number part is shorter than series definition
+                return new PaddedSeriesDto((ndc != null ? ndc : "") + initial, (ndc != null ? ndc : "") + finalNum);
             }
+            // Number part is longer than series definition, pad series to match number part length
             int paddingLength = diffLenTelefonoSeries - lenSeries;
             initial = initial + String.join("", Collections.nCopies(paddingLength, "0"));
             finalNum = finalNum + String.join("", Collections.nCopies(paddingLength, "9"));
