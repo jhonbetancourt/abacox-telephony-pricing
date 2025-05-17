@@ -15,28 +15,27 @@ public class RawCdrData {
     private LocalDateTime dateTimeConnect;
     private LocalDateTime dateTimeDisconnect;
 
-    // These fields will be manipulated during parsing based on conference/redirect logic.
-    // They represent the "current" state of these numbers/partitions during parsing.
+    // --- Pristine Original Values from CDR ---
+    private String original_callingPartyNumber;
+    private String original_callingPartyNumberPartition;
+    private String original_finalCalledPartyNumber;
+    private String original_finalCalledPartyNumberPartition;
+    private String original_originalCalledPartyNumber; // originalCalledPartyNumber from CDR
+    private String original_originalCalledPartyNumberPartition; // originalCalledPartyNumberPartition from CDR
+    private String original_lastRedirectDn; // lastRedirectDn from CDR
+    private String original_lastRedirectDnPartition; // lastRedirectDnPartition from CDR
+    private String original_finalMobileCalledPartyNumber;
+    private String original_destMobileDeviceName; // Partition for mobile redirect
+
+    // --- Current Working Values (manipulated during parsing) ---
     private String callingPartyNumber;
     private String callingPartyNumberPartition;
     private String finalCalledPartyNumber;
     private String finalCalledPartyNumberPartition;
-    private String lastRedirectDn;
+    private String lastRedirectDn; // This is the "ext-redir" in PHP, can be updated
     private String lastRedirectDnPartition;
-
-    // Store original values for specific logic steps and fallbacks
-    private String original_callingPartyNumber; // To restore if swaps happen
-    private String original_callingPartyNumberPartition;
-    private String original_finalCalledPartyNumber;
-    private String original_finalCalledPartyNumberPartition;
-    private String original_originalCalledPartyNumber;
-    private String original_originalCalledPartyNumberPartition;
-    private String original_lastRedirectDn; // Stores the value of lastRedirectDn as read from CDR
-    private String original_lastRedirectDnPartition;
-
-    // Mobile redirection fields
-    private String finalMobileCalledPartyNumber;
-    private String destMobileDeviceName; // This is the "partition" field for mobile number in PHP
+    private String finalMobileCalledPartyNumber; // Current working value for mobile number
+    private String destMobileDeviceName; // Current working value for mobile partition/device name
 
     private Integer duration;
     private String authCodeDescription;
