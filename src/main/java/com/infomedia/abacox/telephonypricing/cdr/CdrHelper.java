@@ -1,3 +1,4 @@
+// FILE: com/infomedia/abacox/telephonypricing/cdr/CdrHelper.java
 package com.infomedia.abacox.telephonypricing.cdr;
 
 import java.nio.charset.StandardCharsets;
@@ -15,7 +16,7 @@ public class CdrHelper {
 
     private static final Pattern NUMERIC_PATTERN = Pattern.compile("^[0-9]+$");
     private static final DateTimeFormatter CISCO_DATE_FORMATTER = DateTimeFormatter.ofPattern("MMM dd HH:mm:ss yyyy z", Locale.ENGLISH)
-            .withZone(ZoneId.of("UTC")); // Assuming Cisco logs in UTC
+            .withZone(ZoneId.of("UTC"));
 
 
     public static String calculateSha256(String input) {
@@ -45,69 +46,72 @@ public class CdrHelper {
         }
         return LocalDateTime.ofInstant(Instant.ofEpochSecond(epochSeconds), ZoneId.of("UTC"));
     }
-
-    public static LocalDateTime ciscoDateToLocalDateTime(String ciscoDateString) {
-        if (ciscoDateString == null || ciscoDateString.trim().isEmpty()) {
-            return null;
-        }
-        try {
-            String[] parts = ciscoDateString.split(" ");
-            if (parts.length >= 6) {
-                String month = parts[3];
-                String day = parts[4];
-                String timeWithMillis = parts[0];
-                String time = timeWithMillis.contains(".") ? timeWithMillis.substring(0, timeWithMillis.indexOf('.')) : timeWithMillis;
-                String year = parts[5];
-                String tz = "UTC";
-
-                String parsableDateString = String.format("%s %s %s %s %s", month, day, time, year, tz);
-                return LocalDateTime.parse(parsableDateString, CISCO_DATE_FORMATTER);
-            }
-        } catch (Exception e) {
-            System.err.println("Failed to parse Cisco date: " + ciscoDateString + " - " + e.getMessage());
-        }
-        return null;
-    }
-
-    public static String decimalToIp(long ipDecimal) {
-        if (ipDecimal < 0) {
-            return null;
-        }
-        return ((ipDecimal >> 24) & 0xFF) + "." +
-               ((ipDecimal >> 16) & 0xFF) + "." +
-               ((ipDecimal >> 8) & 0xFF) + "." +
-               (ipDecimal & 0xFF);
-    }
-
-    public static boolean isNumeric(String str) {
-        if (str == null || str.isEmpty()) {
-            return false;
-        }
-        return NUMERIC_PATTERN.matcher(str).matches();
-    }
-
-    public static String cleanPhoneNumber(String number) {
-        if (number == null) return ""; // Return empty string for null input to avoid NPE
-        return number.replaceAll("[^0-9#*+]", "");
-    }
     
     public static String cleanString(String input) {
         if (input == null) return "";
         return input.trim().replace("\"", "");
     }
 
+    /**
+     * Cleans a phone number by removing non-essential characters and optionally stripping PBX prefixes.
+     * Mimics PHP's limpiar_numero.
+     * @param number The raw number string.
+     * @param pbxPrefixes List of PBX prefixes to strip.
+     * @param safeMode If true and a PBX prefix is defined but not found, returns original number (for further processing).
+     *                 If false and PBX prefix defined but not found, returns empty string.
+     * @return Cleaned number.
+     */
+    public static String cleanAndStripPhoneNumber(String number, List<String> pbxPrefixes, boolean safeMode) {
+        if (number == null) return "";
+        String currentNumber = number.trim();
 
-    public static String stripPbxPrefix(String number, List<String> pbxPrefixes) {
-        if (number == null || pbxPrefixes == null || pbxPrefixes.isEmpty()) {
-            return number;
-        }
-        for (String prefix : pbxPrefixes) {
-            if (prefix != null && !prefix.isEmpty() && number.startsWith(prefix)) {
-                return number.substring(prefix.length());
+        if (pbxPrefixes != null && !pbxPrefixes.isEmpty()) {
+            boolean prefixFound = false;
+            for (String pbxPrefix : pbxPrefixes) {
+                if (pbxPrefix != null && !pbxPrefix.isEmpty() && currentNumber.startsWith(pbxPrefix)) {
+                    currentNumber = currentNumber.substring(pbxPrefix.length());
+                    prefixFound = true;
+                    break;
+                }
+            }
+            if (!prefixFound && !safeMode) { // If prefix was expected (not safe mode) but not found
+                return ""; // PHP logic implies returning empty if prefix mandatory and not found
             }
         }
-        return number;
+        
+        // PHP: Elimina si y solo si encuentra "#" o "*" en una posicion cualquiera posterior al primer caracter
+        if (currentNumber.length() > 1) {
+            String firstChar = currentNumber.substring(0, 1);
+            String rest = currentNumber.substring(1);
+            
+            StringBuilder cleanedRest = new StringBuilder();
+            boolean nonNumericFound = false;
+            for (char c : rest.toCharArray()) {
+                if (Character.isDigit(c)) {
+                    cleanedRest.append(c);
+                } else if (c == '#' || c == '*') { // Allow these specific chars
+                    cleanedRest.append(c);
+                } else {
+                    nonNumericFound = true; // Mark that a non-allowed char was found
+                    break; // Stop at the first non-allowed, non-numeric char
+                }
+            }
+            currentNumber = firstChar + cleanedRest.toString();
+        }
+        
+        // Remove leading '+' if present (PHP: if ($primercar == '+') { $primercar = ''; })
+        if (currentNumber.startsWith("+")) {
+            currentNumber = currentNumber.substring(1);
+        }
+
+        return currentNumber;
     }
+    
+    public static String cleanPhoneNumber(String number) { // Simpler version if no PBX stripping needed
+        if (number == null) return "";
+        return number.replaceAll("[^0-9#*+]", "");
+    }
+
 
     public static int durationToSeconds(String durationString) {
         if (durationString == null || durationString.trim().isEmpty()) {
@@ -133,44 +137,48 @@ public class CdrHelper {
         }
         return seconds;
     }
+    
+    public static boolean isNumeric(String str) {
+        if (str == null || str.isEmpty()) {
+            return false;
+        }
+        return NUMERIC_PATTERN.matcher(str).matches();
+    }
 
-    /**
-     * Checks if the given string represents a potential internal extension.
-     * Based on PHP's ExtensionPosible logic.
-     *
-     * @param extension The extension string to check.
-     * @param limits    The configured limits for internal extensions.
-     * @return true if it's a potential internal extension, false otherwise.
-     */
     public static boolean isPotentialExtension(String extension, InternalExtensionLimitsDto limits) {
         if (extension == null || extension.isEmpty() || limits == null) {
             return false;
         }
-
-        String cleanedExtension = cleanPhoneNumber(extension); // Keep #*+ for special extensions
+        String cleanedExtension = cleanPhoneNumber(extension);
         
-        // Check against special extensions list first
         if (limits.getSpecialExtensions() != null && limits.getSpecialExtensions().contains(cleanedExtension)) {
             return true;
         }
 
-        // For numeric checks, ensure it's purely numeric and doesn't start with '0' (PHP logic)
         if (isNumeric(cleanedExtension) && !cleanedExtension.startsWith("0")) {
             try {
                 long numericExt = Long.parseLong(cleanedExtension);
-                if (numericExt >= limits.getMinNumericValue() && numericExt <= limits.getMaxNumericValue()) {
-                    // Check length constraints as well, as numeric value alone might not be sufficient
-                    // if min/max length define a tighter range than min/max numeric value.
-                    // Example: minLength=4 (minNumeric=1000), maxLength=4 (maxNumeric=9999)
-                    // A number like 500 would be between min/max numeric but not length.
-                    // However, PHP's $_LIM_INTERNAS['min'] and ['max'] are numeric values derived from lengths.
-                    return cleanedExtension.length() >= limits.getMinLength() && cleanedExtension.length() <= limits.getMaxLength();
-                }
+                // PHP logic: $extension >= $_LIM_INTERNAS['min'] && $extension <= $_LIM_INTERNAS['max']
+                // Where min/max are numeric values derived from lengths (e.g. minLength 4 -> 1000)
+                return numericExt >= limits.getMinNumericValue() && numericExt <= limits.getMaxNumericValue() &&
+                       cleanedExtension.length() >= limits.getMinLength() && cleanedExtension.length() <= limits.getMaxLength();
             } catch (NumberFormatException e) {
-                // Not a valid long, might be too long, or caught by specialExtensions if alphanumeric
                 return false;
             }
         }
         return false;
+    }
+
+    public static String padSeries(String seriesPart, int targetLength, boolean padWithZerosAtEnd) {
+        if (seriesPart == null) seriesPart = "";
+        if (seriesPart.length() >= targetLength) {
+            return seriesPart.substring(0, targetLength);
+        }
+        char padChar = padWithZerosAtEnd ? '0' : '9'; // PHP uses 0 for initial_number padding, 9 for final_number
+        StringBuilder sb = new StringBuilder(seriesPart);
+        while (sb.length() < targetLength) {
+            sb.append(padChar);
+        }
+        return sb.toString();
     }
 }
