@@ -33,7 +33,7 @@ public class FileInfo {
             initialValue = 10000000
     )
     @Column(name = "id", nullable = false)
-    private Integer id;
+    private Long id;
 
     /**
      * File name.

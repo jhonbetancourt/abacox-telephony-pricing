@@ -1,7 +1,5 @@
 package com.infomedia.abacox.telephonypricing.controller;
 
-import com.infomedia.abacox.telephonypricing.cdr.CdrProcessingRequest;
-import com.infomedia.abacox.telephonypricing.cdr.CdrProcessingService;
 import com.infomedia.abacox.telephonypricing.dto.generic.MessageResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;

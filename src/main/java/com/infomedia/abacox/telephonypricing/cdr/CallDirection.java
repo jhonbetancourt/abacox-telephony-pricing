@@ -1,8 +1,8 @@
 package com.infomedia.abacox.telephonypricing.cdr;
 
 public enum CallDirection {
-    OUTGOING(0),
-    INCOMING(1);
+    OUTGOING(0), // Assuming 0 for outgoing from PHP logic (false)
+    INCOMING(1); // Assuming 1 for incoming from PHP logic (true)
 
     private final int value;
 
@@ -14,16 +14,7 @@ public enum CallDirection {
         return value;
     }
 
-    public static CallDirection fromValue(int value) {
-        for (CallDirection dir : CallDirection.values()) {
-            if (dir.value == value) {
-                return dir;
-            }
-        }
-        // Default or throw exception
-        return OUTGOING;
-    }
-     public static CallDirection fromBoolean(boolean isIncoming) {
+    public static CallDirection fromBoolean(boolean isIncoming) {
         return isIncoming ? INCOMING : OUTGOING;
     }
 }
