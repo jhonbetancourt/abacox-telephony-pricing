@@ -12,8 +12,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 
 @Service
@@ -24,7 +22,7 @@ public class EnrichmentService {
     private final LookupService lookupService;
     private final CdrConfigService cdrConfigService;
 
-    public void enrichCallRecord(CallRecord callRecord, RawCiscoCdrData rawData, CommunicationLocation commLocation) {
+    public void enrichCallRecord(CallRecord callRecord, RawCdrData rawData, CommunicationLocation commLocation) {
         InternalExtensionLimitsDto internalLimits = cdrConfigService.getInternalExtensionLimits(
             commLocation.getIndicator() != null ? commLocation.getIndicator().getOriginCountryId() : null,
             commLocation.getId()
@@ -48,7 +46,7 @@ public class EnrichmentService {
         }
     }
 
-    private void assignEmployee(CallRecord callRecord, RawCiscoCdrData rawData, CommunicationLocation commLocation, InternalExtensionLimitsDto limits) {
+    private void assignEmployee(CallRecord callRecord, RawCdrData rawData, CommunicationLocation commLocation, InternalExtensionLimitsDto limits) {
         Optional<Employee> employeeOpt = Optional.empty();
         ImdexAssignmentCause assignmentCause = ImdexAssignmentCause.NOT_ASSIGNED;
         List<String> ignoredAuthCodes = cdrConfigService.getIgnoredAuthCodes();
@@ -92,7 +90,7 @@ public class EnrichmentService {
     }
 
 
-    private void determineCallTypeAndPricing(CallRecord callRecord, RawCiscoCdrData rawData, CommunicationLocation commLocation, InternalExtensionLimitsDto limits) {
+    private void determineCallTypeAndPricing(CallRecord callRecord, RawCdrData rawData, CommunicationLocation commLocation, InternalExtensionLimitsDto limits) {
         String effectiveDialedNumber = rawData.getEffectiveDestinationNumber();
         
         effectiveDialedNumber = applyPbxSpecialRules(effectiveDialedNumber, commLocation, callRecord.isIncoming());
@@ -322,7 +320,7 @@ public class EnrichmentService {
     }
 
 
-    private void handleExternalCallPricing(CallRecord callRecord, RawCiscoCdrData rawData, String dialedNumber, CommunicationLocation commLocation, Long originCountryId) {
+    private void handleExternalCallPricing(CallRecord callRecord, RawCdrData rawData, String dialedNumber, CommunicationLocation commLocation, Long originCountryId) {
         List<String> pbxPrefixes = cdrConfigService.getPbxOutputPrefixes(commLocation);
         boolean usesTrunk = callRecord.getTrunk() != null && !callRecord.getTrunk().isEmpty();
         

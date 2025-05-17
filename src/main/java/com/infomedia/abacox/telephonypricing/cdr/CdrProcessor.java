@@ -13,7 +13,7 @@ public interface CdrProcessor {
      * @return A partially populated CallRecord DTO or Entity.
      * @throws CdrProcessingException if parsing fails.
      */
-    RawCiscoCdrData parseCdrLine(String cdrLine, CommunicationLocation commLocation, Map<String, Integer> columnMapping);
+    RawCdrData parseCdrLine(String cdrLine, CommunicationLocation commLocation, Map<String, Integer> columnMapping);
 
     /**
      * Establishes the column mapping from the header line of the CDR file.

@@ -5,7 +5,7 @@ import java.time.LocalDateTime;
 
 // Holds data parsed directly from a Cisco CDR row before full enrichment
 @Data
-public class RawCiscoCdrData {
+public class RawCdrData {
     private String originalLine; // The raw CDR line for hashing and error reporting
 
     // Fields from Cisco CDR (names match internal logic, not necessarily raw CDR column names)

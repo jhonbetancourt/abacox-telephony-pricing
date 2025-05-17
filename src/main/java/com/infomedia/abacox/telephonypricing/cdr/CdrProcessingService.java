@@ -108,7 +108,7 @@ public class CdrProcessingService {
                     continue;
                 }
 
-                RawCiscoCdrData rawData = null;
+                RawCdrData rawData = null;
                 try {
                     rawData = processor.parseCdrLine(trimmedLine, commLocation, columnMapping);
                     CallRecord callRecord = mapRawToCallRecord(rawData, commLocation, cdrHash, fileInfo);
@@ -156,7 +156,7 @@ public class CdrProcessingService {
         return null;
     }
 
-    private CallRecord mapRawToCallRecord(RawCiscoCdrData rawData, CommunicationLocation commLocation, String cdrHash, FileInfo fileInfo) {
+    private CallRecord mapRawToCallRecord(RawCdrData rawData, CommunicationLocation commLocation, String cdrHash, FileInfo fileInfo) {
         CallRecord cr = CallRecord.builder()
                 .dial(rawData.getFinalCalledPartyNumber()) // This might be further refined by enrichment
                 .commLocationId(commLocation.getId())
