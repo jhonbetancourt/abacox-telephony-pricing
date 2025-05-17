@@ -8,10 +8,10 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
 
 @Service
 @RequiredArgsConstructor
@@ -22,17 +22,21 @@ public class EnrichmentService {
     private final CdrConfigService cdrConfigService;
 
     public void enrichCallRecord(CallRecord callRecord, RawCiscoCdrData rawData, CommunicationLocation commLocation) {
-        assignEmployee(callRecord, rawData, commLocation);
-        determineCallTypeAndPricing(callRecord, rawData, commLocation);
-        // Further enrichments can be added here
+        InternalExtensionLimitsDto internalLimits = cdrConfigService.getInternalExtensionLimits(
+            commLocation.getIndicator() != null ? commLocation.getIndicator().getOriginCountryId() : null,
+            commLocation.getId()
+        );
+
+        assignEmployee(callRecord, rawData, commLocation, internalLimits);
+        determineCallTypeAndPricing(callRecord, rawData, commLocation, internalLimits);
     }
 
-    private void assignEmployee(CallRecord callRecord, RawCiscoCdrData rawData, CommunicationLocation commLocation) {
+    private void assignEmployee(CallRecord callRecord, RawCiscoCdrData rawData, CommunicationLocation commLocation, InternalExtensionLimitsDto limits) {
         Optional<Employee> employeeOpt = Optional.empty();
         ImdexAssignmentCause assignmentCause = ImdexAssignmentCause.NOT_ASSIGNED;
-
         List<String> ignoredAuthCodes = cdrConfigService.getIgnoredAuthCodes();
 
+        // Priority 1: Auth Code (if not ignored)
         if (rawData.getAuthCodeDescription() != null && !rawData.getAuthCodeDescription().isEmpty() &&
             !ignoredAuthCodes.contains(rawData.getAuthCodeDescription())) {
             employeeOpt = lookupService.findEmployeeByAuthCode(rawData.getAuthCodeDescription(), commLocation.getId());
@@ -41,87 +45,81 @@ public class EnrichmentService {
             }
         }
 
+        // Priority 2: Direct Extension Match
         if (employeeOpt.isEmpty() && rawData.getCallingPartyNumber() != null && !rawData.getCallingPartyNumber().isEmpty()) {
-            employeeOpt = lookupService.findEmployeeByExtension(rawData.getCallingPartyNumber(), commLocation.getId());
-             if (employeeOpt.isPresent()) {
-                // Check if it came from a range or direct lookup
-                if (employeeOpt.get().getId() == null) { // Virtual employee from range
-                     assignmentCause = ImdexAssignmentCause.BY_EXTENSION_RANGE;
-                } else {
-                    assignmentCause = ImdexAssignmentCause.BY_EXTENSION;
-                }
+            employeeOpt = lookupService.findEmployeeByExtension(rawData.getCallingPartyNumber(), commLocation.getId(), limits);
+            if (employeeOpt.isPresent()) {
+                assignmentCause = (employeeOpt.get().getId() == null) ? ImdexAssignmentCause.BY_EXTENSION_RANGE : ImdexAssignmentCause.BY_EXTENSION;
             }
         }
         
         // PHP logic for assigning based on transfer (funcionario_redir)
-        if (employeeOpt.isEmpty() && rawData.getImdexTransferCause() != ImdexTransferCause.NO_TRANSFER &&
-            rawData.getLastRedirectDn() != null && !rawData.getLastRedirectDn().isEmpty()) {
-            // If the call was transferred, the lastRedirectDn might be an internal extension
-            Optional<Employee> transferredToEmployeeOpt = lookupService.findEmployeeByExtension(rawData.getLastRedirectDn(), commLocation.getId());
-            if (transferredToEmployeeOpt.isPresent()) {
-                // This logic is tricky: PHP's `procesaSaliente` assigns based on `funcionario_funid` (original caller)
-                // or `funcionario_redir` (if original not found and redir is in same commLocation).
-                // For simplicity here, if original employee not found and it's a transfer,
-                // we might associate with the transfer target if it's an internal known employee.
-                // However, CallRecord.employeeId is for the *originating* employee.
-                // This part needs careful mapping to PHP's intent.
-                // For now, we stick to originating employee. Destination employee is separate.
-            }
-        }
-
+        // This is complex. PHP's `ObtenerFuncionario_Arreglo` has a `tipo` parameter.
+        // If `employeeOpt` is still empty, and it's a transfer, PHP might check `ext-redir`.
+        // The `callRecord.employeeId` should be the *originator*.
+        // If the call was transferred *by* an internal employee (rawData.callingPartyNumber) *to* another internal employee (rawData.lastRedirectDn),
+        // the originator is still rawData.callingPartyNumber.
+        // If an external call was transferred *by* an internal employee (rawData.lastRedirectDn) *to* another party,
+        // then rawData.lastRedirectDn might be considered the "responsible" internal party for that leg.
+        // This needs very careful mapping. For now, we assume assignEmployee focuses on the primary originating party.
+        // Destination employee is handled separately.
 
         employeeOpt.ifPresent(emp -> {
             callRecord.setEmployee(emp);
-            callRecord.setEmployeeId(emp.getId()); // May be null if virtual employee from range
+            callRecord.setEmployeeId(emp.getId());
         });
         callRecord.setAssignmentCause(assignmentCause.getValue());
     }
 
 
-    private void determineCallTypeAndPricing(CallRecord callRecord, RawCiscoCdrData rawData, CommunicationLocation commLocation) {
-        // This is a major simplification of PHP's `evaluarDestino` and related functions.
-        // A full translation would be extremely large.
-
-        String dialedNumber = rawData.getFinalCalledPartyNumber();
+    private void determineCallTypeAndPricing(CallRecord callRecord, RawCiscoCdrData rawData, CommunicationLocation commLocation, InternalExtensionLimitsDto limits) {
+        String dialedNumber = rawData.getFinalCalledPartyNumber(); // This is already processed by Cisco processor
         if (dialedNumber == null || dialedNumber.isEmpty()) {
+             // This case should ideally be caught by the parser if finalCalled and originalCalled are both empty
             dialedNumber = rawData.getOriginalCalledPartyNumber();
         }
         
-        // Apply PBX Special Rules first, as they can change the dialed number
         dialedNumber = applyPbxSpecialRules(dialedNumber, commLocation, callRecord.isIncoming());
-
-        callRecord.setDial(dialedNumber); // Store potentially modified number
+        callRecord.setDial(CdrHelper.cleanPhoneNumber(dialedNumber)); // Store cleaned, potentially modified number
 
         // Default values
-        callRecord.setTelephonyTypeId(TelephonyTypeConstants.ERRORES); // Default to error/unknown
-        lookupService.findTelephonyTypeById(TelephonyTypeConstants.ERRORES).ifPresent(callRecord::setTelephonyType);
-        callRecord.setBilledAmount(BigDecimal.ZERO);
-        callRecord.setPricePerMinute(BigDecimal.ZERO);
-        callRecord.setInitialPrice(BigDecimal.ZERO);
+        setDefaultErrorTelephonyType(callRecord);
 
         if (dialedNumber == null || dialedNumber.isEmpty()) {
             log.warn("Dialed number is empty for CDR hash: {}", callRecord.getCdrHash());
             return;
         }
 
-        // 1. Handle Special Services (e.g., 113, emergency numbers)
+        Long originCountryId = commLocation.getIndicator() != null ? commLocation.getIndicator().getOriginCountryId() : null;
+        if (originCountryId == null) {
+            log.error("Origin Country ID is null for commLocationId: {}. Cannot proceed with pricing.", commLocation.getId());
+            return; // Cannot price without origin country
+        }
+
+        // 1. Special Services
+        if (handleSpecialServices(callRecord, dialedNumber, commLocation, originCountryId)) {
+            return;
+        }
+
+        // 2. Internal Calls
+        if (handleInternalCalls(callRecord, rawData, dialedNumber, commLocation, limits, originCountryId)) {
+            return;
+        }
+        
+        // 3. External Calls (Outgoing/Incoming)
+        handleExternalCalls(callRecord, rawData, dialedNumber, commLocation, originCountryId);
+    }
+
+    private boolean handleSpecialServices(CallRecord callRecord, String dialedNumber, CommunicationLocation commLocation, Long originCountryId) {
         Optional<SpecialService> specialServiceOpt = lookupService.findSpecialService(
             dialedNumber,
             commLocation.getIndicatorId(),
-            commLocation.getIndicator().getOriginCountryId() // Assuming indicator is always present on commLocation
+            originCountryId
         );
 
         if (specialServiceOpt.isPresent()) {
             SpecialService ss = specialServiceOpt.get();
-            callRecord.setTelephonyTypeId(TelephonyTypeConstants.NUMEROS_ESPECIALES); // Or a more specific type if available
-            lookupService.findTelephonyTypeById(TelephonyTypeConstants.NUMEROS_ESPECIALES).ifPresent(callRecord::setTelephonyType);
-            lookupService.findInternalOperatorByTelephonyType(TelephonyTypeConstants.NUMEROS_ESPECIALES, commLocation.getIndicator().getOriginCountryId())
-                .ifPresent(op -> {
-                    callRecord.setOperator(op);
-                    callRecord.setOperatorId(op.getId());
-                });
-            callRecord.setIndicator(commLocation.getIndicator());
-            callRecord.setIndicatorId(commLocation.getIndicatorId());
+            setTelephonyTypeAndOperator(callRecord, TelephonyTypeConstants.NUMEROS_ESPECIALES, originCountryId, ss.getIndicator());
             
             BigDecimal value = ss.getValue() != null ? ss.getValue() : BigDecimal.ZERO;
             BigDecimal vat = ss.getVatAmount() != null ? ss.getVatAmount() : BigDecimal.ZERO;
@@ -130,175 +128,241 @@ public class EnrichmentService {
             } else {
                 callRecord.setBilledAmount(value.add(vat));
             }
-            callRecord.setPricePerMinute(value); // Assuming value is per call for special services
+            callRecord.setPricePerMinute(value); // Assuming value is per call
+            callRecord.setInitialPrice(value);
             log.debug("Call identified as Special Service: {}", ss.getDescription());
-            return;
+            return true;
         }
+        return false;
+    }
 
-        // 2. Determine if Internal Call (simplified)
-        // PHP's `es_llamada_interna` and `procesaInterna` are complex.
-        // A simple check: if dialedNumber is a known internal extension in the same commLocation.
-        Optional<Employee> destinationEmployeeOpt = lookupService.findEmployeeByExtension(dialedNumber, commLocation.getId());
-        if (destinationEmployeeOpt.isPresent() && callRecord.getEmployeeId() != null) { // Originating employee must also be internal
-            callRecord.setDestinationEmployee(destinationEmployeeOpt.get());
-            callRecord.setDestinationEmployeeId(destinationEmployeeOpt.get().getId());
-            
-            // Determine internal call type (INTERNA, INTERNA_LOCAL, INTERNA_NACIONAL, INTERNA_INTERNACIONAL)
-            // This depends on comparing origin and destination subdivisions/cost_centers/indicators
-            // For simplicity, defaulting to INTERNA
-            callRecord.setTelephonyTypeId(TelephonyTypeConstants.INTERNA);
-            lookupService.findTelephonyTypeById(TelephonyTypeConstants.INTERNA).ifPresent(callRecord::setTelephonyType);
-            lookupService.findInternalOperatorByTelephonyType(TelephonyTypeConstants.INTERNA, commLocation.getIndicator().getOriginCountryId())
-                .ifPresent(op -> {
-                    callRecord.setOperator(op);
-                    callRecord.setOperatorId(op.getId());
-                });
-            callRecord.setIndicator(commLocation.getIndicator()); // Assuming internal calls use local indicator
-            callRecord.setIndicatorId(commLocation.getIndicatorId());
-            // Internal calls usually have zero cost
-            callRecord.setBilledAmount(BigDecimal.ZERO);
-            callRecord.setPricePerMinute(BigDecimal.ZERO);
-            log.debug("Call identified as Internal");
-            return;
+    private boolean handleInternalCalls(CallRecord callRecord, RawCiscoCdrData rawData, String dialedNumber, CommunicationLocation commLocation, InternalExtensionLimitsDto limits, Long originCountryId) {
+        // PHP's `procesaInterna` and `tipo_llamada_interna`
+        String originatingExtension = rawData.getCallingPartyNumber();
+
+        boolean isOriginPotentiallyInternal = CdrHelper.isPotentialExtension(originatingExtension, limits);
+        boolean isDestinationPotentiallyInternal = CdrHelper.isPotentialExtension(dialedNumber, limits);
+
+        if (isOriginPotentiallyInternal && isDestinationPotentiallyInternal) {
+            // Both parties look like internal extensions.
+            // Further checks are needed to confirm they are *known* internal extensions
+            // and to determine the specific internal call type.
+            Optional<Employee> originEmployeeOpt = lookupService.findEmployeeByExtension(originatingExtension, commLocation.getId(), limits);
+            Optional<Employee> destEmployeeOpt = lookupService.findEmployeeByExtension(dialedNumber, commLocation.getId(), limits);
+
+            if (originEmployeeOpt.isPresent() && destEmployeeOpt.isPresent()) {
+                Employee originEmp = originEmployeeOpt.get();
+                Employee destEmp = destEmployeeOpt.get();
+                callRecord.setDestinationEmployee(destEmp);
+                callRecord.setDestinationEmployeeId(destEmp.getId());
+
+                // Determine specific internal type based on locations
+                Long internalTelephonyTypeId = TelephonyTypeConstants.INTERNA; // Default
+                CommunicationLocation originCommLoc = originEmp.getCommunicationLocation() != null ? originEmp.getCommunicationLocation() : commLocation;
+                CommunicationLocation destCommLoc = destEmp.getCommunicationLocation() != null ? destEmp.getCommunicationLocation() : commLocation; // Assume same if destEmp is virtual/range
+
+                if (originCommLoc != null && destCommLoc != null) {
+                    Indicator originIndicator = originCommLoc.getIndicator();
+                    Indicator destIndicator = destCommLoc.getIndicator();
+
+                    if (originIndicator != null && destIndicator != null) {
+                        if (!Objects.equals(originIndicator.getOriginCountryId(), destIndicator.getOriginCountryId())) {
+                            internalTelephonyTypeId = TelephonyTypeConstants.INTERNA_INTERNACIONAL;
+                        } else if (!Objects.equals(originIndicator.getId(), destIndicator.getId())) {
+                            internalTelephonyTypeId = TelephonyTypeConstants.INTERNA_NACIONAL;
+                        } else if (!Objects.equals(originCommLoc.getId(), destCommLoc.getId())) {
+                            // Same indicator (city) but different physical locations/plants
+                            internalTelephonyTypeId = TelephonyTypeConstants.INTERNA_LOCAL;
+                        } else {
+                            internalTelephonyTypeId = TelephonyTypeConstants.INTERNA; // Same plant
+                        }
+                    }
+                }
+                setTelephonyTypeAndOperator(callRecord, internalTelephonyTypeId, originCountryId, commLocation.getIndicator());
+                callRecord.setBilledAmount(BigDecimal.ZERO);
+                callRecord.setPricePerMinute(BigDecimal.ZERO);
+                callRecord.setInitialPrice(BigDecimal.ZERO);
+                log.debug("Call identified as Internal (Type: {})", internalTelephonyTypeId);
+                return true;
+            }
         }
+        return false;
+    }
 
-        // 3. External Call (Outgoing/Incoming based on callRecord.isIncoming)
-        // This is where the main `evaluarDestino` logic from PHP applies.
-        // It involves looking up Prefix, Band, Indicator, Operator, TelephonyTypeConfig, SpecialRateValue.
-
+    private void handleExternalCalls(CallRecord callRecord, RawCiscoCdrData rawData, String dialedNumber, CommunicationLocation commLocation, Long originCountryId) {
         List<String> pbxPrefixes = cdrConfigService.getPbxOutputPrefixes(commLocation);
         String numberToLookup = CdrHelper.stripPbxPrefix(dialedNumber, pbxPrefixes);
         
-        Long originCountryId = commLocation.getIndicator().getOriginCountryId();
         List<Prefix> prefixes = lookupService.findMatchingPrefixes(numberToLookup, originCountryId, callRecord.getTrunk() != null && !callRecord.getTrunk().isEmpty());
 
         if (prefixes.isEmpty()) {
-            log.warn("No matching prefix found for number: {} (orig: {})", numberToLookup, dialedNumber);
-            // Default to error or a generic "unknown external" type
+            log.warn("No matching prefix for external call: {} (orig: {})", numberToLookup, dialedNumber);
+            setDefaultErrorTelephonyType(callRecord);
             return;
         }
 
-        Prefix matchedPrefix = prefixes.get(0); // Longest prefix matched
-        callRecord.setTelephonyType(matchedPrefix.getTelephonyType());
-        callRecord.setTelephonyTypeId(matchedPrefix.getTelephoneTypeId());
-        callRecord.setOperator(matchedPrefix.getOperator());
+        // PHP iterates through prefixes. We'll take the first (longest match).
+        // A more faithful implementation would loop and try to find the "best" indicator/rate.
+        Prefix matchedPrefix = prefixes.get(0);
+        setTelephonyTypeAndOperator(callRecord, matchedPrefix.getTelephoneTypeId(), originCountryId, null); // Indicator set later
+        callRecord.setOperator(matchedPrefix.getOperator()); // Set the operator object too
         callRecord.setOperatorId(matchedPrefix.getOperatorId());
 
-        // Find Indicator based on the remaining part of the number after prefix
+
         String numberAfterPrefix = numberToLookup;
         if (matchedPrefix.getCode() != null && !matchedPrefix.getCode().isEmpty() && numberToLookup.startsWith(matchedPrefix.getCode())) {
             numberAfterPrefix = numberToLookup.substring(matchedPrefix.getCode().length());
         }
         
-        List<Indicator> indicators = lookupService.findIndicatorsByNumberAndType(numberAfterPrefix, matchedPrefix.getTelephoneTypeId(), originCountryId);
+        List<Indicator> indicators = lookupService.findIndicatorsByNumberAndType(numberAfterPrefix, matchedPrefix.getTelephoneTypeId(), originCountryId, commLocation);
         Indicator matchedIndicator = null;
         if (!indicators.isEmpty()) {
-            // PHP logic for selecting the best indicator (e.g. based on series specificity)
-            // For now, take the first one (longest NDC match)
-            matchedIndicator = indicators.get(0);
+            matchedIndicator = indicators.get(0); // Simplification: take first. PHP might have more complex selection.
             callRecord.setIndicator(matchedIndicator);
             callRecord.setIndicatorId(matchedIndicator.getId());
         } else if (Long.valueOf(TelephonyTypeConstants.LOCAL).equals(matchedPrefix.getTelephoneTypeId())) {
-            // If local and no specific indicator found, use the commLocation's indicator
             callRecord.setIndicator(commLocation.getIndicator());
             callRecord.setIndicatorId(commLocation.getIndicatorId());
             matchedIndicator = commLocation.getIndicator();
         } else {
-            log.warn("No indicator found for number part: {} and type: {}", numberAfterPrefix, matchedPrefix.getTelephoneTypeId());
-            // Keep callRecord.telephonyTypeId as ERRORES or a more specific error type
+            log.warn("No indicator found for number part: {} and type: {}. CDR Hash: {}", numberAfterPrefix, matchedPrefix.getTelephoneTypeId(), callRecord.getCdrHash());
+            setDefaultErrorTelephonyType(callRecord); // Fallback to error if no indicator
             return;
         }
 
-        // Pricing logic (simplified)
-        BigDecimal baseValue = matchedPrefix.getBaseValue();
+        // --- Pricing Logic ---
+        BigDecimal baseValue = matchedPrefix.getBaseValue() != null ? matchedPrefix.getBaseValue() : BigDecimal.ZERO;
         boolean vatIncludedInBase = matchedPrefix.isVatIncluded();
-        BigDecimal vatRate = matchedPrefix.getVatValue() != null ? matchedPrefix.getVatValue() : BigDecimal.ZERO; // %
+        BigDecimal vatRate = matchedPrefix.getVatValue() != null ? matchedPrefix.getVatValue() : BigDecimal.ZERO;
         
         BigDecimal callValue = baseValue;
+        Long bandIdForSpecialRate = null;
 
         if (matchedPrefix.isBandOk() && matchedIndicator != null) {
             List<Band> bands = lookupService.findBandsForPrefixAndIndicator(matchedPrefix.getId(), commLocation.getIndicatorId());
             if (!bands.isEmpty()) {
-                Band matchedBand = bands.get(0); // Assuming first is best match (e.g. most specific origin)
+                Band matchedBand = bands.get(0);
                 callValue = matchedBand.getValue();
                 vatIncludedInBase = matchedBand.getVatIncluded();
-                log.debug("Using band value: {}", matchedBand.getName());
+                bandIdForSpecialRate = matchedBand.getId();
+                log.debug("Using band value from Band ID: {}", matchedBand.getId());
             }
         }
         
-        // Apply SpecialRateValue if any
+        // Store initial price before special rates (PHP's PRECIOINICIAL logic)
+        BigDecimal initialPriceNoVat = callValue;
+        if (vatIncludedInBase && vatRate.compareTo(BigDecimal.ZERO) > 0) {
+            initialPriceNoVat = callValue.divide(BigDecimal.ONE.add(vatRate.divide(BigDecimal.valueOf(100))), 4, RoundingMode.HALF_UP);
+        }
+        callRecord.setInitialPrice(initialPriceNoVat.setScale(4, RoundingMode.HALF_UP));
+
+
         if (matchedIndicator != null) {
             List<SpecialRateValue> specialRates = lookupService.findSpecialRateValues(
                 callRecord.getServiceDate(),
                 callRecord.getTelephonyTypeId(),
                 callRecord.getOperatorId(),
-                (callValue == baseValue ? null : callRecord.getIndicator().getTelephonyType().getCallCategory().getId()), // This is a guess for bandId logic
+                bandIdForSpecialRate, 
                 commLocation.getIndicatorId()
             );
             if (!specialRates.isEmpty()) {
-                SpecialRateValue sr = specialRates.get(0); // Assuming most specific applies
+                SpecialRateValue sr = specialRates.get(0); 
+                BigDecimal currentRateNoVat = callValue;
+                if (vatIncludedInBase && vatRate.compareTo(BigDecimal.ZERO) > 0) {
+                     currentRateNoVat = callValue.divide(BigDecimal.ONE.add(vatRate.divide(BigDecimal.valueOf(100))), 10, RoundingMode.HALF_UP); // Higher precision for intermediate
+                }
+
                 if (sr.getValueType() != null && sr.getValueType() == 1) { // Percentage
-                    BigDecimal discountPercentage = sr.getRateValue().divide(BigDecimal.valueOf(100));
-                    BigDecimal currentRateNoVat = callValue;
-                    if (vatIncludedInBase) {
-                        currentRateNoVat = callValue.divide(BigDecimal.ONE.add(vatRate.divide(BigDecimal.valueOf(100))), 4, RoundingMode.HALF_UP);
-                    }
+                    BigDecimal discountPercentage = sr.getRateValue().divide(BigDecimal.valueOf(100), 10, RoundingMode.HALF_UP);
                     callValue = currentRateNoVat.multiply(BigDecimal.ONE.subtract(discountPercentage));
                 } else { // Absolute value
-                    callValue = sr.getRateValue();
+                    callValue = sr.getRateValue(); // This value is assumed to be ex-VAT if sr.includesVat is false
                 }
-                vatIncludedInBase = sr.getIncludesVat();
+                vatIncludedInBase = sr.getIncludesVat(); // VAT status now determined by special rate
+                // If special rate defines a new VAT rate (not directly supported by SpecialRateValue entity, but PHP implies it via PREFIJO_IVA lookup)
+                // For now, assume VAT rate remains from the prefix.
                 log.debug("Applied special rate: {}", sr.getName());
             }
         }
 
-        // Calculate final billed amount
-        BigDecimal pricePerMinute = callValue;
+        BigDecimal pricePerMinute = callValue; // This is now the potentially special-rated value
         if (!vatIncludedInBase && vatRate.compareTo(BigDecimal.ZERO) > 0) {
             pricePerMinute = callValue.multiply(BigDecimal.ONE.add(vatRate.divide(BigDecimal.valueOf(100))));
         }
         callRecord.setPricePerMinute(pricePerMinute.setScale(4, RoundingMode.HALF_UP));
 
         int durationInSeconds = callRecord.getDuration() != null ? callRecord.getDuration() : 0;
-        // PHP Duracion_Minuto rounds up to the next minute unless ensegundos is true
-        long billedMinutes = (long) Math.ceil((double) durationInSeconds / 60.0);
-        if (billedMinutes == 0 && durationInSeconds > 0) billedMinutes = 1; // Min 1 minute billing
+        long billedUnits = (long) Math.ceil((double) durationInSeconds / 60.0); // Default to minutes
+        // PHP: $ensegundos = ($infovalor['ensegundos'] !== false);
+        // This 'ensegundos' flag comes from TrunkRule or TrunkRate in PHP.
+        // For now, assume minute billing. Trunk rule logic below might change this.
 
-        callRecord.setBilledAmount(pricePerMinute.multiply(BigDecimal.valueOf(billedMinutes)).setScale(2, RoundingMode.HALF_UP));
-        callRecord.setInitialPrice(callRecord.getPricePerMinute()); // Simplified, PHP might have different initial price logic
+        if (billedUnits == 0 && durationInSeconds > 0) billedUnits = 1;
 
-        // Trunk rule application (simplified - PHP's Calcular_Valor_Reglas)
+        callRecord.setBilledAmount(pricePerMinute.multiply(BigDecimal.valueOf(billedUnits)).setScale(2, RoundingMode.HALF_UP));
+        
+        // Trunk rule application
         if (callRecord.getTrunk() != null && !callRecord.getTrunk().isEmpty() && matchedIndicator != null) {
             Optional<Trunk> trunkOpt = lookupService.findTrunkByNameAndCommLocation(callRecord.getTrunk(), commLocation.getId());
             if (trunkOpt.isPresent()) {
                 List<TrunkRule> trunkRules = lookupService.findTrunkRules(
                     trunkOpt.get().getId(),
-                    callRecord.getTelephonyTypeId(),
-                    String.valueOf(matchedIndicator.getId()), // Assuming single indicator ID for matching
+                    callRecord.getTelephonyTypeId(), // Original type before rule
+                    String.valueOf(matchedIndicator.getId()),
                     commLocation.getIndicatorId()
                 );
                 if (!trunkRules.isEmpty()) {
-                    TrunkRule appliedRule = trunkRules.get(0); // Most specific rule
-                    // Apply rule: change operator, telephony type, rate
-                    log.debug("Applying trunk rule: {}", appliedRule.getId());
-                    // Re-calculate pricing based on rule (this is a simplification)
-                    BigDecimal ruleRate = appliedRule.getRateValue();
-                    if (appliedRule.getIncludesVat() != null && !appliedRule.getIncludesVat() && vatRate.compareTo(BigDecimal.ZERO) > 0) {
-                         ruleRate = ruleRate.multiply(BigDecimal.ONE.add(vatRate.divide(BigDecimal.valueOf(100))));
-                    }
-                    callRecord.setPricePerMinute(ruleRate.setScale(4, RoundingMode.HALF_UP));
-                    callRecord.setBilledAmount(ruleRate.multiply(BigDecimal.valueOf(billedMinutes)).setScale(2, RoundingMode.HALF_UP));
+                    TrunkRule rule = trunkRules.get(0);
+                    log.debug("Applying trunk rule ID: {}", rule.getId());
 
-                    if (appliedRule.getNewTelephonyTypeId() != null) {
-                        lookupService.findTelephonyTypeById(appliedRule.getNewTelephonyTypeId()).ifPresent(tt -> {
-                            callRecord.setTelephonyType(tt);
-                            callRecord.setTelephonyTypeId(tt.getId());
-                        });
+                    BigDecimal ruleRateValue = rule.getRateValue();
+                    boolean ruleVatIncluded = rule.getIncludesVat() != null && rule.getIncludesVat();
+                    
+                    // If rule specifies new telephony type, get its VAT rate
+                    BigDecimal ruleVatRate = vatRate; // Default to original prefix VAT
+                    if (rule.getNewTelephonyTypeId() != null) {
+                        Optional<TelephonyType> newTt = lookupService.findTelephonyTypeById(rule.getNewTelephonyTypeId());
+                        if (newTt.isPresent()) {
+                            // Need to find prefix for this new type and new operator to get VAT
+                            Long operatorForVat = rule.getNewOperatorId() != null ? rule.getNewOperatorId() : callRecord.getOperatorId();
+                            List<Prefix> newPrefixes = lookupService.findMatchingPrefixes("", originCountryId, true); // Find generic prefix for type/op
+                            Optional<Prefix> newPrefixForVat = newPrefixes.stream()
+                                .filter(p -> p.getTelephoneTypeId().equals(rule.getNewTelephonyTypeId()) && p.getOperatorId().equals(operatorForVat))
+                                .findFirst();
+                            if (newPrefixForVat.isPresent()) {
+                                ruleVatRate = newPrefixForVat.get().getVatValue() != null ? newPrefixForVat.get().getVatValue() : BigDecimal.ZERO;
+                            }
+                        }
                     }
-                     if (appliedRule.getNewOperatorId() != null) {
-                        lookupService.findOperatorById(appliedRule.getNewOperatorId()).ifPresent(op -> {
+
+
+                    BigDecimal finalPricePerUnit = ruleRateValue;
+                    if (!ruleVatIncluded && ruleVatRate.compareTo(BigDecimal.ZERO) > 0) {
+                         finalPricePerUnit = ruleRateValue.multiply(BigDecimal.ONE.add(ruleVatRate.divide(BigDecimal.valueOf(100))));
+                    }
+                    callRecord.setPricePerMinute(finalPricePerUnit.setScale(4, RoundingMode.HALF_UP)); // Assuming rule rate is per minute
+
+                    long ruleBilledUnits = billedUnits; // Default to minutes
+                    if (rule.getSeconds() != null && rule.getSeconds() > 0) { // Rule bills per N seconds
+                        ruleBilledUnits = (long) Math.ceil((double) durationInSeconds / (double) rule.getSeconds());
+                        if (ruleBilledUnits == 0 && durationInSeconds > 0) ruleBilledUnits = 1;
+                    }
+                    callRecord.setBilledAmount(finalPricePerUnit.multiply(BigDecimal.valueOf(ruleBilledUnits)).setScale(2, RoundingMode.HALF_UP));
+
+                    if (rule.getNewTelephonyTypeId() != null) {
+                        setTelephonyTypeAndOperator(callRecord, rule.getNewTelephonyTypeId(), originCountryId, callRecord.getIndicator()); // Keep current indicator unless rule changes it
+                    }
+                    if (rule.getNewOperatorId() != null) {
+                        lookupService.findOperatorById(rule.getNewOperatorId()).ifPresent(op -> {
                             callRecord.setOperator(op);
                             callRecord.setOperatorId(op.getId());
+                        });
+                    }
+                    // PHP also has logic for REGLATRONCAL_INDICAORIGEN_ID which might change the indicator context.
+                    if (rule.getOriginIndicatorId() != null && !rule.getOriginIndicatorId().equals(callRecord.getIndicatorId())) {
+                        lookupService.findIndicatorById(rule.getOriginIndicatorId()).ifPresent(ind -> {
+                            callRecord.setIndicator(ind); // This might be the "new" origin indicator for the rerouted call
+                            callRecord.setIndicatorId(ind.getId());
                         });
                     }
                 }
@@ -306,6 +370,33 @@ public class EnrichmentService {
         }
     }
 
+    private void setDefaultErrorTelephonyType(CallRecord callRecord) {
+        callRecord.setTelephonyTypeId(TelephonyTypeConstants.ERRORES);
+        lookupService.findTelephonyTypeById(TelephonyTypeConstants.ERRORES).ifPresent(callRecord::setTelephonyType);
+        callRecord.setBilledAmount(BigDecimal.ZERO);
+        callRecord.setPricePerMinute(BigDecimal.ZERO);
+        callRecord.setInitialPrice(BigDecimal.ZERO);
+    }
+
+    private void setTelephonyTypeAndOperator(CallRecord callRecord, Long telephonyTypeId, Long originCountryId, Indicator indicator) {
+        lookupService.findTelephonyTypeById(telephonyTypeId).ifPresent(tt -> {
+            callRecord.setTelephonyType(tt);
+            callRecord.setTelephonyTypeId(tt.getId());
+        });
+        // Set default operator for this type if not already set by prefix/rule
+        if (callRecord.getOperatorId() == null) {
+            lookupService.findInternalOperatorByTelephonyType(telephonyTypeId, originCountryId)
+                .ifPresent(op -> {
+                    callRecord.setOperator(op);
+                    callRecord.setOperatorId(op.getId());
+                });
+        }
+        if (indicator != null) {
+            callRecord.setIndicator(indicator);
+            callRecord.setIndicatorId(indicator.getId());
+        }
+    }
+    
     private String applyPbxSpecialRules(String dialedNumber, CommunicationLocation commLocation, boolean isIncoming) {
         List<PbxSpecialRule> rules = lookupService.findPbxSpecialRules(commLocation.getId());
         String currentNumber = dialedNumber;
@@ -317,36 +408,46 @@ public class EnrichmentService {
                                      (!isIncoming && ruleDirection == PbxSpecialRuleDirection.OUTGOING);
 
             if (!directionMatch) continue;
-            if (currentNumber.length() < rule.getMinLength()) continue;
+            
+            // Ensure currentNumber is not null or empty before length check
+            if (currentNumber == null || currentNumber.length() < rule.getMinLength()) continue;
 
-            // Search Pattern
-            Pattern searchPattern = Pattern.compile("^" + rule.getSearchPattern()); // Anchor at the beginning
+
+            Pattern searchPattern;
+            try {
+                 searchPattern = Pattern.compile("^" + rule.getSearchPattern());
+            } catch (Exception e) {
+                log.warn("Invalid search pattern in PbxSpecialRule ID {}: {}", rule.getId(), rule.getSearchPattern(), e);
+                continue;
+            }
             Matcher matcher = searchPattern.matcher(currentNumber);
 
             if (matcher.find()) {
-                // Ignore Pattern
                 boolean ignore = false;
                 if (rule.getIgnorePattern() != null && !rule.getIgnorePattern().isEmpty()) {
-                    String[] ignorePatterns = rule.getIgnorePattern().split(","); // Assuming comma-separated
-                    for (String ignorePatStr : ignorePatterns) {
-                        Pattern ignorePat = Pattern.compile(ignorePatStr.trim());
-                        if (ignorePat.matcher(currentNumber).find()) {
-                            ignore = true;
-                            break;
+                    String[] ignorePatternsText = rule.getIgnorePattern().split(",");
+                    for (String ignorePatStr : ignorePatternsText) {
+                        if (ignorePatStr.trim().isEmpty()) continue;
+                        try {
+                            Pattern ignorePat = Pattern.compile(ignorePatStr.trim());
+                            if (ignorePat.matcher(currentNumber).find()) {
+                                ignore = true;
+                                break;
+                            }
+                        } catch (Exception e) {
+                           log.warn("Invalid ignore pattern in PbxSpecialRule ID {}: {}", rule.getId(), ignorePatStr.trim(), e);
+                           // Decide if this should skip the rule or just this ignore pattern
                         }
                     }
                 }
                 if (ignore) continue;
-
-                // Apply Replacement
-                // Regex replace might be needed if search_pattern uses groups for replacement.
-                // Simple prefix replacement:
-                currentNumber = rule.getReplacement() + currentNumber.substring(rule.getSearchPattern().length());
-                log.debug("Applied PBX rule '{}': {} -> {}", rule.getName(), dialedNumber, currentNumber);
-                // PHP logic might imply only one rule applies, or they chain. Assuming first match.
-                return currentNumber;
+                
+                String replacement = rule.getReplacement() != null ? rule.getReplacement() : "";
+                currentNumber = replacement + currentNumber.substring(matcher.end()); // Use matcher.end() to get end of matched search_pattern
+                log.debug("Applied PBX rule ID {}: {} -> {}", rule.getId(), dialedNumber, currentNumber);
+                return currentNumber; // PHP applies first matching rule
             }
         }
-        return currentNumber; // Return original or modified number
+        return currentNumber;
     }
 }
