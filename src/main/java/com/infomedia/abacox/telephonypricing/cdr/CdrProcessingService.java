@@ -27,7 +27,7 @@ import java.util.Optional;
 @Log4j2
 public class CdrProcessingService {
 
-    private final CoreLookupService coreLookupService;
+    private final LookupService lookupService;
     private final EnrichmentService enrichmentService;
     private final CallRecordRepository callRecordRepository;
     private final FailedCallRecordRepository failedCallRecordRepository;
@@ -38,7 +38,7 @@ public class CdrProcessingService {
     public void processCdrStream(String originalFilename, InputStream inputStream, Long commLocationId) {
         log.info("Starting CDR processing for file: {}, commLocationId: {}", originalFilename, commLocationId);
 
-        Optional<CommunicationLocation> commLocationOpt = coreLookupService.findCommunicationLocationById(commLocationId);
+        Optional<CommunicationLocation> commLocationOpt = lookupService.findCommunicationLocationById(commLocationId);
         if (commLocationOpt.isEmpty()) {
             log.error("CommunicationLocation not found or inactive for ID: {}", commLocationId);
             // Optionally create a FailedCallRecord for the whole file if needed

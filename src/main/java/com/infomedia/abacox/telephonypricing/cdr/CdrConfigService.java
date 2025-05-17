@@ -1,6 +1,7 @@
 package com.infomedia.abacox.telephonypricing.cdr;
 
 import com.infomedia.abacox.telephonypricing.entity.CommunicationLocation;
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -12,7 +13,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class CdrConfigService {
 
-    private final EmployeeLookupService employeeLookupService;
+    private final LookupService lookupService; // For dynamic limits
 
     public int getMinCallDurationForProcessing() {
         return 0;
@@ -31,7 +32,7 @@ public class CdrConfigService {
 
     public InternalExtensionLimitsDto getInternalExtensionLimits(Long originCountryId, Long commLocationId) {
         // Delegate to LookupService to get dynamically determined limits
-        return employeeLookupService.getInternalExtensionLimits(originCountryId, commLocationId);
+        return lookupService.getInternalExtensionLimits(originCountryId, commLocationId);
     }
 
     public List<String> getIgnoredAuthCodes() {
