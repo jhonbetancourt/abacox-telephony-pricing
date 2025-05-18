@@ -1,8 +1,6 @@
 package com.infomedia.abacox.telephonypricing.cdr;
+
 import com.infomedia.abacox.telephonypricing.entity.CommunicationLocation;
-
-
-import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
@@ -25,21 +23,6 @@ public class TariffCalculationService {
     private final TrunkRuleLookupService trunkRuleLookupService;
     private final CdrConfigService appConfigService;
     private final TelephonyTypeLookupService telephonyTypeLookupService;
-
-    // Inner DTO for TariffValue
-    @Getter
-    public static class TariffValue {
-        private BigDecimal rateValue;
-        private boolean includesVat;
-        private BigDecimal vatRate;
-
-        public TariffValue(BigDecimal rateValue, boolean includesVat, BigDecimal vatRate) {
-            this.rateValue = rateValue;
-            this.includesVat = includesVat;
-            this.vatRate = vatRate;
-        }
-    }
-
 
     public void calculateTariffs(CdrData cdrData, CommunicationLocation commLocation) {
         if (cdrData.getDurationSeconds() < appConfigService.getMinCallDurationForTariffing() &&

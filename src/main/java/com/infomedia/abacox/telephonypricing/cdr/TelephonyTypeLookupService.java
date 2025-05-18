@@ -55,7 +55,7 @@ public class TelephonyTypeLookupService {
 
 
     @Transactional(readOnly = true)
-    public TariffCalculationService.TariffValue getBaseTariffValue(Long prefixId, Long destinationIndicatorId,
+    public TariffValue getBaseTariffValue(Long prefixId, Long destinationIndicatorId,
                                                                    Long commLocationId, Long originIndicatorIdForBand) {
         // This is the core of PHP's buscarValor
         String prefixQueryStr = "SELECT p.base_value, p.vat_included, p.vat_value, p.band_ok, p.id as prefix_id, p.telephone_type_id " +
@@ -93,18 +93,18 @@ public class TelephonyTypeLookupService {
                 if (!bandResults.isEmpty()) {
                     Tuple bRes = bandResults.get(0);
                     log.debug("Found band-specific rate for prefixId {}", prefixId);
-                    return new TariffCalculationService.TariffValue(
+                    return new TariffValue(
                             bRes.get("band_value", BigDecimal.class),
                             bRes.get("band_vat_included", Boolean.class),
                             vatValue // VAT rate is from prefix table
                     );
                 }
             }
-            return new TariffCalculationService.TariffValue(baseValue, vatIncluded, vatValue);
+            return new TariffValue(baseValue, vatIncluded, vatValue);
 
         } catch (NoResultException e) {
             log.warn("No prefix found for ID: {}", prefixId);
-            return new TariffCalculationService.TariffValue(BigDecimal.ZERO, false, BigDecimal.ZERO);
+            return new TariffValue(BigDecimal.ZERO, false, BigDecimal.ZERO);
         }
     }
 
