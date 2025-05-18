@@ -93,8 +93,7 @@ public class CdrFileProcessorService {
         // Create/get FileInfo for this stream
         // PHP's CDR_Actual_FileInfo logic is complex. Here, we create a new one per stream.
         FileInfo fileInfo = fileInfoPersistenceService.createOrGetFileInfo(filename, commLocationId, "STREAM_INPUT", inputStream);
-        callTypeDeterminationService.resetExtensionLimitsCache(); // Reset for new file/stream
-
+        callTypeDeterminationService.resetExtensionLimitsCache(commLocation); // Reset for new file/stream
 
         // For now, directly use CiscoCm60Processor. A factory could be used for multiple types.
         ICdrTypeProcessor processor = ciscoCm60Processor;

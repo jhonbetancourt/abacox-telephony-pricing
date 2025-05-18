@@ -1,6 +1,7 @@
 package com.infomedia.abacox.telephonypricing.cdr;
 
 import com.infomedia.abacox.telephonypricing.entity.CommunicationLocation;
+import com.infomedia.abacox.telephonypricing.entity.Employee;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
@@ -8,6 +9,7 @@ import org.springframework.stereotype.Service;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Optional;
+import java.util.Objects; // Added for Objects.equals
 
 @Service
 @Log4j2
@@ -18,119 +20,125 @@ public class CallTypeDeterminationService {
     private final PbxSpecialRuleLookupService pbxSpecialRuleLookupService;
     private final SpecialServiceLookupService specialServiceLookupService;
     private final TelephonyTypeLookupService telephonyTypeLookupService;
-    private ExtensionLimits extensionLimits; // To cache limits for a processing run
+    private final PhoneNumberTransformationService phoneNumberTransformationService;
+    private final CdrConfigService appConfigService; // Added
+    private ExtensionLimits extensionLimits;
 
-
-    private ExtensionLimits getExtensionLimits(CommunicationLocation commLocation) {
-        if (this.extensionLimits == null) { // Lazy load per batch/stream
+    public void resetExtensionLimitsCache(CommunicationLocation commLocation) {
+        if (this.extensionLimits == null) {
             this.extensionLimits = employeeLookupService.getExtensionLimits(
                     commLocation.getIndicator().getOriginCountryId(),
                     commLocation.getId(),
                     commLocation.getPlantTypeId()
             );
         }
+    }
+
+    public ExtensionLimits getExtensionLimits() {
         return this.extensionLimits;
     }
 
-    // To be called at the start of processing a new stream/batch
-    public void resetExtensionLimitsCache() {
-        this.extensionLimits = null;
+    public void determineCallTypeAndDirection(CdrData cdrData, CommunicationLocation commLocation) {
+        ExtensionLimits limits = getExtensionLimits();
+
+        boolean isEffectivelyInternal = determineIfEffectivelyInternal(cdrData, commLocation, limits);
+        cdrData.setInternalCall(isEffectivelyInternal);
+
+        if (cdrData.getCallDirection() == CallDirection.INCOMING) {
+            processIncomingLogic(cdrData, commLocation, limits);
+        } else {
+            processOutgoingLogic(cdrData, commLocation, limits, false);
+        }
     }
 
+    private boolean determineIfEffectivelyInternal(CdrData cdrData, CommunicationLocation commLocation, ExtensionLimits limits) {
+        if (cdrData.isInternalCall()) {
+            return true;
+        }
 
-    public void determineCallTypeAndDirection(CdrData cdrData, CommunicationLocation commLocation) {
-        // This combines logic from procesaEntrante, procesaSaliente, procesaInterna, es_llamada_interna
+        if (!employeeLookupService.isPossibleExtension(cdrData.getCallingPartyNumber(), limits)) {
+            return false;
+        }
 
-        ExtensionLimits limits = getExtensionLimits(commLocation);
+        String destinationForInternalCheck = cdrData.getFinalCalledPartyNumber();
+        String cleanedDestination = CdrParserUtil.cleanPhoneNumber(destinationForInternalCheck, null, true);
 
-        // Initial direction is often set by the parser based on partitions. Refine here.
-        boolean isCallingPartyExt = employeeLookupService.isPossibleExtension(cdrData.getCallingPartyNumber(), limits);
-        boolean isFinalCalledPartyExt = employeeLookupService.isPossibleExtension(cdrData.getFinalCalledPartyNumber(), limits);
+        Optional<String> pbxInternalTransformed = pbxSpecialRuleLookupService.applyPbxSpecialRule(
+                cleanedDestination, commLocation.getDirectory(), 3
+        );
+        if (pbxInternalTransformed.isPresent()) {
+            cleanedDestination = pbxInternalTransformed.get();
+        }
 
-        // PHP's es_llamada_interna
-        if (isCallingPartyExt && isFinalCalledPartyExt) {
-            cdrData.setInternalCall(true);
-            // Direction for internal calls is typically outgoing from the perspective of callingPartyNumber
-            cdrData.setCallDirection(CallDirection.OUTGOING);
-        } else if (!isCallingPartyExt && isFinalCalledPartyExt) {
-            // If caller is not an extension but callee is, it's likely incoming
-            cdrData.setCallDirection(CallDirection.INCOMING);
-            // PHP's InvertirLlamada for incoming: swap ext and dial_number
-            String temp = cdrData.getCallingPartyNumber();
+        if (employeeLookupService.isPossibleExtension(cleanedDestination, limits)) {
+            return true;
+        }
+
+        Optional<Employee> employeeFromRange = employeeLookupService.findEmployeeByExtensionRange(
+                cleanedDestination, commLocation.getId(), cdrData.getDateTimeOrigination()
+        );
+        return employeeFromRange.isPresent();
+    }
+
+    private void processIncomingLogic(CdrData cdrData, CommunicationLocation commLocation, ExtensionLimits limits) {
+        if (cdrData.isInternalCall()) {
+            log.debug("Internal call initially marked as incoming. Inverting and processing as outgoing. Original Caller: {}, Original Callee: {}", cdrData.getFinalCalledPartyNumber(), cdrData.getCallingPartyNumber());
+            String tempExt = cdrData.getCallingPartyNumber();
             cdrData.setCallingPartyNumber(cdrData.getFinalCalledPartyNumber());
-            cdrData.setFinalCalledPartyNumber(temp);
-            // Also swap partitions
-            temp = cdrData.getCallingPartyNumberPartition();
+            cdrData.setFinalCalledPartyNumber(tempExt);
+            String tempPart = cdrData.getCallingPartyNumberPartition();
             cdrData.setCallingPartyNumberPartition(cdrData.getFinalCalledPartyNumberPartition());
-            cdrData.setFinalCalledPartyNumberPartition(temp);
-        } else {
-            // Default to outgoing if not clearly incoming or internal-to-internal
+            cdrData.setFinalCalledPartyNumberPartition(tempPart);
+            String tempTrunk = cdrData.getOrigDeviceName();
+            cdrData.setOrigDeviceName(cdrData.getDestDeviceName());
+            cdrData.setDestDeviceName(tempTrunk);
             cdrData.setCallDirection(CallDirection.OUTGOING);
+            processOutgoingLogic(cdrData, commLocation, limits, false);
+            return;
         }
 
-        // Apply _es_Saliente and _esEntrante_60 logic (Colombian specific)
-        // These were called in txt2dbv8.php's procesaSaliente/Entrante
-        // This is a simplification; the PHP code has complex interactions with global vars.
-        String originalDialed = cdrData.getCallDirection() == CallDirection.OUTGOING ? cdrData.getFinalCalledPartyNumber() : cdrData.getCallingPartyNumber();
-        PhoneNumberTransformationResult transformedPhone = transformPhoneNumber(
-                originalDialed,
-                cdrData.getCallDirection(),
-                commLocation
+        String originalCallerId = cdrData.getCallingPartyNumber();
+        Optional<String> pbxTransformedCaller = pbxSpecialRuleLookupService.applyPbxSpecialRule(
+                originalCallerId, commLocation.getDirectory(), 1
         );
-
-        if (transformedPhone.isTransformed()) {
-            cdrData.getAdditionalData().put("originalDialNumberBeforeTransform", originalDialed);
-            if (cdrData.getCallDirection() == CallDirection.OUTGOING) {
-                cdrData.setFinalCalledPartyNumber(transformedPhone.getTransformedNumber());
-            } else { // INCOMING
-                cdrData.setCallingPartyNumber(transformedPhone.getTransformedNumber());
-            }
-            if (transformedPhone.getNewTelephonyTypeId() != null) {
-                // This implies a strong typing of the call due to transformation
-                cdrData.setTelephonyTypeId(transformedPhone.getNewTelephonyTypeId());
-                // Potentially set telephonyTypeName as well
-            }
+        if (pbxTransformedCaller.isPresent()) {
+            cdrData.getAdditionalData().put("originalCallerIdBeforePbxIncoming", originalCallerId);
+            cdrData.setCallingPartyNumber(pbxTransformedCaller.get());
+            cdrData.setPbxSpecialRuleAppliedInfo("PBX Incoming Rule: " + originalCallerId + " -> " + pbxTransformedCaller.get());
         }
-        cdrData.setEffectiveDestinationNumber(cdrData.getFinalCalledPartyNumber()); // Default before PBX rules
 
-        // Handle PBX Special Rules (evaluarPBXEspecial)
-        // This can change the effective destination number
-        String numberToEvaluateForPbx = cdrData.getCallDirection() == CallDirection.OUTGOING ?
-                cdrData.getFinalCalledPartyNumber() :
-                (cdrData.isInternalCall() ? cdrData.getFinalCalledPartyNumber() : cdrData.getCallingPartyNumber());
-
-        int pbxRuleDirection = 0; // 0=both, 1=incoming, 2=outgoing, 3=internal (PHP mapping)
-        if (cdrData.isInternalCall()) pbxRuleDirection = 3;
-        else if (cdrData.getCallDirection() == CallDirection.INCOMING) pbxRuleDirection = 1;
-        else pbxRuleDirection = 2;
-
-        Optional<String> pbxTransformedNum = pbxSpecialRuleLookupService.applyPbxSpecialRule(
-                numberToEvaluateForPbx,
-                commLocation.getDirectory(),
-                pbxRuleDirection
+        PhoneNumberTransformationService.TransformationResult transformedIncoming = phoneNumberTransformationService.transformIncomingNumber(
+                cdrData.getCallingPartyNumber(), commLocation.getIndicator().getOriginCountryId()
         );
-
-        if (pbxTransformedNum.isPresent()) {
-            String transformed = pbxTransformedNum.get();
-            cdrData.setPbxSpecialRuleAppliedInfo("Rule applied: " + numberToEvaluateForPbx + " -> " + transformed);
-            if (cdrData.getCallDirection() == CallDirection.OUTGOING || cdrData.isInternalCall()) {
-                cdrData.setEffectiveDestinationNumber(transformed);
-                // If it was internal but now looks external due to PBX rule, update internal flag
-                if (cdrData.isInternalCall() && !employeeLookupService.isPossibleExtension(transformed, limits)) {
-                    cdrData.setInternalCall(false);
-                }
-            } else { // INCOMING
-                cdrData.setCallingPartyNumber(transformed); // If PBX rule modifies incoming caller ID
+        if (transformedIncoming.isTransformed()) {
+            cdrData.getAdditionalData().put("originalCallerIdBeforeNatTransform", cdrData.getCallingPartyNumber());
+            cdrData.setCallingPartyNumber(transformedIncoming.getTransformedNumber());
+            if (transformedIncoming.getNewTelephonyTypeId() != null) {
+                cdrData.setTelephonyTypeId(transformedIncoming.getNewTelephonyTypeId());
             }
         }
+        
+        if (cdrData.getTelephonyTypeId() == null || cdrData.getTelephonyTypeId() == 0L) {
+             cdrData.setTelephonyTypeId(TelephonyTypeEnum.LOCAL.getValue());
+             cdrData.setTelephonyTypeName("Incoming Local (Default)");
+        }
+    }
 
+    private void processOutgoingLogic(CdrData cdrData, CommunicationLocation commLocation, ExtensionLimits limits, boolean pbxSpecialRuleAppliedRecursively) {
+        PhoneNumberTransformationService.TransformationResult transformedOutgoing = phoneNumberTransformationService.transformOutgoingNumber(
+                cdrData.getFinalCalledPartyNumber(), commLocation.getIndicator().getOriginCountryId()
+        );
+        if (transformedOutgoing.isTransformed()) {
+            cdrData.getAdditionalData().put("originalDialNumberBeforeNatTransform", cdrData.getFinalCalledPartyNumber());
+            cdrData.setFinalCalledPartyNumber(transformedOutgoing.getTransformedNumber());
+        }
+        cdrData.setEffectiveDestinationNumber(cdrData.getFinalCalledPartyNumber());
 
-        // Handle Special Service Numbers (procesaServespecial) - for outgoing calls
-        if (cdrData.getCallDirection() == CallDirection.OUTGOING && !cdrData.isInternalCall()) {
+        if (!pbxSpecialRuleAppliedRecursively && !cdrData.isInternalCall()) {
             String numToCheckSpecial = CdrParserUtil.cleanPhoneNumber(
                     cdrData.getEffectiveDestinationNumber(),
                     commLocation.getPbxPrefix() != null ? Arrays.asList(commLocation.getPbxPrefix().split(",")) : Collections.emptyList(),
-                    true // modo_seguro = true
+                    true
             );
             if (!numToCheckSpecial.isEmpty()) {
                 Optional<SpecialServiceInfo> specialServiceInfo =
@@ -141,119 +149,93 @@ public class CallTypeDeterminationService {
                         );
                 if (specialServiceInfo.isPresent()) {
                     cdrData.setTelephonyTypeId(TelephonyTypeEnum.SPECIAL_SERVICES.getValue());
-                    cdrData.setTelephonyTypeName(specialServiceInfo.get().description); // Or a fixed name
-                    cdrData.setOperatorId(specialServiceInfo.get().operatorId); // From operador_interno
-                    // Tariff info is part of SpecialServiceInfo, will be used by TariffCalculationService
+                    cdrData.setTelephonyTypeName(specialServiceInfo.get().description);
+                    cdrData.setOperatorId(specialServiceInfo.get().operatorId);
                     cdrData.getAdditionalData().put("specialServiceTariff", specialServiceInfo.get());
                     log.debug("Call to special service: {}", numToCheckSpecial);
-                    return; // Processing for special service is distinct
+                    return;
                 }
             }
         }
 
-        // If internal, set telephony type (tipo_llamada_interna)
         if (cdrData.isInternalCall()) {
-            // PHP's tipo_llamada_interna is complex, involving employee lookups for both ends
-            // and comparing their locations (subdivision, city, country).
-            // This simplified version just marks it as a generic internal type.
-            // A more complete version would call EmployeeLookupService for both ends.
-            cdrData.setTelephonyTypeId(TelephonyTypeEnum.INTERNAL_SIMPLE.getValue()); // Default internal
-            cdrData.setTelephonyTypeName("Internal"); // Or lookup
-            // Operator for internal calls
-            cdrData.setOperatorId(telephonyTypeLookupService.getInternalOperatorId(TelephonyTypeEnum.INTERNAL_SIMPLE.getValue(), commLocation.getIndicator().getOriginCountryId()));
+            processInternalCallLogic(cdrData, commLocation, limits, pbxSpecialRuleAppliedRecursively);
+            return;
         }
 
-        // For non-internal, non-special outgoing or incoming, telephony type will be determined by TariffCalculationService
-        // based on prefixes and destination.
-    }
-
-    // Mimics _esEntrante_60 and _es_Saliente
-    private PhoneNumberTransformationResult transformPhoneNumber(String phoneNumber, CallDirection direction, CommunicationLocation commLocation) {
-        String originalPhoneNumber = phoneNumber;
-        Long newTelephonyTypeId = null;
-
-        if (commLocation.getIndicator().getOriginCountryId() == 1L) { // Colombia MPORIGEN_ID = 1
-            int len = phoneNumber.length();
-            if (direction == CallDirection.INCOMING) { // _esEntrante_60 logic
-                String p2 = len >= 2 ? phoneNumber.substring(0, 2) : "";
-                String p3 = len >= 3 ? phoneNumber.substring(0, 3) : "";
-                String p4 = len >= 4 ? phoneNumber.substring(0, 4) : "";
-
-                if (len == 12) {
-                    if ("573".equals(p3) || "603".equals(p3)) {
-                        phoneNumber = phoneNumber.substring(len - 10);
-                        newTelephonyTypeId = TelephonyTypeEnum.CELLULAR.getValue();
-                    } else if ("6060".equals(p4) || "5760".equals(p4)) {
-                        phoneNumber = phoneNumber.substring(len - 8);
-                    }
-                } else if (len == 11) {
-                    if ("604".equals(p3)) {
-                        phoneNumber = phoneNumber.substring(len - 8);
-                    } else if ("03".equals(p2)) {
-                        String n3 = phoneNumber.substring(1, 4); // Get 3 digits after '0'
-                        try {
-                            int n3val = Integer.parseInt(n3);
-                            if (n3val >= 300 && n3val <= 350) { // Colombian mobile prefixes
-                                phoneNumber = phoneNumber.substring(len - 10);
-                                newTelephonyTypeId = TelephonyTypeEnum.CELLULAR.getValue();
-                            }
-                        } catch (NumberFormatException ignored) {
-                        }
-                    }
-                } else if (len == 10) {
-                    if ("60".equals(p2) || "57".equals(p2)) { // National prefix
-                        phoneNumber = phoneNumber.substring(len - 8);
-                    } else if (phoneNumber.startsWith("3")) { // Potentially cellular without 03
-                        try {
-                            int n3val = Integer.parseInt(phoneNumber.substring(0, 3));
-                            if (n3val >= 300 && n3val <= 350) {
-                                newTelephonyTypeId = TelephonyTypeEnum.CELLULAR.getValue();
-                            }
-                        } catch (NumberFormatException | StringIndexOutOfBoundsException ignored) {
-                        }
-                    }
-                } else if (len == 9) {
-                    if ("60".equals(p2)) {
-                        phoneNumber = phoneNumber.substring(len - 7);
-                    }
-                }
-            } else { // OUTGOING - _es_Saliente logic
-                if (len == 11 && phoneNumber.startsWith("03")) {
-                    try {
-                        int n3val = Integer.parseInt(phoneNumber.substring(1, 4)); // Get 3 digits after '0'
-                        if (n3val >= 300 && n3val <= 350) {
-                            phoneNumber = phoneNumber.substring(len - 10);
-                            // newTelephonyTypeId = TelephonyTypeEnum.CELLULAR.getValue(); // Not set in PHP _es_Saliente
-                        }
-                    } catch (NumberFormatException ignored) {
-                    }
-                }
+        if (!pbxSpecialRuleAppliedRecursively) {
+            Optional<String> pbxTransformedDest = pbxSpecialRuleLookupService.applyPbxSpecialRule(
+                    cdrData.getEffectiveDestinationNumber(), commLocation.getDirectory(), 2
+            );
+            if (pbxTransformedDest.isPresent()) {
+                String originalDest = cdrData.getEffectiveDestinationNumber();
+                cdrData.setEffectiveDestinationNumber(pbxTransformedDest.get());
+                 // Update finalCalledPartyNumber as well, as effectiveDestination is based on it
+                cdrData.setFinalCalledPartyNumber(pbxTransformedDest.get());
+                cdrData.setPbxSpecialRuleAppliedInfo("PBX Outgoing Rule: " + originalDest + " -> " + pbxTransformedDest.get());
+                log.debug("Re-processing outgoing logic after PBX rule transformed {} to {}", originalDest, cdrData.getEffectiveDestinationNumber());
+                processOutgoingLogic(cdrData, commLocation, limits, true);
+                return;
             }
         }
-        return new PhoneNumberTransformationResult(phoneNumber, !phoneNumber.equals(originalPhoneNumber), newTelephonyTypeId);
+        
+        if (cdrData.getTelephonyTypeId() == null || cdrData.getTelephonyTypeId() == 0L) {
+             log.debug("Outgoing call, telephony type to be determined by prefix: {}", cdrData.getEffectiveDestinationNumber());
+        }
     }
 
-    private static class PhoneNumberTransformationResult {
-        private final String transformedNumber;
-        private final boolean transformed;
-        private final Long newTelephonyTypeId;
+    private void processInternalCallLogic(CdrData cdrData, CommunicationLocation commLocation, ExtensionLimits limits, boolean pbxSpecialRuleAppliedRecursively) {
+        String cleanedDestination = CdrParserUtil.cleanPhoneNumber(
+            cdrData.getEffectiveDestinationNumber(),
+            null,
+            true
+        );
+        cdrData.setEffectiveDestinationNumber(cleanedDestination);
 
-        public PhoneNumberTransformationResult(String transformedNumber, boolean transformed, Long newTelephonyTypeId) {
-            this.transformedNumber = transformedNumber;
-            this.transformed = transformed;
-            this.newTelephonyTypeId = newTelephonyTypeId;
+        if (Objects.equals(cdrData.getCallingPartyNumber(), cdrData.getEffectiveDestinationNumber())) {
+            log.warn("Internal call to self ignored: {}", cdrData.getCallingPartyNumber());
+            cdrData.setTelephonyTypeId(TelephonyTypeEnum.ERRORS.getValue());
+            cdrData.setTelephonyTypeName("Internal Self-Call");
+            return;
         }
 
-        public String getTransformedNumber() {
-            return transformedNumber;
-        }
+        Optional<Employee> originEmployeeOpt = employeeLookupService.findEmployeeByExtensionOrAuthCode(cdrData.getCallingPartyNumber(), null, commLocation.getId(), cdrData.getDateTimeOrigination());
+        Optional<Employee> destEmployeeOpt = employeeLookupService.findEmployeeByExtensionOrAuthCode(cdrData.getEffectiveDestinationNumber(), null, commLocation.getId(), cdrData.getDateTimeOrigination());
 
-        public boolean isTransformed() {
-            return transformed;
-        }
+        if (originEmployeeOpt.isPresent() && destEmployeeOpt.isPresent()) {
+            Employee originEmp = originEmployeeOpt.get();
+            Employee destEmp = destEmployeeOpt.get();
+            
+            CommunicationLocation originCommLoc = originEmp.getCommunicationLocation();
+            CommunicationLocation destCommLoc = destEmp.getCommunicationLocation();
 
-        public Long getNewTelephonyTypeId() {
-            return newTelephonyTypeId;
+            if (originCommLoc != null && destCommLoc != null && originCommLoc.getIndicator() != null && destCommLoc.getIndicator() != null) {
+                if (!Objects.equals(originCommLoc.getIndicator().getOriginCountryId(), destCommLoc.getIndicator().getOriginCountryId())) {
+                    cdrData.setTelephonyTypeId(TelephonyTypeEnum.INTERNAL_IP.getValue());
+                    cdrData.setTelephonyTypeName("Internal International IP");
+                } else if (!Objects.equals(originCommLoc.getIndicatorId(), destCommLoc.getIndicatorId())) {
+                    cdrData.setTelephonyTypeId(TelephonyTypeEnum.NATIONAL_IP.getValue());
+                    cdrData.setTelephonyTypeName("Internal National IP");
+                } else if (!Objects.equals(originEmp.getSubdivisionId(), destEmp.getSubdivisionId())) {
+                    cdrData.setTelephonyTypeId(TelephonyTypeEnum.LOCAL_IP.getValue());
+                    cdrData.setTelephonyTypeName("Internal Local IP");
+                } else {
+                    cdrData.setTelephonyTypeId(TelephonyTypeEnum.INTERNAL_SIMPLE.getValue());
+                    cdrData.setTelephonyTypeName("Internal Simple");
+                }
+            } else {
+                 cdrData.setTelephonyTypeId(TelephonyTypeEnum.INTERNAL_SIMPLE.getValue());
+                 cdrData.setTelephonyTypeName("Internal (Location Undetermined)");
+            }
+        } else {
+            cdrData.setTelephonyTypeId(TelephonyTypeEnum.INTERNAL_SIMPLE.getValue());
+            cdrData.setTelephonyTypeName("Internal (Assumed)");
+            if (!destEmployeeOpt.isPresent()) {
+                cdrData.setTelephonyTypeName(cdrData.getTelephonyTypeName() + " " + appConfigService.getAssumedText());
+            }
+        }
+        if (cdrData.getTelephonyTypeId() != null && commLocation.getIndicator() != null) {
+            cdrData.setOperatorId(telephonyTypeLookupService.getInternalOperatorId(cdrData.getTelephonyTypeId(), commLocation.getIndicator().getOriginCountryId()));
         }
     }
 }

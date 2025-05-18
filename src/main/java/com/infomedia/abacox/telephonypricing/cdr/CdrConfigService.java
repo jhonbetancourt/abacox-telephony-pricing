@@ -2,6 +2,9 @@ package com.infomedia.abacox.telephonypricing.cdr;
 
 import org.springframework.stereotype.Service;
 
+import java.util.Arrays;
+import java.util.List;
+
 @Service
 public class CdrConfigService {
 
@@ -38,5 +41,10 @@ public class CdrConfigService {
 
     public String getPrefixText() {
         return "(PREFIJO)"; // _PREFIJO
+    }
+
+    // From PHP's $_FUN_IGNORAR_CLAVE
+    public List<String> getIgnoredAuthCodeDescriptions() {
+        return Arrays.asList("Invalid Authorization Code", "Invalid Authorization Level");
     }
 }
