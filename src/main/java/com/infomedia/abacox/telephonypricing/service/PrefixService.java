@@ -26,7 +26,7 @@ public class PrefixService extends CrudService<Prefix, Long, PrefixRepository> {
     public Prefix create(CreatePrefix cDto) {
         Prefix prefix = Prefix.builder()
                 .operatorId(cDto.getOperatorId())
-                .telephoneTypeId(cDto.getTelephoneTypeId())
+                .telephonyTypeId(cDto.getTelephonyTypeId())
                 .code(cDto.getCode())
                 .baseValue(cDto.getBaseValue())
                 .bandOk(cDto.getBandOk())
@@ -40,7 +40,7 @@ public class PrefixService extends CrudService<Prefix, Long, PrefixRepository> {
     public Prefix update(Long id, UpdatePrefix uDto) {
         Prefix prefix = get(id);
         uDto.getOperatorId().ifPresent(prefix::setOperatorId);
-        uDto.getTelephoneTypeId().ifPresent(prefix::setTelephoneTypeId);
+        uDto.getTelephonyTypeId().ifPresent(prefix::setTelephonyTypeId);
         uDto.getCode().ifPresent(prefix::setCode);
         uDto.getBaseValue().ifPresent(prefix::setBaseValue);
         uDto.getBandOk().ifPresent(prefix::setBandOk);

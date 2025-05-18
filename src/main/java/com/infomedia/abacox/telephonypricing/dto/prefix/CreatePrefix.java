@@ -20,7 +20,7 @@ import java.math.BigDecimal;
 public class CreatePrefix {
     private Long operatorId;
     
-    private Long telephoneTypeId;
+    private Long telephonyTypeId;
     
     @NotBlank
     @Size(max = 10)

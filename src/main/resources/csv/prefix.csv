@@ -1,4 +1,4 @@
-id,operatorId,telephoneTypeId,code,baseValue,bandOk,vatIncluded,vatValue
+id,operatorId,telephonyTypeId,code,baseValue,bandOk,vatIncluded,vatValue
 1,1,4,07,0,1,0,16
 2,60,3,,0,1,0,16
 21,1,5,007,0,1,0,16

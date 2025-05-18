@@ -61,18 +61,18 @@ public class Prefix extends ActivableEntity {
      * Type of telephone service.
      * Original field: PREFIJO_TIPOTELE_ID
      */
-    @Column(name = "telephone_type_id")
-    private Long telephoneTypeId;
+    @Column(name = "telephony_type_id")
+    private Long telephonyTypeId;
 
     /**
      * Telephone type relationship.
      */
     @ManyToOne
     @JoinColumn(
-            name = "telephone_type_id", 
+            name = "telephony_type_id",
             insertable = false, 
             updatable = false,
-            foreignKey = @ForeignKey(name = "fk_prefix_telephone_type")
+            foreignKey = @ForeignKey(name = "fk_prefix_telephony_type")
     )
     private TelephonyType telephonyType;
 

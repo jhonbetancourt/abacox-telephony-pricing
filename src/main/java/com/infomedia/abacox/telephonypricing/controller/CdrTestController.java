@@ -1,6 +1,6 @@
 package com.infomedia.abacox.telephonypricing.controller;
 
-import com.infomedia.abacox.telephonypricing.cdr.CdrProcessingService;
+import com.infomedia.abacox.telephonypricing.cdr.CdrFileProcessorService;
 import com.infomedia.abacox.telephonypricing.dto.generic.MessageResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
@@ -24,7 +24,7 @@ import java.io.IOException;
 @RequestMapping("/api/cdr")
 public class CdrTestController {
 
-    private final CdrProcessingService cdrProcessingService;
+    private final CdrFileProcessorService cdrProcessingService;
 
     @PostMapping(value = "/process", consumes = MediaType.MULTIPART_FORM_DATA_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public MessageResponse processCdr(@RequestParam("file") MultipartFile file,

@@ -21,7 +21,7 @@ import java.math.BigDecimal;
 public class UpdatePrefix {
     private JsonNullable<Long> operatorId = JsonNullable.undefined();
     
-    private JsonNullable<Long> telephoneTypeId = JsonNullable.undefined();
+    private JsonNullable<Long> telephonyTypeId = JsonNullable.undefined();
     
     @NotBlank
     @Size(max = 10)
