@@ -36,7 +36,7 @@ public class PrefixLookupService {
             commLocation.getIndicator().getOriginCountryId() != null &&
             commLocation.getIndicator().getOriginCountryId() == 1L) { // Colombia
             // Apply _esCelular_fijo transformation before prefix lookup
-            PhoneNumberTransformationService.TransformationResult transformResult =
+            TransformationResult transformResult =
                 phoneNumberTransformationService.transformForPrefixLookup(dialedNumber, commLocation);
             if (transformResult.isTransformed()) {
                 numberForLookup = transformResult.getTransformedNumber();

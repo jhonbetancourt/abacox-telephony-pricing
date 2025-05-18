@@ -1,5 +1,6 @@
 package com.infomedia.abacox.telephonypricing.cdr;
 
+import com.infomedia.abacox.telephonypricing.entity.CommunicationLocation;
 import com.infomedia.abacox.telephonypricing.entity.Employee;
 import com.infomedia.abacox.telephonypricing.entity.ExtensionRange;
 import jakarta.persistence.EntityManager;
@@ -13,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 @Log4j2
@@ -25,8 +27,12 @@ public class EmployeeLookupService {
     @Transactional(readOnly = true)
     public Optional<Employee> findEmployeeByExtensionOrAuthCode(String extension, String authCode, Long commLocationId, LocalDateTime callTime) {
         StringBuilder queryStr = new StringBuilder("SELECT e.* FROM employee e ");
-        queryStr.append(" JOIN communication_location cl ON e.communication_location_id = cl.id ");
-        queryStr.append(" WHERE e.active = true AND cl.active = true ");
+        queryStr.append(" LEFT JOIN communication_location cl ON e.communication_location_id = cl.id "); // LEFT JOIN if commLocationId can be null for global employees
+        queryStr.append(" WHERE e.active = true ");
+        if (commLocationId != null) { // Only filter by active comm_location if one is provided
+             queryStr.append(" AND cl.active = true ");
+        }
+
 
         boolean hasAuthCode = authCode != null && !authCode.isEmpty();
         boolean hasExtension = extension != null && !extension.isEmpty();
@@ -42,7 +48,10 @@ public class EmployeeLookupService {
         if (commLocationId != null) {
             queryStr.append(" AND e.communication_location_id = :commLocationId ");
         }
-        queryStr.append(" ORDER BY e.created_date DESC LIMIT 1");
+        // PHP's ObtenerHistoricosFuncionarios sorts by HISTODESDE DESC.
+        // Since we are omitting historical lookups for now, this is simplified.
+        // If historical were needed, we'd add date range checks and potentially more complex ordering.
+        queryStr.append(" ORDER BY e.created_date DESC LIMIT 1"); // Get the most recent if multiple match (e.g. global vs specific)
 
         jakarta.persistence.Query nativeQuery = entityManager.createNativeQuery(queryStr.toString(), Employee.class);
 
@@ -59,7 +68,7 @@ public class EmployeeLookupService {
             Employee employee = (Employee) nativeQuery.getSingleResult();
             return Optional.of(employee);
         } catch (jakarta.persistence.NoResultException e) {
-            if (!hasAuthCode && hasExtension) {
+            if (!hasAuthCode && hasExtension) { // Only try range if lookup was by extension and failed
                 return findEmployeeByExtensionRange(extension, commLocationId, callTime);
             }
             return Optional.empty();
@@ -73,161 +82,152 @@ public class EmployeeLookupService {
         newEmployee.setSubdivisionId(subdivisionId);
         newEmployee.setCommunicationLocationId(commLocationId);
         newEmployee.setActive(true);
+        // Audited fields will be set by Spring
         log.info("Conceptually creating new employee for extension {} from range.", extension);
         return newEmployee;
     }
 
     @Transactional(readOnly = true)
     public ExtensionLimits getExtensionLimits(Long originCountryId, Long commLocationId, Long plantTypeId) {
-        ExtensionLimits limits = new ExtensionLimits(0,0, List.of());
+        // PHP's ObtenerMaxMin
+        int maxLenOverall = 0;
+        int minLenOverall = 0;
+        boolean firstMinSet = false;
 
-        String empQueryStr = "SELECT COALESCE(MAX(LENGTH(e.extension)), 0) AS max_len, COALESCE(MIN(LENGTH(e.extension)), 0) AS min_len " +
+        String maxAllowedLenStr = String.valueOf(CdrConfigService.ACUMTOTAL_MAX_EXTENSION_LENGTH_FOR_INTERNAL_CHECK);
+        int maxStandardExtLength = maxAllowedLenStr.length() - 1;
+
+
+        // Query for employee extensions
+        String empQueryStr = "SELECT LENGTH(e.extension) as ext_len " +
                              "FROM employee e " +
                              "JOIN communication_location cl ON e.communication_location_id = cl.id " +
                              "JOIN indicator i ON cl.indicator_id = i.id " +
                              "WHERE e.active = true AND cl.active = true AND i.active = true " +
-                             "  AND e.extension ~ '^[0-9]+$' " +
-                             "  AND e.extension NOT LIKE '0%' " +
-                             "  AND LENGTH(e.extension) BETWEEN 1 AND :maxAllowedLen ";
+                             "  AND e.extension ~ '^[0-9]+$' " + // Numeric check
+                             "  AND e.extension NOT LIKE '0%' " + // Not starting with 0
+                             "  AND LENGTH(e.extension) BETWEEN 1 AND :maxStandardExtLength ";
         if (originCountryId != null) empQueryStr += " AND i.origin_country_id = :originCountryId ";
         if (commLocationId != null) empQueryStr += " AND e.communication_location_id = :commLocationId ";
         if (plantTypeId != null) empQueryStr += " AND cl.plant_type_id = :plantTypeId ";
 
         jakarta.persistence.Query empQuery = entityManager.createNativeQuery(empQueryStr);
-        empQuery.setParameter("maxAllowedLen", String.valueOf(CdrConfigService.ACUMTOTAL_MAX_EXTENSION_LENGTH_FOR_INTERNAL_CHECK).length() -1);
+        empQuery.setParameter("maxStandardExtLength", maxStandardExtLength);
         if (originCountryId != null) empQuery.setParameter("originCountryId", originCountryId);
         if (commLocationId != null) empQuery.setParameter("commLocationId", commLocationId);
         if (plantTypeId != null) empQuery.setParameter("plantTypeId", plantTypeId);
 
-        Object[] empRes = (Object[]) empQuery.getSingleResult();
-        int empMaxLen = ((Number) empRes[0]).intValue();
-        int empMinLen = ((Number) empRes[1]).intValue();
+        List<Number> empLengths = empQuery.getResultList();
+        for (Number lenNum : empLengths) {
+            int len = lenNum.intValue();
+            if (len > maxLenOverall) maxLenOverall = len;
+            if (!firstMinSet || len < minLenOverall) {
+                minLenOverall = len;
+                firstMinSet = true;
+            }
+        }
 
-        String rangeQueryStr = "SELECT COALESCE(MAX(LENGTH(er.range_end::text)), 0) AS max_len, COALESCE(MIN(LENGTH(er.range_start::text)), 0) AS min_len " +
+        // Query for extension ranges
+        String rangeQueryStr = "SELECT LENGTH(er.range_start::text) as len_desde, LENGTH(er.range_end::text) as len_hasta " +
                                "FROM extension_range er " +
                                "JOIN communication_location cl ON er.comm_location_id = cl.id " +
                                "JOIN indicator i ON cl.indicator_id = i.id " +
                                "WHERE er.active = true AND cl.active = true AND i.active = true " +
-                               "  AND LENGTH(er.range_start::text) BETWEEN 1 AND :maxAllowedLen " +
-                               "  AND LENGTH(er.range_end::text) BETWEEN 1 AND :maxAllowedLen ";
+                               "  AND er.range_start::text ~ '^[0-9]+$' AND er.range_end::text ~ '^[0-9]+$' " + // Ensure numeric before length
+                               "  AND LENGTH(er.range_start::text) BETWEEN 1 AND :maxStandardExtLength " +
+                               "  AND LENGTH(er.range_end::text) BETWEEN 1 AND :maxStandardExtLength ";
         if (originCountryId != null) rangeQueryStr += " AND i.origin_country_id = :originCountryId ";
         if (commLocationId != null) rangeQueryStr += " AND er.comm_location_id = :commLocationId ";
         if (plantTypeId != null) rangeQueryStr += " AND cl.plant_type_id = :plantTypeId ";
 
         jakarta.persistence.Query rangeQuery = entityManager.createNativeQuery(rangeQueryStr);
-        rangeQuery.setParameter("maxAllowedLen", String.valueOf(CdrConfigService.ACUMTOTAL_MAX_EXTENSION_LENGTH_FOR_INTERNAL_CHECK).length() -1);
-
+        rangeQuery.setParameter("maxStandardExtLength", maxStandardExtLength);
         if (originCountryId != null) rangeQuery.setParameter("originCountryId", originCountryId);
         if (commLocationId != null) rangeQuery.setParameter("commLocationId", commLocationId);
         if (plantTypeId != null) rangeQuery.setParameter("plantTypeId", plantTypeId);
 
-        Object[] rangeRes = (Object[]) rangeQuery.getSingleResult();
-        int rangeMaxLen = ((Number) rangeRes[0]).intValue();
-        int rangeMinLen = ((Number) rangeRes[1]).intValue();
-
-        if (empMaxLen > 0) limits.maxLength = Integer.parseInt("9".repeat(empMaxLen));
-        else limits.maxLength = CdrConfigService.ACUMTOTAL_MAX_EXTENSION_LENGTH_FOR_INTERNAL_CHECK;
-
-        if (empMinLen > 0) limits.minLength = Integer.parseInt("1" + "0".repeat(Math.max(0, empMinLen - 1)));
-        else limits.minLength = 100;
-
-        if (rangeMaxLen > 0) {
-            int rangeMaxVal = Integer.parseInt("9".repeat(rangeMaxLen));
-            if (rangeMaxVal > limits.maxLength) limits.maxLength = rangeMaxVal;
-        }
-        if (rangeMinLen > 0) {
-            int rangeMinVal = Integer.parseInt("1" + "0".repeat(Math.max(0, rangeMinLen - 1)));
-            if (rangeMinVal < limits.minLength || limits.minLength == 0) limits.minLength = rangeMinVal;
+        List<Object[]> rangeLengthPairs = rangeQuery.getResultList();
+        for (Object[] pair : rangeLengthPairs) {
+            int lenDesde = ((Number) pair[0]).intValue();
+            int lenHasta = ((Number) pair[1]).intValue();
+            if (lenHasta > maxLenOverall) maxLenOverall = lenHasta; // Max is based on range_end length
+            if (!firstMinSet || lenDesde < minLenOverall) { // Min is based on range_start length
+                minLenOverall = lenDesde;
+                firstMinSet = true;
+            }
         }
 
-        if (limits.minLength > limits.maxLength && limits.maxLength > 0) {
-            limits.minLength = limits.maxLength;
-        }
-        if (limits.minLength == 0 && limits.maxLength == 0) {
-            limits.minLength = 100;
-            limits.maxLength = CdrConfigService.ACUMTOTAL_MAX_EXTENSION_LENGTH_FOR_INTERNAL_CHECK;
+        int finalMinVal = CdrConfigService.ACUMTOTAL_MAX_EXTENSION_LENGTH_FOR_INTERNAL_CHECK; // Default high
+        int finalMaxVal = 0; // Default low
+
+        if (maxLenOverall > 0) {
+            finalMaxVal = Integer.parseInt("9".repeat(maxLenOverall));
+        } else { // No numeric extensions found, use default max
+            finalMaxVal = CdrConfigService.ACUMTOTAL_MAX_EXTENSION_LENGTH_FOR_INTERNAL_CHECK;
         }
 
+        if (minLenOverall > 0) {
+            finalMinVal = Integer.parseInt("1" + "0".repeat(Math.max(0, minLenOverall - 1)));
+        } else { // No numeric extensions found, use default min
+            finalMinVal = 100; // PHP default
+        }
+        
+        if (finalMinVal > finalMaxVal && finalMaxVal > 0) { // Ensure min is not greater than max
+            finalMinVal = finalMaxVal;
+        }
+         if (finalMinVal == CdrConfigService.ACUMTOTAL_MAX_EXTENSION_LENGTH_FOR_INTERNAL_CHECK && finalMaxVal == 0) { // Both uninitialized
+            finalMinVal = 100;
+            finalMaxVal = CdrConfigService.ACUMTOTAL_MAX_EXTENSION_LENGTH_FOR_INTERNAL_CHECK;
+        }
+
+
+        // Get special full extensions (long numbers, or starting with 0, #, *)
         String specialExtQueryStr = "SELECT DISTINCT e.extension FROM employee e " +
                                     "JOIN communication_location cl ON e.communication_location_id = cl.id " +
                                     "JOIN indicator i ON cl.indicator_id = i.id " +
                                     "WHERE e.active = true AND cl.active = true AND i.active = true " +
-                                    "  AND (LENGTH(e.extension) >= :maxExtStandardLength OR e.extension LIKE '0%' OR e.extension LIKE '*%' OR e.extension LIKE '#%') ";
+                                    "  AND (LENGTH(e.extension) >= :maxExtStandardLenForFullList OR e.extension LIKE '0%' OR e.extension LIKE '*%' OR e.extension LIKE '#%') ";
         if (originCountryId != null) specialExtQueryStr += " AND i.origin_country_id = :originCountryId ";
         if (commLocationId != null) specialExtQueryStr += " AND e.communication_location_id = :commLocationId ";
         if (plantTypeId != null) specialExtQueryStr += " AND cl.plant_type_id = :plantTypeId ";
 
         jakarta.persistence.Query specialExtQuery = entityManager.createNativeQuery(specialExtQueryStr, String.class);
-        specialExtQuery.setParameter("maxExtStandardLength", String.valueOf(CdrConfigService.ACUMTOTAL_MAX_EXTENSION_LENGTH_FOR_INTERNAL_CHECK).length());
+        specialExtQuery.setParameter("maxExtStandardLenForFullList", maxAllowedLenStr.length());
         if (originCountryId != null) specialExtQuery.setParameter("originCountryId", originCountryId);
         if (commLocationId != null) specialExtQuery.setParameter("commLocationId", commLocationId);
         if (plantTypeId != null) specialExtQuery.setParameter("plantTypeId", plantTypeId);
 
-        limits.specialFullExtensions = specialExtQuery.getResultList();
+        List<String> specialFullExtensions = specialExtQuery.getResultList();
 
-        log.debug("Calculated extension limits: minVal={}, maxVal={}, specialCount={}", limits.minLength, limits.maxLength, limits.specialFullExtensions.size());
-        return limits;
+        log.debug("Calculated extension limits: minVal={}, maxVal={}, specialCount={}", finalMinVal, finalMaxVal, specialFullExtensions.size());
+        return new ExtensionLimits(finalMinVal, finalMaxVal, specialFullExtensions);
     }
 
-    /**
-     * Checks if a given number string could be a valid extension based on configured limits.
-     * Mimics PHP's ExtensionPosible function.
-     *
-     * @param extensionNumber The number string to check.
-     * @param limits          The pre-calculated ExtensionLimits for the current context.
-     * @return true if it's a possible extension, false otherwise.
-     */
     public boolean isPossibleExtension(String extensionNumber, ExtensionLimits limits) {
         if (extensionNumber == null || extensionNumber.isEmpty()) {
             return false;
         }
-
-        // Check against the 'full' list of special extensions first
         if (limits.getSpecialFullExtensions() != null && limits.getSpecialFullExtensions().contains(extensionNumber)) {
             return true;
         }
-
-        // PHP's ExtensionValida($extension, true) checks:
-        // - Not empty
-        // - Numeric OR (starts with '+' AND rest is numeric) OR (is '*' or '#')
-        // - If numeric, not starting with '0' unless it IS '0'.
-        // This is a bit complex. Let's simplify the numeric check for min/max range.
-        // The special list should cover non-standard formats like '*123'.
-
-        boolean isPotentiallyNumericForRange = false;
-        long extNumValue = -1;
-
-        // Try to parse as long for min/max comparison
-        // PHP's ExtensionPosible uses numeric comparison for min/max
-        // It also has `ExtensionValida` which checks `is_numeric($extension) && ($extension > 0 || $extension == '0')`
-        // or `(substr($extension,0,1) == '+' && is_numeric(substr($extension,1)))`
-        // and `($no_inicia_cero || $extension == '0')`
-        // This means '0' is valid, positive numbers are valid, numbers starting with '+' then digits are valid.
-        // Numbers starting with '0' (like '01') are generally NOT valid for the numeric range check unless it's just '0'.
-
+        // PHP's ExtensionValida logic for numeric part
         if (extensionNumber.matches("\\d+")) { // Purely numeric
-            if (extensionNumber.equals("0")) { // '0' is often special (operator)
-                 isPotentiallyNumericForRange = true; // PHP's ExtensionValida allows '0'
-                 extNumValue = 0;
-            } else if (!extensionNumber.startsWith("0")) { // Positive number not starting with 0
-                isPotentiallyNumericForRange = true;
-                try { extNumValue = Long.parseLong(extensionNumber); } catch (NumberFormatException e) { isPotentiallyNumericForRange = false; }
+            if (extensionNumber.equals("0")) {
+                 return true; // '0' is often special (operator)
             }
-            // Numbers like "01", "007" are not considered for numeric range by PHP's ExtensionValida
+            if (!extensionNumber.startsWith("0")) { // Positive number not starting with 0
+                try {
+                    long extNumValue = Long.parseLong(extensionNumber);
+                    return extNumValue >= limits.getMinLength() && extNumValue <= limits.getMaxLength();
+                } catch (NumberFormatException e) { return false; }
+            }
         } else if (extensionNumber.startsWith("+") && extensionNumber.length() > 1 && extensionNumber.substring(1).matches("\\d+")) {
-            // Starts with '+' followed by digits
-            isPotentiallyNumericForRange = true;
-            try { extNumValue = Long.parseLong(extensionNumber.substring(1)); } catch (NumberFormatException e) { isPotentiallyNumericForRange = false; }
+            try {
+                long extNumValue = Long.parseLong(extensionNumber.substring(1));
+                return extNumValue >= limits.getMinLength() && extNumValue <= limits.getMaxLength();
+            } catch (NumberFormatException e) { return false; }
         }
-        // Note: PHP's ExtensionValida also allows '*' or '#', but these are typically in the 'full' list.
-
-        if (isPotentiallyNumericForRange) {
-            if (extNumValue >= limits.getMinLength() && extNumValue <= limits.getMaxLength()) {
-                return true;
-            }
-        }
-
-        return false; // If not in special list and not within numeric min/max range
+        return false;
     }
 
 
@@ -236,14 +236,22 @@ public class EmployeeLookupService {
         if (extension == null || !extension.matches("\\d+")) {
             return Optional.empty();
         }
-        long extNum = Long.parseLong(extension);
+        long extNum;
+        try {
+            extNum = Long.parseLong(extension);
+        } catch (NumberFormatException e) {
+            return Optional.empty();
+        }
+
 
         String queryStr = "SELECT er.* FROM extension_range er WHERE er.active = true " +
                 "AND er.range_start <= :extNum AND er.range_end >= :extNum ";
         if (commLocationId != null) {
             queryStr += "AND er.comm_location_id = :commLocationId ";
         }
-        queryStr += "ORDER BY (er.range_end - er.range_start) ASC, er.created_date DESC LIMIT 1";
+        // PHP's Validar_RangoExt also considers historical validity (RANGOEXT_HISTODESDE)
+        // Since historical lookups are omitted, we don't add date checks here.
+        queryStr += "ORDER BY (er.range_end - er.range_start) ASC, er.created_date DESC LIMIT 1"; // Prefer tighter ranges
 
         jakarta.persistence.Query nativeQuery = entityManager.createNativeQuery(queryStr, ExtensionRange.class);
         nativeQuery.setParameter("extNum", extNum);
@@ -255,12 +263,21 @@ public class EmployeeLookupService {
         if (!ranges.isEmpty()) {
             ExtensionRange matchedRange = ranges.get(0);
             log.debug("Extension {} matched range: {}", extension, matchedRange.getId());
-            return Optional.of(createEmployeeFromRange(
+            // Create a conceptual employee; it's not persisted here.
+            // The calling service (e.g., CdrEnrichmentService) would decide if/how to use this.
+            Employee conceptualEmployee = createEmployeeFromRange(
                     extension,
                     matchedRange.getSubdivisionId(),
                     matchedRange.getCommLocationId(),
                     matchedRange.getPrefix()
-            ));
+            );
+            // Load the actual CommunicationLocation for this conceptual employee
+            if (matchedRange.getCommLocationId() != null) {
+                CommunicationLocation cl = entityManager.find(CommunicationLocation.class, matchedRange.getCommLocationId());
+                conceptualEmployee.setCommunicationLocation(cl); // Set the actual entity
+            }
+
+            return Optional.of(conceptualEmployee);
         }
         return Optional.empty();
     }

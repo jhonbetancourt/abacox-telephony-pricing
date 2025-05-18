@@ -13,6 +13,9 @@ public class CdrConfigService {
     public static final int CDR_PROCESSING_BATCH_SIZE = 500; // _IMDEX_MAXLINEAS (for web, can be different for batch)
     public static final String DEFAULT_PBX_EXIT_PREFIX = "9"; // Example, should be configurable per commLocation
 
+    // For NN_VALIDA, used when partition is blank but number is extension-like
+    public static final String NN_VALIDA_PARTITION = "NN-VALIDA"; // From PHP define
+
     public String getDefaultIgnoredAuthCodeDescription1() {
         return "Invalid Authorization Code";
     }
