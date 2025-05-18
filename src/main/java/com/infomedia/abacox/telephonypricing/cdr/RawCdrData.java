@@ -1,4 +1,4 @@
-// FILE: com/infomedia/abacox/telephonypricing/cdr/RawCdrData.java
+
 package com.infomedia.abacox.telephonypricing.cdr;
 
 import lombok.Data;

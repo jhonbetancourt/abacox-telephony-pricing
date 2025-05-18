@@ -1,4 +1,4 @@
-// FILE: com/infomedia/abacox/telephonypricing/cdr/dto/EvaluatedDestinationDto.java
+
 package com.infomedia.abacox.telephonypricing.cdr;
 
 import com.infomedia.abacox.telephonypricing.entity.Indicator;
@@ -18,17 +18,15 @@ public class EvaluatedDestinationDto {
     private Indicator indicator;
     private String destinationDescription; // e.g., city name or "Assumed Local"
 
-    // Pricing related fields derived from prefix/band/special rate
-    private BigDecimal pricePerMinute; // Final rate per minute (or per unit if seconds billing)
-    private boolean vatIncludedInPrice;
-    private BigDecimal vatRate; // Percentage (e.g., 16.0 for 16%)
-    private BigDecimal initialPriceBeforeSpecialRates; // Price before special rates, ex-VAT
-    private boolean initialPriceVatIncluded;
+    // Pricing related fields derived from prefix/band
+    private BigDecimal pricePerUnitExVat; // Price per minute or per billing_unit_seconds, excluding VAT
+    private boolean vatIncludedInPrefixOrBand; // Was VAT included in the source (Prefix/Band)?
+    private BigDecimal vatRate; // VAT Percentage (e.g., 16.0 for 16%) from Prefix
 
-    private boolean billedInSeconds; // If true, pricePerMinute is actually pricePerSecond
-    private Integer billingUnitInSeconds; // e.g., 60 for minute, 1 for second, N for N-second blocks from trunk rule
+    private boolean billedInSeconds; // If true, pricePerUnit is actually pricePerSecond (from TelephonyType or TrunkRule)
+    private Integer billingUnitInSeconds; // e.g., 60 for minute, 1 for second
 
-    private boolean fromTrunk;
+    private boolean fromTrunk; // Was this evaluation path initiated due to a trunk call?
     private boolean bandUsed;
     private Long bandId;
     private String bandName;

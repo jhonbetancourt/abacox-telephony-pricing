@@ -1,4 +1,4 @@
-// FILE: com/infomedia/abacox/telephonypricing/cdr/dto/PaddedSeriesDto.java
+
 package com.infomedia.abacox.telephonypricing.cdr;
 
 import lombok.AllArgsConstructor;

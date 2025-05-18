@@ -1,3 +1,4 @@
+
 package com.infomedia.abacox.telephonypricing.cdr;
 
 import com.infomedia.abacox.telephonypricing.entity.SpecialRateValue;
@@ -9,9 +10,8 @@ import java.math.BigDecimal;
 @Data
 @Builder
 public class SpecialRateApplicationResultDto {
-    private BigDecimal newPricePerMinute; // Price after special rate, before VAT application
-    private boolean newVatIncluded;
-    private BigDecimal newVatRate; // This might be the same or updated if SRV implies different operator/TT
+    private BigDecimal newPricePerUnitExVat; // Price after special rate, EXCLUDING VAT
+    private BigDecimal newVatRate; // VAT rate to apply to this new price
     private SpecialRateValue appliedRule;
     private boolean rateWasApplied;
 }
