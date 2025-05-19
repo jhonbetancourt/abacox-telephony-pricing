@@ -45,10 +45,10 @@ public class TelephonyTypeLookupService {
                 "(SELECT COUNT(*) FROM band b WHERE b.prefix_id = p.id AND b.active = true) as bands_count " +
                 "FROM prefix p " +
                 "JOIN operator o ON p.operator_id = o.id " +
-                "JOIN telephony_type tt ON p.telephone_type_id = tt.id " +
+                "JOIN telephony_type tt ON p.telephony_type_id = tt.id " +
                 "LEFT JOIN telephony_type_config ttc ON tt.id = ttc.telephony_type_id AND ttc.origin_country_id = :originCountryId AND ttc.active = true " +
                 "WHERE p.active = true AND o.active = true AND tt.active = true AND o.origin_country_id = :originCountryId " +
-                "AND p.telephone_type_id = :localExtendedTypeId LIMIT 1";
+                "AND p.telephony_type_id = :localExtendedTypeId LIMIT 1";
 
         jakarta.persistence.Query nativeQuery = entityManager.createNativeQuery(queryStr, Tuple.class);
         nativeQuery.setParameter("originCountryId", originCountryId);
@@ -75,7 +75,7 @@ public class TelephonyTypeLookupService {
     public OperatorInfo getInternalOperatorInfo(Long telephonyTypeId, Long originCountryId) {
         // PHP: SELECT OPERADOR_ID, OPERADOR_NOMBRE FROM operador, prefijo WHERE PREFIJO_OPERADOR_ID = OPERADOR_ID AND PREFIJO_TIPOTELE_ID = $tipotele_id AND OPERADOR_MPORIGEN_ID = $mporigen_id
         String queryStr = "SELECT o.id, o.name FROM operator o JOIN prefix p ON p.operator_id = o.id " +
-                "WHERE p.telephone_type_id = :telephonyTypeId AND o.origin_country_id = :originCountryId " +
+                "WHERE p.telephony_type_id = :telephonyTypeId AND o.origin_country_id = :originCountryId " +
                 "AND o.active = true AND p.active = true " +
                 "LIMIT 1";
         jakarta.persistence.Query query = entityManager.createNativeQuery(queryStr, Tuple.class);
@@ -97,7 +97,7 @@ public class TelephonyTypeLookupService {
     public BigDecimal getVatForPrefix(Long telephonyTypeId, Long operatorId, Long originCountryId) {
         // PHP: SELECT PREFIJO_TIPOTELE_ID, PREFIJO_OPERADOR_ID, PREFIJO_IVA FROM prefijo WHERE PREFIJO_TIPOTELE_ID in ($ltipoteles_ok)
         String queryStr = "SELECT p.vat_value FROM prefix p " +
-                "WHERE p.active = true AND p.telephone_type_id = :telephonyTypeId AND p.operator_id = :operatorId " +
+                "WHERE p.active = true AND p.telephony_type_id = :telephonyTypeId AND p.operator_id = :operatorId " +
                 "AND EXISTS (SELECT 1 FROM operator o WHERE o.id = p.operator_id AND o.origin_country_id = :originCountryId AND o.active = true) " +
                 "LIMIT 1";
         jakarta.persistence.Query query = entityManager.createNativeQuery(queryStr);
@@ -120,7 +120,7 @@ public class TelephonyTypeLookupService {
     public TariffValue getBaseTariffValue(Long prefixId, Long destinationIndicatorId,
                                           Long commLocationId, Long originIndicatorIdForBand) {
         // PHP: SELECT PREFIJO_VALORBASE, PREFIJO_IVAINC, PREFIJO_BANDAOK, PREFIJO_IVA FROM prefijo WHERE PREFIJO_ID = $prefijo_id
-        String prefixQueryStr = "SELECT p.base_value, p.vat_included, p.vat_value, p.band_ok, p.id as prefix_id, p.telephone_type_id " +
+        String prefixQueryStr = "SELECT p.base_value, p.vat_included, p.vat_value, p.band_ok, p.id as prefix_id, p.telephony_type_id " +
                 "FROM prefix p WHERE p.id = :prefixId AND p.active = true";
         jakarta.persistence.Query prefixQuery = entityManager.createNativeQuery(prefixQueryStr, Tuple.class);
         prefixQuery.setParameter("prefixId", prefixId);
@@ -131,7 +131,7 @@ public class TelephonyTypeLookupService {
             boolean vatIncluded = pRes.get("vat_included", Boolean.class);
             BigDecimal vatValue = pRes.get("vat_value", BigDecimal.class);
             boolean bandOk = pRes.get("band_ok", Boolean.class);
-            Long telephonyTypeId = pRes.get("telephone_type_id", Number.class).longValue();
+            Long telephonyTypeId = pRes.get("telephony_type_id", Number.class).longValue();
 
 
             if (bandOk && (destinationIndicatorId != null && destinationIndicatorId > 0 || isLocalType(telephonyTypeId))) {
@@ -191,7 +191,7 @@ public class TelephonyTypeLookupService {
         String queryStr = "SELECT p.base_value, p.vat_included, p.vat_value " +
                           "FROM prefix p JOIN operator o ON p.operator_id = o.id " +
                           "WHERE p.active = true AND o.active = true " +
-                          "AND p.telephone_type_id = :telephonyTypeId AND o.origin_country_id = :originCountryId " +
+                          "AND p.telephony_type_id = :telephonyTypeId AND o.origin_country_id = :originCountryId " +
                           "LIMIT 1";
 
         jakarta.persistence.Query query = entityManager.createNativeQuery(queryStr, Tuple.class);

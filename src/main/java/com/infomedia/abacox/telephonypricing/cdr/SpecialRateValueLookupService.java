@@ -56,7 +56,7 @@ public class SpecialRateValueLookupService {
         String queryStr = "SELECT sr.rate_value, sr.includes_vat, sr.value_type, sr.hours_specification, " +
                           "COALESCE(p.vat_value, 0) as prefix_vat_rate " + // Get VAT from associated prefix
                           "FROM special_rate_value sr " +
-                          "LEFT JOIN prefix p ON sr.telephony_type_id = p.telephone_type_id AND sr.operator_id = p.operator_id AND p.active = true " +
+                          "LEFT JOIN prefix p ON sr.telephony_type_id = p.telephony_type_id AND sr.operator_id = p.operator_id AND p.active = true " +
                           // LEFT JOIN operator o ON p.operator_id = o.id AND o.origin_country_id = :originCountryId ... (if prefix VAT depends on country)
                           "WHERE sr.active = true " +
                           "AND (sr.valid_from IS NULL OR sr.valid_from <= :callDateTime) " +

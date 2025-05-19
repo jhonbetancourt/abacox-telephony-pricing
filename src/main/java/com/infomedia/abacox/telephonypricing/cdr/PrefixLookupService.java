@@ -52,16 +52,16 @@ public class PrefixLookupService {
                 "(SELECT COUNT(*) FROM band b WHERE b.prefix_id = p.id AND b.active = true) as bands_count " +
                 "FROM prefix p " +
                 "JOIN operator o ON p.operator_id = o.id " +
-                "JOIN telephony_type tt ON p.telephone_type_id = tt.id " +
+                "JOIN telephony_type tt ON p.telephony_type_id = tt.id " +
                 "LEFT JOIN telephony_type_config ttc ON tt.id = ttc.telephony_type_id AND ttc.origin_country_id = :originCountryId AND ttc.active = true " +
                 "WHERE p.active = true AND o.active = true AND tt.active = true AND o.origin_country_id = :originCountryId " +
-                "AND p.telephone_type_id != :specialServicesTypeId ";
+                "AND p.telephony_type_id != :specialServicesTypeId ";
 
         if (isTrunkCall && trunkTelephonyTypeIds != null && !trunkTelephonyTypeIds.isEmpty()) {
-            queryStr += "AND p.telephone_type_id IN (:trunkTelephonyTypeIds) ";
+            queryStr += "AND p.telephony_type_id IN (:trunkTelephonyTypeIds) ";
             log.debug("Trunk call, filtering by telephonyTypeIds: {}", trunkTelephonyTypeIds);
         }
-        queryStr += "ORDER BY LENGTH(p.code) DESC, ttc.min_value DESC, p.telephone_type_id";
+        queryStr += "ORDER BY LENGTH(p.code) DESC, ttc.min_value DESC, p.telephony_type_id";
 
         jakarta.persistence.Query nativeQuery = entityManager.createNativeQuery(queryStr, Tuple.class);
         nativeQuery.setParameter("originCountryId", commLocation.getIndicator().getOriginCountryId());
@@ -155,10 +155,10 @@ public class PrefixLookupService {
             return Collections.emptyMap();
         }
 
-        String queryStr = "SELECT p.code, p.telephone_type_id " +
+        String queryStr = "SELECT p.code, p.telephony_type_id " +
                           "FROM prefix p JOIN operator o ON p.operator_id = o.id " +
                           "WHERE p.active = true AND o.active = true AND o.origin_country_id = :originCountryId " +
-                          "AND p.telephone_type_id IN (:internalTypeIds) AND p.code IS NOT NULL AND p.code != '' " +
+                          "AND p.telephony_type_id IN (:internalTypeIds) AND p.code IS NOT NULL AND p.code != '' " +
                           "ORDER BY LENGTH(p.code) DESC, p.code DESC";
 
         jakarta.persistence.Query nativeQuery = entityManager.createNativeQuery(queryStr, Tuple.class);
@@ -169,7 +169,7 @@ public class PrefixLookupService {
         Map<String, Long> internalPrefixMap = new TreeMap<>(Comparator.reverseOrder());
         for (Tuple row : results) {
             String prefixCode = row.get("code", String.class);
-            Long telephonyTypeId = row.get("telephone_type_id", Number.class).longValue();
+            Long telephonyTypeId = row.get("telephony_type_id", Number.class).longValue();
             internalPrefixMap.put(prefixCode, telephonyTypeId);
         }
         log.debug("Loaded {} internal telephony type prefixes for country {}: {}", internalPrefixMap.size(), originCountryId, internalPrefixMap);

@@ -33,7 +33,7 @@ public class TrunkRuleLookupService {
                           "LEFT JOIN telephony_type ntt ON tr.new_telephony_type_id = ntt.id AND ntt.active = true " +
                           "LEFT JOIN operator nop ON tr.new_operator_id = nop.id AND nop.active = true " +
                           // Prefix for getting VAT of the *new* type/operator
-                          "LEFT JOIN prefix p_new ON tr.new_telephony_type_id = p_new.telephone_type_id AND tr.new_operator_id = p_new.operator_id AND p_new.active = true " +
+                          "LEFT JOIN prefix p_new ON tr.new_telephony_type_id = p_new.telephony_type_id AND tr.new_operator_id = p_new.operator_id AND p_new.active = true " +
                           "WHERE tr.active = true " +
                           "AND (tr.trunk_id = 0 OR t.id IS NOT NULL) " + // Rule for all trunks or specific matching trunk
                           "AND tr.telephony_type_id = :currentTelephonyTypeId " +
