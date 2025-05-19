@@ -135,6 +135,7 @@ public class TariffCalculationService {
             log.debug("Evaluating prefix: {}", prefixInfo.getPrefixCode());
             String numberWithoutPrefix = numberForTariffing;
             boolean stripPrefixForDestLookup = false;
+            boolean actualPrefixStrippedThisIteration = false;
 
             if (trunkInfoOpt.isPresent()) {
                 TrunkInfo ti = trunkInfoOpt.get();
@@ -146,12 +147,13 @@ public class TariffCalculationService {
                 }
                 log.debug("Trunk call, prefix '{}'. Strip for dest lookup: {}", prefixInfo.getPrefixCode(), stripPrefixForDestLookup);
             } else {
-                stripPrefixForDestLookup = true;
+                stripPrefixForDestLookup = true; // For non-trunk, always assume prefix needs to be stripped for destination lookup
                 log.debug("Non-trunk call, prefix '{}'. Strip for dest lookup: {}", prefixInfo.getPrefixCode(), stripPrefixForDestLookup);
             }
 
             if (stripPrefixForDestLookup && prefixInfo.getPrefixCode() != null && !prefixInfo.getPrefixCode().isEmpty() && numberForTariffing.startsWith(prefixInfo.getPrefixCode())) {
                 numberWithoutPrefix = numberForTariffing.substring(prefixInfo.getPrefixCode().length());
+                actualPrefixStrippedThisIteration = true;
                 log.debug("Stripped prefix '{}'. Number for dest lookup: {}", prefixInfo.getPrefixCode(), numberWithoutPrefix);
             }
             finalNumberUsedForDestLookup = numberWithoutPrefix;
@@ -163,7 +165,8 @@ public class TariffCalculationService {
                 commLocation.getIndicatorId(),
                 prefixInfo.prefixId,
                 commLocation.getIndicator().getOriginCountryId(),
-                prefixInfo.bandsAssociatedCount > 0
+                prefixInfo.bandsAssociatedCount > 0,
+                actualPrefixStrippedThisIteration // Pass true if prefix was stripped in *this* iteration for dest lookup
             );
             log.debug("Destination lookup for '{}' (type {}): {}", numberWithoutPrefix, prefixInfo.telephonyTypeId, destInfoOpt.isPresent() ? destInfoOpt.get() : "Not Found");
 
@@ -205,7 +208,7 @@ public class TariffCalculationService {
             log.debug("Normalized number for lookup: {}", normalizedNumberForLookup);
             
             List<PrefixInfo> normalizedPrefixes = prefixLookupService.findMatchingPrefixes(
-                normalizedNumberForLookup, commLocation, false, null
+                normalizedNumberForLookup, commLocation, false, null // isTrunkCall = false for normalization
             );
             DestinationInfo normalizedBestDestInfo = null;
             PrefixInfo normalizedBestPrefixInfo = null;
@@ -213,8 +216,10 @@ public class TariffCalculationService {
 
             for (PrefixInfo normPrefixInfo : normalizedPrefixes) {
                 String normNumberWithoutPrefix = normalizedNumberForLookup;
+                boolean normPrefixStripped = false;
                  if (normPrefixInfo.getPrefixCode() != null && !normPrefixInfo.getPrefixCode().isEmpty() && normalizedNumberForLookup.startsWith(normPrefixInfo.getPrefixCode())) {
                     normNumberWithoutPrefix = normalizedNumberForLookup.substring(normPrefixInfo.getPrefixCode().length());
+                    normPrefixStripped = true;
                 }
                 finalNormalizedNumberUsedForDestLookup = normNumberWithoutPrefix;
 
@@ -222,7 +227,8 @@ public class TariffCalculationService {
                     normNumberWithoutPrefix, normPrefixInfo.telephonyTypeId,
                     normPrefixInfo.telephonyTypeMinLength != null ? normPrefixInfo.telephonyTypeMinLength : 0,
                     commLocation.getIndicatorId(), normPrefixInfo.prefixId,
-                    commLocation.getIndicator().getOriginCountryId(), normPrefixInfo.bandsAssociatedCount > 0
+                    commLocation.getIndicator().getOriginCountryId(), normPrefixInfo.bandsAssociatedCount > 0,
+                    normPrefixStripped // Pass true if prefix was stripped for this normalization lookup
                 );
                 if (normDestInfoOpt.isPresent() && !normDestInfoOpt.get().isApproximateMatch()) {
                     normalizedBestDestInfo = normDestInfoOpt.get();
@@ -250,8 +256,8 @@ public class TariffCalculationService {
                     log.info("Using normalized tariffing result for trunk call. Original number: {}", cdrData.getEffectiveDestinationNumber());
                     bestDestInfo = normalizedBestDestInfo;
                     bestPrefixInfo = normalizedBestPrefixInfo;
-                    finalNumberUsedForDestLookup = finalNormalizedNumberUsedForDestLookup;
-                    trunkInfoOpt = Optional.empty();
+                    finalNumberUsedForDestLookup = finalNormalizedNumberUsedForDestLookup; // This was the number *after* prefix strip for normalized
+                    trunkInfoOpt = Optional.empty(); // Normalized means we are not using trunk-specific rates anymore
                     cdrData.setNormalizedTariffApplied(true);
                 }
             } else {
@@ -268,7 +274,7 @@ public class TariffCalculationService {
             cdrData.setOperatorName(bestPrefixInfo.operatorName);
             cdrData.setIndicatorId(bestDestInfo.getIndicatorId());
             cdrData.setDestinationCityName(bestDestInfo.getDestinationDescription());
-            cdrData.setEffectiveDestinationNumber(bestDestInfo.getMatchedPhoneNumber());
+            cdrData.setEffectiveDestinationNumber(bestDestInfo.getMatchedPhoneNumber()); // This is the number *before* prefix stripping for this successful match
 
             if (cdrData.getTelephonyTypeId() == TelephonyTypeEnum.LOCAL.getValue() &&
                 indicatorLookupService.isLocalExtended(bestDestInfo.getNdc(), commLocation.getIndicatorId(), bestDestInfo.getIndicatorId())) {
@@ -346,10 +352,10 @@ public class TariffCalculationService {
                     cdrData.setInitialPriceIncludesVat(cdrData.isPriceIncludesVat());
                 }
 
-                if (sr.valueType == 0) {
+                if (sr.valueType == 0) { // Absolute value
                     cdrData.setPricePerMinute(sr.rateValue);
                     cdrData.setPriceIncludesVat(sr.includesVat);
-                } else {
+                } else { // Percentage discount
                     BigDecimal currentRateNoVat = cdrData.isPriceIncludesVat() && cdrData.getVatRate() != null && cdrData.getVatRate().compareTo(BigDecimal.ZERO) > 0 ?
                         cdrData.getPricePerMinute().divide(BigDecimal.ONE.add(cdrData.getVatRate().divide(BigDecimal.valueOf(100), 8, RoundingMode.HALF_UP)), 8, RoundingMode.HALF_UP) :
                         cdrData.getPricePerMinute();
@@ -357,10 +363,10 @@ public class TariffCalculationService {
                     BigDecimal discountPercentage = sr.rateValue;
                     BigDecimal discountFactor = BigDecimal.ONE.subtract(discountPercentage.divide(BigDecimal.valueOf(100), 8, RoundingMode.HALF_UP));
                     cdrData.setPricePerMinute(currentRateNoVat.multiply(discountFactor));
-                    cdrData.setPriceIncludesVat(false);
+                    cdrData.setPriceIncludesVat(false); // After discount, VAT needs to be reapplied if applicable
                     cdrData.setSpecialRateDiscountPercentage(discountPercentage);
                 }
-                cdrData.setVatRate(sr.vatRate);
+                cdrData.setVatRate(sr.vatRate); // Special rate might have its own VAT context (from its associated prefix)
                 cdrData.setTelephonyTypeName(cdrData.getTelephonyTypeName() + " (Special Rate)");
             }
 
@@ -392,7 +398,7 @@ public class TariffCalculationService {
                         cdrData.setOperatorId(rule.newOperatorId);
                         cdrData.setOperatorName(rule.newOperatorName != null ? rule.newOperatorName : "OperatorID:" + rule.newOperatorId);
                     }
-                    cdrData.setVatRate(rule.vatRate);
+                    cdrData.setVatRate(rule.vatRate); // VAT from the rule's new context
                     cdrData.setTelephonyTypeName(cdrData.getTelephonyTypeName() + " (Rule Applied)");
                 }
             }
@@ -425,7 +431,7 @@ public class TariffCalculationService {
             log.debug("Charging by second. Duration units: {}, Rate per second: {}", billableDurationUnits, ratePerUnit);
         } else {
             billableDurationUnits = (long) Math.ceil((double) cdrData.getDurationSeconds() / 60.0);
-            if (billableDurationUnits == 0 && cdrData.getDurationSeconds() > 0) billableDurationUnits = 1;
+            if (billableDurationUnits == 0 && cdrData.getDurationSeconds() > 0) billableDurationUnits = 1; // Min 1 minute if any duration
             ratePerUnit = cdrData.getPricePerMinute();
             log.debug("Charging by minute. Duration units (minutes): {}, Rate per minute: {}", billableDurationUnits, ratePerUnit);
         }

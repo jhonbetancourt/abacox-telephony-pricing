@@ -1,3 +1,4 @@
+// File: com/infomedia/abacox/telephonypricing/cdr/CallOriginDeterminationService.java
 package com.infomedia.abacox.telephonypricing.cdr;
 
 import com.infomedia.abacox.telephonypricing.entity.CommunicationLocation;
@@ -36,7 +37,7 @@ public class CallOriginDeterminationService {
         List<PrefixInfo> allPrefixes = prefixLookupService.findMatchingPrefixes(incomingNumber, commLocation, false, null);
 
         DestinationInfo bestMatchDestInfo = null;
-        PrefixInfo bestMatchedPrefixInfo = null; // Store the prefix that led to the best match
+        PrefixInfo bestMatchedPrefixInfo = null; 
 
         for (PrefixInfo prefixInfo : allPrefixes) {
             if (telephonyTypeLookupService.isInternalIpType(prefixInfo.getTelephonyTypeId()) ||
@@ -45,7 +46,7 @@ public class CallOriginDeterminationService {
                 continue;
             }
 
-            String numberToCheck = incomingNumber; // For incoming, we usually check with the prefix intact
+            String numberToCheck = incomingNumber; 
 
             Optional<DestinationInfo> destInfoOpt = indicatorLookupService.findDestinationIndicator(
                     numberToCheck,
@@ -54,22 +55,22 @@ public class CallOriginDeterminationService {
                     currentPlantIndicatorId,
                     prefixInfo.getPrefixId(),
                     originCountryId,
-                    prefixInfo.getBandsAssociatedCount() > 0
+                    prefixInfo.getBandsAssociatedCount() > 0,
+                    false // For incoming, prefix is not yet stripped by PrefixLookupService in this flow
             );
 
             if (destInfoOpt.isPresent()) {
                 DestinationInfo currentDestInfo = destInfoOpt.get();
-                // Prefer exact matches, then longer NDC matches if both are approximate or both exact
                 if (bestMatchDestInfo == null ||
-                        (!bestMatchDestInfo.isApproximateMatch() && currentDestInfo.isApproximateMatch()) || // Current best is exact, new is approx (keep current)
+                        (!bestMatchDestInfo.isApproximateMatch() && currentDestInfo.isApproximateMatch()) || 
                         (currentDestInfo.isApproximateMatch() == bestMatchDestInfo.isApproximateMatch() &&
                                 currentDestInfo.getNdc() != null && bestMatchDestInfo.getNdc() != null &&
                                 currentDestInfo.getNdc().length() > bestMatchDestInfo.getNdc().length()) ||
-                        (!currentDestInfo.isApproximateMatch() && bestMatchDestInfo.isApproximateMatch()) // New is exact, current was approx
+                        (!currentDestInfo.isApproximateMatch() && bestMatchDestInfo.isApproximateMatch()) 
                 ) {
                     bestMatchDestInfo = currentDestInfo;
-                    bestMatchedPrefixInfo = prefixInfo; // Store the prefix that led to this match
-                    if (!bestMatchDestInfo.isApproximateMatch()) break; // Found an exact match, stop
+                    bestMatchedPrefixInfo = prefixInfo; 
+                    if (!bestMatchDestInfo.isApproximateMatch()) break; 
                 }
             }
         }
@@ -77,10 +78,10 @@ public class CallOriginDeterminationService {
         if (bestMatchDestInfo != null && bestMatchedPrefixInfo != null) {
             originInfo.setIndicatorId(bestMatchDestInfo.getIndicatorId());
             originInfo.setDestinationDescription(bestMatchDestInfo.getDestinationDescription());
-            originInfo.setOperatorId(bestMatchedPrefixInfo.getOperatorId()); // Operator from the matched prefix
+            originInfo.setOperatorId(bestMatchedPrefixInfo.getOperatorId()); 
             originInfo.setOperatorName(bestMatchedPrefixInfo.getOperatorName());
             originInfo.setEffectiveNumber(bestMatchDestInfo.getMatchedPhoneNumber());
-            originInfo.setTelephonyTypeId(bestMatchedPrefixInfo.getTelephonyTypeId()); // Type from the prefix
+            originInfo.setTelephonyTypeId(bestMatchedPrefixInfo.getTelephonyTypeId()); 
             originInfo.setTelephonyTypeName(bestMatchedPrefixInfo.getTelephonyTypeName());
 
 
