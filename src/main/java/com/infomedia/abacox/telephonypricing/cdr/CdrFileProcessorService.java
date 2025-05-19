@@ -38,7 +38,7 @@ public class CdrFileProcessorService {
     public void processSingleCdrLine(String cdrLine, FileInfo fileInfo, CommunicationLocation commLocation, ICdrTypeProcessor processor) {
         CdrData cdrData = null;
         try {
-            cdrData = processor.evaluateFormat(cdrLine);
+            cdrData = processor.evaluateFormat(cdrLine, commLocation);
             if (cdrData == null) { // e.g., "INTEGER" line or skipped by parser
                 return;
             }

@@ -1,4 +1,3 @@
-// File: com/infomedia/abacox/telephonypricing/cdr/CallTypeDeterminationService.java
 package com.infomedia.abacox.telephonypricing.cdr;
 
 import com.infomedia.abacox.telephonypricing.entity.CommunicationLocation;
@@ -14,6 +13,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
 
 @Service
 @Log4j2
@@ -27,29 +29,44 @@ public class CallTypeDeterminationService {
     private final PhoneNumberTransformationService phoneNumberTransformationService;
     private final CallOriginDeterminationService callOriginDeterminationService;
     private final CdrConfigService appConfigService;
-    private ExtensionLimits extensionLimits;
+
+    // Cache for extension limits per CommunicationLocation to avoid repeated DB calls
+    // Key: CommunicationLocation ID
+    private final Map<Long, ExtensionLimits> extensionLimitsCache = new ConcurrentHashMap<>();
 
     public void resetExtensionLimitsCache(CommunicationLocation commLocation) {
-        if (commLocation != null && commLocation.getIndicator() != null && commLocation.getIndicator().getOriginCountryId() != null) {
-            this.extensionLimits = employeeLookupService.getExtensionLimits(
+        if (commLocation != null && commLocation.getId() != null &&
+            commLocation.getIndicator() != null && commLocation.getIndicator().getOriginCountryId() != null) {
+            this.extensionLimitsCache.put(commLocation.getId(), employeeLookupService.getExtensionLimits(
                     commLocation.getIndicator().getOriginCountryId(),
                     commLocation.getId(),
                     commLocation.getPlantTypeId()
-            );
+            ));
+            log.debug("Cached extension limits for CommLocation ID: {}", commLocation.getId());
         } else {
-            this.extensionLimits = new ExtensionLimits();
-            log.warn("CommunicationLocation, Indicator, or OriginCountryId is null for {}. Using default (restrictive) extension limits.",
+            log.warn("Cannot cache extension limits: CommunicationLocation, Indicator, or OriginCountryId is null for {}.",
                      commLocation != null ? commLocation.getDirectory() : "UNKNOWN_COMMLOC");
         }
     }
 
-    public ExtensionLimits getExtensionLimits() {
-        if (this.extensionLimits == null) {
-            log.warn("ExtensionLimits accessed before initialization. Returning default. Ensure resetExtensionLimitsCache is called.");
+    public ExtensionLimits getExtensionLimits(CommunicationLocation commLocation) {
+        if (commLocation == null || commLocation.getId() == null) {
+            log.warn("ExtensionLimits accessed with null CommunicationLocation. Returning default.");
             return new ExtensionLimits();
         }
-        return this.extensionLimits;
+        return this.extensionLimitsCache.computeIfAbsent(commLocation.getId(), id -> {
+            log.warn("ExtensionLimits accessed for CommLocation ID {} before initialization or cache miss. Fetching now.", id);
+            if (commLocation.getIndicator() != null && commLocation.getIndicator().getOriginCountryId() != null) {
+                return employeeLookupService.getExtensionLimits(
+                        commLocation.getIndicator().getOriginCountryId(),
+                        id,
+                        commLocation.getPlantTypeId()
+                );
+            }
+            return new ExtensionLimits();
+        });
     }
+
 
     /**
      * PHP equivalent: Orchestrates logic from CargarCDR's main loop after `evaluar_Formato`,
@@ -57,10 +74,10 @@ public class CallTypeDeterminationService {
      * Also incorporates logic from `es_llamada_interna`.
      */
     public void determineCallTypeAndDirection(CdrData cdrData, CommunicationLocation commLocation) {
-        ExtensionLimits limits = getExtensionLimits();
+        ExtensionLimits limits = getExtensionLimits(commLocation);
 
         // PHP: $esinterna = es_llamada_interna($info_cdr, $link);
-        if (!cdrData.isInternalCall()) { // If not already marked by parser
+        if (!cdrData.isInternalCall()) { // If not already marked by parser (e.g. Cisco CM 6.0 parser)
             // PHP: if ($esinterna || ExtensionPosible($origen))
             if (employeeLookupService.isPossibleExtension(cdrData.getCallingPartyNumber(), limits)) {
                 String destinationForInternalCheck = CdrParserUtil.cleanPhoneNumber(cdrData.getFinalCalledPartyNumber(), null, false);
@@ -71,7 +88,7 @@ public class CallTypeDeterminationService {
                 );
                 if (pbxInternalTransformed.isPresent()) {
                     destinationForInternalCheck = pbxInternalTransformed.get();
-                    cdrData.setInternalCheckPbxTransformedDest(destinationForInternalCheck);
+                    cdrData.setInternalCheckPbxTransformedDest(destinationForInternalCheck); // Store for reference
                 }
 
                 // PHP: $esinterna = ($len_destino == 1 || ExtensionPosible($destino));
@@ -80,7 +97,9 @@ public class CallTypeDeterminationService {
                     cdrData.setInternalCall(true);
                 }
                 // PHP: if (!$esinterna && $no_inicia_cero && $es_numerico && $destino != '' ) { $retornar = Validar_RangoExt(...); $esinterna = $retornar['nuevo']; }
-                else if (destinationForInternalCheck.matches("\\d+") && !destinationForInternalCheck.startsWith("0")) { // is_numeric and not starting with 0
+                else if (destinationForInternalCheck.matches("\\d+") &&
+                         !destinationForInternalCheck.startsWith("0") && // PHP: ExtensionValida($destino, true)
+                         !destinationForInternalCheck.isEmpty()) {
                     Optional<Employee> employeeFromRange = employeeLookupService.findEmployeeByExtensionRange(
                             destinationForInternalCheck, commLocation.getId(), cdrData.getDateTimeOrigination()
                     );
@@ -109,7 +128,7 @@ public class CallTypeDeterminationService {
         if (cdrData.isInternalCall()) {
             log.debug("Internal call initially marked as INCOMING. Inverting and processing as OUTGOING. Original Caller: {}, Original Callee: {}", cdrData.getFinalCalledPartyNumber(), cdrData.getCallingPartyNumber());
             CdrParserUtil.swapPartyInfo(cdrData); // PHP: InvertirLlamada
-            CdrParserUtil.swapTrunks(cdrData);    // PHP: InvertirLlamada
+            CdrParserUtil.swapTrunks(cdrData);    // PHP: InvertirLlamada (trunks)
             cdrData.setCallDirection(CallDirection.OUTGOING);
             processOutgoingLogic(cdrData, commLocation, limits, false); // PHP: procesaSaliente
             return;
@@ -125,7 +144,7 @@ public class CallTypeDeterminationService {
                 externalCallerId, commLocation.getDirectory(), 1 // 1 for incoming
         );
         if (pbxTransformedCaller.isPresent()) {
-            cdrData.setOriginalCallerIdBeforePbxIncoming(externalCallerId);
+            cdrData.setOriginalCallerIdBeforePbxIncoming(externalCallerId); // Store for reference
             externalCallerId = pbxTransformedCaller.get();
             cdrData.setPbxSpecialRuleAppliedInfo("PBX Incoming Rule: " + cdrData.getCallingPartyNumber() + " -> " + externalCallerId);
         }
@@ -135,12 +154,9 @@ public class CallTypeDeterminationService {
                 externalCallerId, commLocation.getIndicator().getOriginCountryId()
         );
         if (transformedIncoming.isTransformed()) {
-            cdrData.setOriginalCallerIdBeforeCMETransform(externalCallerId);
+            cdrData.setOriginalCallerIdBeforeCMETransform(externalCallerId); // Store for reference
             externalCallerId = transformedIncoming.getTransformedNumber();
             if (transformedIncoming.getNewTelephonyTypeId() != null) {
-                // This is a bit tricky. PHP's _esEntrante_60 sets $g_tipotele which is then used by buscarOrigen.
-                // For now, we'll let buscarOrigen determine the type, but if _esEntrante_60 definitively sets a type,
-                // it should override. Let's assume for now it's a hint for buscarOrigen.
                 cdrData.setHintedTelephonyTypeIdFromTransform(transformedIncoming.getNewTelephonyTypeId());
             }
         }
@@ -177,7 +193,7 @@ public class CallTypeDeterminationService {
                 cdrData.getFinalCalledPartyNumber(), commLocation.getIndicator().getOriginCountryId()
         );
         if (transformedOutgoing.isTransformed()) {
-            cdrData.setOriginalDialNumberBeforeCMETransform(cdrData.getFinalCalledPartyNumber());
+            cdrData.setOriginalDialNumberBeforeCMETransform(cdrData.getFinalCalledPartyNumber()); // Store for reference
             cdrData.setFinalCalledPartyNumber(transformedOutgoing.getTransformedNumber());
         }
         // PHP: $info['destino'] = $tel_dial; (effectiveDestinationNumber is finalCalledPartyNumber initially)
@@ -189,7 +205,7 @@ public class CallTypeDeterminationService {
             String numToCheckSpecial = CdrParserUtil.cleanPhoneNumber(
                     cdrData.getEffectiveDestinationNumber(),
                     commLocation.getPbxPrefix() != null ? Arrays.asList(commLocation.getPbxPrefix().split(",")) : Collections.emptyList(),
-                    true // true for modo_seguro
+                    true // true for modo_seguro (PHP: $modo_seguro = true)
             );
             if (numToCheckSpecial != null && !numToCheckSpecial.isEmpty()) {
                 // PHP: $infovalor = buscar_NumeroEspecial(...)
@@ -208,7 +224,7 @@ public class CallTypeDeterminationService {
                     cdrData.setEffectiveDestinationNumber(numToCheckSpecial); // PHP: $info['destino'] = $telefono_orig;
                     cdrData.setSpecialServiceTariff(specialServiceInfo.get()); // Store for tariff calc
                     log.debug("Call to special service: {}", numToCheckSpecial);
-                    return; // Tariffing for special services is handled differently
+                    return; // Tariffing for special services is handled differently by TariffCalculationService
                 }
             }
         }
@@ -227,7 +243,7 @@ public class CallTypeDeterminationService {
             // PHP: if ($telefono_eval !== '' && $telefono_eval !== $info_cdr['dial_number'])
             if (pbxTransformedDest.isPresent() && !Objects.equals(pbxTransformedDest.get(), cdrData.getEffectiveDestinationNumber())) {
                 String originalDest = cdrData.getEffectiveDestinationNumber();
-                cdrData.setOriginalDialNumberBeforePbxOutgoing(originalDest);
+                cdrData.setOriginalDialNumberBeforePbxOutgoing(originalDest); // Store for reference
                 cdrData.setFinalCalledPartyNumber(pbxTransformedDest.get());
                 cdrData.setEffectiveDestinationNumber(pbxTransformedDest.get());
                 cdrData.setPbxSpecialRuleAppliedInfo("PBX Outgoing Rule: " + originalDest + " -> " + pbxTransformedDest.get());
@@ -437,8 +453,8 @@ public class CallTypeDeterminationService {
              result.setTelephonyTypeId(appConfigService.getDefaultInternalCallTypeId());
              result.setTelephonyTypeName(telephonyTypeLookupService.getTelephonyTypeName(result.getTelephonyTypeId()));
              result.setAdditionalInfo(appConfigService.getAssumedText());
-             if (originCommLoc != null && originCommLoc.getIndicator() != null) result.setOriginIndicatorId(originCommLoc.getIndicatorId());
-             if (destCommLoc != null && destCommLoc.getIndicator() != null) result.setDestinationIndicatorId(destCommLoc.getIndicatorId());
+             if (originCommLoc != null && originCommLoc.getIndicator() != null) result.setOriginIndicatorId(originCommLoc.getIndicator().getId());
+             if (destCommLoc != null && destCommLoc.getIndicator() != null) result.setDestinationIndicatorId(destCommLoc.getIndicator().getId());
         }
         
         // PHP: if (!ExtensionEncontrada($info['funcionario_funid']) && ExtensionEncontrada($info['funcionario_fundes']) && $arreglo_info['incoming'] <= 0 && $info['funcionario_fundes']['comid'] == $resultado_directorio['COMUBICACION_ID'])

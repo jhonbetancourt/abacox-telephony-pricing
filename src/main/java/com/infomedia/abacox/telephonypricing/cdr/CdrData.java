@@ -94,7 +94,7 @@ public class CdrData {
     private String quarantineReason;
     private String quarantineStep;
 
-    //Aditional Processing Data
+    //Additional Processing Data
     private SpecialServiceInfo specialServiceTariff;
     private boolean normalizedTariffApplied = false;
     private BigDecimal specialRateDiscountPercentage;
