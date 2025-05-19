@@ -179,20 +179,6 @@ public class TelephonyTypeLookupService {
     }
 
     /**
-     * PHP equivalent: _tipotele_Internas (list of IDs)
-     */
-    @Transactional(readOnly = true)
-    public List<Long> getInternalTelephonyTypeIds() {
-        return Arrays.asList(
-                TelephonyTypeEnum.INTERNAL_IP.getValue(),
-                TelephonyTypeEnum.LOCAL_IP.getValue(),
-                TelephonyTypeEnum.NATIONAL_IP.getValue(),
-                TelephonyTypeEnum.INTERNAL_SIMPLE.getValue(),
-                TelephonyTypeEnum.INTERNAL_INTERNATIONAL_IP.getValue()
-        );
-    }
-
-    /**
      * PHP equivalent: TarifasInternas
      */
     @Transactional(readOnly = true)
