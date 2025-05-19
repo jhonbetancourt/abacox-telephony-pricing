@@ -33,20 +33,18 @@ public class CdrEnrichmentService {
         cdrData.setCommLocationId(commLocation.getId());
 
         try {
-            // 1. Determine Call Type (Internal, Incoming, Outgoing) and apply initial transformations
             callTypeDeterminationService.determineCallTypeAndDirection(cdrData, commLocation);
             log.debug("After call type determination: Direction={}, Internal={}, TelephonyType={}",
                     cdrData.getCallDirection(), cdrData.isInternalCall(), cdrData.getTelephonyTypeId());
 
-            // 2. Assign Employees (PHP: ObtenerFuncionario_Arreglo)
             String searchExtForEmployee;
             String searchAuthCodeForEmployee;
 
             if (cdrData.getCallDirection() == CallDirection.INCOMING) {
-                searchExtForEmployee = cdrData.getFinalCalledPartyNumber(); // Our extension after potential inversion
+                searchExtForEmployee = cdrData.getFinalCalledPartyNumber();
                 searchAuthCodeForEmployee = null;
                 log.debug("Incoming call. Searching employee by extension: {}", searchExtForEmployee);
-            } else { // OUTGOING or effectively OUTGOING
+            } else {
                 searchExtForEmployee = cdrData.getCallingPartyNumber();
                 searchAuthCodeForEmployee = cdrData.getAuthCodeDescription();
                 log.debug("Outgoing call. Searching employee by extension: {}, authCode: {}", searchExtForEmployee, searchAuthCodeForEmployee);
@@ -75,11 +73,13 @@ public class CdrEnrichmentService {
                     cdrData.setAssignmentCause(AssignmentCause.AUTH_CODE);
                 } else if (authCodeProvided && !isIgnoredAuthCodeType) {
                     cdrData.setAssignmentCause(AssignmentCause.IGNORED_AUTH_CODE);
-                } else {
+                } else { // No auth code provided, or it was an ignored type, or it didn't match
                     cdrData.setAssignmentCause(AssignmentCause.EXTENSION);
                 }
-
+                // PHP: if ($funid <= 0 && $tiempo > 0) { $funid = ActualizarFuncionarios(...); }
+                // PHP: if ($info_asigna == IMDEX_ASIGNA_EXT && ExtensionEncontrada($arreglo_fun)) { $info_asigna = IMDEX_ASIGNA_RANGOS; }
                 if (foundEmployee.getId() == null && cdrData.getDurationSeconds() > 0 && appConfigService.createEmployeesAutomaticallyFromRange()) {
+                    // This means the employee was conceptually created from a range
                     cdrData.setAssignmentCause(AssignmentCause.RANGES);
                     log.debug("Employee is conceptual (from range). Assignment cause: RANGES");
                 }
@@ -93,7 +93,7 @@ public class CdrEnrichmentService {
             if (cdrData.isInternalCall() && cdrData.getEffectiveDestinationNumber() != null) {
                  employeeLookupService.findEmployeeByExtensionOrAuthCode(
                                  cdrData.getEffectiveDestinationNumber(), null,
-                                 null, // Search globally for destination internal extension
+                                 null,
                                  cdrData.getDateTimeOrigination())
                     .ifPresent(destEmployee -> {
                         cdrData.setDestinationEmployeeId(destEmployee.getId());
@@ -102,11 +102,12 @@ public class CdrEnrichmentService {
                     });
             }
 
+            // PHP: if (!ExtensionEncontrada($arreglo_fun) && !$es_interna && isset($info['funcionario_redir']) && $info['funcionario_redir']['comid'] == $COMUBICACION_ID)
             if (cdrData.getEmployeeId() == null && !cdrData.isInternalCall() &&
                 cdrData.getLastRedirectDn() != null && !cdrData.getLastRedirectDn().isEmpty()) {
                 Employee redirEmployee = employeeLookupService.findEmployeeByExtensionOrAuthCode(
                                 cdrData.getLastRedirectDn(), null,
-                                commLocation.getId(),
+                                commLocation.getId(), // Must be in current commLocation
                                 cdrData.getDateTimeOrigination())
                         .orElse(null);
                 if (redirEmployee != null &&
@@ -115,11 +116,10 @@ public class CdrEnrichmentService {
                     cdrData.setEmployeeId(redirEmployee.getId());
                     cdrData.setEmployee(redirEmployee);
                     cdrData.setAssignmentCause(AssignmentCause.TRANSFER);
-                    log.info("Assigned call to redirecting employee: ID={}, Ext={}", redirEmployee.getId(), redirEmployee.getExtension());
+                    log.info("Assigned call to redirecting employee (due to transfer): ID={}, Ext={}", redirEmployee.getId(), redirEmployee.getExtension());
                 }
             }
 
-            // 3. Calculate Tariffs
             if (cdrData.getDurationSeconds() <= appConfigService.getMinCallDurationForTariffing()) {
                 if (cdrData.getTelephonyTypeId() != null &&
                     cdrData.getTelephonyTypeId() > 0 &&
@@ -136,28 +136,27 @@ public class CdrEnrichmentService {
                 tariffCalculationService.calculateTariffs(cdrData, commLocation);
             } else {
                 log.debug("Skipping tariff calculation. Duration: {}, Type: {}", cdrData.getDurationSeconds(), cdrData.getTelephonyTypeId());
-                 if (cdrData.getBilledAmount() == null) cdrData.setBilledAmount(BigDecimal.ZERO); // Ensure it's not null
+                 if (cdrData.getBilledAmount() == null) cdrData.setBilledAmount(BigDecimal.ZERO);
             }
 
-            // 4. Finalize Transfer Info
+            // PHP: if ($ext_transfer !== '' && ($ext_transfer === $extension || $ext_transfer === $tel_destino) && $info_transfer != IMDEX_TRANSFER_CONFERENCIA)
             if (cdrData.getTransferCause() != TransferCause.NONE &&
                 cdrData.getLastRedirectDn() != null && !cdrData.getLastRedirectDn().isEmpty()) {
                 cdrData.setEmployeeTransferExtension(cdrData.getLastRedirectDn());
-                boolean transferToSelf = false;
-                String extToCompareAgainst = (cdrData.getCallDirection() == CallDirection.INCOMING) ?
-                                             cdrData.getFinalCalledPartyNumber() :
-                                             cdrData.getCallingPartyNumber();
-                if (Objects.equals(cdrData.getLastRedirectDn(), extToCompareAgainst)) {
-                    transferToSelf = true;
-                } else {
-                    String otherParty = (cdrData.getCallDirection() == CallDirection.INCOMING) ?
-                                        cdrData.getCallingPartyNumber() :
-                                        cdrData.getFinalCalledPartyNumber();
-                    if (Objects.equals(cdrData.getLastRedirectDn(), otherParty)) {
-                        transferToSelf = true;
-                    }
+                boolean transferToSelfOrOtherParty = false;
+                String currentPartyExtension = (cdrData.getCallDirection() == CallDirection.INCOMING) ?
+                                             cdrData.getFinalCalledPartyNumber() : // Our extension
+                                             cdrData.getCallingPartyNumber();    // Their extension
+                String otherPartyExtension = (cdrData.getCallDirection() == CallDirection.INCOMING) ?
+                                           cdrData.getCallingPartyNumber() :    // Their extension
+                                           cdrData.getFinalCalledPartyNumber(); // Our extension
+
+                if (Objects.equals(cdrData.getLastRedirectDn(), currentPartyExtension) ||
+                    Objects.equals(cdrData.getLastRedirectDn(), otherPartyExtension)) {
+                    transferToSelfOrOtherParty = true;
                 }
-                if (transferToSelf && cdrData.getTransferCause() != TransferCause.CONFERENCE) {
+
+                if (transferToSelfOrOtherParty && cdrData.getTransferCause() != TransferCause.CONFERENCE && cdrData.getTransferCause() != TransferCause.CONFERENCE_NOW && cdrData.getTransferCause() != TransferCause.PRE_CONFERENCE_NOW) {
                     log.debug("Clearing transfer info as it's a transfer to self/current party for non-conference. Original transfer ext: {}", cdrData.getLastRedirectDn());
                     cdrData.setEmployeeTransferExtension(null);
                     cdrData.setTransferCause(TransferCause.NONE);

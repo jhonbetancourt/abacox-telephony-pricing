@@ -5,24 +5,17 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import lombok.extern.log4j.Log4j2;
 
+@Log4j2
 public class CdrParserUtil {
 
-    /**
-     * PHP equivalent: explode($cm_config['cdr_separador'], $linea);
-     * and csv_limpiar_campos()
-     */
     public static List<String> parseCsvLine(String line, String separator) {
-        // PHP's explode behavior:
         return Arrays.stream(line.split(Pattern.quote(separator)))
                 .map(CdrParserUtil::cleanCsvField)
                 .collect(Collectors.toList());
     }
 
-    /**
-     * PHP equivalent: csv_limpiar_campos($cab); // Elimina comillas
-     * and str_replace(chr(0),'',$string);
-     */
     public static String cleanCsvField(String field) {
         if (field == null) return "";
         String cleaned = field.trim();
@@ -35,11 +28,9 @@ public class CdrParserUtil {
         return cleaned;
     }
 
-    /**
-     * PHP equivalent: dec2ip
-     */
     public static String decimalToIp(long dec) {
         if (dec < 0) {
+            log.warn("Received negative decimal for IP conversion: {}, returning as string.", dec);
             return String.valueOf(dec);
         }
         return String.format("%d.%d.%d.%d",
@@ -51,13 +42,23 @@ public class CdrParserUtil {
 
     /**
      * PHP equivalent: limpiar_numero
+     * @param number The number string to clean.
+     * @param pbxExitPrefixes List of PBX exit prefixes to attempt to remove.
+     * @param stripOnlyIfPrefixMatchesAndFound If true, and pbxExitPrefixes are provided but none match,
+     *                                         the original number (after basic cleaning) is returned.
+     *                                         If false, and pbxExitPrefixes are provided but none match,
+     *                                         an empty string is returned (PHP's $maxCaracterAExtraer == 0 case).
+     *                                         If pbxExitPrefixes is null/empty, this flag has less impact on prefix stripping.
+     * @return The cleaned number.
      */
     public static String cleanPhoneNumber(String number, List<String> pbxExitPrefixes, boolean stripOnlyIfPrefixMatchesAndFound) {
         if (number == null) return "";
         String currentNumber = number.trim();
-        String numberAfterPrefixStrip = currentNumber;
+        log.trace("Cleaning phone number: '{}', PBX Prefixes: {}, StripOnlyIfFound: {}", number, pbxExitPrefixes, stripOnlyIfPrefixMatchesAndFound);
 
+        String numberAfterPrefixStrip = currentNumber;
         boolean pbxPrefixDefined = pbxExitPrefixes != null && !pbxExitPrefixes.isEmpty();
+        boolean pbxPrefixFoundAndStripped = false;
 
         if (pbxPrefixDefined) {
             String longestMatchingPrefix = "";
@@ -71,68 +72,95 @@ public class CdrParserUtil {
             }
             if (!longestMatchingPrefix.isEmpty()) {
                 numberAfterPrefixStrip = currentNumber.substring(longestMatchingPrefix.length());
+                pbxPrefixFoundAndStripped = true;
+                log.trace("PBX prefix '{}' stripped. Number is now: '{}'", longestMatchingPrefix, numberAfterPrefixStrip);
             } else {
+                // PHP: elseif ($maxCaracterAExtraer == 0) { $nuevo = ''; }
+                // This means if prefixes were defined but none matched, PHP returns empty.
+                // This corresponds to stripOnlyIfPrefixMatchesAndFound = false.
                 if (!stripOnlyIfPrefixMatchesAndFound) {
+                    log.trace("PBX prefixes defined but none matched, and stripOnlyIfPrefixMatchesAndFound is false. Returning empty.");
                     return "";
                 }
+                // If stripOnlyIfPrefixMatchesAndFound is true, we continue with currentNumber (or numberAfterPrefixStrip which is same).
+                log.trace("PBX prefixes defined but none matched, stripOnlyIfPrefixMatchesAndFound is true. Continuing with: '{}'", numberAfterPrefixStrip);
             }
         }
 
-        if (numberAfterPrefixStrip.isEmpty()) {
+        // PHP: if ($modo_seguro && $nuevo == '') { $nuevo = trim($numero); }
+        // This PHP logic is a bit confusing. If modo_seguro (stripOnlyIfPrefixMatchesAndFound) is true
+        // AND the number became empty after trying to strip (meaning a prefix was defined but didn't match,
+        // and stripOnlyIfPrefixMatchesAndFound was false, leading to empty), then it reverts to original.
+        // Our logic above handles this: if stripOnlyIfPrefixMatchesAndFound is true and no prefix matched,
+        // numberAfterPrefixStrip remains the original (trimmed) number.
+        // If stripOnlyIfPrefixMatchesAndFound is false and no prefix matched, it already returned "".
+
+        if (numberAfterPrefixStrip.isEmpty() && pbxPrefixFoundAndStripped) {
+            // If stripping the prefix resulted in an empty string, it's considered empty.
+            log.trace("Number became empty after stripping prefix. Returning empty.");
             return "";
         }
+        if (numberAfterPrefixStrip.isEmpty() && !pbxPrefixFoundAndStripped && pbxPrefixDefined && !stripOnlyIfPrefixMatchesAndFound) {
+            // This case should have been caught by `return ""` above if no prefix matched and !stripOnlyIfPrefixMatchesAndFound
+            log.trace("Number is empty, no prefix was stripped but prefixes were defined and !stripOnlyIfPrefixMatchesAndFound. Returning empty.");
+            return "";
+        }
+
 
         String numToClean = numberAfterPrefixStrip;
         if (numToClean.startsWith("+")) {
             numToClean = numToClean.substring(1);
+            log.trace("Stripped leading '+'. Number is now: '{}'", numToClean);
         }
 
-        if (numToClean.isEmpty()) return "";
+        if (numToClean.isEmpty()) {
+            log.trace("Number is empty after stripping '+'. Returning empty.");
+            return "";
+        }
 
+        // PHP: $primercar = substr($nuevo, 0, 1); $parcial = substr($nuevo, 1);
+        // PHP: if ($parcial != '' && !is_numeric($parcial)) { $parcial2 = preg_replace('/[^0-9]/','?', $parcial); ... }
+        // This means it only cleans non-digits *after the first character*.
         String firstChar = String.valueOf(numToClean.charAt(0));
-        String partial = numToClean.substring(1);
-
-        if (!partial.isEmpty()) {
-            int firstNonDigitInPartial = -1;
-            for (int i = 0; i < partial.length(); i++) {
-                if (!Character.isDigit(partial.charAt(i))) {
-                    firstNonDigitInPartial = i;
-                    break;
-                }
+        String restOfNumber = numToClean.substring(1);
+        StringBuilder cleanedRest = new StringBuilder();
+        for (char c : restOfNumber.toCharArray()) {
+            if (Character.isDigit(c)) {
+                cleanedRest.append(c);
+            } else {
+                // PHP: $p = strpos($parcial2, '?'); if ($p > 0) { $parcial = substr($parcial2, 0, $p); }
+                // This means it stops at the first non-digit *after the first character*.
+                log.trace("Non-digit '{}' found after first char. Stopping cleaning of rest.", c);
+                break;
             }
-
-            if (firstNonDigitInPartial != -1) { // A non-digit was found
-                if (firstNonDigitInPartial > 0) { // PHP: if ($p > 0)
-                    partial = partial.substring(0, firstNonDigitInPartial);
-                }
-                // If firstNonDigitInPartial is 0 (PHP: $p == 0), PHP's $p > 0 is false, so $parcial is not changed.
-                // This means if the first char of 'partial' is non-digit, 'partial' remains as is.
-            }
-            // If firstNonDigitInPartial is -1 (all digits), 'partial' is not changed.
         }
-        return firstChar + partial;
+        String finalCleanedNumber = firstChar + cleanedRest.toString();
+        log.debug("Cleaned phone number result: '{}'", finalCleanedNumber);
+        return finalCleanedNumber;
     }
 
 
-    /**
-     * PHP equivalent: _invertir (for party info)
-     */
     public static void swapPartyInfo(CdrData cdrData) {
+        log.debug("Swapping party info. Before: Calling='{}'({}), FinalCalled='{}'({})",
+                cdrData.getCallingPartyNumber(), cdrData.getCallingPartyNumberPartition(),
+                cdrData.getFinalCalledPartyNumber(), cdrData.getFinalCalledPartyNumberPartition());
         String tempExt = cdrData.getCallingPartyNumber();
         String tempExtPart = cdrData.getCallingPartyNumberPartition();
         cdrData.setCallingPartyNumber(cdrData.getFinalCalledPartyNumber());
         cdrData.setCallingPartyNumberPartition(cdrData.getFinalCalledPartyNumberPartition());
         cdrData.setFinalCalledPartyNumber(tempExt);
         cdrData.setFinalCalledPartyNumberPartition(tempExtPart);
-        cdrData.setEffectiveDestinationNumber(cdrData.getFinalCalledPartyNumber());
+        cdrData.setEffectiveDestinationNumber(cdrData.getFinalCalledPartyNumber()); // Update effective destination
+        log.debug("Swapped party info. After: Calling='{}'({}), FinalCalled='{}'({})",
+                cdrData.getCallingPartyNumber(), cdrData.getCallingPartyNumberPartition(),
+                cdrData.getFinalCalledPartyNumber(), cdrData.getFinalCalledPartyNumberPartition());
     }
 
-    /**
-     * PHP equivalent: _invertir (for trunks)
-     */
     public static void swapTrunks(CdrData cdrData) {
+        log.debug("Swapping trunks. Before: Orig='{}', Dest='{}'", cdrData.getOrigDeviceName(), cdrData.getDestDeviceName());
         String tempTrunk = cdrData.getOrigDeviceName();
         cdrData.setOrigDeviceName(cdrData.getDestDeviceName());
         cdrData.setDestDeviceName(tempTrunk);
+        log.debug("Swapped trunks. After: Orig='{}', Dest='{}'", cdrData.getOrigDeviceName(), cdrData.getDestDeviceName());
     }
 }

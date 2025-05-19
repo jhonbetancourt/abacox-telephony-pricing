@@ -23,7 +23,7 @@ public class PrefixLookupService {
     @PersistenceContext
     private EntityManager entityManager;
     private final PhoneNumberTransformationService phoneNumberTransformationService;
-    private final TelephonyTypeLookupService telephonyTypeLookupService; // For internal types list
+    private final TelephonyTypeLookupService telephonyTypeLookupService;
 
     /**
      * PHP equivalent: buscarPrefijo
@@ -33,6 +33,8 @@ public class PrefixLookupService {
                                                  CommunicationLocation commLocation,
                                                  boolean isTrunkCall,
                                                  List<Long> trunkTelephonyTypeIds) {
+        log.debug("Finding matching prefixes for dialedNumber: '{}', isTrunkCall: {}, trunkTelephonyTypeIds: {}",
+                dialedNumber, isTrunkCall, trunkTelephonyTypeIds);
 
         String numberForLookup = dialedNumber;
         if (commLocation != null && commLocation.getIndicator() != null &&
@@ -41,6 +43,7 @@ public class PrefixLookupService {
                 phoneNumberTransformationService.transformForPrefixLookup(dialedNumber, commLocation);
             if (transformResult.isTransformed()) {
                 numberForLookup = transformResult.getTransformedNumber();
+                log.debug("Dialed number '{}' transformed for prefix lookup to '{}'", dialedNumber, numberForLookup);
             }
         }
         final String finalNumberForLookup = numberForLookup;
@@ -56,6 +59,7 @@ public class PrefixLookupService {
 
         if (isTrunkCall && trunkTelephonyTypeIds != null && !trunkTelephonyTypeIds.isEmpty()) {
             queryStr += "AND p.telephone_type_id IN (:trunkTelephonyTypeIds) ";
+            log.debug("Trunk call, filtering by telephonyTypeIds: {}", trunkTelephonyTypeIds);
         }
         queryStr += "ORDER BY LENGTH(p.code) DESC, ttc.min_value DESC, p.telephone_type_id";
 
@@ -75,6 +79,7 @@ public class PrefixLookupService {
             int bandsCount = tuple.get("bands_count", Number.class).intValue();
             return new PrefixInfo(p, cfg, bandsCount);
         }).collect(Collectors.toList());
+        log.debug("All relevant prefixes fetched: {}", allRelevantPrefixes.size());
 
         List<PrefixInfo> matchedPrefixes = new ArrayList<>();
         if (!isTrunkCall) {
@@ -91,17 +96,26 @@ public class PrefixLookupService {
                 allRelevantPrefixes.stream()
                         .filter(pi -> finalBestMatchPrefixCode.equals(pi.getPrefixCode()))
                         .forEach(matchedPrefixes::add);
+                log.debug("Non-trunk call, best matching prefix code: '{}', found {} matches.", bestMatchPrefixCode, matchedPrefixes.size());
+            } else {
+                log.debug("Non-trunk call, no prefix code matched for '{}'", finalNumberForLookup);
             }
-        } else {
+        } else { // isTrunkCall
             for (PrefixInfo pi : allRelevantPrefixes) {
-                if (pi.getPrefixCode() != null && !pi.getPrefixCode().isEmpty() && finalNumberForLookup.startsWith(pi.getPrefixCode())) {
-                    matchedPrefixes.add(pi);
-                } else if (pi.getPrefixCode() == null || pi.getPrefixCode().isEmpty()) {
+                // For trunk calls, PHP logic seems to consider all prefixes associated with the trunk's allowed telephony types.
+                // If a prefix code exists, it must match. If no prefix code, it's a candidate (e.g. for local calls on trunk).
+                if (pi.getPrefixCode() != null && !pi.getPrefixCode().isEmpty()) {
+                    if (finalNumberForLookup.startsWith(pi.getPrefixCode())) {
+                        matchedPrefixes.add(pi);
+                    }
+                } else { // Prefix code is empty or null, consider it a match (e.g. for local type)
                     matchedPrefixes.add(pi);
                 }
             }
+            log.debug("Trunk call, found {} potential prefixes after filtering by trunkTelephonyTypeIds and prefix match.", matchedPrefixes.size());
         }
 
+        // PHP: if ($id_local > 0 && !in_array($id_local, $arr_prefijo_id) && $existe_troncal === false)
         if (!isTrunkCall && (matchedPrefixes.isEmpty() || matchedPrefixes.stream().allMatch(pi -> pi.getPrefixCode() == null || pi.getPrefixCode().isEmpty() || !finalNumberForLookup.startsWith(pi.getPrefixCode())))) {
              allRelevantPrefixes.stream()
                     .filter(pi -> pi.getTelephonyTypeId() == TelephonyTypeEnum.LOCAL.getValue() &&
@@ -114,15 +128,18 @@ public class PrefixLookupService {
                         if (matchedPrefixes.isEmpty() || onlyPrefixlessMatches) {
                             if (!matchedPrefixes.stream().anyMatch(p -> p.getTelephonyTypeId() == TelephonyTypeEnum.LOCAL.getValue() && (p.getPrefixCode() == null || p.getPrefixCode().isEmpty()))) {
                                 matchedPrefixes.add(localPrefixInfo);
+                                log.debug("Added LOCAL prefix as fallback for non-trunk call: {}", localPrefixInfo);
                             }
                         }
                     });
         }
 
+        // PHP: krsort($arr_retornar); (sorts by key, which is prefix string + counter, effectively longest prefix first)
         matchedPrefixes.sort(Comparator.comparing((PrefixInfo pi) -> pi.getPrefixCode() != null ? pi.getPrefixCode().length() : 0)
                 .reversed()
                 .thenComparing(Comparator.comparingInt((PrefixInfo pi) -> pi.getTelephonyTypeMinLength() != null ? pi.getTelephonyTypeMinLength() : 0).reversed()));
 
+        log.debug("Final sorted matched prefixes ({}): {}", matchedPrefixes.size(), matchedPrefixes);
         return matchedPrefixes;
     }
 
@@ -132,42 +149,30 @@ public class PrefixLookupService {
      */
     @Transactional(readOnly = true)
     public Map<String, Long> getInternalTelephonyTypePrefixes(Long originCountryId) {
-        // PHP: $tt_internas = _tipotele_Internas($link, true);
         List<Long> internalTypeIds = telephonyTypeLookupService.getInternalTypeIds();
         if (internalTypeIds.isEmpty()) {
+            log.debug("No internal telephony type IDs defined.");
             return Collections.emptyMap();
         }
 
-        // PHP: foreach ($prefijos['prefijo'] as $prefijo_txt => $infoprefijos)
-        // PHP: $prefijos['prefijo'] is already sorted by length DESC. We achieve this by querying and sorting.
         String queryStr = "SELECT p.code, p.telephone_type_id " +
                           "FROM prefix p JOIN operator o ON p.operator_id = o.id " +
                           "WHERE p.active = true AND o.active = true AND o.origin_country_id = :originCountryId " +
                           "AND p.telephone_type_id IN (:internalTypeIds) AND p.code IS NOT NULL AND p.code != '' " +
-                          "ORDER BY LENGTH(p.code) DESC, p.code DESC"; // Ensure consistent ordering for same-length prefixes
+                          "ORDER BY LENGTH(p.code) DESC, p.code DESC";
 
         jakarta.persistence.Query nativeQuery = entityManager.createNativeQuery(queryStr, Tuple.class);
         nativeQuery.setParameter("originCountryId", originCountryId);
         nativeQuery.setParameter("internalTypeIds", internalTypeIds);
 
         List<Tuple> results = nativeQuery.getResultList();
-        // PHP's krsort($arreglo_tt) sorts by key (prefix string) descending.
-        // A TreeMap with reverseOrder will achieve this.
-        // However, PHP's logic for $_lista_Prefijos['ttin'] is to iterate prefixes sorted by length,
-        // and for each prefix, take the telephony type. If multiple prefixes have the same text,
-        // the one associated with the *last processed prefix_id* (within that text group) wins.
-        // The SQL ORDER BY LENGTH(p.code) DESC ensures we process longer prefixes first.
-        // For identical prefix strings, the one from the "later" (in SQL result due to secondary sort) prefix_id would overwrite.
-        // To mimic PHP's krsort on the *keys* of the final map:
         Map<String, Long> internalPrefixMap = new TreeMap<>(Comparator.reverseOrder());
         for (Tuple row : results) {
             String prefixCode = row.get("code", String.class);
             Long telephonyTypeId = row.get("telephone_type_id", Number.class).longValue();
-            // If multiple prefixes have the same text, the one from the "later" (in SQL result due to secondary sort)
-            // prefix_id would overwrite, which is fine.
             internalPrefixMap.put(prefixCode, telephonyTypeId);
         }
-        log.debug("Loaded {} internal telephony type prefixes for country {}", internalPrefixMap.size(), originCountryId);
+        log.debug("Loaded {} internal telephony type prefixes for country {}: {}", internalPrefixMap.size(), originCountryId, internalPrefixMap);
         return internalPrefixMap;
     }
 }
