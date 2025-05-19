@@ -1,4 +1,3 @@
-// File: com/infomedia/abacox/telephonypricing/cdr/CdrEnrichmentService.java
 package com.infomedia.abacox.telephonypricing.cdr;
 
 import com.infomedia.abacox.telephonypricing.entity.CommunicationLocation;
@@ -41,7 +40,8 @@ public class CdrEnrichmentService {
 
             if (cdrData.getCallDirection() == CallDirection.INCOMING) {
                 // For incoming, the "extension" is the destination of the call (our employee)
-                searchExtForEmployee = cdrData.getFinalCalledPartyNumber();
+                // PHP: $ext = trim($info_cdr['ext']); (after potential inversion)
+                searchExtForEmployee = cdrData.getFinalCalledPartyNumber(); // This is our extension after inversion
                 searchAuthCodeForEmployee = null; // Auth codes typically not for incoming
             } else { // OUTGOING or effectively OUTGOING (after internal call inversion)
                 searchExtForEmployee = cdrData.getCallingPartyNumber();
@@ -62,49 +62,45 @@ public class CdrEnrichmentService {
                 cdrData.setEmployee(foundEmployee);
 
                 // Determine assignment cause (PHP: $retornar['info_asigna'])
-                boolean authCodeUsedAndValid = searchAuthCodeForEmployee != null && !searchAuthCodeForEmployee.isEmpty() &&
-                        foundEmployee.getAuthCode() != null &&
-                        foundEmployee.getAuthCode().equalsIgnoreCase(searchAuthCodeForEmployee);
-                boolean authCodeIgnored = searchAuthCodeForEmployee != null && !searchAuthCodeForEmployee.isEmpty() && !authCodeUsedAndValid;
+                boolean authCodeProvided = searchAuthCodeForEmployee != null && !searchAuthCodeForEmployee.isEmpty();
+                boolean authCodeMatched = authCodeProvided &&
+                                          foundEmployee.getAuthCode() != null &&
+                                          foundEmployee.getAuthCode().equalsIgnoreCase(searchAuthCodeForEmployee);
+                boolean isIgnoredAuthCodeType = authCodeProvided && appConfigService.getIgnoredAuthCodeDescriptions().stream()
+                                                                    .anyMatch(desc -> desc.equalsIgnoreCase(searchAuthCodeForEmployee));
 
-                if (authCodeUsedAndValid) {
+                if (authCodeMatched) {
                     cdrData.setAssignmentCause(AssignmentCause.AUTH_CODE);
-                } else if (authCodeIgnored && appConfigService.getIgnoredAuthCodeDescriptions().stream().anyMatch(desc -> desc.equalsIgnoreCase(searchAuthCodeForEmployee))) {
-                    // If auth code was one of the "Invalid..." types, PHP still assigns by extension
-                    cdrData.setAssignmentCause(AssignmentCause.EXTENSION);
-                } else if (authCodeIgnored) {
-                    cdrData.setAssignmentCause(AssignmentCause.IGNORED_AUTH_CODE);
-                     // If an auth code was provided but didn't match or was invalid (not in ignore list),
-                     // and CAPTURAS_NOCLAVES is 0 (PHP default), the call might not be assigned.
-                     // For simplicity, if employee was found by extension after auth code failed (and not an "ignored" auth code),
-                     // we might still assign by extension or mark as IGNORED_AUTH_CODE.
-                     // PHP: if ($esclave && $retornar['id'] <= 0); // $ignoraclave
-                     // if ($ext != '' && !$esclave) // (!$esclave || $ignoraclave))
-                     // This implies if auth code fails and it's not an "ignored" one, it might not assign by extension.
-                     // Let's assume for now if employee was found by extension, it's EXTENSION.
-                     if (foundEmployee.getExtension() != null && foundEmployee.getExtension().equals(searchExtForEmployee)) {
-                         cdrData.setAssignmentCause(AssignmentCause.EXTENSION);
-                     }
-                } else { // No auth code, or auth code was invalid and employee found by extension
+                } else if (authCodeProvided && !isIgnoredAuthCodeType) { // Auth code provided, but didn't match and is not an "ignored type"
+                    cdrData.setAssignmentCause(AssignmentCause.IGNORED_AUTH_CODE); // PHP: IMDEX_IGNORA_CLAVE
+                    // PHP: if ($esclave && $retornar['id'] <= 0); // $ignoraclave
+                    // If CAPTURAS_NOCLAVES=0 (PHP default), and auth code failed (not an "ignored" one),
+                    // it might not assign by extension. Here, we assume if employee was found by extension, it's EXTENSION.
+                    // If employee was found by extension (e.g. auth code was null for employee but ext matched)
+                    if (foundEmployee.getExtension() != null && foundEmployee.getExtension().equals(searchExtForEmployee)) {
+                         // This case is tricky: auth code was provided, failed, but ext matched.
+                         // PHP's logic for $ignoraclave and CAPTURAS_NOCLAVES is complex.
+                         // For now, if auth code failed and it wasn't an "ignored" type, it's IGNORED_AUTH_CODE.
+                         // If the employee was *only* found by extension (no auth code provided or auth code was ignored type), then it's EXTENSION.
+                    }
+                } else { // No auth code provided, or auth code was an "ignored type" (so we assign by extension)
                     cdrData.setAssignmentCause(AssignmentCause.EXTENSION);
                 }
+
                 // PHP: if ($funid <= 0 && $tiempo > 0) { $funid = ActualizarFuncionarios(...); }
                 // This is for auto-creating employees from ranges, handled by findEmployeeByExtensionRange if primary lookup fails.
                 // If foundEmployee came from a range, it's conceptually a new one.
                 if (foundEmployee.getId() == null && cdrData.getDurationSeconds() > 0 && appConfigService.createEmployeesAutomaticallyFromRange()) {
                     // This employee is conceptual from a range.
-                    // Actual persistence of this conceptual employee would happen elsewhere if needed.
                     cdrData.setAssignmentCause(AssignmentCause.RANGES);
                 }
 
-            } else {
+            } else { // No employee found by primary means
                  // PHP: if ($funid <= 0) { $funid = 0; if ($info_asigna == IMDEX_ASIGNA_EXT && ExtensionEncontrada($arreglo_fun)) $info_asigna = IMDEX_ASIGNA_RANGOS; }
                  // If no employee found by primary means, and it was an attempt by extension, it might be RANGES if conceptual employee was returned by range logic
-                 if (cdrData.getAssignmentCause() == AssignmentCause.EXTENSION) { // Check if it was an attempt by extension
-                    // If findEmployeeByExtensionOrAuthCode returned empty, but a range match could have happened conceptually
-                    // This part is tricky as the conceptual employee from range is already handled.
-                    // If no employee at all, it's NOT_ASSIGNED.
-                 }
+                 // This is already handled by findEmployeeByExtensionOrAuthCode calling findEmployeeByExtensionRange.
+                 // If still null here, it's NOT_ASSIGNED.
+                 cdrData.setAssignmentCause(AssignmentCause.NOT_ASSIGNED);
             }
 
 
@@ -123,11 +119,15 @@ public class CdrEnrichmentService {
             // Handle transfer assignment (PHP: if (!ExtensionEncontrada($arreglo_fun) && !$es_interna && isset($info['funcionario_redir'])...))
             if (cdrData.getEmployeeId() == null && !cdrData.isInternalCall() &&
                 cdrData.getLastRedirectDn() != null && !cdrData.getLastRedirectDn().isEmpty()) {
+                // PHP: $arreglo_funredir = ObtenerFuncionario_Arreglo($link, $ext_redir, '', 0, $info_cdr['date'], $funext, $COMUBICACION_ID, 0);
+                // Type 0 for redir means search globally if ext_globales, or current plant if not.
                 Employee redirEmployee = employeeLookupService.findEmployeeByExtensionOrAuthCode(
                                 cdrData.getLastRedirectDn(), null,
-                                commLocation.getId(), // Transfer redirection usually to local context
+                                commLocation.getId(), // Context for redir employee
                                 cdrData.getDateTimeOrigination())
                         .orElse(null);
+                // PHP: if (ExtensionEncontrada($arreglo_funredir)) { $arreglo_funredir['info_asigna'] = IMDEX_ASIGNA_TRANS; $info_cdr['funcionario_redir'] = $arreglo_funredir; }
+                // PHP also checks: $info['funcionario_redir']['comid'] == $COMUBICACION_ID
                 if (redirEmployee != null && Objects.equals(redirEmployee.getCommunicationLocationId(), commLocation.getId())) {
                     cdrData.setEmployeeId(redirEmployee.getId());
                     cdrData.setEmployee(redirEmployee);
@@ -139,7 +139,7 @@ public class CdrEnrichmentService {
 
             // 3. Calculate Tariffs (if not an error call or no consumption)
             // PHP: if ($tiempo <= 0 && $tipotele_id > 0 && $tipotele_id != _TIPOTELE_ERRORES) $tipotele_id = _TIPOTELE_SINCONSUMO;
-            if (cdrData.getDurationSeconds() <= appConfigService.getMinCallDurationForTariffing()) {
+            if (cdrData.getDurationSeconds() <= appConfigService.getMinCallDurationForTariffing()) { // PHP uses <= 0
                 if (cdrData.getTelephonyTypeId() != null &&
                     cdrData.getTelephonyTypeId() > 0 && // Must have a type
                     cdrData.getTelephonyTypeId() != TelephonyTypeEnum.ERRORS.getValue()) {
@@ -161,16 +161,18 @@ public class CdrEnrichmentService {
 
                 // Clean transfer if it's to self (PHP logic)
                 boolean transferToSelf = false;
-                if (cdrData.getCallDirection() == CallDirection.OUTGOING && Objects.equals(cdrData.getLastRedirectDn(), cdrData.getCallingPartyNumber())) {
+                // PHP: $ext_transfer === $extension (calling party) OR $ext_transfer === $tel_destino (final called party)
+                if (Objects.equals(cdrData.getLastRedirectDn(), cdrData.getCallingPartyNumber())) {
                     transferToSelf = true;
-                } else if (cdrData.getCallDirection() == CallDirection.INCOMING && Objects.equals(cdrData.getLastRedirectDn(), cdrData.getFinalCalledPartyNumber())) {
-                    transferToSelf = true;
-                } else if (Objects.equals(cdrData.getLastRedirectDn(), cdrData.getEffectiveDestinationNumber())) { // Transferred to the number it was already going to
+                } else if (Objects.equals(cdrData.getLastRedirectDn(), cdrData.getFinalCalledPartyNumber())) {
                     transferToSelf = true;
                 }
+                // Note: PHP's $tel_destino can be $info['dial_number'] or $info['ext'] depending on incoming/outgoing.
+                // Here, finalCalledPartyNumber is the callee for outgoing, and our extension (callee) for incoming.
+                // CallingPartyNumber is caller for outgoing, and external number for incoming.
 
                 if (transferToSelf && cdrData.getTransferCause() != TransferCause.CONFERENCE) {
-                    log.debug("Clearing transfer info as it's a transfer to self/current destination for non-conference.");
+                    log.debug("Clearing transfer info as it's a transfer to self/current party for non-conference.");
                     cdrData.setEmployeeTransferExtension(null);
                     cdrData.setTransferCause(TransferCause.NONE);
                 }

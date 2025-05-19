@@ -1,4 +1,3 @@
-// File: com/infomedia/abacox/telephonypricing/cdr/CdrFileProcessorService.java
 package com.infomedia.abacox.telephonypricing.cdr;
 import com.infomedia.abacox.telephonypricing.entity.CommunicationLocation;
 import com.infomedia.abacox.telephonypricing.entity.FileInfo;
@@ -47,11 +46,14 @@ public class CdrFileProcessorService {
             // Initial Validation (mimics ValidarCampos_CDR)
             // PHP: ValidarCampos_CDR($info_arr, $link);
             List<String> validationErrors = cdrValidationService.validateInitialCdrData(cdrData, commLocation.getIndicator().getOriginCountryId());
-            if (!validationErrors.isEmpty()) {
-                String errorMsg = String.join("; ", validationErrors);
-                log.warn("Initial CDR validation failed for line: {} - Errors: {}", cdrLine, errorMsg);
+            if (!validationErrors.isEmpty() || cdrData.isMarkedForQuarantine()) { // Check quarantine flag from validation
+                String errorMsg = cdrData.isMarkedForQuarantine() ? cdrData.getQuarantineReason() : String.join("; ", validationErrors);
+                String errorType = cdrData.isMarkedForQuarantine() ? cdrData.getQuarantineStep().contains("Warning") ? "INITIAL_VALIDATION_WARNING" : "INITIAL_VALIDATION_ERROR" : "INITIAL_VALIDATION_ERROR";
+                String step = cdrData.isMarkedForQuarantine() ? cdrData.getQuarantineStep() : "Validation";
+
+                log.warn("Initial CDR validation failed or warning for line: {} - Reason: {}", cdrLine, errorMsg);
                 failedCallRecordPersistenceService.saveFailedRecord(cdrLine, fileInfo, commLocation.getId(),
-                        "INITIAL_VALIDATION_ERROR", errorMsg, "Validation", cdrData.getCallingPartyNumber(), null);
+                        errorType, errorMsg, step, cdrData.getCallingPartyNumber(), null);
                 return;
             }
 
@@ -59,7 +61,8 @@ public class CdrFileProcessorService {
 
             if (cdrData.isMarkedForQuarantine()) {
                 failedCallRecordPersistenceService.saveFailedRecord(cdrLine, fileInfo, commLocation.getId(),
-                        cdrData.getQuarantineReason().startsWith("Marked for quarantine by parser:") ? "PARSER_QUARANTINE" : "ENRICHMENT_ERROR",
+                        cdrData.getQuarantineReason().startsWith("Marked for quarantine by parser:") ? "PARSER_QUARANTINE" :
+                        cdrData.getQuarantineStep().contains("Warning") ? "ENRICHMENT_WARNING" : "ENRICHMENT_ERROR",
                         cdrData.getQuarantineReason(), cdrData.getQuarantineStep(),
                         cdrData.getCallingPartyNumber(), null);
             } else {
@@ -80,7 +83,7 @@ public class CdrFileProcessorService {
                 .orElseThrow(() -> new IllegalArgumentException("CommunicationLocation not found: " + commLocationId));
 
         FileInfo fileInfo = fileInfoPersistenceService.createOrGetFileInfo(filename, commLocationId, "STREAM_INPUT", inputStream);
-        callTypeDeterminationService.resetExtensionLimitsCache(commLocation);
+        callTypeDeterminationService.resetExtensionLimitsCache(commLocation); // Initialize/reset cache for this processing run
 
         ICdrTypeProcessor processor = ciscoCm60Processor; // Could be a factory based on commLocation.getPlantTypeId()
         boolean headerProcessed = false;
@@ -93,7 +96,8 @@ public class CdrFileProcessorService {
                 lineCount++;
                 if (line.trim().isEmpty()) continue;
 
-                if (!headerProcessed && line.toLowerCase().contains(CiscoCm60CdrProcessor.CDR_RECORD_TYPE_HEADER)) {
+                // PHP: if (strtolower($primer_campo) == strtolower($_cm_config['llave']))
+                if (!headerProcessed && line.toLowerCase().startsWith(CiscoCm60CdrProcessor.CDR_RECORD_TYPE_HEADER.toLowerCase())) {
                     processor.parseHeader(line);
                     headerProcessed = true;
                     log.info("Processed header line from stream: {}", filename);
