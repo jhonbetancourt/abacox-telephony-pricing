@@ -1,35 +1,43 @@
+// File: com/infomedia/abacox/telephonypricing/cdr/TelephonyTypeEnum.java
 package com.infomedia.abacox.telephonypricing.cdr;
 
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
+
 public enum TelephonyTypeEnum {
-    UNKNOWN(0L), // Default or placeholder
-    CELUFIJO(1L),
-    CELLULAR(2L),
-    LOCAL(3L),
-    NATIONAL(4L),
-    INTERNATIONAL(5L),
-    VARIOUS_SERVICES(6L),
-    INTERNAL_IP(7L), // PHP: _TIPOTELE_INTERNAL_IP
-    LOCAL_IP(8L),    // PHP: _TIPOTELE_LOCAL_IP
-    NATIONAL_IP(9L), // PHP: _TIPOTELE_NACIONAL_IP
-    SATELLITE(10L),
-    SPECIAL_SERVICES(11L), // PHP: _TIPOTELE_ESPECIALES
-    LOCAL_EXTENDED(12L),
-    REVERTED_PAYMENT(13L),
-    INTERNAL_INTERNATIONAL_IP(14L), // Assuming this maps to PHP's _TIPOTELE_INTERNAL_IP when countries differ
+    UNKNOWN(0L, "Unknown"), // Default or placeholder
+    CELUFIJO(1L, "Celufijo"),
+    CELLULAR(2L, "Celular"),
+    LOCAL(3L, "Local"),
+    NATIONAL(4L, "Nacional"),
+    INTERNATIONAL(5L, "Internacional"),
+    VARIOUS_SERVICES(6L, "Servicios varios"),
+    INTERNAL_SIMPLE(7L, "Interna"), // Mapped from CSV ID 7 "Interna"
+    LOCAL_IP(8L, "Interna Local"),
+    NATIONAL_IP(9L, "Interna Nacional"),
+    SATELLITE(10L, "Satelital"),
+    SPECIAL_SERVICES(11L, "Números especiales"),
+    LOCAL_EXTENDED(12L, "Local extendida"),
+    REVERTED_PAYMENT(13L, "Pago revertido"),
+    INTERNAL_INTERNATIONAL_IP(14L, "Interna Internacional"),
     // ID 15 is missing in CSV
-    NO_CONSUMPTION(16L), // PHP: _TIPOTELE_SINCONSUMO (was 98, now 16 based on CSV)
-    ERRORS(97L), // PHP: _TIPOTELE_ERRORES
-    INTERNAL_SIMPLE(100L); // A general internal type if more specific IP types don't apply
+    NO_CONSUMPTION(16L, "Sin Consumo"),
+    ERRORS(97L, "Errores (No Válido)"); // PHP: _TIPOTELE_ERRORES
 
     private final long value;
+    private final String defaultName;
 
-    TelephonyTypeEnum(long value) {
+    TelephonyTypeEnum(long value, String defaultName) {
         this.value = value;
+        this.defaultName = defaultName;
     }
 
     public long getValue() {
         return value;
     }
+
+    public String getDefaultName() { return defaultName; }
 
     public static TelephonyTypeEnum fromId(Long id) {
         if (id == null) return UNKNOWN;
@@ -38,17 +46,23 @@ public enum TelephonyTypeEnum {
                 return type;
             }
         }
-        // Fallback for PHP's original _TIPOTELE_SINCONSUMO if data hasn't migrated
-        if (id == 98L) return NO_CONSUMPTION;
         return UNKNOWN;
     }
 
     public static boolean isInternalIpType(Long telephonyTypeId) {
         if (telephonyTypeId == null) return false;
-        return telephonyTypeId == INTERNAL_IP.getValue() ||
+        return telephonyTypeId == INTERNAL_SIMPLE.getValue() || // "Interna" from CSV
                telephonyTypeId == LOCAL_IP.getValue() ||
                telephonyTypeId == NATIONAL_IP.getValue() ||
-               telephonyTypeId == INTERNAL_INTERNATIONAL_IP.getValue() ||
-               telephonyTypeId == INTERNAL_SIMPLE.getValue();
+               telephonyTypeId == INTERNAL_INTERNATIONAL_IP.getValue();
+    }
+
+    public static List<Long> getInternalTypeIds() {
+        return Arrays.asList(
+                INTERNAL_SIMPLE.getValue(),
+                LOCAL_IP.getValue(),
+                NATIONAL_IP.getValue(),
+                INTERNAL_INTERNATIONAL_IP.getValue()
+        );
     }
 }
