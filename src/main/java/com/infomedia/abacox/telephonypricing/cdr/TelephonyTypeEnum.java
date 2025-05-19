@@ -1,10 +1,6 @@
 // File: com/infomedia/abacox/telephonypricing/cdr/TelephonyTypeEnum.java
 package com.infomedia.abacox.telephonypricing.cdr;
 
-import java.util.Arrays;
-import java.util.List;
-import java.util.stream.Collectors;
-
 public enum TelephonyTypeEnum {
     UNKNOWN(0L, "Unknown"), // Default or placeholder
     CELUFIJO(1L, "Celufijo"),
