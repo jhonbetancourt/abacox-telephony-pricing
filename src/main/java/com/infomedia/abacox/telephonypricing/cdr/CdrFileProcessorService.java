@@ -1,4 +1,6 @@
+// File: com/infomedia/abacox/telephonypricing/cdr/CdrFileProcessorService.java
 package com.infomedia.abacox.telephonypricing.cdr;
+
 import com.infomedia.abacox.telephonypricing.entity.CommunicationLocation;
 import com.infomedia.abacox.telephonypricing.entity.FileInfo;
 import lombok.RequiredArgsConstructor;
@@ -114,14 +116,13 @@ public class CdrFileProcessorService {
                 processSingleCdrLine(line, fileInfo, commLocation, processor);
                 processedCdrCount++;
 
-                if (processedCdrCount >= cdrConfigService.CDR_PROCESSING_BATCH_SIZE) {
-                    log.info("Processed a batch of {} CDRs from stream {}. Pausing if necessary or continuing.",
-                            cdrConfigService.CDR_PROCESSING_BATCH_SIZE, filename);
+                if (processedCdrCount % cdrConfigService.CDR_PROCESSING_BATCH_SIZE == 0) {
+                    log.info("Processed a batch of {} CDRs from stream {}. Total processed so far: {}",
+                            cdrConfigService.CDR_PROCESSING_BATCH_SIZE, filename, processedCdrCount);
                     // In a real scenario, you might yield here or check for stop signals
-                    processedCdrCount = 0; // Reset for next batch
                 }
             }
-            log.info("Finished processing stream: {}. Total lines read: {}", filename, lineCount);
+            log.info("Finished processing stream: {}. Total lines read: {}, Total CDRs processed: {}", filename, lineCount, processedCdrCount);
         } catch (IOException e) {
             log.error("Error reading CDR stream: {}", filename, e);
             failedCallRecordPersistenceService.saveFailedRecord("STREAM_READ_ERROR", fileInfo, commLocationId,

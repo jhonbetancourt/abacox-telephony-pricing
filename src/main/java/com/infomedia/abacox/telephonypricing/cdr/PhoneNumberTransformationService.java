@@ -1,6 +1,7 @@
+// File: com/infomedia/abacox/telephonypricing/cdr/PhoneNumberTransformationService.java
 package com.infomedia.abacox.telephonypricing.cdr;
 
-import com.infomedia.abacox.telephonypricing.entity.CommunicationLocation;
+import com.infomedia.abacox.telephonypricing.entity.CommunicationLocation; // Added for transformForPrefixLookup
 import com.infomedia.abacox.telephonypricing.entity.Indicator;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.NoResultException;
@@ -23,10 +24,12 @@ public class PhoneNumberTransformationService {
 
     @PersistenceContext
     private EntityManager entityManager;
-    private final IndicatorLookupService indicatorLookupService; // Already present
-    private final TelephonyTypeLookupService telephonyTypeLookupService; // Added for getTelephonyTypeName
+    private final IndicatorLookupService indicatorLookupService;
+    private final TelephonyTypeLookupService telephonyTypeLookupService;
 
-    // From PHP's _esEntrante_60 (CME specific, but kept for structural similarity)
+    /**
+     * PHP equivalent: _esEntrante_60
+     */
     public TransformationResult transformIncomingNumberCME(String phoneNumber, Long originCountryId) {
         if (phoneNumber == null) return new TransformationResult(null, false, null);
         String originalPhoneNumber = phoneNumber;
@@ -46,14 +49,14 @@ public class PhoneNumberTransformationService {
                     phoneNumber = phoneNumber.substring(len - 8);
                 }
             } else if (len == 11) {
-                if ("604".equals(p3)) {
+                if ("604".equals(p3)) { // Example for a specific fixed line prefix
                     phoneNumber = phoneNumber.substring(len - 8);
-                } else if ("03".equals(p2)) {
+                } else if ("03".equals(p2)) { // Example: 03xxxxxxxxx (cellular with leading 0)
                     String n3_digits = (len > 3) ? phoneNumber.substring(1, 4) : "";
                     try {
                         if (!n3_digits.isEmpty()) {
                             int n3val = Integer.parseInt(n3_digits);
-                            if (n3val >= 300 && n3val <= 350) {
+                            if (n3val >= 300 && n3val <= 350) { // Common cellular prefixes in CO
                                 phoneNumber = phoneNumber.substring(len - 10);
                                 newTelephonyTypeId = TelephonyTypeEnum.CELLULAR.getValue();
                             }
@@ -61,9 +64,9 @@ public class PhoneNumberTransformationService {
                     } catch (NumberFormatException | StringIndexOutOfBoundsException ignored) {}
                 }
             } else if (len == 10) {
-                if ("60".equals(p2) || "57".equals(p2)) { // National
-                    phoneNumber = phoneNumber.substring(len - 8);
-                } else if (phoneNumber.startsWith("3")) { // Cellular
+                if ("60".equals(p2) || "57".equals(p2)) { // National with new prefix
+                    phoneNumber = phoneNumber.substring(len - 8); // Assuming 2-digit prefix + 1-digit NDC + 7-digit number
+                } else if (phoneNumber.startsWith("3")) { // Cellular 3xxxxxxxxx
                     try {
                         int n3val = Integer.parseInt(phoneNumber.substring(0, 3));
                         if (n3val >= 300 && n3val <= 350) {
@@ -71,27 +74,29 @@ public class PhoneNumberTransformationService {
                         }
                     } catch (NumberFormatException | StringIndexOutOfBoundsException ignored) {}
                 }
-            } else if (len == 9) { // National with 9 digits
+            } else if (len == 9) { // National with 9 digits (e.g. 60XNNNNNN)
                 if ("60".equals(p2)) {
-                    phoneNumber = phoneNumber.substring(len - 7);
+                    phoneNumber = phoneNumber.substring(len - 7); // Assuming 2-digit prefix + 7-digit number
                 }
             }
         }
         return new TransformationResult(phoneNumber, !phoneNumber.equals(originalPhoneNumber), newTelephonyTypeId);
     }
 
-    // From PHP's _es_Saliente (CME specific)
+    /**
+     * PHP equivalent: _es_Saliente
+     */
     public TransformationResult transformOutgoingNumberCME(String phoneNumber, Long originCountryId) {
         if (phoneNumber == null) return new TransformationResult(null, false, null);
         String originalPhoneNumber = phoneNumber;
 
         if (originCountryId != null && originCountryId == 1L) { // Colombia
             int len = phoneNumber.length();
-            if (len == 11 && phoneNumber.startsWith("03")) {
+            if (len == 11 && phoneNumber.startsWith("03")) { // e.g. 0300xxxxxxx
                 try {
-                    int n3val = Integer.parseInt(phoneNumber.substring(1, 4));
+                    int n3val = Integer.parseInt(phoneNumber.substring(1, 4)); // Check 300 part
                     if (n3val >= 300 && n3val <= 350) {
-                        phoneNumber = phoneNumber.substring(len - 10);
+                        phoneNumber = phoneNumber.substring(len - 10); // Strip leading '0'
                     }
                 } catch (NumberFormatException | StringIndexOutOfBoundsException ignored) {}
             }
@@ -99,9 +104,11 @@ public class PhoneNumberTransformationService {
         return new TransformationResult(phoneNumber, !phoneNumber.equals(originalPhoneNumber), null);
     }
 
+    /**
+     * PHP equivalent: _esCelular_fijo
+     */
     @Transactional(readOnly = true)
     public TransformationResult transformForPrefixLookup(String phoneNumber, CommunicationLocation commLocation) {
-        // Implements PHP's _esCelular_fijo logic
         if (phoneNumber == null || commLocation == null || commLocation.getIndicator() == null ||
             commLocation.getIndicator().getOriginCountryId() == null) {
             return new TransformationResult(phoneNumber, false, null);
@@ -115,7 +122,7 @@ public class PhoneNumberTransformationService {
             int len = phoneNumber.length();
             if (len == 10) {
                 if (phoneNumber.startsWith("3")) { // Cellular: 3xxxxxxxxx
-                    transformedNumber = "03" + phoneNumber;
+                    transformedNumber = "03" + phoneNumber; // Add "03" for prefix matching logic
                     newTelephonyTypeId = TelephonyTypeEnum.CELLULAR.getValue();
                 } else if (phoneNumber.startsWith("60")) { // New fixed line format: 60Nxxxxxxx
                     String ndcPart = phoneNumber.substring(2, 3); // e.g., "1" for Bogota from "601"
@@ -123,7 +130,7 @@ public class PhoneNumberTransformationService {
 
                     String seriesLookupQuery = "SELECT i.department_country, i.city_name, s.company " +
                                                "FROM series s JOIN indicator i ON s.indicator_id = i.id " +
-                                               "WHERE i.telephony_type_id = :nationalType AND s.ndc = :ndcPartInt " + // Use integer for NDC
+                                               "WHERE i.telephony_type_id = :nationalType AND s.ndc = :ndcPartInt " +
                                                "  AND s.active = true AND i.active = true " +
                                                "  AND s.initial_number <= :subscriberNum AND s.final_number >= :subscriberNum " +
                                                "  AND i.origin_country_id = 1 " + // Colombia
@@ -150,9 +157,13 @@ public class PhoneNumberTransformationService {
                             transformedNumber = subscriberPart; // Treat as local
                             newTelephonyTypeId = TelephonyTypeEnum.LOCAL.getValue();
                         } else if (Objects.equals(dbDept, plantIndicator.getDepartmentCountry())) {
-                            transformedNumber = subscriberPart; // Treat as local extended for prefix matching purposes
-                            newTelephonyTypeId = TelephonyTypeEnum.LOCAL_EXTENDED.getValue();
+                            // PHP: if($fila['INDICATIVO_DPTO_PAIS'] == $g_dep){ $g_numero = $numero = substr($numero, 3); return $numero;}
+                            // This means it's treated as local for prefix matching if in same department
+                            transformedNumber = subscriberPart;
+                            newTelephonyTypeId = TelephonyTypeEnum.LOCAL_EXTENDED.getValue(); // Or LOCAL, depending on how prefix matching handles it
                         } else {
+                            // PHP: if($ind != ''){ $numero = substr($numero, 2); $g_numero = $numero = $ind.$numero; }
+                            // PHP: else { $numero = substr($numero, 2); $g_numero = $numero = '09'.$numero; }
                             String operatorPrefix = mapCompanyToOperatorPrefix(dbCompany);
                             if (!operatorPrefix.isEmpty()) {
                                 transformedNumber = operatorPrefix + phoneNumber.substring(2); // remove "60"
@@ -162,6 +173,7 @@ public class PhoneNumberTransformationService {
                             newTelephonyTypeId = TelephonyTypeEnum.NATIONAL.getValue();
                         }
                     } catch (NoResultException e) {
+                        // PHP: else { $numero = substr($numero, 2); $g_numero = $numero = '09'.$numero; }
                         transformedNumber = "09" + phoneNumber.substring(2); // Default to national with "09"
                         newTelephonyTypeId = TelephonyTypeEnum.NATIONAL.getValue();
                     }
@@ -171,14 +183,16 @@ public class PhoneNumberTransformationService {
         return new TransformationResult(transformedNumber, !transformedNumber.equals(originalPhoneNumber), newTelephonyTypeId);
     }
 
+    /**
+     * PHP equivalent: _esNacional
+     */
     private String mapCompanyToOperatorPrefix(String companyName) {
-        // Mimics PHP's _esNacional
         if (companyName == null) return "";
         String upperCompany = companyName.toUpperCase();
-        if (upperCompany.contains("TELMEX")) return "0456";
-        if (upperCompany.contains("COLOMBIA TELECOMUNICACIONES")) return "09";
-        if (upperCompany.contains("UNE EPM") || upperCompany.contains("UNE EPM TELCO")) return "05";
-        if (upperCompany.contains("EMPRESA DE TELECOMUNICACIONES DE BOGOTÁ") || upperCompany.contains("ETB")) return "07";
-        return "";
+        if (upperCompany.contains("TELMEX")) return "0456"; // CLARO HOGAR FIJO
+        if (upperCompany.contains("COLOMBIA TELECOMUNICACIONES S.A. ESP")) return "09"; // MOVISTAR FIJO
+        if (upperCompany.contains("UNE EPM TELECOMUNICACIONES S.A. E.S.P.") || upperCompany.contains("UNE EPM TELCO S.A.")) return "05"; // TIGO-UNE FIJO
+        if (upperCompany.contains("EMPRESA DE TELECOMUNICACIONES DE BOGOTÁ S.A. ESP.") || upperCompany.contains("ETB")) return "07"; // ETB FIJO
+        return ""; // Default if no specific mapping
     }
 }

@@ -36,16 +36,16 @@ public class CdrConfigService {
     @Transactional(readOnly = true)
     public int getMaxCallDurationSeconds() {
         // PHP: defineParamCliente('CAPTURAS_TIEMPOMAX', $link); (returns minutes)
-        int maxMinutes = 120; // Default 2 hours, PHP default was 2 days (2880 min)
-        // int maxMinutes = 2880; // PHP default
+        int maxMinutes = 2880; // PHP default (2 days)
         return maxMinutes * 60;
     }
 
-    public String getAssumedText() { return "(ASUMIDO)"; }
-    public String getOriginText() { return "(ORIGEN)"; }
-    public String getPrefixText() { return "(PREFIJO)"; }
+    public String getAssumedText() { return "(ASUMIDO)"; } // PHP: _ASUMIDO
+    public String getOriginText() { return "(ORIGEN)"; } // PHP: _ORIGEN
+    public String getPrefixText() { return "(PREFIJO)"; } // PHP: _PREFIJO
 
     public List<String> getIgnoredAuthCodeDescriptions() {
+        // PHP: $_FUN_IGNORAR_CLAVE
         return Arrays.asList("Invalid Authorization Code", "Invalid Authorization Level");
     }
 
@@ -64,6 +64,7 @@ public class CdrConfigService {
     @Transactional(readOnly = true)
     public boolean createEmployeesAutomaticallyFromRange() {
         // PHP: ObtenerGlobales($link, 'auto_fun');
+        // Corresponds to PHP's defineParamCliente('CAPTURAS_CREARFUN', $link)
         return true; // Defaulting to true
     }
 
@@ -90,7 +91,7 @@ public class CdrConfigService {
     @Transactional(readOnly = true)
     public boolean areExtensionsGlobal(Long plantTypeId) {
         // PHP: ObtenerGlobales($link, 'ext_globales')
-        // This would typically query a central configuration table.
+        // This would typically query a central configuration table for the given plant type or client.
         // For now, returning false as per PHP's default if not explicitly set.
         return false;
     }

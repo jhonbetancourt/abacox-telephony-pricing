@@ -8,6 +8,10 @@ import java.util.stream.Collectors;
 
 public class CdrParserUtil {
 
+    /**
+     * PHP equivalent: explode($cm_config['cdr_separador'], $linea);
+     * and csv_limpiar_campos()
+     */
     public static List<String> parseCsvLine(String line, String separator) {
         // PHP's explode behavior:
         return Arrays.stream(line.split(Pattern.quote(separator)))
@@ -15,6 +19,10 @@ public class CdrParserUtil {
                 .collect(Collectors.toList());
     }
 
+    /**
+     * PHP equivalent: csv_limpiar_campos($cab); // Elimina comillas
+     * and str_replace(chr(0),'',$string);
+     */
     public static String cleanCsvField(String field) {
         if (field == null) return "";
         String cleaned = field.trim();
@@ -71,46 +79,50 @@ public class CdrParserUtil {
                 numberAfterPrefixStrip = currentNumber.substring(longestMatchingPrefix.length());
             } else {
                 // No PBX prefix matched
-                if (!stripOnlyIfPrefixMatchesAndFound) { // PHP: $maxCaracterAExtraer == 0 (means prefix defined but not found)
+                // PHP: elseif ($maxCaracterAExtraer == 0) { $nuevo = ''; }
+                if (!stripOnlyIfPrefixMatchesAndFound) {
                     return ""; // Must have prefix, but none found
                 }
                 // If stripOnlyIfPrefixMatchesAndFound (PHP: $modo_seguro) is true, and no prefix matched,
                 // it continues with the original number (numberAfterPrefixStrip is still currentNumber).
             }
         }
-        // If pbxPrefixes is null/empty, or if stripOnlyIfPrefixMatchesAndFound is true and no prefix matched,
-        // numberAfterPrefixStrip is effectively currentNumber.
-
-        // PHP: $primercar = substr($nuevo, 0, 1); $parcial = substr($nuevo, 1);
-        // PHP: if ($parcial != '' && !is_numeric($parcial)) ...
-        // PHP: $parcial2 = preg_replace('/[^0-9]/','?', $parcial);
-        // PHP: $p = strpos($parcial2, '?'); if ($p > 0) { $parcial = substr($parcial2, 0, $p); }
-        // PHP: if ($primercar == '+') { $primercar = ''; }
-        // PHP: $nuevo = $primercar.$parcial;
 
         if (numberAfterPrefixStrip.isEmpty()) {
-            return ""; // If stripping prefix resulted in empty, return empty.
+            return "";
         }
 
         StringBuilder result = new StringBuilder();
         boolean firstCharProcessed = false;
+        String numToClean = numberAfterPrefixStrip;
 
-        for (int i = 0; i < numberAfterPrefixStrip.length(); i++) {
-            char c = numberAfterPrefixStrip.charAt(i);
-            if (!firstCharProcessed) {
-                firstCharProcessed = true;
-                if (c == '+') {
-                    continue; // Skip leading '+'
-                }
+        // PHP: $primercar = substr($nuevo, 0, 1);
+        // PHP: if ($primercar == '+') { $primercar = ''; }
+        if (numToClean.startsWith("+")) {
+            numToClean = numToClean.substring(1);
+        }
+
+        // PHP: $parcial = substr($nuevo, 1);
+        // PHP: if ($parcial != '' && !is_numeric($parcial))
+        // PHP: $parcial2 = preg_replace('/[^0-9]/','?', $parcial);
+        // PHP: $p = strpos($parcial2, '?');
+        // PHP: if ($p > 0) { $parcial = substr($parcial2, 0, $p); }
+        // This logic means: take the first char (if not '+'). Then, for the rest, take all chars until a non-digit is found.
+        // The PHP logic is a bit convoluted here. It replaces non-digits with '?', then finds the first '?'
+        // and takes the substring up to that point. This effectively means it takes all leading digits after the first char.
+
+        if (numToClean.isEmpty()) return "";
+
+        result.append(numToClean.charAt(0)); // Append the (potentially new) first character
+
+        for (int i = 1; i < numToClean.length(); i++) {
+            char c = numToClean.charAt(i);
+            if (Character.isDigit(c)) { // PHP's is_numeric on $parcial implies it expects digits
                 result.append(c);
             } else {
-                // For subsequent characters, stop at the first non-digit (excluding allowed symbols if any)
-                // PHP logic stops at first non-digit in the "parcial" part.
-                if (Character.isDigit(c) || c == '#' || c == '*') { // Allow digits, #, *
-                    result.append(c);
-                } else {
-                    break; // Stop at the first invalid character after the first char
-                }
+                // PHP's logic with preg_replace and strpos effectively stops at the first non-digit
+                // in the "parcial" part.
+                break;
             }
         }
         return result.toString();

@@ -1,3 +1,4 @@
+// File: com/infomedia/abacox/telephonypricing/cdr/CallRecordPersistenceService.java
 package com.infomedia.abacox.telephonypricing.cdr;
 
 import com.infomedia.abacox.telephonypricing.entity.CallRecord;
@@ -18,6 +19,9 @@ public class CallRecordPersistenceService {
     @PersistenceContext
     private EntityManager entityManager;
 
+    /**
+     * PHP equivalent: acumtotal_Insertar (the INSERT part)
+     */
     @Transactional
     public CallRecord saveOrUpdateCallRecord(CdrData cdrData, CommunicationLocation commLocation) {
         if (cdrData.isMarkedForQuarantine()) {
@@ -26,27 +30,30 @@ public class CallRecordPersistenceService {
             return null;
         }
 
-        // Generate a unique hash for the CDR to prevent duplicates
-        // PHP uses a combination of fields. A hash of the raw line is simpler.
-        // Or, more robustly, hash key fields after parsing.
-        // For Cisco: dateTimeOrigination, callingPartyNumber, finalCalledPartyNumber, duration
+        // PHP: $_CAMPOS_UNICOS = 'ACUMTOTAL_FECHA_SERVICIO,ACUMTOTAL_FUN_EXTENSION,ACUMTOTAL_TELEFONO_DESTINO,ACUMTOTAL_TIEMPO,ACUMTOTAL_TRONCAL,ACUMTOTAL_COMUBICACION_ID';
         String cdrKeyFields = String.join("|",
                 String.valueOf(cdrData.getDateTimeOriginationEpochSeconds()),
-                Objects.toString(cdrData.getCallingPartyNumber(), ""),
-                Objects.toString(cdrData.getFinalCalledPartyNumber(), ""),
-                String.valueOf(cdrData.getDurationSeconds()),
-                Objects.toString(cdrData.getOrigDeviceName(), ""), // Troncal
-                String.valueOf(commLocation.getId())
+                Objects.toString(cdrData.getCallingPartyNumber(), ""), // ACUMTOTAL_FUN_EXTENSION
+                Objects.toString(cdrData.getFinalCalledPartyNumber(), ""), // ACUMTOTAL_TELEFONO_DESTINO
+                String.valueOf(cdrData.getDurationSeconds()), // ACUMTOTAL_TIEMPO
+                Objects.toString(cdrData.getDestDeviceName(), ""), // ACUMTOTAL_TRONCAL (destDeviceName)
+                String.valueOf(commLocation.getId()) // ACUMTOTAL_COMUBICACION_ID
         );
         String cdrHash = HashUtil.sha256(cdrKeyFields);
 
 
-        // Check for duplicates based on the hash
+        // PHP: $did = buscarDuplicado($link, $acumcampos);
         CallRecord existingRecord = findByCdrHash(cdrHash);
         if (existingRecord != null) {
-            log.warn("Duplicate CDR detected based on hash {}, raw line: {}. Original ID: {}", cdrHash, cdrData.getRawCdrLine(), existingRecord.getId());
+            log.warn("Duplicate CDR detected based on hash {}, raw line: {}. Original ID: {}. PHP type: REGDUPLICADO",
+                    cdrHash, cdrData.getRawCdrLine(), existingRecord.getId());
             // PHP logic for REGDUPLICADO. For now, we just log and don't insert.
             // If updates were allowed, this is where you'd merge/update.
+            // PHP's ReportarErrores would be called with REGDUPLICADO.
+            // We can simulate this by marking for quarantine here if strict adherence is needed.
+            // cdrData.setMarkedForQuarantine(true);
+            // cdrData.setQuarantineReason("Duplicate record (BDD: " + existingRecord.getId() + ")");
+            // cdrData.setQuarantineStep("DuplicateCheck_REGDUPLICADO");
             return existingRecord;
         }
 
@@ -71,13 +78,16 @@ public class CallRecordPersistenceService {
 
 
     private void mapCdrDataToCallRecord(CdrData cdrData, CallRecord callRecord, CommunicationLocation commLocation, String cdrHash) {
+        // PHP: $acumcampos["ACUMTOTAL_DIAL"] = $tel_dial; (effective destination)
         callRecord.setDial(cdrData.getEffectiveDestinationNumber() != null ? cdrData.getEffectiveDestinationNumber().substring(0, Math.min(cdrData.getEffectiveDestinationNumber().length(), 50)) : "");
         callRecord.setCommLocationId(commLocation.getId());
         callRecord.setServiceDate(cdrData.getDateTimeOrigination());
         callRecord.setOperatorId(cdrData.getOperatorId());
+        // PHP: $acumcampos["ACUMTOTAL_FUN_EXTENSION"] = $extension; (calling party after potential swaps)
         callRecord.setEmployeeExtension(cdrData.getCallingPartyNumber() != null ? cdrData.getCallingPartyNumber().substring(0, Math.min(cdrData.getCallingPartyNumber().length(), 50)) : "");
         callRecord.setEmployeeAuthCode(cdrData.getAuthCodeDescription() != null ? cdrData.getAuthCodeDescription().substring(0, Math.min(cdrData.getAuthCodeDescription().length(), 50)) : "");
         callRecord.setIndicatorId(cdrData.getIndicatorId());
+        // PHP: $acumcampos["ACUMTOTAL_TELEFONO_DESTINO"] = $tel_destino; (final called party after potential swaps)
         callRecord.setDestinationPhone(cdrData.getFinalCalledPartyNumber() != null ? cdrData.getFinalCalledPartyNumber().substring(0, Math.min(cdrData.getFinalCalledPartyNumber().length(), 50)) : "");
         callRecord.setDuration(cdrData.getDurationSeconds());
         callRecord.setRingCount(cdrData.getRingingTimeSeconds());
@@ -97,6 +107,5 @@ public class CallRecordPersistenceService {
             callRecord.setFileInfoId(cdrData.getFileInfo().getId().longValue());
         }
         callRecord.setCdrHash(cdrHash);
-        // Audited fields (createdBy, createdDate etc.) will be set by Spring Data JPA Auditing
     }
 }
