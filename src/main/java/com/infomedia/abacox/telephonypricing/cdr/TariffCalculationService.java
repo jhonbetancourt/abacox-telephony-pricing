@@ -22,9 +22,9 @@ public class TariffCalculationService {
     private final TelephonyTypeLookupService telephonyTypeLookupService;
 
     public void calculateTariffs(CdrData cdrData, CommunicationLocation commLocation) {
-        if (cdrData.getDurationSeconds() <= appConfigService.getMinCallDurationForTariffing() &&
+        if (cdrData.getDurationSeconds() < appConfigService.getMinCallDurationForTariffing() && // PHP uses <= for $tiempo <= 0
             cdrData.getTelephonyTypeId() != null &&
-            cdrData.getTelephonyTypeId() > 0 &&
+            cdrData.getTelephonyTypeId() > 0 && // Must have a type
             cdrData.getTelephonyTypeId() != TelephonyTypeEnum.ERRORS.getValue() &&
             cdrData.getTelephonyTypeId() != TelephonyTypeEnum.SPECIAL_SERVICES.getValue()) {
             cdrData.setBilledAmount(BigDecimal.ZERO);
@@ -43,6 +43,19 @@ public class TariffCalculationService {
                 return;
             }
         }
+        
+        // Handle internal call tariffs (PHP: TarifasInternas)
+        if (cdrData.isInternalCall() && TelephonyTypeEnum.isInternalIpType(cdrData.getTelephonyTypeId())) {
+            TariffValue internalTariff = telephonyTypeLookupService.getInternalTariffValue(
+                cdrData.getTelephonyTypeId(), commLocation.getIndicator().getOriginCountryId()
+            );
+            cdrData.setPricePerMinute(internalTariff.getRateValue());
+            cdrData.setPriceIncludesVat(internalTariff.isIncludesVat());
+            cdrData.setVatRate(internalTariff.getVatRate());
+            cdrData.setBilledAmount(calculateFinalBilledAmount(cdrData));
+            return;
+        }
+
 
         Optional<TrunkInfo> trunkInfoOpt = Optional.empty();
         if (cdrData.getDestDeviceName() != null && !cdrData.getDestDeviceName().isEmpty()) {
@@ -52,20 +65,26 @@ public class TariffCalculationService {
         String numberForTariffing = cdrData.getEffectiveDestinationNumber();
         List<String> pbxPrefixes = commLocation.getPbxPrefix() != null ? Arrays.asList(commLocation.getPbxPrefix().split(",")) : Collections.emptyList();
         
-        // PHP's evaluarDestino: $info_destino_limpio = limpiar_numero($info_destino, $prefijo_salida_pbx, true);
-        // if ($existe_troncal === false) { $telefono = $info_destino_limpio; }
-        // This means if it's NOT a trunk call, the number is cleaned of PBX prefixes.
-        // If it IS a trunk call, the raw (or PBX-rule-transformed) number is used for prefix lookup,
-        // UNLESS the trunk itself has NOPREFIJOPBX, then it's cleaned.
         if (trunkInfoOpt.isEmpty()) {
             numberForTariffing = CdrParserUtil.cleanPhoneNumber(cdrData.getEffectiveDestinationNumber(), pbxPrefixes, true);
-        } else { // It is a trunk call
-            if (trunkInfoOpt.get().noPbxPrefix != null && trunkInfoOpt.get().noPbxPrefix) {
-                numberForTariffing = CdrParserUtil.cleanPhoneNumber(cdrData.getEffectiveDestinationNumber(), pbxPrefixes, true);
-            } else {
-                // Use number as is (already effectiveDestinationNumber) for prefix lookup if trunk and not NoPbxPrefix
-                numberForTariffing = cdrData.getEffectiveDestinationNumber();
+        } else {
+            TrunkInfo ti = trunkInfoOpt.get();
+            boolean cleanDueToTrunkNoPbx = ti.noPbxPrefix != null && ti.noPbxPrefix;
+            
+            // Check specific rate details for NoPbxPrefix
+            if (cdrData.getTelephonyTypeId() != null && cdrData.getOperatorId() != null) {
+                 Optional<TrunkRateDetails> rateDetails = trunkLookupService.getRateDetailsForTrunk(
+                    ti.id, cdrData.getTelephonyTypeId(), cdrData.getOperatorId()
+                );
+                if (rateDetails.isPresent() && rateDetails.get().noPbxPrefix != null) {
+                    cleanDueToTrunkNoPbx = rateDetails.get().noPbxPrefix;
+                }
             }
+
+            if (cleanDueToTrunkNoPbx) {
+                 numberForTariffing = CdrParserUtil.cleanPhoneNumber(cdrData.getEffectiveDestinationNumber(), pbxPrefixes, true);
+            }
+            // else numberForTariffing remains cdrData.getEffectiveDestinationNumber()
         }
         
         List<Long> trunkTelephonyTypeIds = null;
@@ -85,7 +104,7 @@ public class TariffCalculationService {
         String finalNumberUsedForDestLookup = numberForTariffing;
 
         for (PrefixInfo prefixInfo : prefixes) {
-            String numberWithoutPrefix = numberForTariffing; // This is after _esCelular_fijo in prefixLookup
+            String numberWithoutPrefix = numberForTariffing;
             boolean stripPrefixForDestLookup = true; // Default
 
             if (trunkInfoOpt.isPresent()) {
@@ -113,21 +132,25 @@ public class TariffCalculationService {
             );
 
             if (destInfoOpt.isPresent()) {
-                if (bestDestInfo == null || !bestDestInfo.isApproximateMatch() || (destInfoOpt.get().isApproximateMatch() == bestDestInfo.isApproximateMatch() && destInfoOpt.get().getNdc().length() > bestDestInfo.getNdc().length())) {
-                     if (!destInfoOpt.get().isApproximateMatch()) { // Exact match found
+                 if (bestDestInfo == null || // No best match yet
+                    (!bestDestInfo.isApproximateMatch() && destInfoOpt.get().isApproximateMatch()) || // Current best is exact, new is approx (keep current)
+                    (destInfoOpt.get().isApproximateMatch() == bestDestInfo.isApproximateMatch() && // Both same approx status
+                        destInfoOpt.get().getNdc() != null && bestDestInfo.getNdc() != null &&
+                        destInfoOpt.get().getNdc().length() > bestDestInfo.getNdc().length()) || // New NDC is longer
+                    (!destInfoOpt.get().isApproximateMatch() && bestDestInfo.isApproximateMatch()) // New is exact, current was approx
+                ) {
+                     if (!destInfoOpt.get().isApproximateMatch()) {
                         bestDestInfo = destInfoOpt.get();
                         bestPrefixInfo = prefixInfo;
                         break; 
-                     } else if (bestDestInfo == null || bestDestInfo.isApproximateMatch()) { // Current best is null or also approx
+                     } else if (bestDestInfo == null || bestDestInfo.isApproximateMatch()) {
                         bestDestInfo = destInfoOpt.get();
                         bestPrefixInfo = prefixInfo;
-                        // Don't break on approximate, keep looking for exact
                      }
                 }
             }
         }
         
-        // PHP Normalization: if ($existe_troncal !== false && evaluarDestino_novalido($infovalor))
         boolean initialResultIsInvalidOrAssumed = bestDestInfo == null ||
                                                   bestPrefixInfo == null ||
                                                   bestPrefixInfo.telephonyTypeId == null ||
@@ -138,9 +161,6 @@ public class TariffCalculationService {
 
         if (trunkInfoOpt.isPresent() && initialResultIsInvalidOrAssumed) {
             log.debug("Trunk call destination not definitively found or was assumed. Attempting normalization for: {}", cdrData.getEffectiveDestinationNumber());
-            // PHP: $prefijo_salida_pbx = ''; if ($existe_troncal['noprefijopbx']) { $prefijo_salida_pbx = ''; }
-            // For normalization, PHP effectively re-processes as non-trunk, so PBX prefixes are stripped if not NoPbxPrefix.
-            // However, the example shows it calls evaluarDestino_pos(false, ...), which means it will use the default PBX prefix handling for non-trunk.
             String normalizedNumberForLookup = CdrParserUtil.cleanPhoneNumber(cdrData.getEffectiveDestinationNumber(), pbxPrefixes, true);
             
             List<PrefixInfo> normalizedPrefixes = prefixLookupService.findMatchingPrefixes(
@@ -163,7 +183,7 @@ public class TariffCalculationService {
                     commLocation.getIndicatorId(), normPrefixInfo.prefixId,
                     commLocation.getIndicator().getOriginCountryId(), normPrefixInfo.bandsAssociatedCount > 0
                 );
-                if (normDestInfoOpt.isPresent() && !normDestInfoOpt.get().isApproximateMatch()) { // Prefer exact normalized match
+                if (normDestInfoOpt.isPresent() && !normDestInfoOpt.get().isApproximateMatch()) {
                     normalizedBestDestInfo = normDestInfoOpt.get();
                     normalizedBestPrefixInfo = normPrefixInfo;
                     break;
@@ -172,10 +192,11 @@ public class TariffCalculationService {
 
             if (normalizedBestDestInfo != null && normalizedBestPrefixInfo != null) {
                 boolean useNormalized = true;
-                if (bestDestInfo != null && bestPrefixInfo != null) {
+                if (bestDestInfo != null && bestPrefixInfo != null) { // If there was an initial (even if assumed) match
+                    // PHP: if (($infovalor['tipotele'] != $infovalor_pos['tipotele'] || $infovalor['indicativo'] != $infovalor_pos['indicativo']) ... )
                     if (Objects.equals(bestPrefixInfo.telephonyTypeId, normalizedBestPrefixInfo.telephonyTypeId) &&
                         Objects.equals(bestDestInfo.getIndicatorId(), normalizedBestDestInfo.getIndicatorId())) {
-                        useNormalized = false;
+                        useNormalized = false; // Don't switch if type and indicator are the same
                     }
                 }
                 if (useNormalized && normalizedBestPrefixInfo.telephonyTypeId > 0 && normalizedBestPrefixInfo.telephonyTypeId != TelephonyTypeEnum.ERRORS.getValue()) {
@@ -184,6 +205,7 @@ public class TariffCalculationService {
                     bestPrefixInfo = normalizedBestPrefixInfo;
                     finalNumberUsedForDestLookup = finalNormalizedNumberUsedForDestLookup;
                     trunkInfoOpt = Optional.empty(); // Treat as non-trunk for tariff application
+                    cdrData.getAdditionalData().put("normalizedTariffApplied", true);
                 }
             }
         }
@@ -196,22 +218,19 @@ public class TariffCalculationService {
             cdrData.setOperatorName(bestPrefixInfo.operatorName);
             cdrData.setIndicatorId(bestDestInfo.getIndicatorId());
             cdrData.setDestinationCityName(bestDestInfo.getDestinationDescription());
-            cdrData.setEffectiveDestinationNumber(bestDestInfo.getMatchedPhoneNumber()); // Number as matched by series
+            cdrData.setEffectiveDestinationNumber(bestDestInfo.getMatchedPhoneNumber());
 
-            // PHP: Valida local extendido
             if (cdrData.getTelephonyTypeId() == TelephonyTypeEnum.LOCAL.getValue() &&
                 indicatorLookupService.isLocalExtended(bestDestInfo.getNdc(), commLocation.getIndicatorId(), bestDestInfo.getIndicatorId())) {
                 cdrData.setTelephonyTypeId(TelephonyTypeEnum.LOCAL_EXTENDED.getValue());
                 cdrData.setTelephonyTypeName(telephonyTypeLookupService.getTelephonyTypeName(TelephonyTypeEnum.LOCAL_EXTENDED.getValue()));
-                // PHP: AsignarLocalExtendida also updates operator and prefix if local_ext has specific ones
                 PrefixInfo localExtPrefixInfo = telephonyTypeLookupService.getPrefixInfoForLocalExtended(commLocation.getIndicator().getOriginCountryId());
                 if (localExtPrefixInfo != null) {
                     cdrData.setOperatorId(localExtPrefixInfo.getOperatorId());
                     cdrData.setOperatorName(localExtPrefixInfo.getOperatorName());
-                    bestPrefixInfo.prefixId = localExtPrefixInfo.getPrefixId(); // Update prefixId for tariff lookup
+                    bestPrefixInfo.prefixId = localExtPrefixInfo.getPrefixId();
                 }
             }
-
 
             TariffValue baseTariff = telephonyTypeLookupService.getBaseTariffValue(
                 bestPrefixInfo.prefixId,
@@ -224,7 +243,7 @@ public class TariffCalculationService {
             cdrData.setPriceIncludesVat(baseTariff.isIncludesVat());
             cdrData.setVatRate(baseTariff.getVatRate());
 
-            if (trunkInfoOpt.isPresent()) {
+            if (trunkInfoOpt.isPresent() && !Boolean.TRUE.equals(cdrData.getAdditionalData().get("normalizedTariffApplied"))) {
                 TrunkInfo ti = trunkInfoOpt.get();
                 Optional<TrunkRateDetails> rateDetailsOpt = trunkLookupService.getRateDetailsForTrunk(
                     ti.id, cdrData.getTelephonyTypeId(), cdrData.getOperatorId()
@@ -253,15 +272,15 @@ public class TariffCalculationService {
                     commLocation.getIndicatorId(),
                     cdrData.getTelephonyTypeId(),
                     cdrData.getOperatorId(),
-                    bestDestInfo.getBandId() // Pass bandId from DestinationInfo if available
+                    bestDestInfo.getBandId()
             );
             
             if (specialRateOpt.isPresent()) {
                 SpecialRateInfo sr = specialRateOpt.get();
-                if (sr.valueType == 0) { // Absolute value
+                if (sr.valueType == 0) { 
                     cdrData.setPricePerMinute(sr.rateValue);
                     cdrData.setPriceIncludesVat(sr.includesVat);
-                } else { // Percentage adjustment
+                } else { 
                     BigDecimal currentRateNoVat = cdrData.isPriceIncludesVat() && cdrData.getVatRate() != null && cdrData.getVatRate().compareTo(BigDecimal.ZERO) > 0 ?
                         cdrData.getPricePerMinute().divide(BigDecimal.ONE.add(cdrData.getVatRate().divide(BigDecimal.valueOf(100), 8, RoundingMode.HALF_UP)), 8, RoundingMode.HALF_UP) :
                         cdrData.getPricePerMinute();
@@ -322,7 +341,7 @@ public class TariffCalculationService {
             ratePerUnit = cdrData.getPricePerMinute().divide(BigDecimal.valueOf(60), 8, RoundingMode.HALF_UP);
         } else {
             billableDurationUnits = (long) Math.ceil((double) cdrData.getDurationSeconds() / 60.0);
-            if (billableDurationUnits == 0 && cdrData.getDurationSeconds() > 0) billableDurationUnits = 1;
+            if (billableDurationUnits == 0 && cdrData.getDurationSeconds() > 0) billableDurationUnits = 1; // Min 1 minute if any duration
             ratePerUnit = cdrData.getPricePerMinute();
         }
         
@@ -335,6 +354,6 @@ public class TariffCalculationService {
             totalCost = totalCost.multiply(vatMultiplier);
         }
         
-        return totalCost.setScale(4, RoundingMode.HALF_UP);
+        return totalCost.setScale(4, RoundingMode.HALF_UP); // PHP uses 4 decimal places for VALOR_FACTURADO
     }
 }

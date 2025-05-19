@@ -1,6 +1,7 @@
 package com.infomedia.abacox.telephonypricing.cdr;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Arrays;
 import java.util.List;
@@ -8,46 +9,44 @@ import java.util.List;
 @Service
 public class CdrConfigService {
 
-    // Constants from PHP global scope or defines
     public static final int ACUMTOTAL_MAX_EXTENSION_LENGTH_FOR_INTERNAL_CHECK = 1000000; // _ACUMTOTAL_MAXEXT
-    public static final int CDR_PROCESSING_BATCH_SIZE = 500; // _IMDEX_MAXLINEAS (for web, can be different for batch)
-    public static final String DEFAULT_PBX_EXIT_PREFIX = "9"; // Example, should be configurable per commLocation
+    public static final int CDR_PROCESSING_BATCH_SIZE = 500; // _IMDEX_MAXLINEAS
+    public static final String NN_VALIDA_PARTITION = "NN-VALIDA";
 
-    // For NN_VALIDA, used when partition is blank but number is extension-like
-    public static final String NN_VALIDA_PARTITION = "NN-VALIDA"; // From PHP define
+    public static final long DEFAULT_OPERATOR_ID_FOR_INTERNAL = 0L; // Example, if not found via specific logic
 
     public String getDefaultIgnoredAuthCodeDescription1() {
         return "Invalid Authorization Code";
     }
-
     public String getDefaultIgnoredAuthCodeDescription2() {
         return "Invalid Authorization Level";
     }
 
-    public int getMinCallDurationForTariffing() {
-        // CAPTURAS_TIEMPOCERO in PHP
-        return 0; // seconds
-    }
+    public int getMinCallDurationForTariffing() { return 0; } // CAPTURAS_TIEMPOCERO
+    public int getMaxCallDurationSeconds() { return 172800; } // CAPTURAS_TIEMPOMAX (2 days)
 
-    public int getMaxCallDurationSeconds() {
-        // CAPTURAS_TIEMPOMAX in PHP (default 172800 seconds = 2 days)
-        return 172800;
-    }
+    public String getAssumedText() { return "(ASUMIDO)"; } // _ASUMIDO
+    public String getOriginText() { return "(ORIGEN)"; } // _ORIGEN
+    public String getPrefixText() { return "(PREFIJO)"; } // _PREFIJO
 
-    public String getAssumedText() {
-        return "(ASUMIDO)"; // _ASUMIDO
-    }
-
-    public String getOriginText() {
-        return "(ORIGEN)"; // _ORIGEN
-    }
-
-    public String getPrefixText() {
-        return "(PREFIJO)"; // _PREFIJO
-    }
-
-    // From PHP's $_FUN_IGNORAR_CLAVE
     public List<String> getIgnoredAuthCodeDescriptions() {
         return Arrays.asList("Invalid Authorization Code", "Invalid Authorization Level");
     }
+
+    public String getMinAllowedCaptureDate() { return "2000-01-01"; } // CAPTURAS_FECHAMIN
+    public int getMaxAllowedCaptureDateDaysInFuture() { return 90; } // CAPTURAS_FECHAMAX (days)
+
+    public boolean createEmployeesAutomaticallyFromRange() { return true; } // CAPTURAS_CREARFUN (example)
+
+    public String getDefaultInternalCallTypeName() { return "Internal (Default)"; } // CAPTURAS_INTERNADEF (name for it)
+    public Long getDefaultInternalCallTypeId() { return TelephonyTypeEnum.INTERNAL_SIMPLE.getValue(); } // CAPTURAS_INTERNADEF (ID)
+
+
+    public boolean areExtensionsGlobal(Long plantTypeId) {
+        // This is a placeholder. PHP's ObtenerGlobales checks a 'parametros' table.
+        // You'd need to implement a similar lookup.
+        // Example: return parameterLookupService.getBooleanParameter("EXT_GLOBALES", plantTypeId, false);
+        return false; // Defaulting to false (not global)
+    }
+
 }
