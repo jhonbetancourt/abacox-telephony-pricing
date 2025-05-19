@@ -2,6 +2,7 @@
 package com.infomedia.abacox.telephonypricing.cdr;
 
 import com.infomedia.abacox.telephonypricing.entity.CommunicationLocation;
+import com.infomedia.abacox.telephonypricing.entity.Operator;
 import com.infomedia.abacox.telephonypricing.entity.Prefix;
 import com.infomedia.abacox.telephonypricing.entity.TelephonyTypeConfig;
 import jakarta.persistence.EntityManager;
@@ -174,5 +175,24 @@ public class PrefixLookupService {
         }
         log.debug("Loaded {} internal telephony type prefixes for country {}: {}", internalPrefixMap.size(), originCountryId, internalPrefixMap);
         return internalPrefixMap;
+    }
+
+
+    /**
+     * Helper to fetch operator name by ID.
+     * This could be moved to an OperatorLookupService.
+     */
+    @Transactional(readOnly = true)
+    public String findOperatorNameById(Long operatorId) {
+        if (operatorId == null || operatorId == 0L) {
+            return "Unknown Operator";
+        }
+        try {
+            Operator operator = entityManager.find(Operator.class, operatorId);
+            return operator != null ? operator.getName() : "OperatorID:" + operatorId;
+        } catch (Exception e) {
+            log.warn("Could not find operator name for ID: {}", operatorId, e);
+            return "OperatorID:" + operatorId;
+        }
     }
 }
