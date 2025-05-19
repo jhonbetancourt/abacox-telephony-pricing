@@ -8,9 +8,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Objects;
+import java.time.ZoneOffset;
 
 @Data
 @NoArgsConstructor
@@ -35,6 +33,7 @@ public class CdrData {
     private String originalCalledPartyNumberPartition;
     private String lastRedirectDn; // ext-redir
     private String lastRedirectDnPartition; // partredir
+    private String originalLastRedirectDn;
     private String destMobileDeviceName; // partmovil
     private String finalMobileCalledPartyNumber; // ext-movil
 
@@ -91,28 +90,23 @@ public class CdrData {
     private FileInfo fileInfo;
     private Long commLocationId;
 
-    private Map<String, Object> additionalData = new HashMap<>();
-
     private boolean markedForQuarantine = false;
     private String quarantineReason;
     private String quarantineStep;
 
+    //Aditional Processing Data
+    private SpecialServiceInfo specialServiceTariff;
+    private boolean normalizedTariffApplied = false;
+    private BigDecimal specialRateDiscountPercentage;
+    private String internalCheckPbxTransformedDest;
+    private String originalCallerIdBeforePbxIncoming;
+    private String originalCallerIdBeforeCMETransform;
+    private Long hintedTelephonyTypeIdFromTransform;
+    private String originalDialNumberBeforeCMETransform;
+    private String originalDialNumberBeforePbxOutgoing;
+
+
     public long getDateTimeOriginationEpochSeconds() {
-        return dateTimeOrigination != null ? dateTimeOrigination.toEpochSecond(java.time.ZoneOffset.UTC) : 0;
-    }
-
-    public void storeOriginalValue(String key, Object value) {
-        if (!additionalData.containsKey("original_" + key)) { // Store only the first time
-            additionalData.put("original_" + key, value);
-        }
-    }
-
-    public Object getOriginalValue(String key) {
-        return additionalData.get("original_" + key);
-    }
-
-    // Helper to ensure effectiveDestinationNumber is initialized
-    public String getEffectiveDestinationNumber() {
-        return Objects.requireNonNullElse(effectiveDestinationNumber, finalCalledPartyNumber);
+        return dateTimeOrigination != null ? dateTimeOrigination.toEpochSecond(ZoneOffset.UTC) : 0;
     }
 }

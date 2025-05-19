@@ -44,7 +44,7 @@ public class TariffCalculationService {
         }
         
         if (cdrData.getTelephonyTypeId() != null && cdrData.getTelephonyTypeId() == TelephonyTypeEnum.SPECIAL_SERVICES.getValue()) {
-            SpecialServiceInfo ssi = (SpecialServiceInfo) cdrData.getAdditionalData().get("specialServiceTariff");
+            SpecialServiceInfo ssi = cdrData.getSpecialServiceTariff();
             if (ssi != null) {
                 cdrData.setPricePerMinute(ssi.value);
                 cdrData.setPriceIncludesVat(ssi.vatIncluded);
@@ -233,7 +233,7 @@ public class TariffCalculationService {
                     bestPrefixInfo = normalizedBestPrefixInfo;
                     finalNumberUsedForDestLookup = finalNormalizedNumberUsedForDestLookup;
                     trunkInfoOpt = Optional.empty(); // Treat as non-trunk for tariff application
-                    cdrData.getAdditionalData().put("normalizedTariffApplied", true);
+                    cdrData.setNormalizedTariffApplied(true);
                 }
             }
         }
@@ -271,7 +271,7 @@ public class TariffCalculationService {
             cdrData.setPriceIncludesVat(baseTariff.isIncludesVat());
             cdrData.setVatRate(baseTariff.getVatRate());
 
-            if (trunkInfoOpt.isPresent() && !Boolean.TRUE.equals(cdrData.getAdditionalData().get("normalizedTariffApplied"))) {
+            if (trunkInfoOpt.isPresent() && !cdrData.isNormalizedTariffApplied()) {
                 TrunkInfo ti = trunkInfoOpt.get();
                 Optional<TrunkRateDetails> rateDetailsOpt = trunkLookupService.getRateDetailsForTrunk(
                     ti.id, cdrData.getTelephonyTypeId(), cdrData.getOperatorId()
@@ -327,7 +327,7 @@ public class TariffCalculationService {
                     BigDecimal discountFactor = BigDecimal.ONE.subtract(discountPercentage.divide(BigDecimal.valueOf(100), 8, RoundingMode.HALF_UP));
                     cdrData.setPricePerMinute(currentRateNoVat.multiply(discountFactor));
                     cdrData.setPriceIncludesVat(false);
-                    cdrData.getAdditionalData().put("specialRateDiscountPercentage", discountPercentage);
+                    cdrData.setSpecialRateDiscountPercentage(discountPercentage);
                 }
                 cdrData.setVatRate(sr.vatRate);
                 cdrData.setTelephonyTypeName(cdrData.getTelephonyTypeName() + " (Special Rate)");

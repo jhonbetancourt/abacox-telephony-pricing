@@ -243,7 +243,7 @@ public class CiscoCm60CdrProcessor implements ICdrTypeProcessor {
                    cdrData.getOriginalCalledPartyNumber() != null && !cdrData.getOriginalCalledPartyNumber().isEmpty()) {
             // PHP: if (!$esconf_redir)
             if (!isConferenceByLastRedirectDn) {
-                cdrData.storeOriginalValue("lastRedirectDn", cdrData.getLastRedirectDn()); // Store before overwriting
+                cdrData.setOriginalLastRedirectDn(cdrData.getLastRedirectDn()); // Store before overwriting
                 cdrData.setLastRedirectDn(cdrData.getOriginalCalledPartyNumber());
                 cdrData.setLastRedirectDnPartition(cdrData.getOriginalCalledPartyNumberPartition());
             }
@@ -269,7 +269,7 @@ public class CiscoCm60CdrProcessor implements ICdrTypeProcessor {
                 cdrData.setLastRedirectDnPartition(tempDialPartition);
 
                 if (confTransferCause == TransferCause.CONFERENCE_NOW) {
-                    String extRedirCc = (String) cdrData.getOriginalValue("lastRedirectDn");
+                    String extRedirCc = cdrData.getOriginalLastRedirectDn();
                     if (extRedirCc != null && extRedirCc.toLowerCase().startsWith("c")) {
                         cdrData.setLastRedirectDn(extRedirCc);
                     } else if (cdrData.getDestConversationId() != null && cdrData.getDestConversationId() > 0) {

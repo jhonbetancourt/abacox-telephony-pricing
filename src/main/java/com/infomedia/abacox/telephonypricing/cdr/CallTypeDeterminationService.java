@@ -71,7 +71,7 @@ public class CallTypeDeterminationService {
                 );
                 if (pbxInternalTransformed.isPresent()) {
                     destinationForInternalCheck = pbxInternalTransformed.get();
-                    cdrData.getAdditionalData().put("internalCheckPbxTransformedDest", destinationForInternalCheck);
+                    cdrData.setInternalCheckPbxTransformedDest(destinationForInternalCheck);
                 }
 
                 // PHP: $esinterna = ($len_destino == 1 || ExtensionPosible($destino));
@@ -125,7 +125,7 @@ public class CallTypeDeterminationService {
                 externalCallerId, commLocation.getDirectory(), 1 // 1 for incoming
         );
         if (pbxTransformedCaller.isPresent()) {
-            cdrData.getAdditionalData().put("originalCallerIdBeforePbxIncoming", externalCallerId);
+            cdrData.setOriginalCallerIdBeforePbxIncoming(externalCallerId);
             externalCallerId = pbxTransformedCaller.get();
             cdrData.setPbxSpecialRuleAppliedInfo("PBX Incoming Rule: " + cdrData.getCallingPartyNumber() + " -> " + externalCallerId);
         }
@@ -135,13 +135,13 @@ public class CallTypeDeterminationService {
                 externalCallerId, commLocation.getIndicator().getOriginCountryId()
         );
         if (transformedIncoming.isTransformed()) {
-            cdrData.getAdditionalData().put("originalCallerIdBeforeCMETransform", externalCallerId);
+            cdrData.setOriginalCallerIdBeforeCMETransform(externalCallerId);
             externalCallerId = transformedIncoming.getTransformedNumber();
             if (transformedIncoming.getNewTelephonyTypeId() != null) {
                 // This is a bit tricky. PHP's _esEntrante_60 sets $g_tipotele which is then used by buscarOrigen.
                 // For now, we'll let buscarOrigen determine the type, but if _esEntrante_60 definitively sets a type,
                 // it should override. Let's assume for now it's a hint for buscarOrigen.
-                cdrData.getAdditionalData().put("hintedTelephonyTypeIdFromTransform", transformedIncoming.getNewTelephonyTypeId());
+                cdrData.setHintedTelephonyTypeIdFromTransform(transformedIncoming.getNewTelephonyTypeId());
             }
         }
 
@@ -177,7 +177,7 @@ public class CallTypeDeterminationService {
                 cdrData.getFinalCalledPartyNumber(), commLocation.getIndicator().getOriginCountryId()
         );
         if (transformedOutgoing.isTransformed()) {
-            cdrData.getAdditionalData().put("originalDialNumberBeforeCMETransform", cdrData.getFinalCalledPartyNumber());
+            cdrData.setOriginalDialNumberBeforeCMETransform(cdrData.getFinalCalledPartyNumber());
             cdrData.setFinalCalledPartyNumber(transformedOutgoing.getTransformedNumber());
         }
         // PHP: $info['destino'] = $tel_dial; (effectiveDestinationNumber is finalCalledPartyNumber initially)
@@ -206,7 +206,7 @@ public class CallTypeDeterminationService {
                     cdrData.setOperatorName(specialServiceInfo.get().operatorName);
                     cdrData.setIndicatorId(commLocation.getIndicatorId()); // For special services, indicator is usually local plant's
                     cdrData.setEffectiveDestinationNumber(numToCheckSpecial); // PHP: $info['destino'] = $telefono_orig;
-                    cdrData.getAdditionalData().put("specialServiceTariff", specialServiceInfo.get()); // Store for tariff calc
+                    cdrData.setSpecialServiceTariff(specialServiceInfo.get()); // Store for tariff calc
                     log.debug("Call to special service: {}", numToCheckSpecial);
                     return; // Tariffing for special services is handled differently
                 }
@@ -227,7 +227,7 @@ public class CallTypeDeterminationService {
             // PHP: if ($telefono_eval !== '' && $telefono_eval !== $info_cdr['dial_number'])
             if (pbxTransformedDest.isPresent() && !Objects.equals(pbxTransformedDest.get(), cdrData.getEffectiveDestinationNumber())) {
                 String originalDest = cdrData.getEffectiveDestinationNumber();
-                cdrData.getAdditionalData().put("originalDialNumberBeforePbxOutgoing", originalDest);
+                cdrData.setOriginalDialNumberBeforePbxOutgoing(originalDest);
                 cdrData.setFinalCalledPartyNumber(pbxTransformedDest.get());
                 cdrData.setEffectiveDestinationNumber(pbxTransformedDest.get());
                 cdrData.setPbxSpecialRuleAppliedInfo("PBX Outgoing Rule: " + originalDest + " -> " + pbxTransformedDest.get());
