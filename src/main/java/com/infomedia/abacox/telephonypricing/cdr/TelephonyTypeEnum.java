@@ -48,21 +48,4 @@ public enum TelephonyTypeEnum {
         }
         return UNKNOWN;
     }
-
-    public static boolean isInternalIpType(Long telephonyTypeId) {
-        if (telephonyTypeId == null) return false;
-        return telephonyTypeId == INTERNAL_SIMPLE.getValue() || // "Interna" from CSV
-               telephonyTypeId == LOCAL_IP.getValue() ||
-               telephonyTypeId == NATIONAL_IP.getValue() ||
-               telephonyTypeId == INTERNAL_INTERNATIONAL_IP.getValue();
-    }
-
-    public static List<Long> getInternalTypeIds() {
-        return Arrays.asList(
-                INTERNAL_SIMPLE.getValue(),
-                LOCAL_IP.getValue(),
-                NATIONAL_IP.getValue(),
-                INTERNAL_INTERNATIONAL_IP.getValue()
-        );
-    }
 }

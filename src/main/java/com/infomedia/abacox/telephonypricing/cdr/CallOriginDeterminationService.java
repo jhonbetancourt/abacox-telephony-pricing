@@ -39,7 +39,7 @@ public class CallOriginDeterminationService {
         PrefixInfo bestMatchedPrefixInfo = null; // Store the prefix that led to the best match
 
         for (PrefixInfo prefixInfo : allPrefixes) {
-            if (TelephonyTypeEnum.isInternalIpType(prefixInfo.getTelephonyTypeId()) ||
+            if (telephonyTypeLookupService.isInternalIpType(prefixInfo.getTelephonyTypeId()) ||
                     prefixInfo.getTelephonyTypeId() == TelephonyTypeEnum.SPECIAL_SERVICES.getValue() ||
                     prefixInfo.getTelephonyTypeId() == TelephonyTypeEnum.CELUFIJO.getValue()) {
                 continue;

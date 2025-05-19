@@ -45,7 +45,7 @@ public class TariffCalculationService {
         }
         
         // Handle internal call tariffs (PHP: TarifasInternas)
-        if (cdrData.isInternalCall() && TelephonyTypeEnum.isInternalIpType(cdrData.getTelephonyTypeId())) {
+        if (cdrData.isInternalCall() && telephonyTypeLookupService.isInternalIpType(cdrData.getTelephonyTypeId())) {
             TariffValue internalTariff = telephonyTypeLookupService.getInternalTariffValue(
                 cdrData.getTelephonyTypeId(), commLocation.getIndicator().getOriginCountryId()
             );

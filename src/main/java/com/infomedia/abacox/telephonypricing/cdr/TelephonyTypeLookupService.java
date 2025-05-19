@@ -205,4 +205,22 @@ public class TelephonyTypeLookupService {
             return new TariffValue(BigDecimal.ZERO, false, BigDecimal.ZERO);
         }
     }
+
+
+    public boolean isInternalIpType(Long telephonyTypeId) {
+        if (telephonyTypeId == null) return false;
+        return telephonyTypeId == TelephonyTypeEnum.INTERNAL_SIMPLE.getValue() || // "Interna" from CSV
+                telephonyTypeId == TelephonyTypeEnum.LOCAL_IP.getValue() ||
+                telephonyTypeId == TelephonyTypeEnum.NATIONAL_IP.getValue() ||
+                telephonyTypeId == TelephonyTypeEnum.INTERNAL_INTERNATIONAL_IP.getValue();
+    }
+
+    public List<Long> getInternalTypeIds() {
+        return Arrays.asList(
+                TelephonyTypeEnum.INTERNAL_SIMPLE.getValue(),
+                TelephonyTypeEnum.LOCAL_IP.getValue(),
+                TelephonyTypeEnum.NATIONAL_IP.getValue(),
+                TelephonyTypeEnum.INTERNAL_INTERNATIONAL_IP.getValue()
+        );
+    }
 }
