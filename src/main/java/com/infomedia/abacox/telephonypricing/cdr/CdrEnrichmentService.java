@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.util.Objects;
+import java.util.Optional;
 
 @Service
 @Log4j2
@@ -19,11 +20,10 @@ public class CdrEnrichmentService {
     private final EmployeeLookupService employeeLookupService;
     private final TariffCalculationService tariffCalculationService;
     private final CdrConfigService appConfigService;
-    private final TelephonyTypeLookupService telephonyTypeLookupService;
+    private final PhoneNumberTransformationService phoneNumberTransformationService;
+    private final PbxSpecialRuleLookupService pbxSpecialRuleLookupService;
+    private final TelephonyTypeLookupService telephonyTypeLookupService; // Keep for default names if needed
 
-    /**
-     * PHP equivalent: Parts of CargarCDR (after evaluar_Formato and before acumtotal_Insertar)
-     */
     public CdrData enrichCdr(CdrData cdrData, CommunicationLocation commLocation) {
         if (cdrData == null || cdrData.isMarkedForQuarantine()) {
             log.warn("CDR is null or already marked for quarantine. Skipping enrichment. CDR: {}", cdrData != null ? cdrData.getRawCdrLine() : "NULL");
@@ -33,6 +33,7 @@ public class CdrEnrichmentService {
         cdrData.setCommLocationId(commLocation.getId());
 
         try {
+            // Initial determination of direction and internal status (might be refined)
             callTypeDeterminationService.determineCallTypeAndDirection(cdrData, commLocation);
             log.debug("After call type determination: Direction={}, Internal={}, TelephonyType={}",
                     cdrData.getCallDirection(), cdrData.isInternalCall(), cdrData.getTelephonyTypeId());
@@ -41,25 +42,26 @@ public class CdrEnrichmentService {
             String searchAuthCodeForEmployee;
 
             if (cdrData.getCallDirection() == CallDirection.INCOMING) {
-                searchExtForEmployee = cdrData.getFinalCalledPartyNumber();
-                searchAuthCodeForEmployee = null;
-                log.debug("Incoming call. Searching employee by extension: {}", searchExtForEmployee);
-            } else {
+                // After parser swap, callingPartyNumber is our extension
+                searchExtForEmployee = cdrData.getCallingPartyNumber();
+                searchAuthCodeForEmployee = null; // Auth codes typically not used for the receiving leg of an incoming call
+                log.debug("Incoming call. Searching employee by (our) extension: {}", searchExtForEmployee);
+            } else { // OUTGOING or internal treated as outgoing initially
                 searchExtForEmployee = cdrData.getCallingPartyNumber();
                 searchAuthCodeForEmployee = cdrData.getAuthCodeDescription();
-                log.debug("Outgoing call. Searching employee by extension: {}, authCode: {}", searchExtForEmployee, searchAuthCodeForEmployee);
+                log.debug("Outgoing/Internal call. Searching employee by extension: {}, authCode: {}", searchExtForEmployee, searchAuthCodeForEmployee);
             }
 
             Employee foundEmployee = employeeLookupService.findEmployeeByExtensionOrAuthCode(
                             searchExtForEmployee,
                             searchAuthCodeForEmployee,
-                            commLocation.getId(),
+                            commLocation.getId(), // Context for non-global search
                             cdrData.getDateTimeOrigination())
                     .orElse(null);
 
             if (foundEmployee != null) {
                 cdrData.setEmployeeId(foundEmployee.getId());
-                cdrData.setEmployee(foundEmployee);
+                cdrData.setEmployee(foundEmployee); // For convenience
                 log.info("Found employee: ID={}, Ext={}", foundEmployee.getId(), foundEmployee.getExtension());
 
                 boolean authCodeProvided = searchAuthCodeForEmployee != null && !searchAuthCodeForEmployee.isEmpty();
@@ -73,15 +75,14 @@ public class CdrEnrichmentService {
                     cdrData.setAssignmentCause(AssignmentCause.AUTH_CODE);
                 } else if (authCodeProvided && !isIgnoredAuthCodeType) {
                     cdrData.setAssignmentCause(AssignmentCause.IGNORED_AUTH_CODE);
-                } else { // No auth code provided, or it was an ignored type, or it didn't match
+                } else {
                     cdrData.setAssignmentCause(AssignmentCause.EXTENSION);
                 }
-                // PHP: if ($funid <= 0 && $tiempo > 0) { $funid = ActualizarFuncionarios(...); }
-                // PHP: if ($info_asigna == IMDEX_ASIGNA_EXT && ExtensionEncontrada($arreglo_fun)) { $info_asigna = IMDEX_ASIGNA_RANGOS; }
-                if (foundEmployee.getId() == null && cdrData.getDurationSeconds() > 0 && appConfigService.createEmployeesAutomaticallyFromRange()) {
-                    // This means the employee was conceptually created from a range
+
+                if (foundEmployee.getId() == null && // Conceptual employee from range
+                    cdrData.getDurationSeconds() != null && cdrData.getDurationSeconds() > 0 &&
+                    appConfigService.createEmployeesAutomaticallyFromRange()) {
                     cdrData.setAssignmentCause(AssignmentCause.RANGES);
-                    log.debug("Employee is conceptual (from range). Assignment cause: RANGES");
                 }
                 log.debug("Employee assignment cause: {}", cdrData.getAssignmentCause());
 
@@ -90,10 +91,11 @@ public class CdrEnrichmentService {
                  log.warn("Employee not found for Ext: {}, AuthCode: {}", searchExtForEmployee, searchAuthCodeForEmployee);
             }
 
+            // For internal calls, try to find the destination employee
             if (cdrData.isInternalCall() && cdrData.getEffectiveDestinationNumber() != null) {
                  employeeLookupService.findEmployeeByExtensionOrAuthCode(
-                                 cdrData.getEffectiveDestinationNumber(), null,
-                                 null,
+                                 cdrData.getEffectiveDestinationNumber(), null, // No auth code for destination lookup
+                                 null, // Global search for destination extension
                                  cdrData.getDateTimeOrigination())
                     .ifPresent(destEmployee -> {
                         cdrData.setDestinationEmployeeId(destEmployee.getId());
@@ -103,11 +105,12 @@ public class CdrEnrichmentService {
             }
 
             // PHP: if (!ExtensionEncontrada($arreglo_fun) && !$es_interna && isset($info['funcionario_redir']) && $info['funcionario_redir']['comid'] == $COMUBICACION_ID)
+            // Handle assignment by transfer if primary employee not found and it's not an internal call
             if (cdrData.getEmployeeId() == null && !cdrData.isInternalCall() &&
                 cdrData.getLastRedirectDn() != null && !cdrData.getLastRedirectDn().isEmpty()) {
                 Employee redirEmployee = employeeLookupService.findEmployeeByExtensionOrAuthCode(
                                 cdrData.getLastRedirectDn(), null,
-                                commLocation.getId(), // Must be in current commLocation
+                                commLocation.getId(), // Transferring employee must be in the same commLocation
                                 cdrData.getDateTimeOrigination())
                         .orElse(null);
                 if (redirEmployee != null &&
@@ -120,7 +123,14 @@ public class CdrEnrichmentService {
                 }
             }
 
-            if (cdrData.getDurationSeconds() <= appConfigService.getMinCallDurationForTariffing()) {
+            // Process specific logic based on final direction
+            if (cdrData.getCallDirection() == CallDirection.INCOMING) {
+                processIncomingLogic(cdrData, commLocation, callTypeDeterminationService.getExtensionLimits(commLocation));
+            }
+            // For outgoing, effectiveDestinationNumber is already set by determineCallTypeAndDirection or parser.
+
+            // Tariffing and final checks
+            if (cdrData.getDurationSeconds() != null && cdrData.getDurationSeconds() <= appConfigService.getMinCallDurationForTariffing()) {
                 if (cdrData.getTelephonyTypeId() != null &&
                     cdrData.getTelephonyTypeId() > 0 &&
                     cdrData.getTelephonyTypeId() != TelephonyTypeEnum.ERRORS.getValue()) {
@@ -128,6 +138,8 @@ public class CdrEnrichmentService {
                     cdrData.setTelephonyTypeId(TelephonyTypeEnum.NO_CONSUMPTION.getValue());
                     cdrData.setTelephonyTypeName(telephonyTypeLookupService.getTelephonyTypeName(TelephonyTypeEnum.NO_CONSUMPTION.getValue()));
                     cdrData.setBilledAmount(BigDecimal.ZERO);
+                    cdrData.setPricePerMinute(BigDecimal.ZERO);
+                    cdrData.setInitialPricePerMinute(BigDecimal.ZERO);
                 }
             } else if (cdrData.getTelephonyTypeId() != null &&
                        cdrData.getTelephonyTypeId() != TelephonyTypeEnum.ERRORS.getValue() &&
@@ -137,26 +149,32 @@ public class CdrEnrichmentService {
             } else {
                 log.debug("Skipping tariff calculation. Duration: {}, Type: {}", cdrData.getDurationSeconds(), cdrData.getTelephonyTypeId());
                  if (cdrData.getBilledAmount() == null) cdrData.setBilledAmount(BigDecimal.ZERO);
+                 if (cdrData.getPricePerMinute() == null) cdrData.setPricePerMinute(BigDecimal.ZERO);
+                 if (cdrData.getInitialPricePerMinute() == null) cdrData.setInitialPricePerMinute(BigDecimal.ZERO);
             }
 
-            // PHP: if ($ext_transfer !== '' && ($ext_transfer === $extension || $ext_transfer === $tel_destino) && $info_transfer != IMDEX_TRANSFER_CONFERENCIA)
+            // Final transfer info cleanup (PHP: if ($ext_transfer !== '' && ($ext_transfer === $extension || $ext_transfer === $tel_destino)...)
             if (cdrData.getTransferCause() != TransferCause.NONE &&
                 cdrData.getLastRedirectDn() != null && !cdrData.getLastRedirectDn().isEmpty()) {
                 cdrData.setEmployeeTransferExtension(cdrData.getLastRedirectDn());
                 boolean transferToSelfOrOtherParty = false;
                 String currentPartyExtension = (cdrData.getCallDirection() == CallDirection.INCOMING) ?
-                                             cdrData.getFinalCalledPartyNumber() : // Our extension
-                                             cdrData.getCallingPartyNumber();    // Their extension
+                                             cdrData.getCallingPartyNumber() : // Our extension
+                                             cdrData.getFinalCalledPartyNumber();    // Destination for outgoing
+
                 String otherPartyExtension = (cdrData.getCallDirection() == CallDirection.INCOMING) ?
-                                           cdrData.getCallingPartyNumber() :    // Their extension
-                                           cdrData.getFinalCalledPartyNumber(); // Our extension
+                                           cdrData.getFinalCalledPartyNumber() :    // External for incoming
+                                           cdrData.getCallingPartyNumber(); // Our extension for outgoing
 
                 if (Objects.equals(cdrData.getLastRedirectDn(), currentPartyExtension) ||
                     Objects.equals(cdrData.getLastRedirectDn(), otherPartyExtension)) {
                     transferToSelfOrOtherParty = true;
                 }
 
-                if (transferToSelfOrOtherParty && cdrData.getTransferCause() != TransferCause.CONFERENCE && cdrData.getTransferCause() != TransferCause.CONFERENCE_NOW && cdrData.getTransferCause() != TransferCause.PRE_CONFERENCE_NOW) {
+                if (transferToSelfOrOtherParty &&
+                    cdrData.getTransferCause() != TransferCause.CONFERENCE &&
+                    cdrData.getTransferCause() != TransferCause.CONFERENCE_NOW &&
+                    cdrData.getTransferCause() != TransferCause.PRE_CONFERENCE_NOW) {
                     log.debug("Clearing transfer info as it's a transfer to self/current party for non-conference. Original transfer ext: {}", cdrData.getLastRedirectDn());
                     cdrData.setEmployeeTransferExtension(null);
                     cdrData.setTransferCause(TransferCause.NONE);
@@ -171,7 +189,56 @@ public class CdrEnrichmentService {
             cdrData.setQuarantineReason("Enrichment failed: " + e.getMessage());
             cdrData.setQuarantineStep("enrichCdr_UnhandledException");
         }
-        log.info("Finished enrichment for CDR: {}. Billed Amount: {}, Type: {}", cdrData.getRawCdrLine(), cdrData.getBilledAmount(), cdrData.getTelephonyTypeName());
+        log.info("Finished enrichment for CDR: {}. Billed Amount: {}, Type: {}, Operator: {}",
+                 cdrData.getRawCdrLine(), cdrData.getBilledAmount(), cdrData.getTelephonyTypeName(), cdrData.getOperatorId());
         return cdrData;
+    }
+
+    private void processIncomingLogic(CdrData cdrData, CommunicationLocation commLocation, ExtensionLimits limits) {
+        log.debug("Processing INCOMING logic for CDR: {}", cdrData.getRawCdrLine());
+
+        // If it's an internal call that was identified as incoming, it should have been flipped by determineCallTypeAndDirection.
+        // If it's still INCOMING and INTERNAL here, it's a special case that needs careful handling,
+        // potentially re-running call type determination or specific internal processing.
+        // For now, assume if it's INCOMING, it's an external call to one of our extensions.
+        if (cdrData.isInternalCall()) {
+            log.warn("processIncomingLogic called for a CdrData still marked as internal. This might indicate a flow issue. Proceeding as external incoming for now.");
+            // It might be better to call processInternalCallLogic here if this state is valid.
+            // However, the main determineCallTypeAndDirection should ideally resolve this.
+        }
+
+        String externalNumber = cdrData.getFinalCalledPartyNumber(); // This is the actual external number after parser swap
+        cdrData.setEffectiveDestinationNumber(externalNumber); // Initialize effective number for tariffing
+        log.debug("Incoming call. External Number (finalCalledParty): {}, Our Extension (callingParty): {}", externalNumber, cdrData.getCallingPartyNumber());
+
+        Optional<String> pbxTransformedExternal = pbxSpecialRuleLookupService.applyPbxSpecialRule(
+                externalNumber, commLocation.getDirectory(), 1 // 1 for incoming
+        );
+        if (pbxTransformedExternal.isPresent()) {
+            log.debug("External Number '{}' transformed by PBX incoming rule to '{}'", externalNumber, pbxTransformedExternal.get());
+            cdrData.setOriginalDialNumberBeforePbxIncoming(externalNumber);
+            externalNumber = pbxTransformedExternal.get();
+            cdrData.setPbxSpecialRuleAppliedInfo("PBX Incoming Rule: " + cdrData.getFinalCalledPartyNumber() + " -> " + externalNumber);
+        }
+
+        TransformationResult cmeTransformedExternal = phoneNumberTransformationService.transformIncomingNumberCME(
+                externalNumber, commLocation.getIndicator().getOriginCountryId()
+        );
+        if (cmeTransformedExternal.isTransformed()) {
+            log.debug("External Number '{}' transformed by CME rule to '{}'", externalNumber, cmeTransformedExternal.getTransformedNumber());
+            cdrData.setOriginalDialNumberBeforeCMETransform(externalNumber);
+            externalNumber = cmeTransformedExternal.getTransformedNumber();
+            if (cmeTransformedExternal.getNewTelephonyTypeId() != null) {
+                cdrData.setHintedTelephonyTypeIdFromTransform(cmeTransformedExternal.getNewTelephonyTypeId());
+            }
+        }
+
+        // Update the finalCalledPartyNumber (external number) and effectiveDestinationNumber with the (potentially) transformed external number
+        cdrData.setFinalCalledPartyNumber(externalNumber);
+        cdrData.setEffectiveDestinationNumber(externalNumber); // This will be used by TariffCalculationService
+
+        // The main TelephonyType, OperatorId, IndicatorId for the CallRecord
+        // will be set by TariffCalculationService based on this (external) number.
+        log.debug("Finished processing INCOMING logic (transformations only). External number for tariffing: {}", cdrData.getEffectiveDestinationNumber());
     }
 }

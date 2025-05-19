@@ -104,6 +104,7 @@ public class CdrData {
     private Long hintedTelephonyTypeIdFromTransform;
     private String originalDialNumberBeforeCMETransform;
     private String originalDialNumberBeforePbxOutgoing;
+    private String originalDialNumberBeforePbxIncoming;
 
 
     public long getDateTimeOriginationEpochSeconds() {
