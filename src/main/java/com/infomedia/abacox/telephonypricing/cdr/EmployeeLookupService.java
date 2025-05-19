@@ -24,7 +24,7 @@ public class EmployeeLookupService {
 
     @PersistenceContext
     private EntityManager entityManager;
-    private final CdrConfigService cdrConfigService; // For global extension config
+    private final CdrConfigService cdrConfigService;
 
     /**
      * PHP equivalent: ObtenerFuncionario_Arreglo (core logic part)
@@ -32,28 +32,27 @@ public class EmployeeLookupService {
      */
     @Transactional(readOnly = true)
     public Optional<Employee> findEmployeeByExtensionOrAuthCode(String extension, String authCode,
-                                                                Long commLocationIdContext, // The comm_location_id of the current plant/CDR source
+                                                                Long commLocationIdContext,
                                                                 LocalDateTime callTime) {
         StringBuilder queryStr = new StringBuilder("SELECT e.* FROM employee e ");
         queryStr.append(" LEFT JOIN communication_location cl ON e.communication_location_id = cl.id ");
         queryStr.append(" WHERE e.active = true ");
 
         boolean hasAuthCode = authCode != null && !authCode.isEmpty();
-        boolean hasExtension = extension != null && !extension.isEmpty();
+        String cleanedExtension = (extension != null) ? CdrParserUtil.cleanPhoneNumber(extension, null, false) : null;
+        boolean hasExtension = cleanedExtension != null && !cleanedExtension.isEmpty();
+
         boolean isAuthCodeIgnoredType = hasAuthCode && cdrConfigService.getIgnoredAuthCodeDescriptions().stream()
                 .anyMatch(ignored -> ignored.equalsIgnoreCase(authCode));
 
         if (hasAuthCode && !isAuthCodeIgnoredType) {
             queryStr.append(" AND e.auth_code = :authCode ");
-        } else if (hasExtension) { // If auth code is ignored type, or no auth code, search by extension
+        } else if (hasExtension) {
             queryStr.append(" AND e.extension = :extension ");
         } else {
-            return Optional.empty(); // No valid search criteria
+            return Optional.empty();
         }
 
-        // PHP: $tipo_fun (0=any, 2=local only)
-        // $ext_globales = ObtenerGlobales($link, 'ext_globales');
-        // if ($ext_globales) { $tipo_fun = 0; }
         boolean searchGlobally = cdrConfigService.areExtensionsGlobal(
             commLocationIdContext != null ? getPlantTypeIdForCommLocation(commLocationIdContext) : null
         );
@@ -61,17 +60,9 @@ public class EmployeeLookupService {
         if (!searchGlobally && commLocationIdContext != null) {
             queryStr.append(" AND e.communication_location_id = :commLocationIdContext ");
         }
-        // If searchGlobally, no specific comm_location_id filter is applied here for the employee,
-        // but we still ensure their linked comm_location (if any) is active.
         queryStr.append(" AND (cl.id IS NULL OR cl.active = true) ");
 
 
-        // PHP: ORDER BY FUNCIONARIO_HISTODESDE DESC (implicitly handled by historical data structure in PHP)
-        // For JPA, if historical versions were separate rows, you'd filter by callTime against validFrom/validTo.
-        // Since we omit historical lookups for now, we just take the latest created.
-        // PHP's FunIDValido also prefers match in commid_destino if provided, then current commid.
-        // Here, if !searchGlobally, it's already filtered by commLocationIdContext.
-        // If searchGlobally, we might prefer one from commLocationIdContext if multiple matches.
         if (searchGlobally && commLocationIdContext != null) {
             queryStr.append(" ORDER BY CASE WHEN e.communication_location_id = :commLocationIdContext THEN 0 ELSE 1 END, e.created_date DESC LIMIT 1");
         } else {
@@ -84,7 +75,7 @@ public class EmployeeLookupService {
         if (hasAuthCode && !isAuthCodeIgnoredType) {
             nativeQuery.setParameter("authCode", authCode);
         } else if (hasExtension) {
-            nativeQuery.setParameter("extension", extension);
+            nativeQuery.setParameter("extension", cleanedExtension);
         }
 
         if (!searchGlobally && commLocationIdContext != null) {
@@ -99,12 +90,9 @@ public class EmployeeLookupService {
             return Optional.of(employee);
         } catch (jakarta.persistence.NoResultException e) {
             // PHP: if ($retornar['id'] <= 0 && ExtensionValida($ext, true)) { $retornar = Validar_RangoExt(...); }
-            if (hasExtension && isPossibleExtension(extension, getExtensionLimits(
-                commLocationIdContext != null ? getOriginCountryIdForCommLocation(commLocationIdContext) : null,
-                commLocationIdContext,
-                commLocationIdContext != null ? getPlantTypeIdForCommLocation(commLocationIdContext) : null
-            ))) {
-                return findEmployeeByExtensionRange(extension, commLocationIdContext, callTime);
+            // PHP's ExtensionValida checks if it's not starting with '0' (unless it's '0')
+            if (hasExtension && !cleanedExtension.startsWith("0") && !cleanedExtension.equals("0")) {
+                return findEmployeeByExtensionRange(cleanedExtension, commLocationIdContext, callTime);
             }
             return Optional.empty();
         }
@@ -116,11 +104,10 @@ public class EmployeeLookupService {
     public Employee createEmployeeFromRange(String extension, Long subdivisionId, Long commLocationId, String namePrefix) {
         Employee newEmployee = new Employee();
         newEmployee.setExtension(extension);
-        newEmployee.setName((namePrefix != null ? namePrefix : "Ext") + " " + extension); // PHP: $value["PREFIJO"].' '.$ext
+        newEmployee.setName((namePrefix != null ? namePrefix : "Ext") + " " + extension);
         newEmployee.setSubdivisionId(subdivisionId);
         newEmployee.setCommunicationLocationId(commLocationId);
-        newEmployee.setActive(true); // New conceptual employees are active
-        // ID is null as it's not persisted yet, just a conceptual representation
+        newEmployee.setActive(true);
         log.info("Conceptually representing new employee for extension {} from range.", extension);
         return newEmployee;
     }
@@ -138,13 +125,13 @@ public class EmployeeLookupService {
         int maxStandardExtLength = maxAllowedLenStr.length() - 1;
 
         StringBuilder empQueryBuilder = new StringBuilder(
-            "SELECT CAST(LENGTH(e.extension) AS INTEGER) as ext_len " + // Ensure integer type
+            "SELECT CAST(LENGTH(e.extension) AS INTEGER) as ext_len " +
             "FROM employee e " +
             "JOIN communication_location cl ON e.communication_location_id = cl.id " +
             "JOIN indicator i ON cl.indicator_id = i.id " +
             "WHERE e.active = true AND cl.active = true AND i.active = true " +
-            "  AND e.extension ~ '^[0-9]+$' " +
-            "  AND e.extension NOT LIKE '0%' " +
+            "  AND e.extension ~ '^[0-9]+$' " + // PHP: $a_numero = bd_formatea_dato("ISNUMERIC", 'FUNCIONARIO_EXTENSION');
+            "  AND e.extension NOT LIKE '0%' " + // PHP: not(FUNCIONARIO_EXTENSION LIKE '0%')
             "  AND LENGTH(e.extension) BETWEEN 1 AND :maxStandardExtLength ");
         if (originCountryId != null) empQueryBuilder.append(" AND i.origin_country_id = :originCountryId ");
         if (commLocationId != null) empQueryBuilder.append(" AND e.communication_location_id = :commLocationId ");
@@ -163,7 +150,7 @@ public class EmployeeLookupService {
             if (len < minLenEmployees) minLenEmployees = len;
             empLenSet = true;
         }
-        if (!empLenSet) minLenEmployees = 0;
+        if (!empLenSet) minLenEmployees = 0; // PHP default if no lengths found
 
         int maxLenRanges = 0;
         int minLenRanges = Integer.MAX_VALUE;
@@ -175,7 +162,7 @@ public class EmployeeLookupService {
             "JOIN communication_location cl ON er.comm_location_id = cl.id " +
             "JOIN indicator i ON cl.indicator_id = i.id " +
             "WHERE er.active = true AND cl.active = true AND i.active = true " +
-            "  AND er.range_start::text ~ '^[0-9]+$' AND er.range_end::text ~ '^[0-9]+$' " + // Ensure they are numeric like
+            "  AND er.range_start::text ~ '^[0-9]+$' AND er.range_end::text ~ '^[0-9]+$' " +
             "  AND LENGTH(er.range_start::text) BETWEEN 1 AND :maxStandardExtLength " +
             "  AND LENGTH(er.range_end::text) BETWEEN 1 AND :maxStandardExtLength ");
         if (originCountryId != null) rangeQueryBuilder.append(" AND i.origin_country_id = :originCountryId ");
@@ -198,35 +185,51 @@ public class EmployeeLookupService {
         }
         if (!rangeLenSet) minLenRanges = 0;
 
-        int finalMinLen = Math.min(minLenEmployees > 0 ? minLenEmployees : Integer.MAX_VALUE, minLenRanges > 0 ? minLenRanges : Integer.MAX_VALUE);
-        int finalMaxLen = Math.max(maxLenEmployees, maxLenRanges);
+        // PHP: MaxMinGuardar logic
+        int finalMinLen = Integer.MAX_VALUE; // Start with a high value for min
+        int finalMaxLen = 0;                 // Start with a low value for max
 
-        if (finalMinLen == Integer.MAX_VALUE) finalMinLen = 0;
+        if (empLenSet) {
+            finalMinLen = Math.min(finalMinLen, minLenEmployees);
+            finalMaxLen = Math.max(finalMaxLen, maxLenEmployees);
+        }
+        if (rangeLenSet) {
+            finalMinLen = Math.min(finalMinLen, minLenRanges);
+            finalMaxLen = Math.max(finalMaxLen, maxLenRanges);
+        }
+
+        if (finalMinLen == Integer.MAX_VALUE) finalMinLen = 0; // If neither set, default to 0
 
         int finalMinVal;
         int finalMaxVal;
 
+        // PHP: $maxin2 = 1 * str_repeat('9', $infoPrefijoPBX['MAX']);
         if (finalMaxLen > 0) {
             finalMaxVal = Integer.parseInt("9".repeat(finalMaxLen));
         } else {
-            finalMaxVal = CdrConfigService.ACUMTOTAL_MAX_EXTENSION_LENGTH_FOR_INTERNAL_CHECK; // PHP default
+            finalMaxVal = CdrConfigService.ACUMTOTAL_MAX_EXTENSION_LENGTH_FOR_INTERNAL_CHECK;
         }
-
+        // PHP: $maxin2 = 1 * ('1'.str_repeat('0', $infoPrefijoPBX['MIN']-1));
         if (finalMinLen > 0) {
             finalMinVal = Integer.parseInt("1" + "0".repeat(Math.max(0, finalMinLen - 1)));
         } else {
             finalMinVal = 100; // PHP default if no min length found
         }
 
-        if (finalMinVal > finalMaxVal && finalMaxVal > 0) { // Ensure min is not greater than max
-            finalMinVal = finalMaxVal;
+        // PHP: if ($maxin2 > 0 && ($maxin2 > $maxin || $forzar)) { $_LIM_INTERNAS['max'] = $maxin2; }
+        // The logic in PHP is to take the new value if it's "more extreme" or if forced.
+        // Here, we've combined the sources and then derived the numeric value.
+        // Ensure min is not greater than max if both were derived.
+        if (finalMinVal > finalMaxVal && finalMaxVal > 0 && finalMinLen > 0 && finalMaxLen > 0) {
+            finalMinVal = finalMaxVal; // Or some other sensible default
         }
-        if (finalMinLen == 0 && finalMaxLen == 0) { // If no data found for lengths
-            finalMinVal = 100; // PHP default
-            finalMaxVal = CdrConfigService.ACUMTOTAL_MAX_EXTENSION_LENGTH_FOR_INTERNAL_CHECK; // PHP default
+        if (finalMinLen == 0 && finalMaxLen == 0) { // If no data found for lengths from either source
+            finalMinVal = 100;
+            finalMaxVal = CdrConfigService.ACUMTOTAL_MAX_EXTENSION_LENGTH_FOR_INTERNAL_CHECK;
         }
 
 
+        // PHP: $_LIM_INTERNAS['full'] = ObtenerExtensionesEspeciales(...)
         StringBuilder specialExtQueryBuilder = new StringBuilder(
             "SELECT DISTINCT e.extension FROM employee e " +
             "JOIN communication_location cl ON e.communication_location_id = cl.id " +
@@ -258,8 +261,7 @@ public class EmployeeLookupService {
         }
         // PHP: $extension_valida = ExtensionValida($extension, true);
         // ExtensionValida checks if it doesn't start with '0' unless it's just '0'.
-        // Here, cleanPhoneNumber will handle '+' and other non-digits.
-        String cleanedExt = CdrParserUtil.cleanPhoneNumber(extensionNumber, null, false);
+        String cleanedExt = CdrParserUtil.cleanPhoneNumber(extensionNumber, null, false); // Basic cleaning
 
         if (limits.getSpecialFullExtensions() != null && limits.getSpecialFullExtensions().contains(cleanedExt)) {
             return true;
@@ -278,11 +280,9 @@ public class EmployeeLookupService {
                 long extNumValue = Long.parseLong(cleanedExt);
                 return extNumValue >= limits.getMinLength() && extNumValue <= limits.getMaxLength();
             } catch (NumberFormatException e) {
-                return false; // Should not happen if matches("\\d+")
+                return false;
             }
         }
-        // PHP doesn't explicitly check for '+' in ExtensionPosible, but cleanPhoneNumber handles it.
-        // Non-numeric (after cleaning) other than special list are not possible extensions.
         return false;
     }
 
@@ -291,7 +291,7 @@ public class EmployeeLookupService {
      */
     @Transactional(readOnly = true)
     public Optional<Employee> findEmployeeByExtensionRange(String extension, Long commLocationIdContext, LocalDateTime callTime) {
-        if (extension == null || !extension.matches("\\d+")) { // Must be numeric for range check
+        if (extension == null || !extension.matches("\\d+")) {
             return Optional.empty();
         }
         long extNum;
@@ -301,11 +301,6 @@ public class EmployeeLookupService {
             return Optional.empty();
         }
 
-        // PHP: $comid_rango = 0; if (!$ext_globales) { $comid_rango = $comid; }
-        // PHP: Obtener_RangoExt($link, $_RANGOS_EXT, $comid_rango, $bd);
-        // This means if extensions are not global, it only searches ranges for the current commLocationIdContext.
-        // If global, it searches all ranges.
-
         boolean searchRangesGlobally = cdrConfigService.areExtensionsGlobal(
             commLocationIdContext != null ? getPlantTypeIdForCommLocation(commLocationIdContext) : null
         );
@@ -313,16 +308,16 @@ public class EmployeeLookupService {
         StringBuilder queryStrBuilder = new StringBuilder(
             "SELECT er.* FROM extension_range er " +
             "JOIN communication_location cl ON er.comm_location_id = cl.id " +
-            "WHERE er.active = true AND cl.active = true " + // Ensure range and its comm_location are active
+            "WHERE er.active = true AND cl.active = true " +
             "AND er.range_start <= :extNum AND er.range_end >= :extNum ");
 
         if (!searchRangesGlobally && commLocationIdContext != null) {
             queryStrBuilder.append("AND er.comm_location_id = :commLocationIdContext ");
         }
         // PHP: ORDER BY RANGOEXT_HISTODESDE DESC, RANGOEXT_DESDE DESC, RANGOEXT_HASTA ASC
-        // Omitting historical for now. Order by range tightness (smallest range first), then by comm_location preference.
+        // Prioritize ranges specific to the current comm_location if searching globally.
         if (searchRangesGlobally && commLocationIdContext != null) {
-            queryStrBuilder.append("ORDER BY (er.range_end - er.range_start) ASC, CASE WHEN er.comm_location_id = :commLocationIdContext THEN 0 ELSE 1 END, er.created_date DESC LIMIT 1");
+            queryStrBuilder.append("ORDER BY CASE WHEN er.comm_location_id = :commLocationIdContext THEN 0 ELSE 1 END, (er.range_end - er.range_start) ASC, er.created_date DESC LIMIT 1");
         } else {
             queryStrBuilder.append("ORDER BY (er.range_end - er.range_start) ASC, er.created_date DESC LIMIT 1");
         }
@@ -339,7 +334,7 @@ public class EmployeeLookupService {
 
         List<ExtensionRange> ranges = nativeQuery.getResultList();
         if (!ranges.isEmpty()) {
-            ExtensionRange matchedRange = ranges.get(0); // Get the best match based on ordering
+            ExtensionRange matchedRange = ranges.get(0);
             log.debug("Extension {} matched range: {}", extension, matchedRange.getId());
             Employee conceptualEmployee = createEmployeeFromRange(
                     extension,
@@ -347,10 +342,9 @@ public class EmployeeLookupService {
                     matchedRange.getCommLocationId(),
                     matchedRange.getPrefix()
             );
-            // Populate the conceptual employee's communication location if available
             if (matchedRange.getCommLocationId() != null) {
                 CommunicationLocation cl = entityManager.find(CommunicationLocation.class, matchedRange.getCommLocationId());
-                conceptualEmployee.setCommunicationLocation(cl);
+                conceptualEmployee.setCommunicationLocation(cl); // Set the actual CommLocation object
             }
             return Optional.of(conceptualEmployee);
         }
