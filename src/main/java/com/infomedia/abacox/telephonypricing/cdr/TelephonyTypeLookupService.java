@@ -1,3 +1,4 @@
+// File: com/infomedia/abacox/telephonypricing/cdr/TelephonyTypeLookupService.java
 package com.infomedia.abacox.telephonypricing.cdr;
 
 import com.infomedia.abacox.telephonypricing.entity.Prefix;
@@ -32,7 +33,11 @@ public class TelephonyTypeLookupService {
             return "TypeID:" + telephonyTypeId;
         }
     }
-    
+
+    /**
+     * PHP equivalent: Part of buscarDestino when $tipotele_id == _TIPOTELE_LOCAL_EXT
+     * and it needs to find the prefix info for LOCAL_EXTENDED.
+     */
     @Transactional(readOnly = true)
     public PrefixInfo getPrefixInfoForLocalExtended(Long originCountryId) {
         String queryStr = "SELECT p.*, ttc.min_value as ttc_min, ttc.max_value as ttc_max, " +
@@ -43,31 +48,35 @@ public class TelephonyTypeLookupService {
                 "LEFT JOIN telephony_type_config ttc ON tt.id = ttc.telephony_type_id AND ttc.origin_country_id = :originCountryId AND ttc.active = true " +
                 "WHERE p.active = true AND o.active = true AND tt.active = true AND o.origin_country_id = :originCountryId " +
                 "AND p.telephone_type_id = :localExtendedTypeId LIMIT 1";
-        
+
         jakarta.persistence.Query nativeQuery = entityManager.createNativeQuery(queryStr, Tuple.class);
         nativeQuery.setParameter("originCountryId", originCountryId);
         nativeQuery.setParameter("localExtendedTypeId", TelephonyTypeEnum.LOCAL_EXTENDED.getValue());
 
         try {
             Tuple tuple = (Tuple) nativeQuery.getSingleResult();
+            // We need to fetch the actual Prefix entity to get its relationships if needed later
             Prefix p = entityManager.find(Prefix.class, tuple.get("id", Number.class).longValue());
-            TelephonyTypeConfig cfg = new TelephonyTypeConfig();
+            TelephonyTypeConfig cfg = new TelephonyTypeConfig(); // Create a dummy one for now
             cfg.setMinValue(tuple.get("ttc_min", Number.class) != null ? tuple.get("ttc_min", Number.class).intValue() : 0);
             cfg.setMaxValue(tuple.get("ttc_max", Number.class) != null ? tuple.get("ttc_max", Number.class).intValue() : 99);
             int bandsCount = tuple.get("bands_count", Number.class).intValue();
             return new PrefixInfo(p, cfg, bandsCount);
         } catch (NoResultException e) {
+            log.warn("No prefix definition found for LOCAL_EXTENDED type in country {}", originCountryId);
             return null;
         }
     }
 
-
+    /**
+     * PHP equivalent: operador_interno
+     */
     @Transactional(readOnly = true)
     public OperatorInfo getInternalOperatorInfo(Long telephonyTypeId, Long originCountryId) {
         String queryStr = "SELECT o.id, o.name FROM operator o JOIN prefix p ON p.operator_id = o.id " +
                 "WHERE p.telephone_type_id = :telephonyTypeId AND o.origin_country_id = :originCountryId " +
                 "AND o.active = true AND p.active = true " +
-                "LIMIT 1";
+                "LIMIT 1"; // Assuming one designated internal operator per type/country
         jakarta.persistence.Query query = entityManager.createNativeQuery(queryStr, Tuple.class);
         query.setParameter("telephonyTypeId", telephonyTypeId);
         query.setParameter("originCountryId", originCountryId);
@@ -76,10 +85,14 @@ public class TelephonyTypeLookupService {
             return new OperatorInfo(result.get("id", Number.class).longValue(), result.get("name", String.class));
         } catch (NoResultException e) {
             // PHP returns 0 if not found.
-            return new OperatorInfo(0L, "UnknownInternal");
+            log.warn("No internal operator found for telephony type {} and country {}", telephonyTypeId, originCountryId);
+            return new OperatorInfo(CdrConfigService.DEFAULT_OPERATOR_ID_FOR_INTERNAL, "UnknownInternalOperator");
         }
     }
 
+    /**
+     * PHP equivalent: IVA_Troncal (indirectly, by getting prefix VAT)
+     */
     @Transactional(readOnly = true)
     public BigDecimal getVatForPrefix(Long telephonyTypeId, Long operatorId, Long originCountryId) {
         String queryStr = "SELECT p.vat_value FROM prefix p " +
@@ -94,15 +107,17 @@ public class TelephonyTypeLookupService {
             Object result = query.getSingleResult();
             return result != null ? (BigDecimal) result : BigDecimal.ZERO;
         } catch (NoResultException e) {
+            log.warn("No VAT rate found for prefix with type {}, operator {}, country {}", telephonyTypeId, operatorId, originCountryId);
             return BigDecimal.ZERO;
         }
     }
 
-
+    /**
+     * PHP equivalent: buscarValor (core logic part)
+     */
     @Transactional(readOnly = true)
     public TariffValue getBaseTariffValue(Long prefixId, Long destinationIndicatorId,
                                           Long commLocationId, Long originIndicatorIdForBand) {
-        // PHP's buscarValor
         String prefixQueryStr = "SELECT p.base_value, p.vat_included, p.vat_value, p.band_ok, p.id as prefix_id, p.telephone_type_id " +
                 "FROM prefix p WHERE p.id = :prefixId AND p.active = true";
         jakarta.persistence.Query prefixQuery = entityManager.createNativeQuery(prefixQueryStr, Tuple.class);
@@ -126,11 +141,9 @@ public class TelephonyTypeLookupService {
                 }
                 // PHP: BANDA_INDICAORIGEN_ID in (0, COMUBICACION_INDICATIVO_ID)
                 // COMUBICACION_ID = $comubicacion_id
-                // This implies we need to fetch comm_location's indicator_id if originIndicatorIdForBand is not directly the comm_location's indicator.
-                // For simplicity, assuming originIndicatorIdForBand IS the comm_location's indicator_id.
                 bandQueryBuilder.append("WHERE b.active = true AND b.prefix_id = :prefixId ");
                 bandQueryBuilder.append("AND (b.origin_indicator_id = 0 OR b.origin_indicator_id = :originIndicatorIdForBand) ");
-                bandQueryBuilder.append("ORDER BY b.origin_indicator_id DESC LIMIT 1"); // Prefer specific origin indicator
+                bandQueryBuilder.append("ORDER BY b.origin_indicator_id DESC NULLS LAST LIMIT 1"); // Prefer specific origin indicator
 
                 jakarta.persistence.Query bandQuery = entityManager.createNativeQuery(bandQueryBuilder.toString(), Tuple.class);
                 bandQuery.setParameter("prefixId", prefixId);
@@ -165,27 +178,31 @@ public class TelephonyTypeLookupService {
                         telephonyTypeId.equals(TelephonyTypeEnum.LOCAL_EXTENDED.getValue()));
     }
 
+    /**
+     * PHP equivalent: _tipotele_Internas (list of IDs)
+     */
     @Transactional(readOnly = true)
     public List<Long> getInternalTelephonyTypeIds() {
-        // PHP's _tipotele_Internas
         return Arrays.asList(
                 TelephonyTypeEnum.INTERNAL_IP.getValue(),
                 TelephonyTypeEnum.LOCAL_IP.getValue(),
                 TelephonyTypeEnum.NATIONAL_IP.getValue(),
                 TelephonyTypeEnum.INTERNAL_SIMPLE.getValue(),
-                TelephonyTypeEnum.INTERNAL_INTERNATIONAL_IP.getValue() // Added based on enum
+                TelephonyTypeEnum.INTERNAL_INTERNATIONAL_IP.getValue()
         );
     }
-    
+
+    /**
+     * PHP equivalent: TarifasInternas
+     */
     @Transactional(readOnly = true)
     public TariffValue getInternalTariffValue(Long internalTelephonyTypeId, Long originCountryId) {
-        // PHP's TarifasInternas
         String queryStr = "SELECT p.base_value, p.vat_included, p.vat_value " +
                           "FROM prefix p JOIN operator o ON p.operator_id = o.id " +
                           "WHERE p.active = true AND o.active = true " +
                           "AND p.telephone_type_id = :telephonyTypeId AND o.origin_country_id = :originCountryId " +
                           "LIMIT 1"; // Assuming one prefix entry per internal type per country
-        
+
         jakarta.persistence.Query query = entityManager.createNativeQuery(queryStr, Tuple.class);
         query.setParameter("telephonyTypeId", internalTelephonyTypeId);
         query.setParameter("originCountryId", originCountryId);

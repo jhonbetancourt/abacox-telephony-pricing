@@ -1,3 +1,4 @@
+// File: com/infomedia/abacox/telephonypricing/cdr/CdrValidationService.java
 package com.infomedia.abacox.telephonypricing.cdr;
 
 import lombok.extern.log4j.Log4j2;
@@ -12,74 +13,89 @@ import java.util.List;
 public class CdrValidationService {
 
     private final CdrConfigService appConfigService;
-    // private final ParameterLookupService parameterLookupService; // If CAPTURAS_FECHAMIN etc. are dynamic
 
     public CdrValidationService(CdrConfigService appConfigService) {
         this.appConfigService = appConfigService;
     }
 
+    /**
+     * PHP equivalent: ValidarCampos_CDR
+     */
     public List<String> validateInitialCdrData(CdrData cdrData, Long originCountryId) {
         List<String> errors = new ArrayList<>();
+        List<String> warnings = new ArrayList<>(); // PHP's $infoaviso
 
         // Date validation (PHP: _formatea_fecha, CAPTURAS_FECHAMIN, CAPTURAS_FECHAMAX)
         if (cdrData.getDateTimeOrigination() == null) {
-            errors.add("Missing or invalid origination date/time.");
+            errors.add("Missing or invalid origination date/time (PHP: _ESPERABA_FECHA).");
         } else {
-            // Example: CAPTURAS_FECHAMIN = "2000-01-01"
-            // LocalDateTime minDate = parameterLookupService.getDateTimeParameter("CAPTURAS_FECHAMIN", originCountryId, LocalDateTime.of(2000,1,1,0,0));
-            LocalDateTime minDate = LocalDateTime.of(2000, 1, 1, 0, 0); // Hardcoded for example
-            if (cdrData.getDateTimeOrigination().isBefore(minDate)) {
-                errors.add("Origination date " + cdrData.getDateTimeOrigination() + " is before minimum allowed " + minDate);
+            LocalDateTime minDate = DateTimeUtil.stringToLocalDateTime(appConfigService.getMinAllowedCaptureDate() + " 00:00:00");
+            if (minDate != null && cdrData.getDateTimeOrigination().isBefore(minDate)) {
+                warnings.add("Origination date " + cdrData.getDateTimeOrigination() + " is before minimum allowed " + minDate + " (PHP: _FECHANO Min).");
             }
-            // Example: CAPTURAS_FECHAMAX = 90 (days in future)
-            // int maxDaysFuture = parameterLookupService.getIntParameter("CAPTURAS_FECHAMAX_DAYS", originCountryId, 90);
-            int maxDaysFuture = 90; // Hardcoded
-            if (cdrData.getDateTimeOrigination().isAfter(LocalDateTime.now().plusDays(maxDaysFuture))) {
-                errors.add("Origination date " + cdrData.getDateTimeOrigination() + " is too far in the future (max " + maxDaysFuture + " days).");
+            int maxDaysFuture = appConfigService.getMaxAllowedCaptureDateDaysInFuture();
+            if (maxDaysFuture > 0 && cdrData.getDateTimeOrigination().isAfter(LocalDateTime.now().plusDays(maxDaysFuture))) {
+                warnings.add("Origination date " + cdrData.getDateTimeOrigination() + " is too far in the future (max " + maxDaysFuture + " days) (PHP: _FECHANO Max).");
             }
         }
 
         // Extension validation (PHP: ValidarTelefono on ext)
-        // The PHP logic for ext being blank and then inverting is complex and tied to call typing.
+        // PHP's logic for ext being blank and then inverting is complex and tied to call typing.
         // Here, we just check if it looks like a valid phone number component if present.
-        if (cdrData.getCallingPartyNumber() != null && !cdrData.getCallingPartyNumber().isEmpty() &&
-                !CdrParserUtil.cleanPhoneNumber(cdrData.getCallingPartyNumber(), null, false).equals(cdrData.getCallingPartyNumber())) {
-            // If cleaning changes it significantly (other than trim), it might have invalid chars
-            // errors.add("Calling party number contains invalid characters: " + cdrData.getCallingPartyNumber());
-            // PHP's ValidarTelefono allows #, *, +. The cleanPhoneNumber should handle this.
+        // PHP: if (strpos($info_cdr['ext'], ' ') !== false) { $infoerror[] = _EXTENSION.' ('.$info_cdr['ext'].'): '._ESPERABA_NUMERO; }
+        if (cdrData.getCallingPartyNumber() != null && cdrData.getCallingPartyNumber().contains(" ")) {
+            errors.add("Calling party number '" + cdrData.getCallingPartyNumber() + "' contains spaces (PHP: _ESPERABA_NUMERO).");
         }
-
 
         // Dialed number validation (PHP: ValidarTelefono on dial_number)
-        if (cdrData.getFinalCalledPartyNumber() != null && !cdrData.getFinalCalledPartyNumber().isEmpty() &&
-                !CdrParserUtil.cleanPhoneNumber(cdrData.getFinalCalledPartyNumber(), null, false).equals(cdrData.getFinalCalledPartyNumber())) {
-            // errors.add("Final called party number contains invalid characters: " + cdrData.getFinalCalledPartyNumber());
+        // PHP: if (strpos($dial_number, ' ') !== false) { $infoerror[] = _TELEFONO.' ('.$dial_number.'): '._ESPERABA_NUMERO; }
+        if (cdrData.getFinalCalledPartyNumber() != null && cdrData.getFinalCalledPartyNumber().contains(" ")) {
+            errors.add("Final called party number '" + cdrData.getFinalCalledPartyNumber() + "' contains spaces (PHP: _ESPERABA_NUMERO).");
         }
-        if (cdrData.getFinalCalledPartyNumber() == null || cdrData.getFinalCalledPartyNumber().isEmpty()) {
-            // errors.add("Final called party number is missing."); // Cisco CDRs can have this empty, then originalCalledPartyNumber is used.
+        // PHP: if ($dial_number !== '') { $campo_ok = ValidarTelefono($dial_number); if (!$campo_ok) ... }
+        // ValidarTelefono in PHP checks for non (0-9#*+). CdrParserUtil.cleanPhoneNumber effectively does this.
+        // If the cleaned version is different from original (ignoring trim), it implies invalid chars.
+        String cleanedDialNumber = CdrParserUtil.cleanPhoneNumber(cdrData.getFinalCalledPartyNumber(), null, false);
+        if (cdrData.getFinalCalledPartyNumber() != null && !cdrData.getFinalCalledPartyNumber().trim().equals(cleanedDialNumber) &&
+            !cdrData.getFinalCalledPartyNumber().equalsIgnoreCase("ANONYMOUS")) { // PHP allows ANONYMOUS
+             // This check is a bit too strict if only '+' was removed by cleanPhoneNumber.
+             // PHP's ValidarTelefono is more about *containing* invalid chars rather than *being changed by cleaning*.
+             // For now, we'll stick to the space check as per PHP's direct error trigger.
         }
 
 
         // Duration validation (PHP: is_numeric, >=0, CAPTURAS_TIEMPOMAX, CAPTURAS_TIEMPOCERO)
         if (cdrData.getDurationSeconds() == null || cdrData.getDurationSeconds() < 0) {
-            errors.add("Invalid call duration: " + cdrData.getDurationSeconds());
+            errors.add("Invalid call duration: " + cdrData.getDurationSeconds() + " (PHP: _ESPERABA_NUMEROPOS).");
         } else {
             if (cdrData.getDurationSeconds() < appConfigService.getMinCallDurationForTariffing()) {
-                // This might be a warning or lead to NO_CONSUMPTION type, not necessarily an error for quarantine.
-                // PHP logic: if ($tiempo < $min_tiempo) $infoaviso[] = _TIEMPONO;
-                log.debug("Call duration {}s is less than minimum {}s.", cdrData.getDurationSeconds(), appConfigService.getMinCallDurationForTariffing());
+                warnings.add("Call duration " + cdrData.getDurationSeconds() + "s is less than minimum " + appConfigService.getMinCallDurationForTariffing() + "s (PHP: _TIEMPONO Min).");
             }
-            if (cdrData.getDurationSeconds() > appConfigService.getMaxCallDurationSeconds()) {
-                errors.add("Call duration " + cdrData.getDurationSeconds() + "s exceeds maximum allowed " + appConfigService.getMaxCallDurationSeconds() + "s.");
+            if (appConfigService.getMaxCallDurationSeconds() > 0 && cdrData.getDurationSeconds() > appConfigService.getMaxCallDurationSeconds()) {
+                warnings.add("Call duration " + cdrData.getDurationSeconds() + "s exceeds maximum allowed " + appConfigService.getMaxCallDurationSeconds() + "s (PHP: _TIEMPONO Max).");
             }
         }
 
-        // Quarantine from parser (PHP: $info_cdr['cuarentena'])
-        // This would be set by the ICdrTypeProcessor if it detects an unrecoverable parsing issue.
-        if (cdrData.isMarkedForQuarantine() && cdrData.getQuarantineReason() != null) {
+        // Quarantine from parser (PHP: $info_cdr['cuarentena'] if string)
+        if (cdrData.isMarkedForQuarantine() && cdrData.getQuarantineReason() != null &&
+            cdrData.getQuarantineStep() != null && cdrData.getQuarantineStep().startsWith("evaluateFormat")) {
             errors.add("Marked for quarantine by parser: " + cdrData.getQuarantineReason());
         }
 
-        return errors;
+        // Combine errors and warnings for quarantine decision
+        if (!errors.isEmpty()) {
+            cdrData.setMarkedForQuarantine(true);
+            cdrData.setQuarantineReason(String.join("; ", errors));
+            cdrData.setQuarantineStep("InitialValidation_Error");
+        } else if (!warnings.isEmpty()) {
+            // PHP: $info_cdr['cuarentena']['CRNPREV'] = implode(', ', $infoaviso);
+            // This implies warnings also lead to quarantine under CRNPREV type.
+            cdrData.setMarkedForQuarantine(true);
+            cdrData.setQuarantineReason(String.join("; ", warnings));
+            cdrData.setQuarantineStep("InitialValidation_Warning");
+        }
+
+
+        return errors; // Return only hard errors, warnings are handled by setting quarantine flags
     }
 }

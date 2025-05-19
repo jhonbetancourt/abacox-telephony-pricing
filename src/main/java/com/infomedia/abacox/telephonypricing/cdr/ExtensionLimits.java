@@ -1,3 +1,4 @@
+// File: com/infomedia/abacox/telephonypricing/cdr/ExtensionLimits.java
 package com.infomedia.abacox.telephonypricing.cdr;
 
 import lombok.AllArgsConstructor;
@@ -11,7 +12,9 @@ import java.util.List;
 @NoArgsConstructor
 @Data
 public class ExtensionLimits {
-    public int minLength = 100; // Default from PHP _LIM_INTERNAS
-    public int maxLength = CdrConfigService.ACUMTOTAL_MAX_EXTENSION_LENGTH_FOR_INTERNAL_CHECK;
-    public List<String> specialFullExtensions = Collections.emptyList();
+    // PHP: $_LIM_INTERNAS['min'] and $_LIM_INTERNAS['max'] store the actual numeric min/max values
+    // derived from lengths.
+    private int minLength = 100; // Default from PHP _LIM_INTERNAS['min'] (numeric value)
+    private int maxLength = CdrConfigService.ACUMTOTAL_MAX_EXTENSION_LENGTH_FOR_INTERNAL_CHECK; // PHP _LIM_INTERNAS['max']
+    private List<String> specialFullExtensions = Collections.emptyList(); // PHP: $_LIM_INTERNAS['full']
 }

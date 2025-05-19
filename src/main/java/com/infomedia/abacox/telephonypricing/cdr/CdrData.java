@@ -1,3 +1,4 @@
+// File: com/infomedia/abacox/telephonypricing/cdr/CdrData.java
 package com.infomedia.abacox.telephonypricing.cdr;
 
 import com.infomedia.abacox.telephonypricing.entity.Employee;
@@ -36,8 +37,8 @@ public class CdrData {
     private Integer lastRedirectRedirectReason; // code_transfer
     private String origDeviceName; // troncal-ini
     private String destDeviceName; // troncal
-    private String disconnectCauseOrig; // coderrororigen
-    private String disconnectCauseDest; // coderrordestino
+    private String disconnectCauseOrig; // coderrororigen (Not directly used in PHP logic for acumtotal, but parsed)
+    private String disconnectCauseDest; // coderrordestino (Not directly used in PHP logic for acumtotal, but parsed)
 
     // Video related fields
     private String origVideoCodec;
@@ -67,15 +68,15 @@ public class CdrData {
     private String telephonyTypeName; // For display/logging
     private Long operatorId;
     private String operatorName; // For display/logging
-    private Long indicatorId; // Destination indicator
-    private String destinationCityName; // For display/logging
+    private Long indicatorId; // Destination indicator for outgoing, Source indicator for incoming
+    private String destinationCityName; // For display/logging (destination for outgoing, source for incoming)
     private String effectiveDestinationNumber; // The number used for tariffing after cleaning/PBX rules
 
     private BigDecimal billedAmount = BigDecimal.ZERO;
     private BigDecimal pricePerMinute = BigDecimal.ZERO;
-    private BigDecimal initialPricePerMinute = BigDecimal.ZERO; // For special rates
+    private BigDecimal initialPricePerMinute = BigDecimal.ZERO; // For special rates (PHP: ACUMTOTAL_PRECIOINICIAL)
     private boolean priceIncludesVat = false;
-    private boolean initialPriceIncludesVat = false;
+    private boolean initialPriceIncludesVat = false; // For special rates
     private BigDecimal vatRate = BigDecimal.ZERO;
     private boolean chargeBySecond = false;
 
@@ -98,5 +99,14 @@ public class CdrData {
     public long getDateTimeOriginationEpochSeconds() {
         // Assuming dateTimeOrigination is UTC as per Cisco docs
         return dateTimeOrigination != null ? dateTimeOrigination.toEpochSecond(java.time.ZoneOffset.UTC) : 0;
+    }
+
+    // Helper to store original values if they are changed by transformations
+    public void storeOriginalValue(String key, Object value) {
+        additionalData.put("original_" + key, value);
+    }
+
+    public Object getOriginalValue(String key) {
+        return additionalData.get("original_" + key);
     }
 }
