@@ -18,6 +18,11 @@ public class CallRecordPersistenceService {
 
     @PersistenceContext
     private EntityManager entityManager;
+    private final FailedCallRecordPersistenceService failedCallRecordPersistenceService;
+
+    public CallRecordPersistenceService(FailedCallRecordPersistenceService failedCallRecordPersistenceService) {
+        this.failedCallRecordPersistenceService = failedCallRecordPersistenceService;
+    }
 
     /**
      * PHP equivalent: acumtotal_Insertar (the INSERT part)
@@ -26,6 +31,7 @@ public class CallRecordPersistenceService {
     public CallRecord saveOrUpdateCallRecord(CdrData cdrData, CommunicationLocation commLocation) {
         if (cdrData.isMarkedForQuarantine()) {
             log.warn("CDR marked for quarantine, not saving to CallRecord: {}", cdrData.getRawCdrLine());
+            // The quarantine should have already happened in CdrFileProcessorService or CdrEnrichmentService
             return null;
         }
 
@@ -34,7 +40,7 @@ public class CallRecordPersistenceService {
                 Objects.toString(cdrData.getCallingPartyNumber(), ""),
                 Objects.toString(cdrData.getFinalCalledPartyNumber(), ""),
                 String.valueOf(cdrData.getDurationSeconds()),
-                Objects.toString(cdrData.getDestDeviceName(), ""),
+                Objects.toString(cdrData.getDestDeviceName(), ""), // Trunk
                 String.valueOf(commLocation.getId())
         );
         String cdrHash = HashUtil.sha256(cdrKeyFields);
@@ -43,18 +49,34 @@ public class CallRecordPersistenceService {
 
         CallRecord existingRecord = findByCdrHash(cdrHash);
         if (existingRecord != null) {
-            log.warn("Duplicate CDR detected based on hash {}, raw line: {}. Original ID: {}. PHP type: REGDUPLICADO",
+            log.warn("Duplicate CDR detected based on hash {}, raw line: {}. Original ID: {}. Quarantining.",
                     cdrHash, cdrData.getRawCdrLine(), existingRecord.getId());
+            failedCallRecordPersistenceService.quarantineRecord(cdrData,
+                    QuarantineErrorType.DUPLICATE_RECORD,
+                    "Duplicate record based on hash. Original ID: " + existingRecord.getId(),
+                    "saveOrUpdateCallRecord_DuplicateCheck",
+                    existingRecord.getId());
             return existingRecord;
         }
 
         CallRecord callRecord = new CallRecord();
         mapCdrDataToCallRecord(cdrData, callRecord, commLocation, cdrHash);
-        
-        log.debug("Persisting CallRecord: {}", callRecord);
-        entityManager.persist(callRecord);
-        log.info("Saved new CallRecord with ID: {} for CDR line: {}", callRecord.getId(), cdrData.getRawCdrLine());
-        return callRecord;
+
+        try {
+            log.debug("Persisting CallRecord: {}", callRecord);
+            entityManager.persist(callRecord);
+            log.info("Saved new CallRecord with ID: {} for CDR line: {}", callRecord.getId(), cdrData.getRawCdrLine());
+            return callRecord;
+        } catch (Exception e) {
+            log.error("Database error while saving CallRecord for CDR: {}. Error: {}", cdrData.getRawCdrLine(), e.getMessage(), e);
+            // PHP: if (!$insertar) { ... $infoerror = bd_captura_error($link); $causaerror = 'NOINSERTA'; ... ReportarErrores(...) }
+            failedCallRecordPersistenceService.quarantineRecord(cdrData,
+                    QuarantineErrorType.DB_INSERT_FAILED,
+                    "Database error: " + e.getMessage(),
+                    "saveOrUpdateCallRecord_Persist",
+                    null);
+            return null;
+        }
     }
 
     @Transactional(readOnly = true)

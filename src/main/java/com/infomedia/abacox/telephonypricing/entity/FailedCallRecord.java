@@ -25,9 +25,6 @@ public class FailedCallRecord extends AuditedEntity {
     @Column(name = "id", nullable = false)
     private Long id;
 
-    @Column(name = "comm_location_id")
-    private Long commLocationId; // Reference to the source location
-
     @Column(name = "employee_extension", length = 50)
     private String employeeExtension;
 
@@ -43,9 +40,33 @@ public class FailedCallRecord extends AuditedEntity {
     @Column(name = "original_call_record_id")
     private Long originalCallRecordId; // If failure happened during reprocessing/update
 
-    @Column(name = "file_info_id")
-    private Long fileInfoId; // Reference to the source file info if available
-
     @Column(name = "processing_step", length = 100)
     private String processingStep; // e.g., "Parsing", "LookupEmployee", "CalculateRate"
+
+    @Column(name = "file_info_id")
+    private Long fileInfoId;
+
+    @ManyToOne
+    @JoinColumn(
+            name = "file_info_id",
+            insertable = false,
+            updatable = false,
+            foreignKey = @ForeignKey(name = "fk_call_record_file_info")
+    )
+    private FileInfo fileInfo;
+
+    @Column(name = "comm_location_id")
+    private Long commLocationId;
+
+    @ManyToOne
+    @JoinColumn(
+            name = "comm_location_id",
+            insertable = false,
+            updatable = false,
+            foreignKey = @ForeignKey(name = "fk_call_record_comm_location")
+    )
+    private CommunicationLocation commLocation;
+
+    @Column(name = "ctl_hash", length = 64, unique = true)
+    private String ctlHash;
 }

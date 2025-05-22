@@ -20,73 +20,91 @@ public class CdrValidationService {
 
     /**
      * PHP equivalent: ValidarCampos_CDR
+     * This method now directly modifies cdrData.isMarkedForQuarantine and sets reason/step.
+     * It returns true if CDR is valid, false if errors occurred.
      */
-    public List<String> validateInitialCdrData(CdrData cdrData, Long originCountryId) {
+    public boolean validateInitialCdrData(CdrData cdrData, Long originCountryId) {
         log.debug("Validating initial CDR data: {}", cdrData.getRawCdrLine());
-        List<String> errors = new ArrayList<>();
-        List<String> warnings = new ArrayList<>();
+        List<String> errorMessages = new ArrayList<>();
+        List<String> warningMessages = new ArrayList<>(); // PHP's CRNPREV type
 
         if (cdrData.getDateTimeOrigination() == null) {
-            errors.add("Missing or invalid origination date/time (PHP: _ESPERABA_FECHA).");
+            errorMessages.add("Missing or invalid origination date/time (PHP: _ESPERABA_FECHA).");
         } else {
             LocalDateTime minDate = DateTimeUtil.stringToLocalDateTime(appConfigService.getMinAllowedCaptureDate() + " 00:00:00");
             if (minDate != null && cdrData.getDateTimeOrigination().isBefore(minDate)) {
-                warnings.add("Origination date " + cdrData.getDateTimeOrigination() + " is before minimum allowed " + minDate + " (PHP: _FECHANO Min).");
+                warningMessages.add("Origination date " + cdrData.getDateTimeOrigination() + " is before minimum allowed " + minDate + " (PHP: _FECHANO Min).");
             }
             int maxDaysFuture = appConfigService.getMaxAllowedCaptureDateDaysInFuture();
             if (maxDaysFuture > 0 && cdrData.getDateTimeOrigination().isAfter(LocalDateTime.now().plusDays(maxDaysFuture))) {
-                warnings.add("Origination date " + cdrData.getDateTimeOrigination() + " is too far in the future (max " + maxDaysFuture + " days) (PHP: _FECHANO Max).");
+                warningMessages.add("Origination date " + cdrData.getDateTimeOrigination() + " is too far in the future (max " + maxDaysFuture + " days) (PHP: _FECHANO Max).");
             }
         }
 
         if (cdrData.getCallingPartyNumber() != null && cdrData.getCallingPartyNumber().contains(" ")) {
-            errors.add("Calling party number '" + cdrData.getCallingPartyNumber() + "' contains spaces (PHP: _ESPERABA_NUMERO).");
+            errorMessages.add("Calling party number '" + cdrData.getCallingPartyNumber() + "' contains spaces (PHP: _ESPERABA_NUMERO).");
         }
 
         if (cdrData.getFinalCalledPartyNumber() != null && cdrData.getFinalCalledPartyNumber().contains(" ")) {
-            errors.add("Final called party number '" + cdrData.getFinalCalledPartyNumber() + "' contains spaces (PHP: _ESPERABA_NUMERO).");
+            errorMessages.add("Final called party number '" + cdrData.getFinalCalledPartyNumber() + "' contains spaces (PHP: _ESPERABA_NUMERO).");
         }
+        // PHP: ValidarTelefono checks for non-numeric, #, *, +
         if (cdrData.getFinalCalledPartyNumber() != null && !cdrData.getFinalCalledPartyNumber().isEmpty() &&
             !cdrData.getFinalCalledPartyNumber().equalsIgnoreCase("ANONYMOUS") &&
             !cdrData.getFinalCalledPartyNumber().matches("^[0-9#*+]+$")) {
-            errors.add("Final called party number '" + cdrData.getFinalCalledPartyNumber() + "' contains invalid characters (PHP: _ESPERABA_NUMERO).");
+            // PHP: Reporta error solo si hay espacios, de lo contrario lo reporta asi sea como "no relacionado"
+            // The PHP logic is a bit nuanced here. If it contains spaces, it's an error.
+            // If it contains other invalid chars but no spaces, it might still proceed.
+            // For Java, let's be stricter: if it's not empty, not ANONYMOUS, and contains invalid chars, it's an error.
+            errorMessages.add("Final called party number '" + cdrData.getFinalCalledPartyNumber() + "' contains invalid characters (PHP: _ESPERABA_NUMERO).");
         }
+
 
         if (cdrData.getDurationSeconds() == null || cdrData.getDurationSeconds() < 0) {
-            errors.add("Invalid call duration: " + cdrData.getDurationSeconds() + " (PHP: _ESPERABA_NUMEROPOS).");
+            errorMessages.add("Invalid call duration: " + cdrData.getDurationSeconds() + " (PHP: _ESPERABA_NUMEROPOS).");
         } else {
             if (cdrData.getDurationSeconds() < appConfigService.getMinCallDurationForTariffing()) {
-                warnings.add("Call duration " + cdrData.getDurationSeconds() + "s is less than minimum " + appConfigService.getMinCallDurationForTariffing() + "s (PHP: _TIEMPONO Min).");
+                // PHP: This was a warning (CRNPREV) if $min_tiempo > 0
+                if (appConfigService.getMinCallDurationForTariffing() > 0) {
+                     warningMessages.add("Call duration " + cdrData.getDurationSeconds() + "s is less than minimum " + appConfigService.getMinCallDurationForTariffing() + "s (PHP: _TIEMPONO Min).");
+                }
             }
             if (appConfigService.getMaxCallDurationSeconds() > 0 && cdrData.getDurationSeconds() > appConfigService.getMaxCallDurationSeconds()) {
-                warnings.add("Call duration " + cdrData.getDurationSeconds() + "s exceeds maximum allowed " + appConfigService.getMaxCallDurationSeconds() + "s (PHP: _TIEMPONO Max).");
+                warningMessages.add("Call duration " + cdrData.getDurationSeconds() + "s exceeds maximum allowed " + appConfigService.getMaxCallDurationSeconds() + "s (PHP: _TIEMPONO Max).");
             }
         }
 
+        // PHP: if (isset($info_cdr['cuarentena']) && is_string($info_cdr['cuarentena']) && $info_cdr['cuarentena'] != '')
+        // This is handled if the parser itself sets quarantine reason.
         if (cdrData.isMarkedForQuarantine() && cdrData.getQuarantineReason() != null &&
             cdrData.getQuarantineStep() != null && cdrData.getQuarantineStep().startsWith("evaluateFormat")) {
-            if (errors.isEmpty()) {
-                errors.add("Marked for quarantine by parser: " + cdrData.getQuarantineReason());
+            // If parser already marked it, ensure its reason is included if no other errors found yet.
+            if (errorMessages.isEmpty()) {
+                errorMessages.add("Marked for quarantine by parser: " + cdrData.getQuarantineReason());
             }
         }
 
-        if (!errors.isEmpty()) {
+
+        if (!errorMessages.isEmpty()) {
             cdrData.setMarkedForQuarantine(true);
+            // If parser already set a reason, keep it, otherwise use combined errors.
             if (cdrData.getQuarantineReason() == null || !cdrData.getQuarantineReason().startsWith("Marked for quarantine by parser:")) {
-                cdrData.setQuarantineReason(String.join("; ", errors));
+                cdrData.setQuarantineReason(String.join("; ", errorMessages));
             }
             if (cdrData.getQuarantineStep() == null || !cdrData.getQuarantineStep().startsWith("evaluateFormat")) {
-                cdrData.setQuarantineStep("InitialValidation_Error");
+                cdrData.setQuarantineStep(QuarantineErrorType.INITIAL_VALIDATION_ERROR.name());
             }
-            log.warn("CDR validation errors: {}. Quarantine set.", errors);
-        } else if (!warnings.isEmpty()) {
+            log.warn("CDR validation errors: {}. Quarantine set.", errorMessages);
+            return false; // Errors found
+        } else if (!warningMessages.isEmpty()) {
             cdrData.setMarkedForQuarantine(true);
-            cdrData.setQuarantineReason(String.join("; ", warnings));
-            cdrData.setQuarantineStep("InitialValidation_Warning");
-            log.warn("CDR validation warnings (leading to quarantine): {}. Quarantine set.", warnings);
-        } else {
-            log.debug("CDR data passed initial validation.");
+            cdrData.setQuarantineReason(String.join("; ", warningMessages));
+            cdrData.setQuarantineStep(QuarantineErrorType.INITIAL_VALIDATION_WARNING.name());
+            log.warn("CDR validation warnings (leading to quarantine): {}. Quarantine set.", warningMessages);
+            return true; // No hard errors, but warnings lead to quarantine
         }
-        return errors;
+
+        log.debug("CDR data passed initial validation without errors or quarantinable warnings.");
+        return true; // Valid
     }
 }

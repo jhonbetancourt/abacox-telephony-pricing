@@ -22,40 +22,38 @@ import java.util.List;
 @RequiredArgsConstructor
 public class CdrFileProcessorService {
 
-    private final CiscoCm60CdrProcessor ciscoCm60Processor;
+    // Keep existing dependencies
+    private final CiscoCm60CdrProcessor ciscoCm60Processor; // Example, could be injected based on plant type
     private final CdrEnrichmentService cdrEnrichmentService;
     private final CallRecordPersistenceService callRecordPersistenceService;
     private final FailedCallRecordPersistenceService failedCallRecordPersistenceService;
     private final CommunicationLocationLookupService communicationLocationLookupService;
     private final FileInfoPersistenceService fileInfoPersistenceService;
     private final CdrValidationService cdrValidationService;
-    private final CallTypeDeterminationService callTypeDeterminationService; // For cache reset
+    private final CallTypeDeterminationService callTypeDeterminationService;
     private final CdrConfigService cdrConfigService;
 
 
-    // Each CDR processed in its own transaction to allow others to succeed if one fails
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void processSingleCdrLine(String cdrLine, FileInfo fileInfo, CommunicationLocation commLocation, ICdrTypeProcessor processor) {
         CdrData cdrData = null;
         log.trace("Processing single CDR line: {}", cdrLine);
         try {
             cdrData = processor.evaluateFormat(cdrLine, commLocation);
-            if (cdrData == null) { // e.g., "INTEGER" line or skipped by parser
-                log.trace("Parser returned null for line, skipping: {}", cdrLine);
+            if (cdrData == null) {
+                log.trace("Processor returned null for line, skipping: {}", cdrLine);
                 return;
             }
             cdrData.setFileInfo(fileInfo);
             cdrData.setCommLocationId(commLocation.getId());
 
-            List<String> validationErrors = cdrValidationService.validateInitialCdrData(cdrData, commLocation.getIndicator().getOriginCountryId());
-            if (!validationErrors.isEmpty() || cdrData.isMarkedForQuarantine()) {
-                String errorMsg = cdrData.isMarkedForQuarantine() ? cdrData.getQuarantineReason() : String.join("; ", validationErrors);
-                String errorType = cdrData.isMarkedForQuarantine() ? cdrData.getQuarantineStep().contains("Warning") ? "INITIAL_VALIDATION_WARNING" : "INITIAL_VALIDATION_ERROR" : "INITIAL_VALIDATION_ERROR";
-                String step = cdrData.isMarkedForQuarantine() ? cdrData.getQuarantineStep() : "Validation";
-
-                log.warn("Initial CDR validation failed or warning for line: {} - Reason: {}", cdrLine, errorMsg);
-                failedCallRecordPersistenceService.saveFailedRecord(cdrLine, fileInfo, commLocation.getId(),
-                        errorType, errorMsg, step, cdrData.getCallingPartyNumber(), null);
+            boolean isValid = cdrValidationService.validateInitialCdrData(cdrData, commLocation.getIndicator().getOriginCountryId());
+            if (!isValid || cdrData.isMarkedForQuarantine()) {
+                QuarantineErrorType errorType = cdrData.getQuarantineStep() != null && !cdrData.getQuarantineStep().isEmpty() ?
+                                                QuarantineErrorType.valueOf(cdrData.getQuarantineStep()) :
+                                                QuarantineErrorType.INITIAL_VALIDATION_ERROR;
+                failedCallRecordPersistenceService.quarantineRecord(cdrData, errorType,
+                        cdrData.getQuarantineReason(), cdrData.getQuarantineStep(), null);
                 return;
             }
 
@@ -63,20 +61,25 @@ public class CdrFileProcessorService {
 
             if (cdrData.isMarkedForQuarantine()) {
                 log.warn("CDR marked for quarantine after enrichment. Reason: {}, Step: {}", cdrData.getQuarantineReason(), cdrData.getQuarantineStep());
-                failedCallRecordPersistenceService.saveFailedRecord(cdrLine, fileInfo, commLocation.getId(),
-                        cdrData.getQuarantineReason().startsWith("Marked for quarantine by parser:") ? "PARSER_QUARANTINE" :
-                        cdrData.getQuarantineStep().contains("Warning") ? "ENRICHMENT_WARNING" : "ENRICHMENT_ERROR",
-                        cdrData.getQuarantineReason(), cdrData.getQuarantineStep(),
-                        cdrData.getCallingPartyNumber(), null);
+                QuarantineErrorType errorType = cdrData.getQuarantineStep() != null && !cdrData.getQuarantineStep().isEmpty() ?
+                                                QuarantineErrorType.valueOf(cdrData.getQuarantineStep()) :
+                                                QuarantineErrorType.ENRICHMENT_ERROR;
+                failedCallRecordPersistenceService.quarantineRecord(cdrData, errorType,
+                        cdrData.getQuarantineReason(), cdrData.getQuarantineStep(), null);
             } else {
                 callRecordPersistenceService.saveOrUpdateCallRecord(cdrData, commLocation);
             }
         } catch (Exception e) {
             log.error("Unhandled exception processing CDR line: {}", cdrLine, e);
             String step = (cdrData != null && cdrData.getQuarantineStep() != null) ? cdrData.getQuarantineStep() : "UNKNOWN_PROCESSING_STEP";
-            String ext = (cdrData != null) ? cdrData.getCallingPartyNumber() : "UNKNOWN_EXT";
-            failedCallRecordPersistenceService.saveFailedRecord(cdrLine, fileInfo, commLocation.getId(),
-                    "UNHANDLED_EXCEPTION", e.getMessage(), step, ext, null);
+            if (cdrData == null) {
+                cdrData = new CdrData();
+                cdrData.setRawCdrLine(cdrLine);
+                cdrData.setFileInfo(fileInfo);
+                cdrData.setCommLocationId(commLocation.getId());
+            }
+            failedCallRecordPersistenceService.quarantineRecord(cdrData,
+                    QuarantineErrorType.UNHANDLED_EXCEPTION, e.getMessage(), step, null);
         }
     }
 
@@ -92,10 +95,11 @@ public class CdrFileProcessorService {
         FileInfo fileInfo = fileInfoPersistenceService.createOrGetFileInfo(filename, commLocationId, "STREAM_INPUT", inputStream);
         log.debug("Using FileInfo ID: {} for stream: {}", fileInfo.getId(), filename);
 
-        // Reset cache for this specific commLocation at the start of processing its file
         callTypeDeterminationService.resetExtensionLimitsCache(commLocation);
 
-        ICdrTypeProcessor processor = ciscoCm60Processor; // Could be a factory based on commLocation.getPlantTypeId()
+        // TODO: Implement a factory or strategy to select the correct processor based on commLocation.getPlantTypeId()
+        // For now, we are hardcoding to CiscoCm60CdrProcessor as per the initial request context.
+        ICdrTypeProcessor processor = ciscoCm60Processor;
         boolean headerProcessed = false;
 
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))) {
@@ -104,27 +108,31 @@ public class CdrFileProcessorService {
             long processedCdrCount = 0;
             while ((line = reader.readLine()) != null) {
                 lineCount++;
-                if (line.trim().isEmpty()) {
+                String trimmedLine = line.trim();
+                if (trimmedLine.isEmpty()) {
                     log.trace("Skipping empty line at line number {}", lineCount);
                     continue;
                 }
-                log.trace("Read line {}: {}", lineCount, line);
+                log.trace("Read line {}: {}", lineCount, trimmedLine);
 
-                if (!headerProcessed && line.toLowerCase().startsWith(CiscoCm60CdrProcessor.CDR_RECORD_TYPE_HEADER.toLowerCase())) {
-                    processor.parseHeader(line);
+                // Use the processor's method to check if it's a header
+                if (!headerProcessed && processor.isHeaderLine(trimmedLine)) {
+                    processor.parseHeader(trimmedLine);
                     headerProcessed = true;
-                    log.info("Processed header line from stream: {}", filename);
+                    log.info("Processed header line using {} for stream: {}", processor.getClass().getSimpleName(), filename);
                     continue;
                 }
 
                 if (!headerProcessed) {
-                    log.warn("Skipping line {} as header has not been processed yet: {}", lineCount, line);
-                    failedCallRecordPersistenceService.saveFailedRecord(line, fileInfo, commLocationId,
-                            "MISSING_HEADER", "CDR data encountered before header", "StreamRead_HeaderCheck", null, null);
+                    log.warn("Skipping line {} as header has not been processed yet (checked by {}): {}",
+                            lineCount, processor.getClass().getSimpleName(), trimmedLine);
+                    CdrData tempData = new CdrData(); tempData.setRawCdrLine(trimmedLine); tempData.setFileInfo(fileInfo); tempData.setCommLocationId(commLocationId);
+                    failedCallRecordPersistenceService.quarantineRecord(tempData,
+                            QuarantineErrorType.MISSING_HEADER, "CDR data encountered before header", "StreamRead_HeaderCheck", null);
                     continue;
                 }
 
-                processSingleCdrLine(line, fileInfo, commLocation, processor);
+                processSingleCdrLine(trimmedLine, fileInfo, commLocation, processor);
                 processedCdrCount++;
 
                 if (processedCdrCount > 0 && processedCdrCount % cdrConfigService.CDR_PROCESSING_BATCH_SIZE == 0) {
@@ -135,8 +143,9 @@ public class CdrFileProcessorService {
             log.info("Finished processing stream: {}. Total lines read: {}, Total CDRs processed: {}", filename, lineCount, processedCdrCount);
         } catch (IOException e) {
             log.error("Error reading CDR stream: {}", filename, e);
-            failedCallRecordPersistenceService.saveFailedRecord("STREAM_READ_ERROR", fileInfo, commLocationId,
-                    "IO_EXCEPTION", e.getMessage(), "StreamRead_IOException", null, null);
+            CdrData tempData = new CdrData(); tempData.setRawCdrLine("STREAM_READ_ERROR"); tempData.setFileInfo(fileInfo); tempData.setCommLocationId(commLocationId);
+            failedCallRecordPersistenceService.quarantineRecord(tempData,
+                    QuarantineErrorType.IO_EXCEPTION, e.getMessage(), "StreamRead_IOException", null);
         }
     }
 }
