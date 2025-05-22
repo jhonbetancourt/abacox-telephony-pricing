@@ -35,16 +35,8 @@ public class CallRecordPersistenceService {
             return null;
         }
 
-        String cdrKeyFields = String.join("|",
-                String.valueOf(cdrData.getDateTimeOriginationEpochSeconds()),
-                Objects.toString(cdrData.getCallingPartyNumber(), ""),
-                Objects.toString(cdrData.getFinalCalledPartyNumber(), ""),
-                String.valueOf(cdrData.getDurationSeconds()),
-                Objects.toString(cdrData.getDestDeviceName(), ""), // Trunk
-                String.valueOf(commLocation.getId())
-        );
-        String cdrHash = HashUtil.sha256(cdrKeyFields);
-        log.debug("Generated CDR Hash for key fields '{}': {}", cdrKeyFields, cdrHash);
+        String cdrHash = HashUtil.sha256(cdrData.getRawCdrLine());
+        log.debug("Generated CDR Hash for line: {} is {}", cdrData.getRawCdrLine(), cdrHash);
 
 
         CallRecord existingRecord = findByCdrHash(cdrHash);
