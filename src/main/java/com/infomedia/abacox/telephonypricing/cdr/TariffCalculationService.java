@@ -1,8 +1,6 @@
 package com.infomedia.abacox.telephonypricing.cdr;
 
 import com.infomedia.abacox.telephonypricing.entity.CommunicationLocation;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.PersistenceContext; // Import PersistenceContext
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
@@ -105,7 +103,7 @@ public class TariffCalculationService {
         }
 
         if (cleanNumberDueToTrunkConfig) {
-            String cleaned = CdrParserUtil.cleanPhoneNumber(cdrData.getEffectiveDestinationNumber(), pbxPrefixes, true);
+            String cleaned = CdrUtil.cleanPhoneNumber(cdrData.getEffectiveDestinationNumber(), pbxPrefixes, true);
             if (!Objects.equals(cleaned, numberForTariffing)) {
                 log.debug("Number '{}' cleaned to '{}' for tariffing (due to trunk/no-trunk config)", numberForTariffing, cleaned);
                 numberForTariffing = cleaned;
@@ -202,7 +200,7 @@ public class TariffCalculationService {
             if (trunkInfoOpt.get().noPbxPrefix != null && trunkInfoOpt.get().noPbxPrefix) {
                 prefixesForNormalization = Collections.emptyList();
             }
-            String normalizedNumberForLookup = CdrParserUtil.cleanPhoneNumber(cdrData.getEffectiveDestinationNumber(), prefixesForNormalization, true);
+            String normalizedNumberForLookup = CdrUtil.cleanPhoneNumber(cdrData.getEffectiveDestinationNumber(), prefixesForNormalization, true);
             log.debug("Normalized number for lookup: {}", normalizedNumberForLookup);
             
             List<PrefixInfo> normalizedPrefixes = prefixLookupService.findMatchingPrefixes(

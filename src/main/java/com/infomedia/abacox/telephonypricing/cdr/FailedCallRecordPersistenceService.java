@@ -33,12 +33,8 @@ public class FailedCallRecordPersistenceService {
 
         String cdrStringToStore = cdrData.getRawCdrLine();
         Long commLocationIdToStore = cdrData.getCommLocationId();
-        String extensionToStore = cdrData.getCallingPartyNumber(); // Or a more relevant extension based on context
-
-        // PHP: $cdr5 = sha256($comubicacion_id.'@'.$cdr);
-        String ctlHashContent = (commLocationIdToStore != null ? commLocationIdToStore : "0") + "@" +
-                                (cdrStringToStore != null ? cdrStringToStore : "");
-        String ctlHash = HashUtil.sha256(ctlHashContent);
+        String extensionToStore = cdrData.getCallingPartyNumber();
+        String ctlHash = CdrUtil.generateCtlHash(cdrStringToStore, commLocationIdToStore);
 
         FailedCallRecord existingRecord = findByCtlHash(ctlHash);
         FailedCallRecord recordToSave;

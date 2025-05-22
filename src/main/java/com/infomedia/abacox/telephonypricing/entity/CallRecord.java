@@ -298,11 +298,9 @@ public class CallRecord extends AuditedEntity {
     )
     private FileInfo fileInfo;
 
-    /**
-     * SHA-256 hash of the original raw CDR line to prevent duplicates.
-     * Length 64 for SHA-256 hex output.
-     * Must be unique across all records.
-     */
-    @Column(name = "cdr_hash", length = 64, unique = true)
-    private String cdrHash;
+    @Column(name = "ctl_hash", length = 64, unique = true)
+    private String ctlHash;
+
+    @Column(name = "cdr_string", columnDefinition = "TEXT")
+    private String cdrString;
 }

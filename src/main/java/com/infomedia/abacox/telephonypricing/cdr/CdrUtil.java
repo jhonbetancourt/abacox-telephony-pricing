@@ -8,11 +8,11 @@ import java.util.stream.Collectors;
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
-public class CdrParserUtil {
+public class CdrUtil {
 
     public static List<String> parseCsvLine(String line, String separator) {
         return Arrays.stream(line.split(Pattern.quote(separator)))
-                .map(CdrParserUtil::cleanCsvField)
+                .map(CdrUtil::cleanCsvField)
                 .collect(Collectors.toList());
     }
 
@@ -162,5 +162,10 @@ public class CdrParserUtil {
         cdrData.setOrigDeviceName(cdrData.getDestDeviceName());
         cdrData.setDestDeviceName(tempTrunk);
         log.debug("Swapped trunks. After: Orig='{}', Dest='{}'", cdrData.getOrigDeviceName(), cdrData.getDestDeviceName());
+    }
+
+    public static String generateCtlHash(String cdrString, Long commLocationId) {
+        String ctlHashContent = (commLocationId != null ? commLocationId : "0") + "@" + (cdrString != null ? cdrString : "");
+        return HashUtil.sha256(ctlHashContent);
     }
 }

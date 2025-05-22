@@ -83,7 +83,7 @@ public class CallTypeDeterminationService {
                     cdrData.getCallingPartyNumber(), cdrData.getFinalCalledPartyNumber());
             if (employeeLookupService.isPossibleExtension(cdrData.getCallingPartyNumber(), limits)) {
                 log.debug("Calling party '{}' is a possible extension. Checking destination for internal call.", cdrData.getCallingPartyNumber());
-                String destinationForInternalCheck = CdrParserUtil.cleanPhoneNumber(cdrData.getFinalCalledPartyNumber(), null, false);
+                String destinationForInternalCheck = CdrUtil.cleanPhoneNumber(cdrData.getFinalCalledPartyNumber(), null, false);
                 log.debug("Cleaned destination for internal check: {}", destinationForInternalCheck);
 
                 Optional<String> pbxInternalTransformed = pbxSpecialRuleLookupService.applyPbxSpecialRule(
@@ -142,8 +142,8 @@ public class CallTypeDeterminationService {
         log.debug("Processing INCOMING logic for CDR: {}", cdrData.getRawCdrLine());
         if (cdrData.isInternalCall()) {
             log.debug("Incoming call marked as internal. Inverting and processing as outgoing.");
-            CdrParserUtil.swapPartyInfo(cdrData);
-            CdrParserUtil.swapTrunks(cdrData);
+            CdrUtil.swapPartyInfo(cdrData);
+            CdrUtil.swapTrunks(cdrData);
             cdrData.setCallDirection(CallDirection.OUTGOING);
             processOutgoingLogic(cdrData, commLocation, limits, false);
             return;
@@ -217,7 +217,7 @@ public class CallTypeDeterminationService {
         cdrData.setEffectiveDestinationNumber(cdrData.getFinalCalledPartyNumber());
 
         if (!pbxSpecialRuleAppliedRecursively && !cdrData.isInternalCall()) {
-            String numToCheckSpecial = CdrParserUtil.cleanPhoneNumber(
+            String numToCheckSpecial = CdrUtil.cleanPhoneNumber(
                     cdrData.getEffectiveDestinationNumber(),
                     commLocation.getPbxPrefix() != null ? Arrays.asList(commLocation.getPbxPrefix().split(",")) : Collections.emptyList(),
                     true
@@ -286,7 +286,7 @@ public class CallTypeDeterminationService {
             stripOnlyIfPrefixMatches = false;
         }
 
-        String cleanedDestination = CdrParserUtil.cleanPhoneNumber(
+        String cleanedDestination = CdrUtil.cleanPhoneNumber(
             cdrData.getEffectiveDestinationNumber(),
             prefixesToClean,
             stripOnlyIfPrefixMatches
@@ -327,7 +327,7 @@ public class CallTypeDeterminationService {
 
         if (internalTypeInfo.isEffectivelyIncoming() && cdrData.getCallDirection() == CallDirection.OUTGOING) {
             log.debug("Internal call determined to be effectively incoming. Inverting parties.");
-            CdrParserUtil.swapPartyInfo(cdrData);
+            CdrUtil.swapPartyInfo(cdrData);
             cdrData.setCallDirection(CallDirection.INCOMING);
             cdrData.setEmployee(internalTypeInfo.getDestinationEmployee());
             cdrData.setEmployeeId(internalTypeInfo.getDestinationEmployee() != null ? internalTypeInfo.getDestinationEmployee().getId() : null);

@@ -14,7 +14,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 @Service
 @Log4j2
@@ -40,7 +39,7 @@ public class EmployeeLookupService {
         boolean hasAuthCode = authCode != null && !authCode.isEmpty();
         // PHP: $ext = trim($info_cdr['ext']);
         // PHP: if ($param_tipo == 'ext' && substr($param, 0, 1) == '+') { $param = substr($param, 1); }
-        String cleanedExtension = (extension != null) ? CdrParserUtil.cleanPhoneNumber(extension, null, false) : null;
+        String cleanedExtension = (extension != null) ? CdrUtil.cleanPhoneNumber(extension, null, false) : null;
         if (cleanedExtension != null && cleanedExtension.startsWith("+")) {
             cleanedExtension = cleanedExtension.substring(1);
         }
@@ -284,7 +283,7 @@ public class EmployeeLookupService {
         }
         // PHP: $extension_valida = ExtensionValida($extension, true);
         // ExtensionValida checks if it doesn't start with '0' unless it's just '0'.
-        String cleanedExt = CdrParserUtil.cleanPhoneNumber(extensionNumber, null, false); // Basic cleaning
+        String cleanedExt = CdrUtil.cleanPhoneNumber(extensionNumber, null, false); // Basic cleaning
         if (cleanedExt.startsWith("+")) cleanedExt = cleanedExt.substring(1);
 
 

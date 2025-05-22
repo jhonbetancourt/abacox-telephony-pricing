@@ -73,9 +73,9 @@ public class CiscoCm60CdrProcessor implements ICdrTypeProcessor {
         }
         // Clean the line specifically for this check, as the raw line might have quotes.
         String cleanedFirstField = "";
-        List<String> fields = CdrParserUtil.parseCsvLine(line, CDR_SEPARATOR);
+        List<String> fields = CdrUtil.parseCsvLine(line, CDR_SEPARATOR);
         if (!fields.isEmpty()) {
-            cleanedFirstField = CdrParserUtil.cleanCsvField(fields.get(0)).toLowerCase();
+            cleanedFirstField = CdrUtil.cleanCsvField(fields.get(0)).toLowerCase();
         }
         return INTERNAL_CDR_RECORD_TYPE_HEADER_KEY.equalsIgnoreCase(cleanedFirstField);
     }
@@ -83,10 +83,10 @@ public class CiscoCm60CdrProcessor implements ICdrTypeProcessor {
     @Override
     public void parseHeader(String headerLine) {
         currentHeaderPositions.clear();
-        List<String> headers = CdrParserUtil.parseCsvLine(headerLine, CDR_SEPARATOR);
+        List<String> headers = CdrUtil.parseCsvLine(headerLine, CDR_SEPARATOR);
         int maxIndex = -1;
         for (int i = 0; i < headers.size(); i++) {
-            String cleanedHeader = CdrParserUtil.cleanCsvField(headers.get(i)).toLowerCase();
+            String cleanedHeader = CdrUtil.cleanCsvField(headers.get(i)).toLowerCase();
             currentHeaderPositions.put(cleanedHeader, i);
             if (conceptualToActualHeaderMap.containsValue(cleanedHeader)) {
                  if (i > maxIndex) maxIndex = i;
@@ -114,7 +114,7 @@ public class CiscoCm60CdrProcessor implements ICdrTypeProcessor {
             if (actualHeaderName.contains("ipaddr") || actualHeaderName.contains("address_ip")) {
                 try {
                     if (!valueToProcess.isEmpty() && !valueToProcess.equals("0") && !valueToProcess.equals("-1")) {
-                        return CdrParserUtil.decimalToIp(Long.parseLong(valueToProcess));
+                        return CdrUtil.decimalToIp(Long.parseLong(valueToProcess));
                     }
                     return valueToProcess;
                 } catch (NumberFormatException e) {
@@ -171,7 +171,7 @@ public class CiscoCm60CdrProcessor implements ICdrTypeProcessor {
             errorData.setQuarantineStep("evaluateFormat_HeaderMissing_CM60"); return errorData;
         }
 
-        List<String> fields = CdrParserUtil.parseCsvLine(cdrLine, CDR_SEPARATOR);
+        List<String> fields = CdrUtil.parseCsvLine(cdrLine, CDR_SEPARATOR);
         CdrData cdrData = new CdrData();
         cdrData.setRawCdrLine(cdrLine);
 
@@ -293,7 +293,7 @@ public class CiscoCm60CdrProcessor implements ICdrTypeProcessor {
                 }
             }
             if (cdrData.getJoinOnBehalfOf() == null || cdrData.getJoinOnBehalfOf() != 7) {
-                CdrParserUtil.swapPartyInfo(cdrData);
+                CdrUtil.swapPartyInfo(cdrData);
             }
         } else {
             if (isConferenceByLastRedirectDn) {
@@ -314,7 +314,7 @@ public class CiscoCm60CdrProcessor implements ICdrTypeProcessor {
                 cdrData.setCallDirection(CallDirection.INCOMING);
             } else if (invertTrunksForConference && cdrData.getCallDirection() != CallDirection.INCOMING) {
                 if (cdrData.getJoinOnBehalfOf() == null || cdrData.getJoinOnBehalfOf() != 7) {
-                    CdrParserUtil.swapTrunks(cdrData);
+                    CdrUtil.swapTrunks(cdrData);
                 }
             }
         } else {
@@ -327,7 +327,7 @@ public class CiscoCm60CdrProcessor implements ICdrTypeProcessor {
                                                         employeeLookupService.isPossibleExtension(cdrData.getLastRedirectDn(), limits);
                 if (isFinalCalledPartyInternalFormat || isRedirectPartyInternalFormat) {
                      cdrData.setCallDirection(CallDirection.INCOMING);
-                     CdrParserUtil.swapPartyInfo(cdrData);
+                     CdrUtil.swapPartyInfo(cdrData);
                 }
             }
         }

@@ -10,8 +10,6 @@ import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Objects;
-
 @Service
 @Log4j2
 public class CallRecordPersistenceService {
@@ -39,7 +37,7 @@ public class CallRecordPersistenceService {
         log.debug("Generated CDR Hash for line: {} is {}", cdrData.getRawCdrLine(), cdrHash);
 
 
-        CallRecord existingRecord = findByCdrHash(cdrHash);
+        CallRecord existingRecord = findByCtlHash(cdrHash);
         if (existingRecord != null) {
             log.warn("Duplicate CDR detected based on hash {}, raw line: {}. Original ID: {}. Quarantining.",
                     cdrHash, cdrData.getRawCdrLine(), existingRecord.getId());
@@ -72,9 +70,9 @@ public class CallRecordPersistenceService {
     }
 
     @Transactional(readOnly = true)
-    public CallRecord findByCdrHash(String cdrHash) {
+    public CallRecord findByCtlHash(String cdrHash) {
         try {
-            return entityManager.createQuery("SELECT cr FROM CallRecord cr WHERE cr.cdrHash = :hash", CallRecord.class)
+            return entityManager.createQuery("SELECT cr FROM CallRecord cr WHERE cr.ctlHash = :hash", CallRecord.class)
                     .setParameter("hash", cdrHash)
                     .getSingleResult();
         } catch (NoResultException e) {
@@ -106,9 +104,10 @@ public class CallRecordPersistenceService {
         callRecord.setTransferCause(cdrData.getTransferCause().getValue());
         callRecord.setAssignmentCause(cdrData.getAssignmentCause().getValue());
         callRecord.setDestinationEmployeeId(cdrData.getDestinationEmployeeId());
+        callRecord.setCdrString(cdrData.getRawCdrLine());
         if (cdrData.getFileInfo() != null) {
             callRecord.setFileInfoId(cdrData.getFileInfo().getId().longValue());
         }
-        callRecord.setCdrHash(cdrHash);
+        callRecord.setCtlHash(CdrUtil.generateCtlHash(cdrData.getRawCdrLine(), commLocation.getId()));
     }
 }
