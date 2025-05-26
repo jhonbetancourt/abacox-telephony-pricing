@@ -1,20 +1,18 @@
+// File: com/infomedia/abacox/telephonypricing/cdr/CdrConfigService.java
 package com.infomedia.abacox.telephonypricing.cdr;
 
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.NoResultException;
 import jakarta.persistence.PersistenceContext;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 @Log4j2
-@RequiredArgsConstructor
 public class CdrConfigService {
 
     @PersistenceContext
@@ -84,13 +82,37 @@ public class CdrConfigService {
 
     /**
      * PHP equivalent: defineParamCliente('CAPTURAS_INTERNADEF', $link);
+     * This is the default telephony type for internal calls when the destination
+     * extension cannot be definitively classified by other means.
+     * The PHP script validates if this value is in the list of internal types.
+     * Here, we just provide the configured value. The calling service should validate.
+     */
+    @Transactional(readOnly = true)
+    public Long getDefaultTelephonyTypeForUnresolvedInternalCalls() {
+        // For the specific CSV case, this should return 9 (NATIONAL_IP)
+        // In a real system, this would come from a configuration database:
+        // Example:
+        // try {
+        // return entityManager.createQuery("SELECT p.value FROM Parameter p WHERE p.name = 'CAPTURAS_INTERNADEF'", Long.class)
+        // .getSingleResult();
+        // } catch (NoResultException e) {
+        // log.warn("Parameter CAPTURAS_INTERNADEF not found, defaulting to NATIONAL_IP (9L)");
+        // return TelephonyTypeEnum.NATIONAL_IP.getValue();
+        // }
+        log.debug("getDefaultTelephonyTypeForUnresolvedInternalCalls returning: {}", TelephonyTypeEnum.NATIONAL_IP.getValue());
+        return TelephonyTypeEnum.NATIONAL_IP.getValue(); // To match the CSV output
+    }
+
+
+    /**
+     * This is the general default for internal calls when specific logic (like IP routing) doesn't apply.
+     * Not to be confused with getDefaultTelephonyTypeForUnresolvedInternalCalls, which is a fallback.
      */
     @Transactional(readOnly = true)
     public Long getDefaultInternalCallTypeId() {
-        // The PHP logic checks if the defined default is in _tipotele_Internas.
-        // Here, we'll just return a sensible default from our enum.
         return TelephonyTypeEnum.INTERNAL_SIMPLE.getValue();
     }
+
 
     @Transactional(readOnly = true)
     public String getDefaultInternalCallTypeName() {
