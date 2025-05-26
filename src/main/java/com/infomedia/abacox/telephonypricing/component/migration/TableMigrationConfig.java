@@ -1,4 +1,5 @@
-package com.infomedia.abacox.telephonypricing.component.migration; // Use your actual package
+// File: com/infomedia/abacox/telephonypricing/component/migration/TableMigrationConfig.java
+package com.infomedia.abacox.telephonypricing.component.migration;
 
 import lombok.Builder;
 import lombok.Data;
@@ -18,13 +19,19 @@ public class TableMigrationConfig {
     private String targetIdFieldName; // Name of the @Id field in the target entity
     private Map<String, String> columnMapping; // Map<SourceColumnName, TargetFieldName>
 
-    // --- New fields for self-reference ---
     @Builder.Default
-    private boolean selfReferencing = false; // Flag to indicate self-reference
-    private String selfReferenceSourceParentIdColumn; // e.g., "SUBDIRECCION_PERTENECE"
-    private String selfReferenceTargetForeignKeyFieldName; // e.g., "parentSubdivisionId" (the Long field)
-    // We can derive the DB column name from the target field name later if needed
+    private boolean selfReferencing = false;
+    private String selfReferenceSourceParentIdColumn;
+    private String selfReferenceTargetForeignKeyFieldName;
 
     @Builder.Default
-    private boolean treatZeroIdAsNullForForeignKeys = true; // Flag to treat 0 as null for foreign keys
+    private boolean treatZeroIdAsNullForForeignKeys = true;
+
+    // --- New fields for Historical Activeness (Pass 3) ---
+    @Builder.Default
+    private boolean processHistoricalActiveness = false; // Flag to enable Pass 3
+    private String sourceHistoricalControlIdColumn; // e.g., "FUNCIONARIO_HISTORICTL_ID"
+    private String sourceValidFromDateColumn;       // e.g., "FUNCIONARIO_HISTODESDE"
+    // targetHistoricalControlIdFieldName and targetValidFromDateFieldName are derived from columnMapping
+    // if processHistoricalActiveness is true.
 }

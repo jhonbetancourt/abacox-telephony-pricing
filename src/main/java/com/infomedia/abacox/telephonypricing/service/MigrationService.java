@@ -1,3 +1,4 @@
+// File: com/infomedia/abacox/telephonypricing/service/MigrationService.java
 package com.infomedia.abacox.telephonypricing.service; // Use your actual package
 
 import com.infomedia.abacox.telephonypricing.component.migration.DataMigrationExecutor;
@@ -15,9 +16,9 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ExecutorService; // Added
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future; // Added
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -41,75 +42,51 @@ public class MigrationService {
     private final AtomicInteger totalTables = new AtomicInteger(0);
     private final AtomicInteger migratedTables = new AtomicInteger(0);
     private final AtomicReference<String> currentStep = new AtomicReference<>("");
-    private final AtomicReference<Future<?>> migrationTaskFuture = new AtomicReference<>(null); // To potentially cancel
+    private final AtomicReference<Future<?>> migrationTaskFuture = new AtomicReference<>(null);
     // --- End State Tracking ---
 
-    /**
-     * Initiates the data migration asynchronously using a dedicated ExecutorService.
-     * Throws MigrationAlreadyInProgressException if a migration is already running.
-     *
-     * @param runRequest The parameters for the migration.
-     */
     public void startAsync(MigrationStart runRequest) {
-        // Use compareAndSet for atomicity, although isMigrationRunning.get() check is likely sufficient
-        // because the actual execution is serialized by the single-thread executor.
-        // However, compareAndSet is robust against potential (though unlikely) races here.
         if (!isMigrationRunning.compareAndSet(false, true)) {
              throw new MigrationAlreadyInProgressException("A data migration is already in progress.");
         }
-
         log.info("Submitting migration task to executor service.");
         try {
-            // Reset state *before* submitting the task
             resetMigrationState();
-
-            // Submit the actual migration logic to run asynchronously
             Future<?> future = migrationExecutorService.submit(() -> {
-                start(runRequest); // Call the private method containing the logic
+                start(runRequest);
             });
-            migrationTaskFuture.set(future); // Store the future if cancellation is needed
-
+            migrationTaskFuture.set(future);
         } catch (Exception e) {
-            // Handle potential submission errors (e.g., RejectedExecutionException if executor is shutting down)
             log.error("Failed to submit migration task to executor service", e);
             currentState.set(MigrationState.FAILED);
             errorMessage.set("Failed to start migration task: " + e.getMessage());
             endTime.set(LocalDateTime.now());
-            isMigrationRunning.set(false); // Ensure state is reset if submission fails
+            isMigrationRunning.set(false);
             migrationTaskFuture.set(null);
-            // Rethrow or handle as appropriate for your application
-            // throw new RuntimeException("Failed to submit migration task", e);
         }
     }
 
-    /**
-     * Resets the internal state variables before starting a new migration.
-     */
     private void resetMigrationState() {
-        currentState.set(MigrationState.STARTING); // Indicate preparing to run
+        currentState.set(MigrationState.STARTING);
         startTime.set(LocalDateTime.now());
         endTime.set(null);
         errorMessage.set(null);
         migratedTables.set(0);
         totalTables.set(0);
         currentStep.set("Initializing...");
-        migrationTaskFuture.set(null); // Clear previous future
+        migrationTaskFuture.set(null);
         log.debug("Migration state reset.");
     }
 
-
-    /**
-     * Contains the core logic for performing the data migration.
-     * This method is executed asynchronously via the migrationExecutorService.
-     * It should NOT be called directly from outside startAsync.
-     *
-     * @param runRequest The parameters for the migration.
-     */
     public void start(MigrationStart runRequest) {
-        isMigrationRunning.set(true);
+        // isMigrationRunning is set by startAsync, or should be set if this is called directly (not recommended for async)
+        if (!isMigrationRunning.get()) { // Ensure it's marked as running if called directly
+            isMigrationRunning.set(true);
+            resetMigrationState(); // Reset if called directly without async wrapper
+        }
         log.info("<<<<<<<<<< Starting Full Data Migration Execution >>>>>>>>>>");
-        currentState.set(MigrationState.RUNNING); // Now actually running
-        List<TableMigrationConfig> tablesToMigrate = List.of();
+        currentState.set(MigrationState.RUNNING);
+        List<TableMigrationConfig> tablesToMigrate; // Initialize
         try {
             String url = "jdbc:sqlserver://" + runRequest.getHost() + ":" + runRequest.getPort() + ";databaseName="
                     + runRequest.getDatabase() + ";encrypt=" + runRequest.getEncryption() + ";trustServerCertificate="
@@ -130,40 +107,31 @@ public class MigrationService {
             log.info("Constructed migration params with {} tables. Starting execution.", totalTableCount);
             currentStep.set(String.format("Starting migration of %d tables...", totalTableCount));
 
-            // Pass the progress reporting method reference
             dataMigrationExecutor.runMigration(params, this::reportProgress);
 
-            // If runMigration completes without exception
             currentState.set(MigrationState.COMPLETED);
             currentStep.set(String.format("Finished: Successfully migrated %d/%d tables.", migratedTables.get(), totalTables.get()));
             log.info("<<<<<<<<<< Full Data Migration Finished Successfully >>>>>>>>>>");
 
         } catch (Exception e) {
-            // Catch exceptions from runMigration or setup
             log.error("<<<<<<<<<< Full Data Migration FAILED during execution >>>>>>>>>>", e);
             currentState.set(MigrationState.FAILED);
             String failureMsg = (e.getCause() != null) ? e.getCause().getMessage() : e.getMessage();
             errorMessage.set("Migration failed: " + failureMsg);
-            // Ensure the step reflects failure if not already set by reportProgress
             if (!currentStep.get().toLowerCase().contains("failed")) {
                  currentStep.set(String.format("Failed during migration (%d/%d tables completed). Error: %s",
                          migratedTables.get(), totalTables.get(), failureMsg));
             }
              log.error("Final migration status: FAILED. Error: {}", errorMessage.get());
-             // Optional: Rethrow if the executor's exception handling mechanism needs it,
-             // but typically logging and setting state is sufficient for background tasks.
-             // throw new RuntimeException("Migration failed", e);
-
         } finally {
             endTime.set(LocalDateTime.now());
-            isMigrationRunning.set(false); // Release the lock
-            migrationTaskFuture.set(null); // Clear the future on completion/failure
+            isMigrationRunning.set(false);
+            migrationTaskFuture.set(null);
             log.info("Migration process ended. State: {}, Duration: {}", currentState.get(),
                     startTime.get() != null && endTime.get() != null ?
                             java.time.Duration.between(startTime.get(), endTime.get()) : "N/A");
         }
     }
-
 
     public MigrationStatus getStatus() {
         return MigrationStatus.builder()
@@ -177,44 +145,29 @@ public class MigrationService {
                 .build();
     }
 
-    /**
-     * Callback method invoked by DataMigrationExecutor after processing each table.
-     * Updates the migration progress status.
-     *
-     * @param config The configuration of the table just processed.
-     * @param error  The exception that occurred during processing, or null if successful.
-     */
     private void reportProgress(TableMigrationConfig config, Exception error) {
-        int currentTotal = totalTables.get(); // Get snapshot of total
-
+        int currentTotal = totalTables.get();
         if (error == null) {
-            // Success for this table
             int completedCount = migratedTables.incrementAndGet();
             String stepMessage = String.format("Migrated table %d/%d: %s",
                     completedCount, currentTotal, config.getSourceTableName());
             currentStep.set(stepMessage);
-            log.debug(stepMessage); // Keep debug for successful steps
+            log.debug(stepMessage);
         } else {
-            // Failure for this table
             int completedCount = migratedTables.get();
             String stepMessage = String.format("Failed on table %d/%d: %s. Error: %s",
-                    completedCount + 1, // Show user which table number failed (e.g., 5/10)
+                    completedCount + 1,
                     currentTotal,
                     config.getSourceTableName(),
                     error.getMessage());
             currentStep.set(stepMessage);
-            errorMessage.set(error.getMessage()); // Set the specific error message
-            // The main performMigration() catch block will set the final FAILED state
+            errorMessage.set(error.getMessage());
             log.warn("Progress update: Failure on table {}. Error: {}", config.getSourceTableName(), error.getMessage());
         }
     }
 
-
-    // --- defineMigrationOrderAndMappings() method remains the same ---
     private List<TableMigrationConfig> defineMigrationOrderAndMappings() {
-       // ... (Keep the existing long list of table configurations)
         List<TableMigrationConfig> configs = new ArrayList<>();
-        // --- Order based on dependencies ---
 
         // Level 0: No FK dependencies among these
         configs.add(TableMigrationConfig.builder()
@@ -227,9 +180,10 @@ public class MigrationService {
                         entry("MPORIGEN_SIMBOLO", "currencySymbol"),
                         entry("MPORIGEN_PAIS", "name"),
                         entry("MPORIGEN_CCODE", "code"),
-                        entry("MPORIGEN_ACTIVO", "active")
+                        entry("MPORIGEN_ACTIVO", "active"),
+                        entry("MPORIGEN_FCREACION", "createdDate"),
+                        entry("MPORIGEN_FMODIFICADO", "lastModifiedDate")
                 ))
-                // .treatZeroIdAsNullForForeignKeys(true) // Uses default
                 .build());
 
         configs.add(TableMigrationConfig.builder()
@@ -249,7 +203,9 @@ public class MigrationService {
                         entry("CIUDADES_NORTE", "northCoordinate"),
                         entry("CIUDADES_ESTE", "eastCoordinate"),
                         entry("CIUDADES_ORIGEN", "origin"),
-                        entry("CIUDADES_ACTIVO", "active")
+                        entry("CIUDADES_ACTIVO", "active"),
+                        entry("CIUDADES_FCREACION", "createdDate"),
+                        entry("CIUDADES_FMODIFICADO", "lastModifiedDate")
                 ))
                 .build());
 
@@ -261,7 +217,9 @@ public class MigrationService {
                 .columnMapping(Map.ofEntries(
                         entry("TIPOPLANTA_ID", "id"),
                         entry("TIPOPLANTA_NOMBRE", "name"),
-                        entry("TIPOPLANTA_ACTIVO", "active")
+                        entry("TIPOPLANTA_ACTIVO", "active"),
+                        entry("TIPOPLANTA_FCREACION", "createdDate"),
+                        entry("TIPOPLANTA_FMODIFICADO", "lastModifiedDate")
                 ))
                 .build());
 
@@ -273,7 +231,9 @@ public class MigrationService {
                 .columnMapping(Map.ofEntries(
                         entry("FUNCARGO_ID", "id"),
                         entry("FUNCARGO_NOMBRE", "name"),
-                        entry("FUNCARGO_ACTIVO", "active")
+                        entry("FUNCARGO_ACTIVO", "active"),
+                        entry("FUNCARGO_FCREACION", "createdDate"),
+                        entry("FUNCARGO_FMODIFICADO", "lastModifiedDate")
                 ))
                 .build());
 
@@ -285,7 +245,9 @@ public class MigrationService {
                 .columnMapping(Map.ofEntries(
                         entry("CLASELLAMA_ID", "id"),
                         entry("CLASELLAMA_NOMBRE", "name"),
-                        entry("CLASELLAMA_ACTIVO", "active")
+                        entry("CLASELLAMA_ACTIVO", "active"),
+                        entry("CLASELLAMA_FCREACION", "createdDate"),
+                        entry("CLASELLAMA_FMODIFICADO", "lastModifiedDate")
                 ))
                 .build());
 
@@ -298,8 +260,10 @@ public class MigrationService {
                 .columnMapping(Map.ofEntries(
                         entry("OPERADOR_ID", "id"),
                         entry("OPERADOR_NOMBRE", "name"),
-                        entry("OPERADOR_MPORIGEN_ID", "originCountryId"), // FK
-                        entry("OPERADOR_ACTIVO", "active")
+                        entry("OPERADOR_MPORIGEN_ID", "originCountryId"),
+                        entry("OPERADOR_ACTIVO", "active"),
+                        entry("OPERADOR_FCREACION", "createdDate"),
+                        entry("OPERADOR_FMODIFICADO", "lastModifiedDate")
                 ))
                 .build());
 
@@ -311,9 +275,11 @@ public class MigrationService {
                 .columnMapping(Map.ofEntries(
                         entry("TIPOTELE_ID", "id"),
                         entry("TIPOTELE_NOMBRE", "name"),
-                        entry("TIPOTELE_CLASELLAMA_ID", "callCategoryId"), // FK
+                        entry("TIPOTELE_CLASELLAMA_ID", "callCategoryId"),
                         entry("TIPOTELE_TRONCALES", "usesTrunks"),
-                        entry("TIPOTELE_ACTIVO", "active")
+                        entry("TIPOTELE_ACTIVO", "active"),
+                        entry("TIPOTELE_FCREACION", "createdDate"),
+                        entry("TIPOTELE_FMODIFICADO", "lastModifiedDate")
                 ))
                 .build());
 
@@ -325,12 +291,14 @@ public class MigrationService {
                 .targetIdFieldName("id")
                 .columnMapping(Map.ofEntries(
                         entry("INDICATIVO_ID", "id"),
-                        entry("INDICATIVO_TIPOTELE_ID", "telephonyTypeId"), // FK
+                        entry("INDICATIVO_TIPOTELE_ID", "telephonyTypeId"),
                         entry("INDICATIVO_DPTO_PAIS", "departmentCountry"),
                         entry("INDICATIVO_CIUDAD", "cityName"),
-                        entry("INDICATIVO_OPERADOR_ID", "operatorId"), // FK
-                        entry("INDICATIVO_MPORIGEN_ID", "originCountryId"), // FK
-                        entry("INDICATIVO_ENUSO", "active")
+                        entry("INDICATIVO_OPERADOR_ID", "operatorId"),
+                        entry("INDICATIVO_MPORIGEN_ID", "originCountryId"),
+                        entry("INDICATIVO_ENUSO", "active"), // Assuming ENUSO maps to active
+                        entry("INDICATIVO_FCREACION", "createdDate"),
+                        entry("INDICATIVO_FMODIFICADO", "lastModifiedDate")
                 ))
                 .build());
 
@@ -341,14 +309,16 @@ public class MigrationService {
                 .targetIdFieldName("id")
                 .columnMapping(Map.ofEntries(
                         entry("PREFIJO_ID", "id"),
-                        entry("PREFIJO_OPERADOR_ID", "operatorId"), // FK
-                        entry("PREFIJO_TIPOTELE_ID", "telephoneTypeId"), // FK
+                        entry("PREFIJO_OPERADOR_ID", "operatorId"),
+                        entry("PREFIJO_TIPOTELE_ID", "telephoneTypeId"), // Renamed in entity
                         entry("PREFIJO_PREFIJO", "code"),
                         entry("PREFIJO_VALORBASE", "baseValue"),
                         entry("PREFIJO_BANDAOK", "bandOk"),
                         entry("PREFIJO_IVAINC", "vatIncluded"),
                         entry("PREFIJO_IVA", "vatValue"),
-                        entry("PREFIJO_ACTIVO", "active")
+                        entry("PREFIJO_ACTIVO", "active"),
+                        entry("PREFIJO_FCREACION", "createdDate"),
+                        entry("PREFIJO_FMODIFICADO", "lastModifiedDate")
                 ))
                 .build());
 
@@ -361,8 +331,12 @@ public class MigrationService {
                         entry("TIPOTELECFG_ID", "id"),
                         entry("TIPOTELECFG_MIN", "minValue"),
                         entry("TIPOTELECFG_MAX", "maxValue"),
-                        entry("TIPOTELECFG_TIPOTELE_ID", "telephonyTypeId"), // FK
-                        entry("TIPOTELECFG_MPORIGEN_ID", "originCountryId") // FK
+                        entry("TIPOTELECFG_TIPOTELE_ID", "telephonyTypeId"),
+                        entry("TIPOTELECFG_MPORIGEN_ID", "originCountryId"),
+                        // Assuming TIPOTELECFG doesn't have its own _ACTIVO, relies on parent entities
+                        // If it has, add: entry("TIPOTELECFG_ACTIVO", "active"),
+                        entry("TIPOTELECFG_FCREACION", "createdDate"),
+                        entry("TIPOTELECFG_FMODIFICADO", "lastModifiedDate")
                 ))
                 .build());
 
@@ -374,13 +348,15 @@ public class MigrationService {
                 .targetIdFieldName("id")
                 .columnMapping(Map.ofEntries(
                         entry("BANDA_ID", "id"),
-                        entry("BANDA_PREFIJO_ID", "prefixId"), // FK
+                        entry("BANDA_PREFIJO_ID", "prefixId"),
                         entry("BANDA_NOMBRE", "name"),
                         entry("BANDA_VALOR", "value"),
-                        entry("BANDA_INDICAORIGEN_ID", "originIndicatorId"), // FK
+                        entry("BANDA_INDICAORIGEN_ID", "originIndicatorId"),
                         entry("BANDA_IVAINC", "vatIncluded"),
                         entry("BANDA_REF", "reference"),
-                        entry("BANDA_ACTIVO", "active")
+                        entry("BANDA_ACTIVO", "active"),
+                        entry("BANDA_FCREACION", "createdDate"),
+                        entry("BANDA_FMODIFICADO", "lastModifiedDate")
                 ))
                 .build());
 
@@ -397,8 +373,10 @@ public class MigrationService {
                         entry("EMPRESA_NIT", "taxId"),
                         entry("EMPRESA_RSOCIAL", "legalName"),
                         entry("EMPRESA_URL", "website"),
-                        entry("EMPRESA_INDICATIVO_ID", "indicatorId"), // FK
-                        entry("EMPRESA_ACTIVO", "active")
+                        entry("EMPRESA_INDICATIVO_ID", "indicatorId"),
+                        entry("EMPRESA_ACTIVO", "active"),
+                        entry("EMPRESA_FCREACION", "createdDate"),
+                        entry("EMPRESA_FMODIFICADO", "lastModifiedDate")
                 ))
                 .build());
 
@@ -410,15 +388,17 @@ public class MigrationService {
                 .columnMapping(Map.ofEntries(
                         entry("COMUBICACION_ID", "id"),
                         entry("COMUBICACION_DIRECTORIO", "directory"),
-                        entry("COMUBICACION_TIPOPLANTA_ID", "plantTypeId"), // FK
+                        entry("COMUBICACION_TIPOPLANTA_ID", "plantTypeId"),
                         entry("COMUBICACION_SERIAL", "serial"),
-                        entry("COMUBICACION_INDICATIVO_ID", "indicatorId"), // FK
+                        entry("COMUBICACION_INDICATIVO_ID", "indicatorId"),
                         entry("COMUBICACION_PREFIJOPBX", "pbxPrefix"),
                         entry("COMUBICACION_FECHACAPTURA", "captureDate"),
                         entry("COMUBICACION_CDRS", "cdrCount"),
                         entry("COMUBICACION_ARCHIVO", "fileName"),
                         entry("COMUBICACION_CABECERA_ID", "headerId"),
-                        entry("COMUBICACION_ACTIVO", "active")
+                        entry("COMUBICACION_ACTIVO", "active"),
+                        entry("COMUBICACION_FCREACION", "createdDate"),
+                        entry("COMUBICACION_FMODIFICADO", "lastModifiedDate")
                 ))
                 .build());
 
@@ -429,12 +409,14 @@ public class MigrationService {
                 .targetIdFieldName("id")
                 .columnMapping(Map.ofEntries(
                         entry("SERIE_ID", "id"),
-                        entry("SERIE_INDICATIVO_ID", "indicatorId"), // FK
+                        entry("SERIE_INDICATIVO_ID", "indicatorId"),
                         entry("SERIE_NDC", "ndc"),
                         entry("SERIE_INICIAL", "initialNumber"),
                         entry("SERIE_FINAL", "finalNumber"),
                         entry("SERIE_EMPRESA", "company"),
-                        entry("SERIE_ACTIVO", "active")
+                        entry("SERIE_ACTIVO", "active"),
+                        entry("SERIE_FCREACION", "createdDate"),
+                        entry("SERIE_FMODIFICADO", "lastModifiedDate")
                 ))
                 .build());
 
@@ -445,14 +427,16 @@ public class MigrationService {
                 .targetIdFieldName("id")
                 .columnMapping(Map.ofEntries(
                         entry("SERVESPECIAL_ID", "id"),
-                        entry("SERVESPECIAL_INDICATIVO_ID", "indicatorId"), // FK
+                        entry("SERVESPECIAL_INDICATIVO_ID", "indicatorId"),
                         entry("SERVESPECIAL_NUMERO", "phoneNumber"),
                         entry("SERVESPECIAL_VALOR", "value"),
                         entry("SERVESPECIAL_IVA", "vatAmount"),
                         entry("SERVESPECIAL_IVAINC", "vatIncluded"),
                         entry("SERVESPECIAL_DESCRIPCION", "description"),
-                        entry("SERVESPECIAL_MPORIGEN_ID", "originCountryId"), // FK
-                        entry("SERVESPECIAL_ACTIVO", "active")
+                        entry("SERVESPECIAL_MPORIGEN_ID", "originCountryId"),
+                        entry("SERVESPECIAL_ACTIVO", "active"),
+                        entry("SERVESPECIAL_FCREACION", "createdDate"),
+                        entry("SERVESPECIAL_FMODIFICADO", "lastModifiedDate")
                 ))
                 .build());
 
@@ -464,9 +448,11 @@ public class MigrationService {
                 .targetIdFieldName("id")
                 .columnMapping(Map.ofEntries(
                         entry("SUBDIRECCION_ID", "id"),
-                        entry("SUBDIRECCION_PERTENECE", "parentSubdivisionId"), // FK (Self-ref handled by executor)
+                        entry("SUBDIRECCION_PERTENECE", "parentSubdivisionId"),
                         entry("SUBDIRECCION_NOMBRE", "name"),
-                        entry("SUBDIRECCION_ACTIVO", "active")
+                        entry("SUBDIRECCION_ACTIVO", "active"),
+                        entry("SUBDIRECCION_FCREACION", "createdDate"),
+                        entry("SUBDIRECCION_FMODIFICADO", "lastModifiedDate")
                 ))
                 .build());
 
@@ -479,9 +465,11 @@ public class MigrationService {
                         entry("CENTROCOSTOS_ID", "id"),
                         entry("CENTROCOSTOS_CENTRO_COSTO", "name"),
                         entry("CENTROCOSTOS_OT", "workOrder"),
-                        entry("CENTROCOSTOS_PERTENECE", "parentCostCenterId"), // FK (Self-ref handled by executor)
-                        entry("CENTROCOSTOS_MPORIGEN_ID", "originCountryId"), // FK
-                        entry("CENTROCOSTOS_ACTIVO", "active")
+                        entry("CENTROCOSTOS_PERTENECE", "parentCostCenterId"),
+                        entry("CENTROCOSTOS_MPORIGEN_ID", "originCountryId"),
+                        entry("CENTROCOSTOS_ACTIVO", "active"),
+                        entry("CENTROCOSTOS_FCREACION", "createdDate"),
+                        entry("CENTROCOSTOS_FMODIFICADO", "lastModifiedDate")
                 ))
                 .build());
 
@@ -492,8 +480,11 @@ public class MigrationService {
                 .targetIdFieldName("id")
                 .columnMapping(Map.ofEntries(
                         entry("BANDAINDICA_ID", "id"),
-                        entry("BANDAINDICA_BANDA_ID", "bandId"), // FK
-                        entry("BANDAINDICA_INDICATIVO_ID", "indicatorId") // FK
+                        entry("BANDAINDICA_BANDA_ID", "bandId"),
+                        entry("BANDAINDICA_INDICATIVO_ID", "indicatorId"),
+                        // BANDAINDICA doesn't have _ACTIVO, relies on Band and Indicator
+                        entry("BANDAINDICA_FCREACION", "createdDate"),
+                        entry("BANDAINDICA_FMODIFICADO", "lastModifiedDate")
                 ))
                 .build());
 
@@ -515,32 +506,36 @@ public class MigrationService {
                         entry("VALORESPECIAL_VIERNES", "fridayEnabled"),
                         entry("VALORESPECIAL_SABADO", "saturdayEnabled"),
                         entry("VALORESPECIAL_FESTIVO", "holidayEnabled"),
-                        entry("VALORESPECIAL_TIPOTELE_ID", "telephonyTypeId"), // FK
-                        entry("VALORESPECIAL_OPERADOR_ID", "operatorId"), // FK
-                        entry("VALORESPECIAL_BANDA_ID", "bandId"), // FK
+                        entry("VALORESPECIAL_TIPOTELE_ID", "telephonyTypeId"),
+                        entry("VALORESPECIAL_OPERADOR_ID", "operatorId"),
+                        entry("VALORESPECIAL_BANDA_ID", "bandId"),
                         entry("VALORESPECIAL_DESDE", "validFrom"),
                         entry("VALORESPECIAL_HASTA", "validTo"),
-                        entry("VALORESPECIAL_INDICAORIGEN_ID", "originIndicatorId"), // FK
+                        entry("VALORESPECIAL_INDICAORIGEN_ID", "originIndicatorId"),
                         entry("VALORESPECIAL_HORAS", "hoursSpecification"),
                         entry("VALORESPECIAL_TIPOVALOR", "valueType"),
-                        entry("VALORESPECIAL_ACTIVO", "active")
+                        entry("VALORESPECIAL_ACTIVO", "active"),
+                        entry("VALORESPECIAL_FCREACION", "createdDate"),
+                        entry("VALORESPECIAL_FMODIFICADO", "lastModifiedDate")
                 ))
                 .build());
 
         configs.add(TableMigrationConfig.builder()
-                .sourceTableName("celulink") // Source table for Trunk
+                .sourceTableName("celulink")
                 .targetEntityClassName("com.infomedia.abacox.telephonypricing.entity.Trunk")
                 .sourceIdColumnName("CELULINK_ID")
                 .targetIdFieldName("id")
                 .columnMapping(Map.ofEntries(
                         entry("CELULINK_ID", "id"),
-                        entry("CELULINK_COMUBICACION_ID", "commLocationId"), // FK
+                        entry("CELULINK_COMUBICACION_ID", "commLocationId"),
                         entry("CELULINK_DESC", "description"),
                         entry("CELULINK_TRONCAL", "name"),
-                        entry("CELULINK_OPERADOR_ID", "operatorId"), // FK
+                        entry("CELULINK_OPERADOR_ID", "operatorId"),
                         entry("CELULINK_NOPREFIJOPBX", "noPbxPrefix"),
                         entry("CELULINK_CANALES", "channels"),
-                        entry("CELULINK_ACTIVO", "active")
+                        entry("CELULINK_ACTIVO", "active"),
+                        entry("CELULINK_FCREACION", "createdDate"),
+                        entry("CELULINK_FMODIFICADO", "lastModifiedDate")
                 ))
                 .build());
 
@@ -553,39 +548,48 @@ public class MigrationService {
                 .columnMapping(Map.ofEntries(
                         entry("FUNCIONARIO_ID", "id"),
                         entry("FUNCIONARIO_NOMBRE", "name"),
-                        entry("FUNCIONARIO_SUBDIRECCION_ID", "subdivisionId"), // FK
-                        entry("FUNCIONARIO_CENTROCOSTOS_ID", "costCenterId"), // FK
+                        entry("FUNCIONARIO_SUBDIRECCION_ID", "subdivisionId"),
+                        entry("FUNCIONARIO_CENTROCOSTOS_ID", "costCenterId"),
                         entry("FUNCIONARIO_CLAVE", "authCode"),
                         entry("FUNCIONARIO_EXTENSION", "extension"),
-                        entry("FUNCIONARIO_COMUBICACION_ID", "communicationLocationId"), // FK
-                        entry("FUNCIONARIO_FUNCARGO_ID", "jobPositionId"), // FK
+                        entry("FUNCIONARIO_COMUBICACION_ID", "communicationLocationId"),
+                        entry("FUNCIONARIO_FUNCARGO_ID", "jobPositionId"),
                         entry("FUNCIONARIO_CORREO", "email"),
                         entry("FUNCIONARIO_TELEFONO", "phone"),
                         entry("FUNCIONARIO_DIRECCION", "address"),
                         entry("FUNCIONARIO_NUMEROID", "idNumber"),
-                        entry("FUNCIONARIO_ACTIVO", "active")
+                        entry("FUNCIONARIO_ACTIVO", "active"), // This will be overridden by Pass 3 if enabled
+                        entry("FUNCIONARIO_FCREACION", "createdDate"),
+                        entry("FUNCIONARIO_FMODIFICADO", "lastModifiedDate")
                 ))
+                .processHistoricalActiveness(true) // Enable Pass 3
+                .sourceHistoricalControlIdColumn("FUNCIONARIO_HISTORICTL_ID")
+                .sourceValidFromDateColumn("FUNCIONARIO_HISTODESDE")
                 .build());
 
         configs.add(TableMigrationConfig.builder()
-                .sourceTableName("rangoext") // Source table for ExtensionRange
+                .sourceTableName("rangoext")
                 .targetEntityClassName("com.infomedia.abacox.telephonypricing.entity.ExtensionRange")
                 .sourceIdColumnName("RANGOEXT_ID")
                 .targetIdFieldName("id")
                 .columnMapping(Map.ofEntries(
                         entry("RANGOEXT_ID", "id"),
-                        entry("RANGOEXT_COMUBICACION_ID", "commLocationId"), // FK
-                        entry("RANGOEXT_SUBDIRECCION_ID", "subdivisionId"), // FK
+                        entry("RANGOEXT_COMUBICACION_ID", "commLocationId"),
+                        entry("RANGOEXT_SUBDIRECCION_ID", "subdivisionId"),
                         entry("RANGOEXT_PREFIJO", "prefix"),
                         entry("RANGOEXT_DESDE", "rangeStart"),
                         entry("RANGOEXT_HASTA", "rangeEnd"),
-                        entry("RANGOEXT_CENTROCOSTOS_ID", "costCenterId"), // FK
-                        entry("RANGOEXT_ACTIVO", "active")
+                        entry("RANGOEXT_CENTROCOSTOS_ID", "costCenterId"),
+                        entry("RANGOEXT_FCREACION", "createdDate"),
+                        entry("RANGOEXT_FMODIFICADO", "lastModifiedDate")
                 ))
+                .processHistoricalActiveness(true) // Enable Pass 3
+                .sourceHistoricalControlIdColumn("RANGOEXT_HISTORICTL_ID")
+                .sourceValidFromDateColumn("RANGOEXT_HISTODESDE")
                 .build());
 
         configs.add(TableMigrationConfig.builder()
-                .sourceTableName("pbxespecial") // Source table for PbxSpecialRule
+                .sourceTableName("pbxespecial")
                 .targetEntityClassName("com.infomedia.abacox.telephonypricing.entity.PbxSpecialRule")
                 .sourceIdColumnName("PBXESPECIAL_ID")
                 .targetIdFieldName("id")
@@ -595,29 +599,34 @@ public class MigrationService {
                         entry("PBXESPECIAL_BUSCAR", "searchPattern"),
                         entry("PBXESPECIAL_IGNORAR", "ignorePattern"),
                         entry("PBXESPECIAL_REMPLAZO", "replacement"),
-                        entry("PBXESPECIAL_COMUBICACION_ID", "commLocationId"), // FK
+                        entry("PBXESPECIAL_COMUBICACION_ID", "commLocationId"),
                         entry("PBXESPECIAL_MINLEN", "minLength"),
                         entry("PBXESPECIAL_IO", "direction"),
-                        entry("PBXESPECIAL_ACTIVO", "active")
+                        entry("PBXESPECIAL_ACTIVO", "active"),
+                        entry("PBXESPECIAL_FCREACION", "createdDate"),
+                        entry("PBXESPECIAL_FMODIFICADO", "lastModifiedDate")
                 ))
                 .build());
 
         configs.add(TableMigrationConfig.builder()
-                .sourceTableName("tarifatroncal") // Source table for TrunkRate
+                .sourceTableName("tarifatroncal")
                 .targetEntityClassName("com.infomedia.abacox.telephonypricing.entity.TrunkRate")
                 .sourceIdColumnName("TARIFATRONCAL_ID")
                 .targetIdFieldName("id")
                 .columnMapping(Map.ofEntries(
                         entry("TARIFATRONCAL_ID", "id"),
-                        entry("TARIFATRONCAL_TRONCAL_ID", "trunkId"), // FK
+                        entry("TARIFATRONCAL_TRONCAL_ID", "trunkId"),
                         entry("TARIFATRONCAL_VALOR", "rateValue"),
                         entry("TARIFATRONCAL_IVAINC", "includesVat"),
-                        entry("TARIFATRONCAL_OPERADOR_ID", "operatorId"), // FK
-                        entry("TARIFATRONCAL_TIPOTELE_ID", "telephonyTypeId"), // FK
+                        entry("TARIFATRONCAL_OPERADOR_ID", "operatorId"),
+                        entry("TARIFATRONCAL_TIPOTELE_ID", "telephonyTypeId"),
                         entry("TARIFATRONCAL_NOPREFIJOPBX", "noPbxPrefix"),
                         entry("TARIFATRONCAL_NOPREFIJO", "noPrefix"),
-                        entry("TARIFATRONCAL_SEGUNDOS", "seconds"
-                        )))
+                        entry("TARIFATRONCAL_SEGUNDOS", "seconds"),
+                        entry("TARIFATRONCAL_ACTIVO", "active"), // Assuming TARIFATRONCAL has _ACTIVO
+                        entry("TARIFATRONCAL_FCREACION", "createdDate"),
+                        entry("TARIFATRONCAL_FMODIFICADO", "lastModifiedDate")
+                ))
                 .build());
 
         // Level 6: Depend on Level 5 or lower
@@ -629,18 +638,20 @@ public class MigrationService {
                 .columnMapping(Map.ofEntries(
                         entry("DIRECTORIO_ID", "id"),
                         entry("DIRECTORIO_TIPO", "contactType"),
-                        entry("DIRECTORIO_FUNCIONARIO_ID", "employeeId"), // FK
-                        entry("DIRECTORIO_EMPRESA_ID", "companyId"), // FK
+                        entry("DIRECTORIO_FUNCIONARIO_ID", "employeeId"),
+                        entry("DIRECTORIO_EMPRESA_ID", "companyId"),
                         entry("DIRECTORIO_TELEFONO", "phoneNumber"),
                         entry("DIRECTORIO_NOMBRE", "name"),
                         entry("DIRECTORIO_DESCRIPCION", "description"),
-                        entry("DIRECTORIO_INDICATIVO_ID", "indicatorId"), // FK
-                        entry("DIRECTORIO_ACTIVO", "active")
+                        entry("DIRECTORIO_INDICATIVO_ID", "indicatorId"),
+                        entry("DIRECTORIO_ACTIVO", "active"),
+                        entry("DIRECTORIO_FCREACION", "createdDate"),
+                        entry("DIRECTORIO_FMODIFICADO", "lastModifiedDate")
                 ))
                 .build());
 
         configs.add(TableMigrationConfig.builder()
-                .sourceTableName("reglatroncal") // Source table for TrunkRule
+                .sourceTableName("reglatroncal")
                 .targetEntityClassName("com.infomedia.abacox.telephonypricing.entity.TrunkRule")
                 .sourceIdColumnName("REGLATRONCAL_ID")
                 .targetIdFieldName("id")
@@ -648,20 +659,25 @@ public class MigrationService {
                         entry("REGLATRONCAL_ID", "id"),
                         entry("REGLATRONCAL_VALOR", "rateValue"),
                         entry("REGLATRONCAL_IVAINC", "includesVat"),
-                        entry("REGLATRONCAL_TIPOTELE_ID", "telephonyTypeId"), // FK
+                        entry("REGLATRONCAL_TIPOTELE_ID", "telephonyTypeId"),
                         entry("REGLATRONCAL_INDICATIVO_ID", "indicatorIds"),
-                        entry("REGLATRONCAL_TRONCAL_ID", "trunkId"), // FK
-                        entry("REGLATRONCAL_OPERADOR_NUEVO", "newOperatorId"), // FK
-                        entry("REGLATRONCAL_TIPOTELE_NUEVO", "newTelephonyTypeId"), // FK
+                        entry("REGLATRONCAL_TRONCAL_ID", "trunkId"),
+                        entry("REGLATRONCAL_OPERADOR_NUEVO", "newOperatorId"),
+                        entry("REGLATRONCAL_TIPOTELE_NUEVO", "newTelephonyTypeId"),
                         entry("REGLATRONCAL_SEGUNDOS", "seconds"),
-                        entry("REGLATRONCAL_INDICAORIGEN_ID", "originIndicatorId"), // FK
-                        entry("REGLATRONCAL_ACTIVO", "active")
+                        entry("REGLATRONCAL_INDICAORIGEN_ID", "originIndicatorId"),
+                        entry("REGLATRONCAL_ACTIVO", "active"),
+                        entry("REGLATRONCAL_FCREACION", "createdDate"),
+                        entry("REGLATRONCAL_FMODIFICADO", "lastModifiedDate")
                 ))
                 .build());
 
-        // Level 7: Independent or depends on lower levels (FileInfo)
-       /* configs.add(TableMigrationConfig.builder()
-                .sourceTableName("fileinfo")
+        // Level 7: fileinfo (if needed, often populated by application logic, not direct migration)
+        // Assuming fileinfo is populated by the CDR processing logic itself, not a direct table migration from source.
+        // If it IS a direct migration:
+        /*
+        configs.add(TableMigrationConfig.builder()
+                .sourceTableName("fileinfo") // Assuming source table name
                 .targetEntityClassName("com.infomedia.abacox.telephonypricing.entity.FileInfo")
                 .sourceIdColumnName("FILEINFO_ID")
                 .targetIdFieldName("id")
@@ -675,17 +691,57 @@ public class MigrationService {
                         entry("FILEINFO_REF_ID", "referenceId"),
                         entry("FILEINFO_DIRECTORIO", "directory"),
                         entry("FILEINFO_TIPO", "type")
+                        // FILEINFO typically doesn't have _FCREACION/_FMODIFICADO in the old system
                 ))
-                .build());*/
+                .build());
+        */
+/*
+        // Level 8: ACUMTOTAL (CallRecord) - This is the final target, usually populated by CDR processing,
+        // but if you are migrating existing ACUMTOTAL data:
+        configs.add(TableMigrationConfig.builder()
+                .sourceTableName("ACUMTOTAL")
+                .targetEntityClassName("com.infomedia.abacox.telephonypricing.entity.CallRecord")
+                .sourceIdColumnName("ACUMTOTAL_ID")
+                .targetIdFieldName("id")
+                .columnMapping(Map.ofEntries(
+                        entry("ACUMTOTAL_ID", "id"),
+                        entry("ACUMTOTAL_DIAL", "dial"),
+                        entry("ACUMTOTAL_COMUBICACION_ID", "commLocationId"),
+                        entry("ACUMTOTAL_FECHA_SERVICIO", "serviceDate"),
+                        entry("ACUMTOTAL_OPERADOR_ID", "operatorId"),
+                        entry("ACUMTOTAL_FUN_EXTENSION", "employeeExtension"),
+                        entry("ACUMTOTAL_FUN_CLAVE", "employeeAuthCode"),
+                        entry("ACUMTOTAL_INDICATIVO_ID", "indicatorId"),
+                        entry("ACUMTOTAL_TELEFONO_DESTINO", "destinationPhone"),
+                        entry("ACUMTOTAL_TIEMPO", "duration"),
+                        entry("ACUMTOTAL_REPIQUE", "ringCount"),
+                        entry("ACUMTOTAL_TIPOTELE_ID", "telephonyTypeId"),
+                        entry("ACUMTOTAL_VALOR_FACTURADO", "billedAmount"),
+                        entry("ACUMTOTAL_PRECIOMINUTO", "pricePerMinute"),
+                        entry("ACUMTOTAL_PRECIOINICIAL", "initialPrice"),
+                        entry("ACUMTOTAL_IO", "isIncoming"),
+                        entry("ACUMTOTAL_TRONCAL", "trunk"),
+                        entry("ACUMTOTAL_TRONCALINI", "initialTrunk"),
+                        entry("ACUMTOTAL_FUNCIONARIO_ID", "employeeId"),
+                        entry("ACUMTOTAL_FUN_TRANSFER", "employeeTransfer"),
+                        entry("ACUMTOTAL_CAUSA_TRANSFER", "transferCause"),
+                        entry("ACUMTOTAL_CAUSA_ASIGNA", "assignmentCause"),
+                        entry("ACUMTOTAL_FUNDESTINO_ID", "destinationEmployeeId"),
+                        entry("ACUMTOTAL_FILEINFO_ID", "fileInfoId"),
+                        // ACUMTOTAL_CTL is for the raw CDR line, map to cdrHash
+                        // entry("ACUMTOTAL_CTL", "cdrHash"), // This needs to be generated, not directly mapped
+                        entry("ACUMTOTAL_FCREACION", "createdDate"),
+                        entry("ACUMTOTAL_FMODIFICADO", "lastModifiedDate")
+                ))
+                // ACUMTOTAL doesn't have its own _ACTIVO field in the old system.
+                // Its "activeness" is implicit or handled by COMUBICACION_ID sign.
+                .build());
+*/
+
         return configs;
     }
 
-    // Added STARTING state
     public enum MigrationState {
-        IDLE,        // No migration running, none run yet or last one finished
-        STARTING,    // Submitted to executor, preparing to run
-        RUNNING,     // Migration is currently executing
-        COMPLETED,   // Last migration finished successfully
-        FAILED       // Last migration failed
+        IDLE, STARTING, RUNNING, COMPLETED, FAILED
     }
 }
