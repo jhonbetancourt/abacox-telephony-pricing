@@ -33,7 +33,7 @@ public class CallRecordPersistenceService {
             return null;
         }
 
-        String cdrHash = HashUtil.sha256(cdrData.getRawCdrLine());
+        String cdrHash = CdrUtil.generateCtlHash(cdrData.getRawCdrLine(), commLocation.getId());
         log.debug("Generated CDR Hash for line: {} is {}", cdrData.getRawCdrLine(), cdrHash);
 
 
@@ -46,7 +46,7 @@ public class CallRecordPersistenceService {
                     "Duplicate record based on hash. Original ID: " + existingRecord.getId(),
                     "saveOrUpdateCallRecord_DuplicateCheck",
                     existingRecord.getId());
-            return existingRecord;
+            return existingRecord; // Return the existing record, do not attempt to save new one
         }
 
         CallRecord callRecord = new CallRecord();
@@ -58,8 +58,9 @@ public class CallRecordPersistenceService {
             log.info("Saved new CallRecord with ID: {} for CDR line: {}", callRecord.getId(), cdrData.getRawCdrLine());
             return callRecord;
         } catch (Exception e) {
+            // This catch block might still be hit if there's a race condition or other DB constraint,
+            // but the primary duplicate check is now done above.
             log.error("Database error while saving CallRecord for CDR: {}. Error: {}", cdrData.getRawCdrLine(), e.getMessage(), e);
-            // PHP: if (!$insertar) { ... $infoerror = bd_captura_error($link); $causaerror = 'NOINSERTA'; ... ReportarErrores(...) }
             failedCallRecordPersistenceService.quarantineRecord(cdrData,
                     QuarantineErrorType.DB_INSERT_FAILED,
                     "Database error: " + e.getMessage(),
@@ -70,10 +71,10 @@ public class CallRecordPersistenceService {
     }
 
     @Transactional(readOnly = true)
-    public CallRecord findByCtlHash(String cdrHash) {
+    public CallRecord findByCtlHash(String ctlHash) { // Renamed from findByCtlHash
         try {
             return entityManager.createQuery("SELECT cr FROM CallRecord cr WHERE cr.ctlHash = :hash", CallRecord.class)
-                    .setParameter("hash", cdrHash)
+                    .setParameter("hash", ctlHash)
                     .getSingleResult();
         } catch (NoResultException e) {
             return null;
@@ -106,8 +107,8 @@ public class CallRecordPersistenceService {
         callRecord.setDestinationEmployeeId(cdrData.getDestinationEmployeeId());
         callRecord.setCdrString(cdrData.getRawCdrLine());
         if (cdrData.getFileInfo() != null) {
-            callRecord.setFileInfoId(cdrData.getFileInfo().getId().longValue());
+            callRecord.setFileInfoId(cdrData.getFileInfo().getId());
         }
-        callRecord.setCtlHash(CdrUtil.generateCtlHash(cdrData.getRawCdrLine(), commLocation.getId()));
+        callRecord.setCtlHash(cdrHash); // Use the passed hash
     }
 }
