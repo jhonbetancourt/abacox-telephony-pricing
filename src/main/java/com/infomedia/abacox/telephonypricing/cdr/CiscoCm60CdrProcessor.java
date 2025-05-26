@@ -19,7 +19,6 @@ import java.util.Objects;
 public class CiscoCm60CdrProcessor implements ICdrTypeProcessor {
 
     public static final String PLANT_TYPE_IDENTIFIER = "26"; // CM_6_0
-    // This constant is now primarily for internal use within this class
     private static final String INTERNAL_CDR_RECORD_TYPE_HEADER_KEY = "cdrrecordtype";
     private static final String CDR_SEPARATOR = ",";
     private static final String DEFAULT_CONFERENCE_IDENTIFIER_PREFIX = "b";
@@ -71,7 +70,6 @@ public class CiscoCm60CdrProcessor implements ICdrTypeProcessor {
         if (line == null || line.isEmpty()) {
             return false;
         }
-        // Clean the line specifically for this check, as the raw line might have quotes.
         String cleanedFirstField = "";
         List<String> fields = CdrUtil.parseCsvLine(line, CDR_SEPARATOR);
         if (!fields.isEmpty()) {
@@ -100,16 +98,15 @@ public class CiscoCm60CdrProcessor implements ICdrTypeProcessor {
         String actualHeaderName = conceptualToActualHeaderMap.getOrDefault(conceptualFieldName, conceptualFieldName.toLowerCase());
         Integer position = currentHeaderPositions.get(actualHeaderName);
         if (position == null) {
+            // Fallback to conceptual name if actual mapping wasn't found (e.g. custom header)
             position = currentHeaderPositions.get(conceptualFieldName.toLowerCase());
         }
 
         if (position != null && position >= 0 && position < fields.size()) {
             String rawValue = fields.get(position);
             if (rawValue == null) return "";
-            // Field cleaning (like quote removal) is already done by parseCsvLine -> cleanCsvField
-            // So, rawValue here is already cleaned.
-            String valueToProcess = rawValue;
 
+            String valueToProcess = rawValue; // Already cleaned by parseCsvLine
 
             if (actualHeaderName.contains("ipaddr") || actualHeaderName.contains("address_ip")) {
                 try {
@@ -175,7 +172,7 @@ public class CiscoCm60CdrProcessor implements ICdrTypeProcessor {
         CdrData cdrData = new CdrData();
         cdrData.setRawCdrLine(cdrLine);
 
-        String firstField = fields.isEmpty() ? "" : fields.get(0); // fields are already cleaned by parseCsvLine
+        String firstField = fields.isEmpty() ? "" : fields.get(0);
         if (INTERNAL_CDR_RECORD_TYPE_HEADER_KEY.equalsIgnoreCase(firstField)) {
             log.debug("Skipping header line found mid-stream (already cleaned).");
             return null;
@@ -313,7 +310,7 @@ public class CiscoCm60CdrProcessor implements ICdrTypeProcessor {
             if (isConferenceIncoming) {
                 cdrData.setCallDirection(CallDirection.INCOMING);
             } else if (invertTrunksForConference && cdrData.getCallDirection() != CallDirection.INCOMING) {
-                if (cdrData.getJoinOnBehalfOf() == null || cdrData.getJoinOnBehalfOf() != 7) {
+                 if (cdrData.getJoinOnBehalfOf() == null || cdrData.getJoinOnBehalfOf() != 7) { // PHP: if ($cdr_motivo_union != "7")
                     CdrUtil.swapTrunks(cdrData);
                 }
             }
@@ -353,10 +350,14 @@ public class CiscoCm60CdrProcessor implements ICdrTypeProcessor {
         }
 
         if (numberChangedByRedirect) {
-            if (cdrData.getTransferCause() == TransferCause.NONE) {
-                if (cdrData.getLastRedirectRedirectReason() != null && cdrData.getLastRedirectRedirectReason() > 0 && cdrData.getLastRedirectRedirectReason() <= 16) {
+            if (cdrData.getTransferCause() == TransferCause.NONE) { // Only set if not already set by conference logic
+                Integer lastRedirectReason = cdrData.getLastRedirectRedirectReason();
+                if (lastRedirectReason != null && lastRedirectReason > 0 && lastRedirectReason <= 16) {
                     cdrData.setTransferCause(TransferCause.NORMAL);
-                } else {
+                } else if (lastRedirectReason != null && lastRedirectReason == 130) { // Specific mapping for 130 to BUSY
+                    cdrData.setTransferCause(TransferCause.BUSY);
+                }
+                else {
                     TransferCause autoTransferCause = (cdrData.getDestCallTerminationOnBehalfOf() != null && cdrData.getDestCallTerminationOnBehalfOf() == 7) ?
                                                      TransferCause.PRE_CONFERENCE_NOW : TransferCause.AUTO;
                     cdrData.setTransferCause(autoTransferCause);
@@ -379,6 +380,7 @@ public class CiscoCm60CdrProcessor implements ICdrTypeProcessor {
                      numberChangedByMobileRedirect = true;
                      cdrData.setCallingPartyNumber(cdrData.getFinalMobileCalledPartyNumber());
                      cdrData.setCallingPartyNumberPartition(cdrData.getDestMobileDeviceName());
+                     // If an incoming call is redirected to a mobile, it's no longer an internal call to our extension
                      cdrData.setInternalCall(false);
                 }
             }

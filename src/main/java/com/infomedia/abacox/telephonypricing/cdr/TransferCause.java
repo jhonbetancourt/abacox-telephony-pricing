@@ -25,11 +25,4 @@ public enum TransferCause {
     public int getValue() {
         return value;
     }
-
-    public static TransferCause fromCode(int code) {
-        // Simplified mapping, PHP has more complex logic based on code_transfer and other fields
-        if (code > 0 && code <= 16) return NORMAL; // Generic transfer
-        // Add more specific mappings if needed based on the exact values of IMDEX_TRANSFER_*
-        return NONE;
-    }
 }
