@@ -1,3 +1,4 @@
+// File: com/infomedia/abacox/telephonypricing/cdr/CallOriginDeterminationService.java
 package com.infomedia.abacox.telephonypricing.cdr;
 
 import com.infomedia.abacox.telephonypricing.entity.CommunicationLocation;
@@ -36,7 +37,7 @@ public class CallOriginDeterminationService {
         List<PrefixInfo> allPrefixes = prefixLookupService.findMatchingPrefixes(incomingNumber, commLocation, false, null);
 
         DestinationInfo bestMatchDestInfo = null;
-        PrefixInfo bestMatchedPrefixInfo = null;
+        PrefixInfo bestMatchedPrefixInfo = null; 
 
         for (PrefixInfo prefixInfo : allPrefixes) {
             if (telephonyTypeLookupService.isInternalIpType(prefixInfo.getTelephonyTypeId()) ||
@@ -45,7 +46,7 @@ public class CallOriginDeterminationService {
                 continue;
             }
 
-            String numberToCheck = incomingNumber;
+            String numberToCheck = incomingNumber; 
 
             Optional<DestinationInfo> destInfoOpt = indicatorLookupService.findDestinationIndicator(
                     numberToCheck,
@@ -55,21 +56,21 @@ public class CallOriginDeterminationService {
                     prefixInfo.getPrefixId(),
                     originCountryId,
                     prefixInfo.getBandsAssociatedCount() > 0,
-                    false
+                    false // For incoming, prefix is not yet stripped by PrefixLookupService in this flow
             );
 
             if (destInfoOpt.isPresent()) {
                 DestinationInfo currentDestInfo = destInfoOpt.get();
                 if (bestMatchDestInfo == null ||
-                        (!bestMatchDestInfo.isApproximateMatch() && currentDestInfo.isApproximateMatch()) ||
+                        (!bestMatchDestInfo.isApproximateMatch() && currentDestInfo.isApproximateMatch()) || 
                         (currentDestInfo.isApproximateMatch() == bestMatchDestInfo.isApproximateMatch() &&
                                 currentDestInfo.getNdc() != null && bestMatchDestInfo.getNdc() != null &&
                                 currentDestInfo.getNdc().length() > bestMatchDestInfo.getNdc().length()) ||
-                        (!currentDestInfo.isApproximateMatch() && bestMatchDestInfo.isApproximateMatch())
+                        (!currentDestInfo.isApproximateMatch() && bestMatchDestInfo.isApproximateMatch()) 
                 ) {
                     bestMatchDestInfo = currentDestInfo;
-                    bestMatchedPrefixInfo = prefixInfo;
-                    if (bestMatchDestInfo != null && !bestMatchDestInfo.isApproximateMatch()) break;
+                    bestMatchedPrefixInfo = prefixInfo; 
+                    if (!bestMatchDestInfo.isApproximateMatch()) break; 
                 }
             }
         }
@@ -77,11 +78,12 @@ public class CallOriginDeterminationService {
         if (bestMatchDestInfo != null && bestMatchedPrefixInfo != null) {
             originInfo.setIndicatorId(bestMatchDestInfo.getIndicatorId());
             originInfo.setDestinationDescription(bestMatchDestInfo.getDestinationDescription());
-            originInfo.setOperatorId(bestMatchedPrefixInfo.getOperatorId());
+            originInfo.setOperatorId(bestMatchedPrefixInfo.getOperatorId()); 
             originInfo.setOperatorName(bestMatchedPrefixInfo.getOperatorName());
             originInfo.setEffectiveNumber(bestMatchDestInfo.getMatchedPhoneNumber());
-            originInfo.setTelephonyTypeId(bestMatchedPrefixInfo.getTelephonyTypeId());
+            originInfo.setTelephonyTypeId(bestMatchedPrefixInfo.getTelephonyTypeId()); 
             originInfo.setTelephonyTypeName(bestMatchedPrefixInfo.getTelephonyTypeName());
+
 
             if (!Objects.equals(currentPlantIndicatorId, bestMatchDestInfo.getIndicatorId())) {
                 if (indicatorLookupService.isLocalExtended(bestMatchDestInfo.getNdc(), currentPlantIndicatorId, bestMatchDestInfo.getIndicatorId())) {
@@ -91,26 +93,6 @@ public class CallOriginDeterminationService {
             } else {
                 originInfo.setTelephonyTypeId(TelephonyTypeEnum.LOCAL.getValue());
                 originInfo.setTelephonyTypeName(telephonyTypeLookupService.getTelephonyTypeName(TelephonyTypeEnum.LOCAL.getValue()) + " (Incoming)");
-            }
-        } else {
-            log.debug("No specific prefix/destination match for incoming number '{}'. Defaulting to LOCAL.", incomingNumber);
-            originInfo.setTelephonyTypeId(TelephonyTypeEnum.LOCAL.getValue());
-            originInfo.setTelephonyTypeName(telephonyTypeLookupService.getTelephonyTypeName(TelephonyTypeEnum.LOCAL.getValue()));
-            originInfo.setIndicatorId(commLocation.getIndicatorId());
-            originInfo.setDestinationDescription(commLocation.getIndicator() != null ? commLocation.getIndicator().getCityName() : "Unknown City");
-
-            Optional<PrefixInfo> localPrefixDetails = telephonyTypeLookupService.getPrefixInfoForTelephonyType(
-                    TelephonyTypeEnum.LOCAL.getValue(),
-                    originCountryId
-            );
-            if (localPrefixDetails.isPresent()) {
-                originInfo.setOperatorId(localPrefixDetails.get().getOperatorId());
-                originInfo.setOperatorName(localPrefixDetails.get().getOperatorName());
-                log.debug("Set operator for LOCAL default: {}", localPrefixDetails.get());
-            } else {
-                log.warn("Could not find PrefixInfo for LOCAL type in country {}. Operator will be default.", originCountryId);
-                originInfo.setOperatorId(CdrConfigService.DEFAULT_OPERATOR_ID_FOR_INTERNAL); // Or a specific default for LOCAL
-                originInfo.setOperatorName("Default Local Operator");
             }
         }
         return originInfo;
