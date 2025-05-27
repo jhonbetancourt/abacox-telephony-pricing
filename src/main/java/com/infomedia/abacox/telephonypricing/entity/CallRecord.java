@@ -20,6 +20,7 @@ import org.hibernate.annotations.ColumnDefault;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@ToString
 @SuperBuilder(toBuilder = true)
 public class CallRecord extends AuditedEntity {
 

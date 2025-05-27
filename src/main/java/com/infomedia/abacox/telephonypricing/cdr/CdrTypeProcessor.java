@@ -3,7 +3,7 @@ package com.infomedia.abacox.telephonypricing.cdr;
 
 import com.infomedia.abacox.telephonypricing.entity.CommunicationLocation;
 
-public interface ICdrTypeProcessor {
+public interface CdrTypeProcessor {
     /**
      * Checks if the given line is a header line for this CDR type.
      * The line passed here should be the raw (or trimmed) line from the file.
@@ -36,5 +36,5 @@ public interface ICdrTypeProcessor {
      *
      * @return String identifier.
      */
-    String getPlantTypeIdentifier();
+    Long getPlantTypeIdentifier();
 }

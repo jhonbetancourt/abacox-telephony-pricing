@@ -16,9 +16,9 @@ import java.util.Objects;
 @Component("ciscoCm60Processor")
 @Log4j2
 @RequiredArgsConstructor
-public class CiscoCm60CdrProcessor implements ICdrTypeProcessor {
+public class CiscoCm60CdrProcessor implements CdrTypeProcessor {
 
-    public static final String PLANT_TYPE_IDENTIFIER = "26"; // CM_6_0
+    public static final Long PLANT_TYPE_IDENTIFIER = 26L; // CM_6_0
     private static final String INTERNAL_CDR_RECORD_TYPE_HEADER_KEY = "cdrrecordtype";
     private static final String CDR_SEPARATOR = ",";
     private static final String DEFAULT_CONFERENCE_IDENTIFIER_PREFIX = "b";
@@ -413,7 +413,7 @@ public class CiscoCm60CdrProcessor implements ICdrTypeProcessor {
     }
 
     @Override
-    public String getPlantTypeIdentifier() {
+    public Long getPlantTypeIdentifier() {
         return PLANT_TYPE_IDENTIFIER;
     }
 
