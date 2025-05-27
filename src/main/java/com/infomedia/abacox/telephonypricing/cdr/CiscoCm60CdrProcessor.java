@@ -27,8 +27,8 @@ public class CiscoCm60CdrProcessor implements CdrTypeProcessor {
     private final Map<String, Integer> currentHeaderPositions = new HashMap<>();
     private String conferenceIdentifierActual = DEFAULT_CONFERENCE_IDENTIFIER_PREFIX;
 
-    private final EmployeeLookupService employeeLookupService;
-    private final CallTypeDeterminationService callTypeDeterminationService;
+    private final EmployeeLookupService employeeLookupService; // Keep for isPossibleExtension
+    private final CallTypeDeterminationService callTypeDeterminationService; // To get limits
 
 
     @PostConstruct
@@ -98,7 +98,6 @@ public class CiscoCm60CdrProcessor implements CdrTypeProcessor {
         String actualHeaderName = conceptualToActualHeaderMap.getOrDefault(conceptualFieldName, conceptualFieldName.toLowerCase());
         Integer position = currentHeaderPositions.get(actualHeaderName);
         if (position == null) {
-            // Fallback to conceptual name if actual mapping wasn't found (e.g. custom header)
             position = currentHeaderPositions.get(conceptualFieldName.toLowerCase());
         }
 
@@ -106,7 +105,7 @@ public class CiscoCm60CdrProcessor implements CdrTypeProcessor {
             String rawValue = fields.get(position);
             if (rawValue == null) return "";
 
-            String valueToProcess = rawValue; // Already cleaned by parseCsvLine
+            String valueToProcess = rawValue;
 
             if (actualHeaderName.contains("ipaddr") || actualHeaderName.contains("address_ip")) {
                 try {
@@ -301,7 +300,17 @@ public class CiscoCm60CdrProcessor implements CdrTypeProcessor {
             }
         }
 
-        ExtensionLimits limits = callTypeDeterminationService.getExtensionLimits(commLocation);
+        // Initial determination of internal/external based on partitions and extension format
+        // This needs ExtensionLimits, which are context-dependent (commLocation)
+        // If commLocation is null here (e.g., routing stage), use a default/less strict check.
+        ExtensionLimits limits = commLocation != null ? callTypeDeterminationService.getExtensionLimits(commLocation) : new ExtensionLimits();
+
+        boolean isCallingPartyEffectivelyExternal = !isPartitionPresent(cdrData.getCallingPartyNumberPartition()) ||
+                                                    !employeeLookupService.isPossibleExtension(cdrData.getCallingPartyNumber(), limits);
+        boolean isFinalCalledPartyInternalFormat = isPartitionPresent(cdrData.getFinalCalledPartyNumberPartition()) &&
+                                                   employeeLookupService.isPossibleExtension(cdrData.getFinalCalledPartyNumber(), limits);
+        boolean isRedirectPartyInternalFormat = isPartitionPresent(cdrData.getLastRedirectDnPartition()) &&
+                                                employeeLookupService.isPossibleExtension(cdrData.getLastRedirectDn(), limits);
 
         if (isConferenceByFinalCalled) {
             boolean isConferenceIncoming = (!isPartitionPresent(cdrData.getFinalCalledPartyNumberPartition())) &&
@@ -310,22 +319,15 @@ public class CiscoCm60CdrProcessor implements CdrTypeProcessor {
             if (isConferenceIncoming) {
                 cdrData.setCallDirection(CallDirection.INCOMING);
             } else if (invertTrunksForConference && cdrData.getCallDirection() != CallDirection.INCOMING) {
-                 if (cdrData.getJoinOnBehalfOf() == null || cdrData.getJoinOnBehalfOf() != 7) { // PHP: if ($cdr_motivo_union != "7")
+                 if (cdrData.getJoinOnBehalfOf() == null || cdrData.getJoinOnBehalfOf() != 7) {
                     CdrUtil.swapTrunks(cdrData);
                 }
             }
-        } else {
-            boolean isCallingPartyEffectivelyExternal = !isPartitionPresent(cdrData.getCallingPartyNumberPartition()) ||
-                                                        !employeeLookupService.isPossibleExtension(cdrData.getCallingPartyNumber(), limits);
-            if (isCallingPartyEffectivelyExternal) {
-                boolean isFinalCalledPartyInternalFormat = isPartitionPresent(cdrData.getFinalCalledPartyNumberPartition()) &&
-                                                           employeeLookupService.isPossibleExtension(cdrData.getFinalCalledPartyNumber(), limits);
-                boolean isRedirectPartyInternalFormat = isPartitionPresent(cdrData.getLastRedirectDnPartition()) &&
-                                                        employeeLookupService.isPossibleExtension(cdrData.getLastRedirectDn(), limits);
-                if (isFinalCalledPartyInternalFormat || isRedirectPartyInternalFormat) {
-                     cdrData.setCallDirection(CallDirection.INCOMING);
-                     CdrUtil.swapPartyInfo(cdrData);
-                }
+        } else { // Not conference by final called
+            if (isCallingPartyEffectivelyExternal && (isFinalCalledPartyInternalFormat || isRedirectPartyInternalFormat)) {
+                 cdrData.setCallDirection(CallDirection.INCOMING);
+                 CdrUtil.swapPartyInfo(cdrData);
+                 CdrUtil.swapTrunks(cdrData); // **FIX: Added trunk swap here**
             }
         }
 
@@ -340,21 +342,30 @@ public class CiscoCm60CdrProcessor implements CdrTypeProcessor {
             cdrData.setInternalCall(false);
         }
 
+        // Set effective destination number after all swaps and initial logic
+        cdrData.setEffectiveDestinationNumber(cdrData.getFinalCalledPartyNumber());
+
+        // Transfer logic from PHP (simplified, as full conference chain re-creation is complex)
         boolean numberChangedByRedirect = false;
         if (cdrData.getLastRedirectDn() != null && !cdrData.getLastRedirectDn().isEmpty()) {
             if (cdrData.getCallDirection() == CallDirection.OUTGOING && !Objects.equals(cdrData.getFinalCalledPartyNumber(), cdrData.getLastRedirectDn())) {
                 numberChangedByRedirect = true;
             } else if (cdrData.getCallDirection() == CallDirection.INCOMING && !Objects.equals(cdrData.getCallingPartyNumber(), cdrData.getLastRedirectDn())) {
+                // For incoming, after swap, callingPartyNumber is our internal extension.
+                // If lastRedirectDn is different, it means the call was redirected *before* reaching our final extension.
+                // Or, if it's an internal transfer, lastRedirectDn would be the original target.
+                // PHP: ($info_arr['incoming'] == 1 && $info_arr['ext'] != $info_arr['ext-redir'])
+                // After swap, cdrData.getCallingPartyNumber() is the internal extension (PHP's $info_arr['ext'])
                 numberChangedByRedirect = true;
             }
         }
 
         if (numberChangedByRedirect) {
-            if (cdrData.getTransferCause() == TransferCause.NONE) { // Only set if not already set by conference logic
+            if (cdrData.getTransferCause() == TransferCause.NONE) {
                 Integer lastRedirectReason = cdrData.getLastRedirectRedirectReason();
                 if (lastRedirectReason != null && lastRedirectReason > 0 && lastRedirectReason <= 16) {
                     cdrData.setTransferCause(TransferCause.NORMAL);
-                } else if (lastRedirectReason != null && lastRedirectReason == 130) { // Specific mapping for 130 to BUSY
+                } else if (lastRedirectReason != null && lastRedirectReason == 130) {
                     cdrData.setTransferCause(TransferCause.BUSY);
                 }
                 else {
@@ -371,6 +382,7 @@ public class CiscoCm60CdrProcessor implements CdrTypeProcessor {
                     numberChangedByMobileRedirect = true;
                     cdrData.setFinalCalledPartyNumber(cdrData.getFinalMobileCalledPartyNumber());
                     cdrData.setFinalCalledPartyNumberPartition(cdrData.getDestMobileDeviceName());
+                    cdrData.setEffectiveDestinationNumber(cdrData.getFinalCalledPartyNumber());
                     if (cdrData.isInternalCall() && !employeeLookupService.isPossibleExtension(cdrData.getFinalCalledPartyNumber(), limits)) {
                         cdrData.setInternalCall(false);
                     }
@@ -380,7 +392,6 @@ public class CiscoCm60CdrProcessor implements CdrTypeProcessor {
                      numberChangedByMobileRedirect = true;
                      cdrData.setCallingPartyNumber(cdrData.getFinalMobileCalledPartyNumber());
                      cdrData.setCallingPartyNumberPartition(cdrData.getDestMobileDeviceName());
-                     // If an incoming call is redirected to a mobile, it's no longer an internal call to our extension
                      cdrData.setInternalCall(false);
                 }
             }
