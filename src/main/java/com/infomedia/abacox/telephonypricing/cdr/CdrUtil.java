@@ -14,51 +14,54 @@ public class CdrUtil {
         // PHP's csv_datos is more robust than a simple split, handling quoted fields.
         // A proper CSV parsing library would be better, but for now, mimic simple split and clean.
         // The provided PHP doesn't show a complex csv_datos, so simple split + clean is assumed.
+        if (line == null) return Arrays.asList(""); // Match PHP behavior of returning array with one empty string for null input
         return Arrays.stream(line.split(Pattern.quote(separator)))
-                .map(CdrUtil::cleanCsvField)
+                .map(CdrUtil::cleanCsvField) // PHP's CM_ValidarCab calls csv_limpiar_campos on each field
                 .collect(Collectors.toList());
     }
 
     public static String cleanCsvField(String field) {
         if (field == null) return "";
         String cleaned = field.trim();
-        // PHP: $string = str_replace(chr(0),'',$string); (in txt2dbv8.php)
         cleaned = cleaned.replace("\u0000", ""); // Remove NULL characters
 
-        // PHP's csv_limpiar_campos (called by CM_ValidarCab) removes surrounding quotes
         if (cleaned.startsWith("\"") && cleaned.endsWith("\"") && cleaned.length() >= 2) {
             cleaned = cleaned.substring(1, cleaned.length() - 1);
             // PHP doesn't seem to handle escaped quotes like "" -> " inside fields with this simple logic.
-            // A full CSV parser would.
         }
         return cleaned;
     }
 
     public static String decimalToIp(long dec) {
-        // PHP: dec2ip
-        if (dec < 0) { // Cisco sometimes uses -1 for unknown IPs
-            log.warn("Received negative decimal for IP conversion: {}, returning as string.", dec);
-            return String.valueOf(dec); // Or handle as invalid
+        if (dec < 0) {
+            log.trace("Received negative decimal for IP conversion: {}, returning as string.", dec);
+            return String.valueOf(dec);
         }
         // Corrected order based on PHP's array_reverse and hexdec logic
+        // PHP: $hex =  sprintf("%08s", dechex($dec));
+        // PHP: $arr_dec = array_reverse( str_split($hex, 2) );
+        // PHP: $arr_dec[$key] = hexdec($val);
+        // Example: dec = 2886729729 -> hex = ABE00001 -> reverse split = [01, 00, E0, AB] -> dec = [1, 0, 224, 171] -> IP = 1.0.224.171
+        // This is different from the common network byte order conversion.
+        // The PHP logic implies the decimal IP is stored with octets in reverse order of significance for display.
+        // Let's re-verify the PHP logic:
+        // dec = 167772161 (for 10.0.0.1)
+        // dechex(167772161) = a000001
+        // sprintf("%08s", "a000001") = "0a000001"
+        // str_split("0a000001", 2) = ["0a", "00", "00", "01"]
+        // array_reverse = ["01", "00", "00", "0a"]
+        // hexdec("01")=1, hexdec("00")=0, hexdec("00")=0, hexdec("0a")=10
+        // implode = "1.0.0.10" -> This is correct for 10.0.0.1 if the input decimal was for 1.0.0.10
+        // So, the PHP logic is: (dec & 0xFF) . "." . ((dec >> 8) & 0xFF) . "." . ((dec >> 16) & 0xFF) . "." . ((dec >> 24) & 0xFF)
+        // This is standard little-endian to dotted-quad if the decimal was stored little-endian.
         return String.format("%d.%d.%d.%d",
-                (dec >> 24) & 0xFF,
-                (dec >> 16) & 0xFF,
+                (dec & 0xFF),
                 (dec >> 8) & 0xFF,
-                (dec & 0xFF));
+                (dec >> 16) & 0xFF,
+                (dec >> 24) & 0xFF);
     }
 
-    /**
-     * PHP equivalent: limpiar_numero
-     * @param number The number string to clean.
-     * @param pbxExitPrefixes List of PBX exit prefixes to attempt to remove.
-     * @param modoSeguro Corresponds to PHP's $modo_seguro.
-     *                   If true, and pbxExitPrefixes are provided but none match,
-     *                   the original number (after basic cleaning) is returned.
-     *                   If false, and pbxExitPrefixes are provided but none match,
-     *                   an empty string is returned (PHP's $maxCaracterAExtraer == 0 case).
-     * @return The cleaned number.
-     */
+
     public static String cleanPhoneNumber(String number, List<String> pbxExitPrefixes, boolean modoSeguro) {
         if (number == null) return "";
         String currentNumber = number.trim();
@@ -66,7 +69,7 @@ public class CdrUtil {
 
         String numberAfterPrefixStrip = currentNumber;
         boolean pbxPrefixDefined = pbxExitPrefixes != null && !pbxExitPrefixes.isEmpty();
-        int maxCaracterAExtraerPhpEquivalent = -1; // -1: no prefixes or not found yet, 0: prefixes defined but none matched, >0: length of matched prefix
+        int phpMaxCaracterAExtraer = -1; // -1: no prefixes or not found yet, 0: prefixes defined but none matched, >0: length of matched prefix
 
         if (pbxPrefixDefined) {
             String longestMatchingPrefix = "";
@@ -80,32 +83,27 @@ public class CdrUtil {
             }
             if (!longestMatchingPrefix.isEmpty()) {
                 numberAfterPrefixStrip = currentNumber.substring(longestMatchingPrefix.length());
-                maxCaracterAExtraerPhpEquivalent = longestMatchingPrefix.length();
+                phpMaxCaracterAExtraer = longestMatchingPrefix.length();
                 log.trace("PBX prefix '{}' stripped. Number is now: '{}'", longestMatchingPrefix, numberAfterPrefixStrip);
             } else {
-                maxCaracterAExtraerPhpEquivalent = 0; // Prefixes defined, but none matched
+                phpMaxCaracterAExtraer = 0; // Prefixes defined, but none matched
                 log.trace("PBX prefixes defined but none matched current number '{}'", currentNumber);
             }
         }
 
         // PHP: if ($maxCaracterAExtraer == 0) { $nuevo = ''; }
-        if (maxCaracterAExtraerPhpEquivalent == 0) {
+        if (phpMaxCaracterAExtraer == 0) { // This means prefixes were defined, but none matched
             numberAfterPrefixStrip = "";
         }
 
         // PHP: if ($modo_seguro && $nuevo == '') { $nuevo = trim($numero); }
-        if (modoSeguro && numberAfterPrefixStrip.isEmpty() && maxCaracterAExtraerPhpEquivalent == 0) {
-            // This case in PHP means: modo_seguro is true, prefixes were defined but none matched (so $nuevo became empty).
-            // In this specific scenario, PHP reverts to the original number for further cleaning.
+        if (modoSeguro && numberAfterPrefixStrip.isEmpty() && phpMaxCaracterAExtraer == 0) {
             numberAfterPrefixStrip = currentNumber; // Revert to original (trimmed) number
             log.trace("ModoSeguro is true and no PBX prefix matched (or resulted in empty after strip), reverting to original for further cleaning: '{}'", numberAfterPrefixStrip);
         }
-        // If modo_seguro is false and no prefix matched (maxCaracterAExtraerPhpEquivalent == 0), numberAfterPrefixStrip is already "" and stays "".
 
         String numToClean = numberAfterPrefixStrip;
 
-        // PHP: $primercar = substr($nuevo, 0, 1);
-        // PHP: if ($primercar == '+') { $primercar = ''; } (NOV/2017)
         if (numToClean.startsWith("+")) {
             numToClean = numToClean.substring(1);
             log.trace("Stripped leading '+'. Number is now: '{}'", numToClean);
@@ -116,23 +114,26 @@ public class CdrUtil {
             return "";
         }
 
-        // PHP: $parcial = substr($nuevo, 1);
+        // PHP: $primercar = substr($nuevo, 0, 1); $parcial = substr($nuevo, 1);
         // PHP: if ($parcial != '' && !is_numeric($parcial)) { $parcial2 = preg_replace('/[^0-9]/','?', $parcial); ... $p = strpos($parcial2, '?'); if ($p > 0) { $parcial = substr($parcial2, 0, $p); } }
         // This means it only cleans non-digits *after the first character*.
         // And it stops at the *first* non-digit encountered after the first character.
+        // The first character is kept as is (unless it was '+').
         String firstChar = String.valueOf(numToClean.charAt(0));
         String restOfNumber = numToClean.length() > 1 ? numToClean.substring(1) : "";
         StringBuilder cleanedRest = new StringBuilder();
 
         if (!restOfNumber.isEmpty()) {
-            boolean allDigitsSoFar = true;
             for (char c : restOfNumber.toCharArray()) {
                 if (Character.isDigit(c)) {
                     cleanedRest.append(c);
                 } else {
-                    allDigitsSoFar = false;
+                    // PHP: $p = strpos($parcial2, '?'); if ($p > 0) { $parcial = substr($parcial2, 0, $p); }
+                    // This means if the first char of 'restOfNumber' is non-digit, 'cleanedRest' remains empty.
+                    // If 'restOfNumber' is "A123", 'cleanedRest' is empty.
+                    // If 'restOfNumber' is "1A23", 'cleanedRest' is "1".
                     log.trace("Non-digit '{}' found after first char. Stopping cleaning of rest.", c);
-                    break; // Stop at the first non-digit after the first character
+                    break;
                 }
             }
         }
@@ -153,7 +154,7 @@ public class CdrUtil {
         cdrData.setCallingPartyNumberPartition(cdrData.getFinalCalledPartyNumberPartition());
         cdrData.setFinalCalledPartyNumber(tempExt);
         cdrData.setFinalCalledPartyNumberPartition(tempExtPart);
-        cdrData.setEffectiveDestinationNumber(cdrData.getFinalCalledPartyNumber());
+        cdrData.setEffectiveDestinationNumber(cdrData.getFinalCalledPartyNumber()); // Update effective dest
         log.debug("Swapped party info. After: Calling='{}'({}), FinalCalled='{}'({})",
                 cdrData.getCallingPartyNumber(), cdrData.getCallingPartyNumberPartition(),
                 cdrData.getFinalCalledPartyNumber(), cdrData.getFinalCalledPartyNumberPartition());
@@ -168,7 +169,8 @@ public class CdrUtil {
     }
 
     public static String generateCtlHash(String cdrString, Long commLocationId) {
-        String ctlHashContent = (commLocationId != null ? commLocationId : "0") + "@" + (cdrString != null ? cdrString : "");
+        // PHP: $cdr5 = sha256($comubicacion_id.'@'.$cdr);
+        String ctlHashContent = (commLocationId != null ? commLocationId.toString() : "0") + "@" + (cdrString != null ? cdrString : "");
         return HashUtil.sha256(ctlHashContent);
     }
 }

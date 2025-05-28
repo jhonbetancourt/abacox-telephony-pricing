@@ -21,19 +21,22 @@ public class CiscoCm60CdrProcessor implements CdrTypeProcessor {
     public static final Long PLANT_TYPE_IDENTIFIER = 26L; // CM_6_0
     private static final String INTERNAL_CDR_RECORD_TYPE_HEADER_KEY = "cdrrecordtype";
     private static final String CDR_SEPARATOR = ",";
-    private static final String DEFAULT_CONFERENCE_IDENTIFIER_PREFIX = "b"; // PHP: $_IDENTIFICADOR_CONFERENCIA
+    private static final String DEFAULT_CONFERENCE_IDENTIFIER_PREFIX = "b";
 
     private final Map<String, String> conceptualToActualHeaderMap = new HashMap<>();
     private final Map<String, Integer> currentHeaderPositions = new HashMap<>();
     private String conferenceIdentifierActual = DEFAULT_CONFERENCE_IDENTIFIER_PREFIX;
+    private int minExpectedFieldsForValidCdr = 0; // Will be set by parseHeader
 
-    private final EmployeeLookupService employeeLookupService;
-    private final CallTypeDeterminationService callTypeDeterminationService;
+    private final EmployeeLookupService employeeLookupService; // For ExtensionPosible
+    private final CallTypeDeterminationService callTypeDeterminationService; // For getExtensionLimits
 
 
     @PostConstruct
     public void initDefaultHeaderMappings() {
-        // PHP: $cm_cdr array in CM_TipoPlanta
+        // Conceptual keys (used internally in CdrData or as keys in this map)
+        // mapped to default actual header names (lowercase) expected in the CDR file.
+        // These actual header names will be used to find positions if no custom mapping is loaded.
         conceptualToActualHeaderMap.put("callingPartyNumberPartition", "callingPartyNumberPartition".toLowerCase());
         conceptualToActualHeaderMap.put("callingPartyNumber", "callingPartyNumber".toLowerCase());
         conceptualToActualHeaderMap.put("finalCalledPartyNumberPartition", "finalCalledPartyNumberPartition".toLowerCase());
@@ -62,6 +65,7 @@ public class CiscoCm60CdrProcessor implements CdrTypeProcessor {
         conceptualToActualHeaderMap.put("globalCallIDCallId", "globalCallID_callId".toLowerCase());
         conceptualToActualHeaderMap.put("durationSeconds", "duration".toLowerCase());
         conceptualToActualHeaderMap.put("authCodeDescription", "authCodeDescription".toLowerCase());
+
         // PHP: $cm_config['cdr_conferencia'] = 'b';
         this.conferenceIdentifierActual = DEFAULT_CONFERENCE_IDENTIFIER_PREFIX.toUpperCase();
     }
@@ -71,64 +75,70 @@ public class CiscoCm60CdrProcessor implements CdrTypeProcessor {
         if (line == null || line.isEmpty()) {
             return false;
         }
-        String cleanedFirstField = "";
-        List<String> fields = CdrUtil.parseCsvLine(line, CDR_SEPARATOR);
+        // PHP: $primer_campo = $arreglo_string[0]; if (strtolower($primer_campo) == strtolower($cm_config['llave']))
+        // $cm_config['llave'] is 'cdrRecordType'
+        // The PHP logic splits by comma first, then checks the first field.
+        List<String> fields = CdrUtil.parseCsvLine(line, CDR_SEPARATOR); // parseCsvLine also cleans
         if (!fields.isEmpty()) {
-            cleanedFirstField = CdrUtil.cleanCsvField(fields.get(0)).toLowerCase();
+            return INTERNAL_CDR_RECORD_TYPE_HEADER_KEY.equalsIgnoreCase(fields.get(0));
         }
-        // PHP: if (strtolower($primer_campo) == strtolower($cm_config['llave']))
-        return INTERNAL_CDR_RECORD_TYPE_HEADER_KEY.equalsIgnoreCase(cleanedFirstField);
+        return false;
     }
 
     @Override
     public void parseHeader(String headerLine) {
+        // PHP: CM_ValidarCab(&$cm_config, $campos, false);
         currentHeaderPositions.clear();
-        List<String> headers = CdrUtil.parseCsvLine(headerLine, CDR_SEPARATOR);
+        List<String> headers = CdrUtil.parseCsvLine(headerLine, CDR_SEPARATOR); // parseCsvLine also cleans fields
         int maxIndex = -1;
         for (int i = 0; i < headers.size(); i++) {
-            String cleanedHeader = CdrUtil.cleanCsvField(headers.get(i)).toLowerCase();
-            currentHeaderPositions.put(cleanedHeader, i);
-            // PHP: CM_ValidarCab logic
-            if (conceptualToActualHeaderMap.containsValue(cleanedHeader)) {
-                 if (i > maxIndex) maxIndex = i;
+            String actualHeaderFromFile = headers.get(i).toLowerCase(); // PHP uses strtolower for matching
+            currentHeaderPositions.put(actualHeaderFromFile, i);
+
+            // Check if this actual header from file corresponds to one of our conceptual fields
+            for (Map.Entry<String, String> entry : conceptualToActualHeaderMap.entrySet()) {
+                if (entry.getValue().equals(actualHeaderFromFile)) {
+                    if (i > maxIndex) {
+                        maxIndex = i;
+                    }
+                    break;
+                }
             }
         }
-        currentHeaderPositions.put("_max_mapped_header_index_", maxIndex);
-        log.debug("Parsed CDR headers for Cisco CM 6.0. Mapped positions: {}", currentHeaderPositions);
+        this.minExpectedFieldsForValidCdr = maxIndex + 1; // Need at least this many fields if all mapped headers are present
+        currentHeaderPositions.put("_max_mapped_header_index_", maxIndex); // Store for field count check
+        log.debug("Parsed Cisco CM 6.0 headers. Mapped positions: {}. Min expected fields: {}", currentHeaderPositions, minExpectedFieldsForValidCdr);
     }
 
     private String getFieldValue(List<String> fields, String conceptualFieldName) {
+        // This method now assumes actualHeaderName is what's in currentHeaderPositions keys
         String actualHeaderName = conceptualToActualHeaderMap.getOrDefault(conceptualFieldName, conceptualFieldName.toLowerCase());
         Integer position = currentHeaderPositions.get(actualHeaderName);
-        // Fallback if the conceptual name itself was used as a header (e.g. from custom config)
-        if (position == null) {
+
+        if (position == null) { // Fallback: if the conceptual name itself was used as a header
             position = currentHeaderPositions.get(conceptualFieldName.toLowerCase());
         }
 
         if (position != null && position >= 0 && position < fields.size()) {
-            String rawValue = fields.get(position);
+            String rawValue = fields.get(position); // Fields are already cleaned by parseCsvLine
             if (rawValue == null) return "";
-
-            String valueToProcess = rawValue; // No CdrUtil.cleanCsvField here, as PHP doesn't clean before these checks
 
             // PHP: if (strpos($cab, 'ipaddr') !== false || strpos($cab, 'address_ip') !== false)
             if (actualHeaderName.contains("ipaddr") || actualHeaderName.contains("address_ip")) {
                 try {
-                    // PHP: dec2ip($valor)
-                    if (!valueToProcess.isEmpty() && !valueToProcess.equals("0") && !valueToProcess.equals("-1")) { // Cisco uses 0 or -1 for unknown IPs
-                        return CdrUtil.decimalToIp(Long.parseLong(valueToProcess));
+                    if (!rawValue.isEmpty() && !rawValue.equals("0") && !rawValue.equals("-1")) {
+                        return CdrUtil.decimalToIp(Long.parseLong(rawValue));
                     }
-                    return valueToProcess; // Return "0" or "-1" as is
+                    return rawValue;
                 } catch (NumberFormatException e) {
-                    log.warn("Failed to parse IP address from decimal: {} for header {}", valueToProcess, actualHeaderName);
-                    return valueToProcess; // Return original on error
+                    log.warn("Failed to parse IP address from decimal: {} for header {}", rawValue, actualHeaderName);
+                    return rawValue;
                 }
             }
-            // PHP: elseif (strpos($cab, 'date') !== false) { if ($valor > 0) { $arreglo_string[ $cm_config[$llave] ] = date("Y-m-d H:i:s", $valor); } }
-            // This is handled by parseEpochToLocalDateTime for date fields.
-            return valueToProcess;
+            // Date conversion (epoch to string) is handled when setting CdrData fields
+            return rawValue;
         }
-        log.trace("Field '{}' (actual header: '{}') not found or out of bounds.", conceptualFieldName, actualHeaderName);
+        log.trace("Field for conceptual name '{}' (actual header: '{}') not found or out of bounds.", conceptualFieldName, actualHeaderName);
         return "";
     }
 
@@ -146,12 +156,12 @@ public class CiscoCm60CdrProcessor implements CdrTypeProcessor {
     }
 
      private Integer parseIntField(String valueStr) {
-        if (valueStr == null || valueStr.isEmpty()) return 0; // PHP often treats empty as 0
+        if (valueStr == null || valueStr.isEmpty()) return 0;
         try {
             return Integer.parseInt(valueStr);
         } catch (NumberFormatException e) {
             log.trace("Failed to parse integer: {}", valueStr);
-            return 0; // PHP behavior
+            return 0;
         }
     }
 
@@ -172,30 +182,29 @@ public class CiscoCm60CdrProcessor implements CdrTypeProcessor {
             log.error("Cisco CM 6.0 Headers not parsed. Cannot process line: {}", cdrLine);
             CdrData errorData = new CdrData(); errorData.setRawCdrLine(cdrLine);
             errorData.setMarkedForQuarantine(true); errorData.setQuarantineReason("Header not parsed prior to CDR line processing.");
-            errorData.setQuarantineStep("evaluateFormat_HeaderMissing_CM60"); return errorData;
+            errorData.setQuarantineStep(QuarantineErrorType.MISSING_HEADER.name()); return errorData;
         }
 
         List<String> fields = CdrUtil.parseCsvLine(cdrLine, CDR_SEPARATOR);
         CdrData cdrData = new CdrData();
         cdrData.setRawCdrLine(cdrLine);
 
-        String firstField = fields.isEmpty() ? "" : CdrUtil.cleanCsvField(fields.get(0));
+        String firstField = fields.isEmpty() ? "" : fields.get(0); // Already cleaned by parseCsvLine
         if (INTERNAL_CDR_RECORD_TYPE_HEADER_KEY.equalsIgnoreCase(firstField)) {
             log.debug("Skipping header line found mid-stream.");
-            return null; // Indicates to skip this line
+            return null;
         }
         if ("INTEGER".equalsIgnoreCase(firstField)) {
             log.debug("Skipping 'INTEGER' type definition line.");
             return null;
         }
 
-        int maxMappedIndex = currentHeaderPositions.getOrDefault("_max_mapped_header_index_", -1);
         // PHP: if (count($arreglo_string) < $_cm_config['cdr_campos'])
-        if (maxMappedIndex != -1 && fields.size() <= maxMappedIndex) {
-            log.warn("Cisco CM 6.0 CDR line has insufficient fields ({}). Expected at least {} for mapped headers. Line: {}", fields.size(), maxMappedIndex + 1, cdrLine);
+        if (fields.size() < this.minExpectedFieldsForValidCdr) {
+            log.warn("Cisco CM 6.0 CDR line has insufficient fields ({}). Expected at least {}. Line: {}", fields.size(), this.minExpectedFieldsForValidCdr, cdrLine);
             cdrData.setMarkedForQuarantine(true);
-            cdrData.setQuarantineReason("Insufficient fields for mapped headers. Found " + fields.size() + ", expected more than " + maxMappedIndex);
-            cdrData.setQuarantineStep("evaluateFormat_FieldCount_CM60");
+            cdrData.setQuarantineReason("Insufficient fields. Found " + fields.size() + ", expected " + this.minExpectedFieldsForValidCdr);
+            cdrData.setQuarantineStep(QuarantineErrorType.PARSER_ERROR.name()); // More specific than INITIAL_VALIDATION
             return cdrData;
         }
 
@@ -209,11 +218,11 @@ public class CiscoCm60CdrProcessor implements CdrTypeProcessor {
             ringingTime = (int) java.time.Duration.between(cdrData.getDateTimeOrigination(), dateTimeConnect).getSeconds();
         } else if (dateTimeDisconnect != null && cdrData.getDateTimeOrigination() != null) {
             ringingTime = (int) java.time.Duration.between(cdrData.getDateTimeOrigination(), dateTimeDisconnect).getSeconds();
-            if (cdrData.getDurationSeconds() == null || cdrData.getDurationSeconds() > 0) { // PHP: $duracion = 0;
+            if (cdrData.getDurationSeconds() == null || cdrData.getDurationSeconds() > 0) {
                 cdrData.setDurationSeconds(0);
             }
         }
-        cdrData.setRingingTimeSeconds(Math.max(0, ringingTime)); // Ringing time cannot be negative
+        cdrData.setRingingTimeSeconds(Math.max(0, ringingTime));
         if (cdrData.getDurationSeconds() == null) cdrData.setDurationSeconds(0);
 
 
@@ -228,7 +237,6 @@ public class CiscoCm60CdrProcessor implements CdrTypeProcessor {
         cdrData.setDestMobileDeviceName(getFieldValue(fields, "destMobileDeviceName").toUpperCase());
         cdrData.setFinalMobileCalledPartyNumber(getFieldValue(fields, "finalMobileCalledPartyNumber"));
 
-        // Store original values before modification for conference/redirect logic
         cdrData.setOriginalFinalCalledPartyNumber(cdrData.getFinalCalledPartyNumber());
         cdrData.setOriginalFinalCalledPartyNumberPartition(cdrData.getFinalCalledPartyNumberPartition());
         cdrData.setOriginalLastRedirectDn(cdrData.getLastRedirectDn());
@@ -253,31 +261,24 @@ public class CiscoCm60CdrProcessor implements CdrTypeProcessor {
 
         log.debug("Initial parsed Cisco CM 6.0 fields: {}", cdrData);
 
-        // --- Start of complex logic from CM_FormatoCDR ---
         boolean isConferenceByLastRedirectDn = isConferenceIdentifier(cdrData.getLastRedirectDn());
 
-        // PHP: if ($info_arr['dial_number'] == "")
         if (cdrData.getFinalCalledPartyNumber() == null || cdrData.getFinalCalledPartyNumber().isEmpty()) {
             cdrData.setFinalCalledPartyNumber(cdrData.getOriginalCalledPartyNumber());
             cdrData.setFinalCalledPartyNumberPartition(cdrData.getOriginalCalledPartyNumberPartition());
             log.debug("FinalCalledPartyNumber was empty, used OriginalCalledPartyNumber: {}", cdrData.getFinalCalledPartyNumber());
         }
-        // PHP: elseif ($info_arr['dial_number'] != $destino_original && $destino_original != '')
         else if (!Objects.equals(cdrData.getFinalCalledPartyNumber(), cdrData.getOriginalCalledPartyNumber()) &&
                  cdrData.getOriginalCalledPartyNumber() != null && !cdrData.getOriginalCalledPartyNumber().isEmpty()) {
-            // PHP: if (!$esconf_redir)
             if (!isConferenceByLastRedirectDn) {
                 log.debug("FinalCalledPartyNumber differs from Original; LastRedirectDn is not conference. Using Original for LastRedirectDn.");
-                // PHP: $info_arr['ext-redir-cc'] = $info_arr['ext-redir']; // Preserva original
-                // This implies originalLastRedirectDn should be preserved if it was different.
-                // We already stored originalLastRedirectDn.
                 cdrData.setLastRedirectDn(cdrData.getOriginalCalledPartyNumber());
                 cdrData.setLastRedirectDnPartition(cdrData.getOriginalCalledPartyNumberPartition());
             }
         }
 
         boolean isConferenceByFinalCalled = isConferenceIdentifier(cdrData.getFinalCalledPartyNumber());
-        boolean invertTrunksForConference = true; // PHP: $invertir_troncales = true;
+        boolean invertTrunksForConference = true;
 
         if (isConferenceByFinalCalled) {
             TransferCause confTransferCause = (cdrData.getJoinOnBehalfOf() != null && cdrData.getJoinOnBehalfOf() == 7) ?
@@ -286,67 +287,54 @@ public class CiscoCm60CdrProcessor implements CdrTypeProcessor {
             cdrData.setConferenceIdentifierUsed(cdrData.getFinalCalledPartyNumber());
             log.debug("Call identified as conference by finalCalledPartyNumber. TransferCause: {}", cdrData.getTransferCause());
 
-            // PHP: if (!$esconf_redir)
             if (!isConferenceByLastRedirectDn) {
                 String tempDialNumber = cdrData.getFinalCalledPartyNumber();
                 String tempDialPartition = cdrData.getFinalCalledPartyNumberPartition();
 
                 cdrData.setFinalCalledPartyNumber(cdrData.getLastRedirectDn());
                 cdrData.setFinalCalledPartyNumberPartition(cdrData.getLastRedirectDnPartition());
-                cdrData.setLastRedirectDn(tempDialNumber); // This is the 'bXXXX' conference ID
+                cdrData.setLastRedirectDn(tempDialNumber);
                 cdrData.setLastRedirectDnPartition(tempDialPartition);
                 log.debug("Conference: Swapped finalCalledParty with lastRedirectDn. New finalCalled: {}, New lastRedirectDn: {}",
                         cdrData.getFinalCalledPartyNumber(), cdrData.getLastRedirectDn());
 
-                // PHP: if ($infotrans == IMDEX_TRANSFER_CONFENOW)
                 if (confTransferCause == TransferCause.CONFERENCE_NOW) {
-                    // PHP: if (isset($info_arr['ext-redir-cc']) && strtolower(substr($info_arr['ext-redir-cc'], 0, 1)) == 'c')
-                    // ext-redir-cc was the original lastRedirectDn before this block.
                     String originalLastRedirectDnValue = cdrData.getOriginalLastRedirectDn();
                     if (originalLastRedirectDnValue != null && originalLastRedirectDnValue.toLowerCase().startsWith("c")) {
-                        cdrData.setLastRedirectDn(originalLastRedirectDnValue); // Restore if it was a 'cXXXX'
+                        cdrData.setLastRedirectDn(originalLastRedirectDnValue);
                         cdrData.setConferenceIdentifierUsed(originalLastRedirectDnValue);
                     } else if (cdrData.getDestConversationId() != null && cdrData.getDestConversationId() > 0) {
-                        // PHP: $info_arr['ext-redir']   = 'i'.$info_arr['indice-conferencia'];
                         cdrData.setLastRedirectDn("i" + cdrData.getDestConversationId());
                         cdrData.setConferenceIdentifierUsed(cdrData.getLastRedirectDn());
                     }
                 }
             }
-            // PHP: if ($cdr_motivo_union != "7") { _invertir(...callingParty..., finalCalledParty...); }
             if (cdrData.getJoinOnBehalfOf() == null || cdrData.getJoinOnBehalfOf() != 7) {
                 CdrUtil.swapPartyInfo(cdrData);
             }
-        } else { // Not conference by final called
-            // PHP: $esconferencia = CM_ValidarConferencia($cm_config, $info_arr['ext-redir']);
+        } else {
             if (isConferenceByLastRedirectDn) {
-                // PHP: if (_cm_CausaTransfer($info_arr, IMDEX_TRANSFER_CONFERE_FIN))
                 if (setTransferCauseIfUnset(cdrData, TransferCause.CONFERENCE_END)) {
                     cdrData.setConferenceIdentifierUsed(cdrData.getLastRedirectDn());
-                    invertTrunksForConference = false; // PHP: $invertir_troncales = false;
+                    invertTrunksForConference = false;
                 }
             }
         }
 
-        ExtensionLimits limits = commLocation != null ? callTypeDeterminationService.getExtensionLimits(commLocation) : new ExtensionLimits();
+        ExtensionLimits limits = callTypeDeterminationService.getExtensionLimits(commLocation);
 
         if (isConferenceByFinalCalled) {
-            // PHP: $es_entrante = (trim($info_arr['partdestino']) == '' && ($ndial === '' || !ExtensionPosible($ndial)));
-            // After potential swapPartyInfo, partdestino is original partorigen, and dial_number is original ext.
             boolean isConferenceEffectivelyIncoming = (!isPartitionPresent(cdrData.getFinalCalledPartyNumberPartition())) &&
                     (cdrData.getCallingPartyNumber() == null || cdrData.getCallingPartyNumber().isEmpty() ||
                             !employeeLookupService.isPossibleExtension(cdrData.getCallingPartyNumber(), limits));
             if (isConferenceEffectivelyIncoming) {
                 cdrData.setCallDirection(CallDirection.INCOMING);
             } else if (invertTrunksForConference && cdrData.getCallDirection() != CallDirection.INCOMING) {
-                // PHP: if ($invertir_troncales) { _invertir($info_arr['troncal'], $info_arr['troncal-ini']); }
-                // Only swap trunks if party info was also swapped (i.e., joinOnBehalfOf != 7)
                 if (cdrData.getJoinOnBehalfOf() == null || cdrData.getJoinOnBehalfOf() != 7) {
                     CdrUtil.swapTrunks(cdrData);
                 }
             }
-        } else { // Not conference by final called
-            // PHP: elseif (!$interna_ext) { ... if ($es_entrante && !$es_transfer && $info_arr['partorigen'] == '') ... }
+        } else {
             boolean isCallingPartyEffectivelyExternal = !isPartitionPresent(cdrData.getCallingPartyNumberPartition()) ||
                     !employeeLookupService.isPossibleExtension(cdrData.getCallingPartyNumber(), limits);
             boolean isFinalCalledPartyInternalFormat = isPartitionPresent(cdrData.getFinalCalledPartyNumberPartition()) &&
@@ -355,86 +343,63 @@ public class CiscoCm60CdrProcessor implements CdrTypeProcessor {
                     employeeLookupService.isPossibleExtension(cdrData.getLastRedirectDn(), limits);
 
             if (isCallingPartyEffectivelyExternal && (isFinalCalledPartyInternalFormat || isRedirectPartyInternalFormat)) {
-                // PHP: $info_arr['incoming'] = 1; _invertir($info_arr['dial_number'], $info_arr['ext']);
                 cdrData.setCallDirection(CallDirection.INCOMING);
-                String tempExt = cdrData.getCallingPartyNumber();
-                cdrData.setCallingPartyNumber(cdrData.getFinalCalledPartyNumber());
-                cdrData.setFinalCalledPartyNumber(tempExt);
-                // Partitions are NOT swapped in this PHP block. Trunks are also NOT swapped.
-                log.debug("Non-conference incoming detected. Swapped only calling/called numbers. Calling: {}, Called: {}",
+                CdrUtil.swapPartyInfo(cdrData); // PHP: _invertir($info_arr['dial_number'], $info_arr['ext']);
+                log.debug("Non-conference incoming detected. Swapped calling/called numbers. Calling: {}, Called: {}",
                         cdrData.getCallingPartyNumber(), cdrData.getFinalCalledPartyNumber());
             }
         }
 
-        // Determine if call is internal
         boolean isCallingPartyInternal = isPartitionPresent(cdrData.getCallingPartyNumberPartition()) &&
                 employeeLookupService.isPossibleExtension(cdrData.getCallingPartyNumber(), limits);
         boolean isFinalCalledPartyInternal = isPartitionPresent(cdrData.getFinalCalledPartyNumberPartition()) &&
                 employeeLookupService.isPossibleExtension(cdrData.getFinalCalledPartyNumber(), limits);
 
-        // PHP: if ($interna_ext && $interna_des) { $info_arr['interna'] = 1; }
         if (isCallingPartyInternal && isFinalCalledPartyInternal) {
             cdrData.setInternalCall(true);
         } else {
-            cdrData.setInternalCall(false); // Default, might be overridden by later logic
+            cdrData.setInternalCall(false);
         }
 
-        // Set effective destination number (used for tariffing, etc.)
-        cdrData.setEffectiveDestinationNumber(cdrData.getFinalCalledPartyNumber());
-
         // Transfer logic
-        // PHP: if ($info_arr['ext-redir'] != '' && (($info_arr['incoming'] == 0 && $info_arr['dial_number'] != $info_arr['ext-redir']) || ($info_arr['incoming'] == 1 && $info_arr['ext'] != $info_arr['ext-redir'])))
         boolean numberChangedByRedirect = false;
         if (cdrData.getLastRedirectDn() != null && !cdrData.getLastRedirectDn().isEmpty()) {
             if (cdrData.getCallDirection() == CallDirection.OUTGOING && !Objects.equals(cdrData.getFinalCalledPartyNumber(), cdrData.getLastRedirectDn())) {
                 numberChangedByRedirect = true;
             } else if (cdrData.getCallDirection() == CallDirection.INCOMING && !Objects.equals(cdrData.getCallingPartyNumber(), cdrData.getLastRedirectDn())) {
-                // For incoming, PHP compares ext (which is our finalCalledPartyNumber after swap) with ext-redir
                 numberChangedByRedirect = true;
             }
         }
 
         if (numberChangedByRedirect) {
-            // PHP: if ($info_arr['code_transfer'] > 0 && $info_arr['code_transfer'] <= 16)
-            if (cdrData.getTransferCause() == TransferCause.NONE) { // Only if not already set by conference logic
+            if (cdrData.getTransferCause() == TransferCause.NONE) {
                 Integer lastRedirectReason = cdrData.getLastRedirectRedirectReason();
                 if (lastRedirectReason != null && lastRedirectReason > 0 && lastRedirectReason <= 16) {
                     cdrData.setTransferCause(TransferCause.NORMAL);
                 } else {
-                    // PHP: $motivotrans = ($info_arr['finaliza-union'] == 7) ? IMDEX_TRANSFER_PRECONFENOW : IMDEX_TRANSFER_AUTO;
                     TransferCause autoTransferCause = (cdrData.getDestCallTerminationOnBehalfOf() != null && cdrData.getDestCallTerminationOnBehalfOf() == 7) ?
                             TransferCause.PRE_CONFERENCE_NOW : TransferCause.AUTO;
                     cdrData.setTransferCause(autoTransferCause);
                 }
             }
         }
-        // PHP: elseif ($info_arr['ext-movil'] != '' && ...)
         else if (cdrData.getFinalMobileCalledPartyNumber() != null && !cdrData.getFinalMobileCalledPartyNumber().isEmpty()) {
             boolean numberChangedByMobileRedirect = false;
             if (cdrData.getCallDirection() == CallDirection.OUTGOING) {
                 if (!Objects.equals(cdrData.getFinalCalledPartyNumber(), cdrData.getFinalMobileCalledPartyNumber())) {
                     numberChangedByMobileRedirect = true;
                     cdrData.setFinalCalledPartyNumber(cdrData.getFinalMobileCalledPartyNumber());
-                    cdrData.setFinalCalledPartyNumberPartition(cdrData.getDestMobileDeviceName()); // Partition becomes mobile device name
-                    cdrData.setEffectiveDestinationNumber(cdrData.getFinalCalledPartyNumber());
+                    cdrData.setFinalCalledPartyNumberPartition(cdrData.getDestMobileDeviceName());
                     if (cdrData.isInternalCall() && !employeeLookupService.isPossibleExtension(cdrData.getFinalCalledPartyNumber(), limits)) {
                         cdrData.setInternalCall(false);
                     }
                 }
             } else { // INCOMING
-                // PHP: if ($info_arr['incoming'] == 1 && $info_arr['ext'] != $info_arr['ext-movil'])
-                // After potential swap, 'ext' is our internal extension (finalCalledPartyNumber in CdrData)
                 if (!Objects.equals(cdrData.getFinalCalledPartyNumber(), cdrData.getFinalMobileCalledPartyNumber())) {
                     numberChangedByMobileRedirect = true;
-                    // PHP: $info_arr['ext'] = $info_arr['ext-movil'];
-                    // PHP: $info_arr['partorigen'] = $info_arr['partdestino'];
-                    // This means the "our side" of the call becomes the mobile number.
-                    // For an incoming call, our extension was in finalCalledPartyNumber.
-                    // If it's redirected to mobile, finalCalledPartyNumber becomes the mobile number.
                     cdrData.setFinalCalledPartyNumber(cdrData.getFinalMobileCalledPartyNumber());
                     cdrData.setFinalCalledPartyNumberPartition(cdrData.getDestMobileDeviceName());
-                    // The external caller remains in callingPartyNumber.
-                    cdrData.setInternalCall(false); // Call to/from external mobile is not internal
+                    cdrData.setInternalCall(false);
                 }
             }
             if (numberChangedByMobileRedirect) {
@@ -442,12 +407,11 @@ public class CiscoCm60CdrProcessor implements CdrTypeProcessor {
             }
         }
 
-        // PHP: if ($esconferencia && $info_arr['ext'].'' == $info_arr['dial_number'].'') { $info_arr = array(); }
-        if (isConferenceByFinalCalled && // Was originally a conference call
+        if (isConferenceByFinalCalled &&
                 cdrData.getCallingPartyNumber() != null &&
                 Objects.equals(cdrData.getCallingPartyNumber(), cdrData.getFinalCalledPartyNumber())) {
             log.info("Conference call where caller and callee are the same after all processing. Discarding CDR: {}", cdrLine);
-            return null; // Discard
+            return null;
         }
 
         log.debug("Final evaluated Cisco CM 6.0 CDR data: {}", cdrData);
@@ -463,7 +427,7 @@ public class CiscoCm60CdrProcessor implements CdrTypeProcessor {
             cdrData.setTransferCause(cause);
             return true;
         }
-        return cdrData.getTransferCause() == cause; // Return true if it was already set to this cause
+        return cdrData.getTransferCause() == cause;
     }
 
     @Override
@@ -475,11 +439,10 @@ public class CiscoCm60CdrProcessor implements CdrTypeProcessor {
         if (number == null || number.isEmpty() || conferenceIdentifierActual == null || conferenceIdentifierActual.isEmpty()) {
             return false;
         }
-        String prefix = conferenceIdentifierActual; // This is 'B' (uppercase)
+        String prefix = conferenceIdentifierActual;
         String numUpper = number.toUpperCase();
         if (numUpper.startsWith(prefix)) {
             String rest = numUpper.substring(prefix.length());
-            // PHP: strlen($resto_dial) > 0 && is_numeric($resto_dial)
             return !rest.isEmpty() && rest.matches("\\d+");
         }
         return false;
