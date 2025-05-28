@@ -78,14 +78,14 @@ public class TariffCalculationService {
             log.debug("Trunk lookup for '{}': {}", cdrData.getDestDeviceName(), trunkInfoOpt.isPresent() ? "Found" : "Not Found");
         }
 
-        String numberForTariffing = cdrData.getEffectiveDestinationNumber();
-        List<String> pbxPrefixes = commLocation.getPbxPrefix() != null ? Arrays.asList(commLocation.getPbxPrefix().split(",")) : Collections.emptyList();
-        
-        boolean cleanNumberDueToTrunkConfig = false;
+        // PHP: $prefijo_salida_pbx logic in evaluarDestino
+        List<String> pbxPrefixesForCleaning = Collections.emptyList();
+        boolean cleanNumberForTariffing = true; // Default for non-trunk or trunk that expects cleaned number
+
         if (trunkInfoOpt.isPresent()) {
             TrunkInfo ti = trunkInfoOpt.get();
             boolean trunkExpectsNoPbxPrefix = ti.noPbxPrefix != null && ti.noPbxPrefix;
-            
+            // Check specific rate details if available
             if (cdrData.getTelephonyTypeId() != null && cdrData.getOperatorId() != null) {
                  Optional<TrunkRateDetails> rateDetails = trunkLookupService.getRateDetailsForTrunk(
                     ti.id, cdrData.getTelephonyTypeId(), cdrData.getOperatorId()
@@ -94,264 +94,90 @@ public class TariffCalculationService {
                     trunkExpectsNoPbxPrefix = rateDetails.get().noPbxPrefix;
                 }
             }
-            if (!trunkExpectsNoPbxPrefix) {
-                cleanNumberDueToTrunkConfig = true;
+            if (!trunkExpectsNoPbxPrefix) { // Trunk expects number *with* PBX prefix
+                cleanNumberForTariffing = false;
+            } else { // Trunk expects number *without* PBX prefix
+                if (commLocation.getPbxPrefix() != null && !commLocation.getPbxPrefix().isEmpty()) {
+                    pbxPrefixesForCleaning = Arrays.asList(commLocation.getPbxPrefix().split(","));
+                }
             }
-            log.debug("Trunk call. NoPbxPrefix (effective): {}. Clean number for tariffing: {}", !cleanNumberDueToTrunkConfig, cleanNumberDueToTrunkConfig);
-        } else {
-            cleanNumberDueToTrunkConfig = true;
-            log.debug("Non-trunk call. Number will be cleaned for tariffing.");
+        } else { // Not a trunk call, always clean with PBX prefixes if they exist
+            if (commLocation.getPbxPrefix() != null && !commLocation.getPbxPrefix().isEmpty()) {
+                pbxPrefixesForCleaning = Arrays.asList(commLocation.getPbxPrefix().split(","));
+            }
         }
+        log.debug("Clean number for tariffing: {}, PBX prefixes for cleaning: {}", cleanNumberForTariffing, pbxPrefixesForCleaning);
 
-        if (cleanNumberDueToTrunkConfig) {
-            String cleaned = CdrUtil.cleanPhoneNumber(cdrData.getEffectiveDestinationNumber(), pbxPrefixes, true);
+        String numberForTariffing = cdrData.getEffectiveDestinationNumber();
+        if (cleanNumberForTariffing) {
+            String cleaned = CdrUtil.cleanPhoneNumber(cdrData.getEffectiveDestinationNumber(), pbxPrefixesForCleaning, true);
             if (!Objects.equals(cleaned, numberForTariffing)) {
-                log.debug("Number '{}' cleaned to '{}' for tariffing (due to trunk/no-trunk config)", numberForTariffing, cleaned);
+                log.debug("Number '{}' cleaned to '{}' for tariffing", numberForTariffing, cleaned);
                 numberForTariffing = cleaned;
             }
         }
         
-        List<Long> trunkTelephonyTypeIds = null;
-        if (trunkInfoOpt.isPresent()) {
-            trunkTelephonyTypeIds = trunkInfoOpt.get().getAllowedTelephonyTypeIds();
-        }
+        TariffingAttemptResult initialAttempt = attemptTariffing(numberForTariffing, cdrData, commLocation, trunkInfoOpt, false);
 
-        List<PrefixInfo> prefixes = prefixLookupService.findMatchingPrefixes(
-            numberForTariffing,
-            commLocation,
-            trunkInfoOpt.isPresent(),
-            trunkTelephonyTypeIds
-        );
-        log.debug("Found {} potential prefixes for number '{}'", prefixes.size(), numberForTariffing);
+        boolean initialResultIsInvalidOrAssumed = initialAttempt.getBestDestInfo() == null ||
+                                                  initialAttempt.getBestPrefixInfo() == null ||
+                                                  initialAttempt.getBestPrefixInfo().getTelephonyTypeId() == null ||
+                                                  initialAttempt.getBestPrefixInfo().getTelephonyTypeId() <= 0 ||
+                                                  initialAttempt.getBestPrefixInfo().getTelephonyTypeId() == TelephonyTypeEnum.ERRORS.getValue() ||
+                                                  (initialAttempt.getBestDestInfo().getDestinationDescription() != null && initialAttempt.getBestDestInfo().getDestinationDescription().contains(appConfigService.getAssumedText())) ||
+                                                  (initialAttempt.getBestPrefixInfo().getTelephonyTypeName() != null && initialAttempt.getBestPrefixInfo().getTelephonyTypeName().contains(appConfigService.getAssumedText()));
 
-        DestinationInfo bestDestInfo = null;
-        PrefixInfo bestPrefixInfo = null;
-        String finalNumberUsedForDestLookup = numberForTariffing; // Will be updated if prefix stripped
-
-        for (PrefixInfo prefixInfo : prefixes) {
-            log.debug("Evaluating prefix: {}", prefixInfo.getPrefixCode());
-            String numberWithoutPrefix = numberForTariffing; // Start with the number for tariffing (already PBX-cleaned if needed)
-            boolean stripOperatorPrefixForDestLookup = false; // PHP's $reducir
-            boolean actualOperatorPrefixStrippedThisIteration = false;
-
-            if (trunkInfoOpt.isPresent()) {
-                TrunkInfo ti = trunkInfoOpt.get();
-                Optional<TrunkRateDetails> rateDetails = trunkLookupService.getRateDetailsForTrunk(
-                    ti.id, prefixInfo.telephonyTypeId, prefixInfo.operatorId
-                );
-                if (rateDetails.isPresent() && rateDetails.get().noPrefix != null) {
-                    stripOperatorPrefixForDestLookup = rateDetails.get().noPrefix;
-                }
-                log.debug("Trunk call, prefix '{}'. Strip operator prefix for dest lookup: {}", prefixInfo.getPrefixCode(), stripOperatorPrefixForDestLookup);
-            } else { // Not a trunk call
-                stripOperatorPrefixForDestLookup = true; // For non-trunk, always assume operator prefix should be stripped if present before NDC lookup
-                log.debug("Non-trunk call, prefix '{}'. Strip operator prefix for dest lookup: {}", prefixInfo.getPrefixCode(), stripOperatorPrefixForDestLookup);
-            }
-
-            // The `isOperatorPrefixAlreadyStripped` flag for findDestinationIndicator
-            // will be true if stripOperatorPrefixForDestLookup is true AND we actually strip it here.
-            // Otherwise, it's false, meaning findDestinationIndicator should try to strip prefixInfo.getPrefixCode().
-            boolean isOpPrefixStrippedBeforeFindDest = false;
-            String operatorPrefixToPassToFindDest = prefixInfo.getPrefixCode();
-
-            if (stripOperatorPrefixForDestLookup && prefixInfo.getPrefixCode() != null && !prefixInfo.getPrefixCode().isEmpty() && numberForTariffing.startsWith(prefixInfo.getPrefixCode())) {
-                numberWithoutPrefix = numberForTariffing.substring(prefixInfo.getPrefixCode().length());
-                actualOperatorPrefixStrippedThisIteration = true;
-                isOpPrefixStrippedBeforeFindDest = true; // We stripped it here
-                operatorPrefixToPassToFindDest = null; // No need for findDestinationIndicator to strip it again
-                log.debug("Stripped operator prefix '{}'. Number for dest lookup: {}", prefixInfo.getPrefixCode(), numberWithoutPrefix);
-            }
-            finalNumberUsedForDestLookup = numberWithoutPrefix;
-            
-            Optional<DestinationInfo> destInfoOpt = indicatorLookupService.findDestinationIndicator(
-                numberWithoutPrefix, // This is the number potentially stripped of operator prefix
-                prefixInfo.telephonyTypeId,
-                prefixInfo.telephonyTypeMinLength != null ? prefixInfo.telephonyTypeMinLength : 0,
-                commLocation.getIndicatorId(),
-                prefixInfo.prefixId,
-                commLocation.getIndicator().getOriginCountryId(),
-                prefixInfo.bandsAssociatedCount > 0,
-                isOpPrefixStrippedBeforeFindDest, // True if we stripped it just above
-                operatorPrefixToPassToFindDest   // Pass the prefix if we didn't strip it
-            );
-            log.debug("Destination lookup for '{}' (type {}): {}", numberWithoutPrefix, prefixInfo.telephonyTypeId, destInfoOpt.isPresent() ? destInfoOpt.get() : "Not Found");
-
-            if (destInfoOpt.isPresent()) {
-                 DestinationInfo currentDestInfo = destInfoOpt.get();
-                 if (bestDestInfo == null ||
-                     (!bestDestInfo.isApproximateMatch() && currentDestInfo.isApproximateMatch()) || // Prefer non-approx over approx
-                     (currentDestInfo.isApproximateMatch() == bestDestInfo.isApproximateMatch() && // If both same approx status
-                         currentDestInfo.getSeriesRangeSize() < bestDestInfo.getSeriesRangeSize()) || // Prefer tighter range
-                     (!currentDestInfo.isApproximateMatch() && bestDestInfo.isApproximateMatch()) // Always prefer non-approx if current is non-approx and best was approx
-                 ) {
-                    bestDestInfo = currentDestInfo;
-                    bestPrefixInfo = prefixInfo;
-                    log.debug("New best destination match: {}, with prefix: {}", bestDestInfo, bestPrefixInfo.getPrefixCode());
-                 }
-                 if (bestDestInfo != null && !bestDestInfo.isApproximateMatch()) {
-                    log.debug("Exact destination match found. Stopping prefix iteration.");
-                    break;
-                 }
-            }
-        }
-        
-        boolean initialResultIsInvalidOrAssumed = bestDestInfo == null ||
-                                                  bestPrefixInfo == null ||
-                                                  bestPrefixInfo.telephonyTypeId == null ||
-                                                  bestPrefixInfo.telephonyTypeId <= 0 ||
-                                                  bestPrefixInfo.telephonyTypeId == TelephonyTypeEnum.ERRORS.getValue() ||
-                                                  (bestDestInfo.getDestinationDescription() != null && bestDestInfo.getDestinationDescription().contains(appConfigService.getAssumedText())) ||
-                                                  (bestPrefixInfo.telephonyTypeName != null && bestPrefixInfo.telephonyTypeName.contains(appConfigService.getAssumedText()));
-
-        if (trunkInfoOpt.isPresent() && initialResultIsInvalidOrAssumed && !cdrData.isNormalizedTariffApplied()) { // Avoid re-normalizing
+        if (trunkInfoOpt.isPresent() && initialResultIsInvalidOrAssumed && !cdrData.isNormalizedTariffApplied()) {
             log.warn("Trunk call destination not definitively found or was assumed. Attempting normalization for: {}", cdrData.getEffectiveDestinationNumber());
-            List<String> prefixesForNormalization = pbxPrefixes;
-            if (trunkInfoOpt.get().noPbxPrefix != null && trunkInfoOpt.get().noPbxPrefix) {
-                prefixesForNormalization = Collections.emptyList();
-            }
-            String normalizedNumberForLookup = CdrUtil.cleanPhoneNumber(cdrData.getEffectiveDestinationNumber(), prefixesForNormalization, true);
-            log.debug("Normalized number for lookup: {}", normalizedNumberForLookup);
             
-            List<PrefixInfo> normalizedPrefixes = prefixLookupService.findMatchingPrefixes(
-                normalizedNumberForLookup, commLocation, false, null // Treat as non-trunk for this lookup
-            );
-            DestinationInfo normalizedBestDestInfo = null;
-            PrefixInfo normalizedBestPrefixInfo = null;
-            String finalNormalizedNumberUsedForDestLookup = normalizedNumberForLookup;
-
-            for (PrefixInfo normPrefixInfo : normalizedPrefixes) {
-                String normNumberWithoutPrefix = normalizedNumberForLookup;
-                boolean normOpPrefixStripped = false;
-                String normOpPrefixToPass = normPrefixInfo.getPrefixCode();
-
-                // For normalization, we assume the operator prefix (if any) should be stripped before NDC lookup
-                if (normPrefixInfo.getPrefixCode() != null && !normPrefixInfo.getPrefixCode().isEmpty() && normalizedNumberForLookup.startsWith(normPrefixInfo.getPrefixCode())) {
-                    normNumberWithoutPrefix = normalizedNumberForLookup.substring(normPrefixInfo.getPrefixCode().length());
-                    normOpPrefixStripped = true;
-                    normOpPrefixToPass = null;
-                }
-                finalNormalizedNumberUsedForDestLookup = normNumberWithoutPrefix;
-
-                Optional<DestinationInfo> normDestInfoOpt = indicatorLookupService.findDestinationIndicator(
-                    normNumberWithoutPrefix, normPrefixInfo.telephonyTypeId,
-                    normPrefixInfo.telephonyTypeMinLength != null ? normPrefixInfo.telephonyTypeMinLength : 0,
-                    commLocation.getIndicatorId(), normPrefixInfo.prefixId,
-                    commLocation.getIndicator().getOriginCountryId(), normPrefixInfo.bandsAssociatedCount > 0,
-                    normOpPrefixStripped,
-                    normOpPrefixToPass
-                );
-                if (normDestInfoOpt.isPresent() && !normDestInfoOpt.get().isApproximateMatch()) {
-                    normalizedBestDestInfo = normDestInfoOpt.get();
-                    normalizedBestPrefixInfo = normPrefixInfo;
-                    log.debug("Exact normalized destination match found: {}", normalizedBestDestInfo);
-                    break;
-                } else if (normDestInfoOpt.isPresent() && normalizedBestDestInfo == null) { // First (potentially approx) match
-                    normalizedBestDestInfo = normDestInfoOpt.get();
-                    normalizedBestPrefixInfo = normPrefixInfo;
-                    log.debug("Approximate normalized destination match: {}", normalizedBestDestInfo);
+            // PHP: $prefijo_salida_pbx = ''; // Retira prefijo si existe pues debe ignorarse (for normalization)
+            List<String> pbxPrefixesForNormalization = Collections.emptyList(); // No PBX prefix for normalization
+            if (trunkInfoOpt.get().noPbxPrefix != null && trunkInfoOpt.get().noPbxPrefix) {
+                // If trunk was already expecting no PBX prefix, use the already cleaned number.
+                // If trunk was expecting PBX prefix, we need to clean it now for normalization.
+                if (commLocation.getPbxPrefix() != null && !commLocation.getPbxPrefix().isEmpty()) {
+                     pbxPrefixesForNormalization = Arrays.asList(commLocation.getPbxPrefix().split(","));
                 }
             }
 
-            if (normalizedBestDestInfo != null && normalizedBestPrefixInfo != null &&
-                normalizedBestPrefixInfo.telephonyTypeId > 0 && normalizedBestPrefixInfo.telephonyTypeId != TelephonyTypeEnum.ERRORS.getValue()) {
+            String normalizedNumberForLookup = CdrUtil.cleanPhoneNumber(cdrData.getEffectiveDestinationNumber(), pbxPrefixesForNormalization, true);
+            log.debug("Normalized number for lookup: {}", normalizedNumberForLookup);
+
+            TariffingAttemptResult normalizedAttempt = attemptTariffing(normalizedNumberForLookup, cdrData, commLocation, Optional.empty(), true);
+
+            if (normalizedAttempt.getBestDestInfo() != null && normalizedAttempt.getBestPrefixInfo() != null &&
+                normalizedAttempt.getBestPrefixInfo().getTelephonyTypeId() > 0 &&
+                normalizedAttempt.getBestPrefixInfo().getTelephonyTypeId() != TelephonyTypeEnum.ERRORS.getValue()) {
+                
                 boolean useNormalized = true;
-                if (bestDestInfo != null && bestPrefixInfo != null) { // Compare with previous best (even if assumed)
-                    if (Objects.equals(bestPrefixInfo.telephonyTypeId, normalizedBestPrefixInfo.telephonyTypeId) &&
-                        Objects.equals(bestDestInfo.getIndicatorId(), normalizedBestDestInfo.getIndicatorId())) {
+                if (initialAttempt.getBestDestInfo() != null && initialAttempt.getBestPrefixInfo() != null) {
+                    if (Objects.equals(initialAttempt.getBestPrefixInfo().getTelephonyTypeId(), normalizedAttempt.getBestPrefixInfo().getTelephonyTypeId()) &&
+                        Objects.equals(initialAttempt.getBestDestInfo().getIndicatorId(), normalizedAttempt.getBestDestInfo().getIndicatorId())) {
                         useNormalized = false;
                         log.debug("Normalized result is same type/indicator as initial assumed result. Preferring initial.");
                     }
                 }
                 if (useNormalized) {
                     log.info("Using normalized tariffing result for trunk call. Original number: {}", cdrData.getEffectiveDestinationNumber());
-                    bestDestInfo = normalizedBestDestInfo;
-                    bestPrefixInfo = normalizedBestPrefixInfo;
-                    finalNumberUsedForDestLookup = finalNormalizedNumberUsedForDestLookup;
-                    // trunkInfoOpt = Optional.empty(); // Effectively treat as non-trunk for tariff application
-                    cdrData.setNormalizedTariffApplied(true); // Mark that normalization was applied
+                    applyTariffingResult(normalizedAttempt, cdrData, commLocation, Optional.empty()); // Apply as if non-trunk
+                    cdrData.setNormalizedTariffApplied(true);
+                } else {
+                    applyTariffingResult(initialAttempt, cdrData, commLocation, trunkInfoOpt); // Re-apply initial if better
                 }
             } else {
-                log.warn("Normalization did not yield a better result for trunk call.");
+                log.warn("Normalization did not yield a valid result. Using initial attempt if available.");
+                applyTariffingResult(initialAttempt, cdrData, commLocation, trunkInfoOpt);
             }
+        } else {
+            applyTariffingResult(initialAttempt, cdrData, commLocation, trunkInfoOpt);
         }
 
+        // Final calculations after all potential tariff sources
+        if (cdrData.getTelephonyTypeId() != null &&
+            cdrData.getTelephonyTypeId() != TelephonyTypeEnum.ERRORS.getValue() &&
+            cdrData.getTelephonyTypeId() != TelephonyTypeEnum.NO_CONSUMPTION.getValue() &&
+            cdrData.getTelephonyTypeId() != TelephonyTypeEnum.SPECIAL_SERVICES.getValue()) { // Special services already billed
 
-        if (bestDestInfo != null && bestPrefixInfo != null) {
-            log.info("Final best match for tariffing. Destination: {}, Prefix: {}", bestDestInfo.getDestinationDescription(), bestPrefixInfo.getPrefixCode());
-            cdrData.setTelephonyTypeId(bestPrefixInfo.telephonyTypeId);
-            cdrData.setTelephonyTypeName(bestPrefixInfo.telephonyTypeName);
-
-            if (bestDestInfo.getOperatorId() != null && bestDestInfo.getOperatorId() != 0L) {
-                cdrData.setOperatorId(bestDestInfo.getOperatorId());
-                String operatorNameFromIndicator = prefixLookupService.findOperatorNameById(bestDestInfo.getOperatorId());
-                cdrData.setOperatorName(operatorNameFromIndicator != null ? operatorNameFromIndicator : bestPrefixInfo.operatorName);
-                if (!Objects.equals(bestDestInfo.getOperatorId(), bestPrefixInfo.getOperatorId()) && operatorNameFromIndicator == null) {
-                     log.warn("Operator ID from Indicator ({}) differs from Prefix ({}). Using Indicator's Operator ID. Operator Name from Prefix used as fallback.",
-                             bestDestInfo.getOperatorId(), bestPrefixInfo.getOperatorId());
-                }
-            } else {
-                cdrData.setOperatorId(bestPrefixInfo.operatorId);
-                cdrData.setOperatorName(bestPrefixInfo.operatorName);
-            }
-
-            cdrData.setIndicatorId(bestDestInfo.getIndicatorId());
-            cdrData.setDestinationCityName(bestDestInfo.getDestinationDescription());
-            cdrData.setEffectiveDestinationNumber(bestDestInfo.getMatchedPhoneNumber());
-
-            if (cdrData.getTelephonyTypeId() == TelephonyTypeEnum.LOCAL.getValue() &&
-                indicatorLookupService.isLocalExtended(bestDestInfo.getNdc(), commLocation.getIndicatorId(), bestDestInfo.getIndicatorId())) {
-                log.debug("Call to {} identified as LOCAL_EXTENDED.", bestDestInfo.getDestinationDescription());
-                cdrData.setTelephonyTypeId(TelephonyTypeEnum.LOCAL_EXTENDED.getValue());
-                cdrData.setTelephonyTypeName(telephonyTypeLookupService.getTelephonyTypeName(TelephonyTypeEnum.LOCAL_EXTENDED.getValue()));
-                PrefixInfo localExtPrefixInfo = telephonyTypeLookupService.getPrefixInfoForLocalExtended(commLocation.getIndicator().getOriginCountryId());
-                if (localExtPrefixInfo != null) {
-                    cdrData.setOperatorId(localExtPrefixInfo.getOperatorId());
-                    cdrData.setOperatorName(localExtPrefixInfo.getOperatorName());
-                    bestPrefixInfo.prefixId = localExtPrefixInfo.getPrefixId(); // Update prefixId for tariff lookup
-                }
-            }
-
-            TariffValue baseTariff = telephonyTypeLookupService.getBaseTariffValue(
-                bestPrefixInfo.prefixId,
-                bestDestInfo.getIndicatorId(),
-                commLocation.getId(),
-                commLocation.getIndicatorId()
-            );
-            log.debug("Base tariff for prefixId {}: {}", bestPrefixInfo.prefixId, baseTariff);
-            
-            cdrData.setPricePerMinute(baseTariff.getRateValue());
-            cdrData.setPriceIncludesVat(baseTariff.isIncludesVat());
-            cdrData.setVatRate(baseTariff.getVatRate());
-
-            if (trunkInfoOpt.isPresent() && !cdrData.isNormalizedTariffApplied()) {
-                TrunkInfo ti = trunkInfoOpt.get();
-                log.debug("Applying trunk-specific rates for trunk: {}", ti.description);
-                Optional<TrunkRateDetails> rateDetailsOpt = trunkLookupService.getRateDetailsForTrunk(
-                    ti.id, cdrData.getTelephonyTypeId(), cdrData.getOperatorId()
-                );
-                if (rateDetailsOpt.isPresent()) {
-                    TrunkRateDetails rd = rateDetailsOpt.get();
-                    log.debug("Found specific rate details for trunk: {}", rd);
-                    cdrData.setInitialPricePerMinute(cdrData.getPricePerMinute());
-                    cdrData.setInitialPriceIncludesVat(cdrData.isPriceIncludesVat());
-
-                    cdrData.setPricePerMinute(rd.rateValue);
-                    cdrData.setPriceIncludesVat(rd.includesVat);
-                    cdrData.setChargeBySecond(rd.seconds != null && rd.seconds > 0);
-                    cdrData.setVatRate(telephonyTypeLookupService.getVatForPrefix(rd.telephonyTypeId, rd.operatorId, commLocation.getIndicator().getOriginCountryId()));
-                    cdrData.setTelephonyTypeName(cdrData.getTelephonyTypeName() + " (Trunk: " + ti.description + ")");
-
-                    if (ti.isCelufijo() && cdrData.getTelephonyTypeId() == TelephonyTypeEnum.CELLULAR.getValue()) {
-                        log.debug("Trunk is celufijo and call is cellular. Changing type to CELUFIJO.");
-                        cdrData.setTelephonyTypeId(TelephonyTypeEnum.CELUFIJO.getValue());
-                        cdrData.setTelephonyTypeName("Celufijo (Trunk: " + ti.description + ")");
-                    }
-                } else {
-                    log.debug("No specific rate details found for trunk {} with type {} and operator {}. Using base prefix tariff.",
-                              ti.description, cdrData.getTelephonyTypeId(), cdrData.getOperatorId());
-                }
-            }
-            
             if (cdrData.getInitialPricePerMinute() == null || cdrData.getInitialPricePerMinute().compareTo(BigDecimal.ZERO) == 0) {
                  cdrData.setInitialPricePerMinute(cdrData.getPricePerMinute());
                  cdrData.setInitialPriceIncludesVat(cdrData.isPriceIncludesVat());
@@ -363,7 +189,7 @@ public class TariffCalculationService {
                     commLocation.getIndicatorId(),
                     cdrData.getTelephonyTypeId(),
                     cdrData.getOperatorId(),
-                    bestDestInfo.getBandId()
+                    initialAttempt.getBestDestInfo() != null ? initialAttempt.getBestDestInfo().getBandId() : null // Use band from initial attempt
             );
             
             if (specialRateOpt.isPresent()) {
@@ -385,10 +211,10 @@ public class TariffCalculationService {
                     BigDecimal discountPercentage = sr.rateValue;
                     BigDecimal discountFactor = BigDecimal.ONE.subtract(discountPercentage.divide(BigDecimal.valueOf(100), 8, RoundingMode.HALF_UP));
                     cdrData.setPricePerMinute(currentRateNoVat.multiply(discountFactor));
-                    cdrData.setPriceIncludesVat(false); // After applying discount, it's pre-VAT
+                    cdrData.setPriceIncludesVat(false);
                     cdrData.setSpecialRateDiscountPercentage(discountPercentage);
                 }
-                cdrData.setVatRate(sr.vatRate); // Use VAT rate associated with the special rule's context
+                cdrData.setVatRate(sr.vatRate);
                 cdrData.setTelephonyTypeName(cdrData.getTelephonyTypeName() + " (Special Rate)");
             }
 
@@ -425,15 +251,159 @@ public class TariffCalculationService {
                 }
             }
             cdrData.setBilledAmount(calculateFinalBilledAmount(cdrData));
-        } else {
-            log.warn("Could not determine destination or tariff for: {} (original number for tariffing: {}). Marking as ERROR.", finalNumberUsedForDestLookup, numberForTariffing);
-            cdrData.setTelephonyTypeId(TelephonyTypeEnum.ERRORS.getValue());
-            cdrData.setTelephonyTypeName(telephonyTypeLookupService.getTelephonyTypeName(TelephonyTypeEnum.ERRORS.getValue()));
+        } else if (cdrData.getBilledAmount() == null) { // Ensure billed amount is set if not calculated
             cdrData.setBilledAmount(BigDecimal.ZERO);
         }
+
+
         log.info("Final tariff calculation for CDR: {}. Billed Amount: {}, Price/Min: {}, Type: {}",
                  cdrData.getRawCdrLine(), cdrData.getBilledAmount(), cdrData.getPricePerMinute(), cdrData.getTelephonyTypeName());
     }
+
+    private TariffingAttemptResult attemptTariffing(String numberForLookup, CdrData cdrData,
+                                                    CommunicationLocation commLocation,
+                                                    Optional<TrunkInfo> trunkInfoOpt,
+                                                    boolean isNormalizationAttempt) {
+        log.debug("Attempting tariffing for number: {}, isNormalization: {}", numberForLookup, isNormalizationAttempt);
+        List<Long> trunkTelephonyTypeIds = null;
+        if (trunkInfoOpt.isPresent() && !isNormalizationAttempt) { // For normalization, we treat as non-trunk
+            trunkTelephonyTypeIds = trunkInfoOpt.get().getAllowedTelephonyTypeIds();
+        }
+
+        List<PrefixInfo> prefixes = prefixLookupService.findMatchingPrefixes(
+            numberForLookup,
+            commLocation,
+            trunkInfoOpt.isPresent() && !isNormalizationAttempt, // Treat as non-trunk for normalization prefix lookup
+            trunkTelephonyTypeIds
+        );
+
+        DestinationInfo bestDestInfo = null;
+        PrefixInfo bestPrefixInfo = null;
+
+        for (PrefixInfo prefixInfo : prefixes) {
+            String numberWithoutPrefix = numberForLookup;
+            boolean stripOperatorPrefixForDestLookup = false;
+            boolean actualOperatorPrefixStrippedThisIteration = false;
+            String operatorPrefixToPassToFindDest = prefixInfo.getPrefixCode();
+
+            if (trunkInfoOpt.isPresent() && !isNormalizationAttempt) {
+                TrunkInfo ti = trunkInfoOpt.get();
+                Optional<TrunkRateDetails> rateDetails = trunkLookupService.getRateDetailsForTrunk(
+                    ti.id, prefixInfo.telephonyTypeId, prefixInfo.operatorId
+                );
+                if (rateDetails.isPresent() && rateDetails.get().noPrefix != null) {
+                    stripOperatorPrefixForDestLookup = rateDetails.get().noPrefix;
+                }
+            } else { // Not a trunk call, or it's a normalization attempt
+                stripOperatorPrefixForDestLookup = true;
+            }
+
+            if (stripOperatorPrefixForDestLookup && prefixInfo.getPrefixCode() != null && !prefixInfo.getPrefixCode().isEmpty() && numberForLookup.startsWith(prefixInfo.getPrefixCode())) {
+                numberWithoutPrefix = numberForLookup.substring(prefixInfo.getPrefixCode().length());
+                actualOperatorPrefixStrippedThisIteration = true;
+                operatorPrefixToPassToFindDest = null;
+            }
+            
+            Optional<DestinationInfo> destInfoOpt = indicatorLookupService.findDestinationIndicator(
+                numberWithoutPrefix, prefixInfo.telephonyTypeId,
+                prefixInfo.telephonyTypeMinLength != null ? prefixInfo.telephonyTypeMinLength : 0,
+                commLocation.getIndicatorId(), prefixInfo.prefixId,
+                commLocation.getIndicator().getOriginCountryId(), prefixInfo.bandsAssociatedCount > 0,
+                actualOperatorPrefixStrippedThisIteration,
+                operatorPrefixToPassToFindDest
+            );
+
+            if (destInfoOpt.isPresent()) {
+                DestinationInfo currentDestInfo = destInfoOpt.get();
+                 if (bestDestInfo == null ||
+                     (!bestDestInfo.isApproximateMatch() && currentDestInfo.isApproximateMatch()) ||
+                     (currentDestInfo.isApproximateMatch() == bestDestInfo.isApproximateMatch() &&
+                         currentDestInfo.getSeriesRangeSize() < bestDestInfo.getSeriesRangeSize()) ||
+                     (!currentDestInfo.isApproximateMatch() && bestDestInfo.isApproximateMatch())
+                 ) {
+                    bestDestInfo = currentDestInfo;
+                    bestPrefixInfo = prefixInfo;
+                 }
+                 if (bestDestInfo != null && !bestDestInfo.isApproximateMatch()) {
+                    break;
+                 }
+            }
+        }
+        return new TariffingAttemptResult(bestDestInfo, bestPrefixInfo);
+    }
+
+    private void applyTariffingResult(TariffingAttemptResult attempt, CdrData cdrData,
+                                      CommunicationLocation commLocation, Optional<TrunkInfo> trunkInfoOpt) {
+        if (attempt.getBestDestInfo() == null || attempt.getBestPrefixInfo() == null) {
+            log.warn("Tariffing attempt yielded no valid destination/prefix. Marking CDR as ERROR. Original number: {}", cdrData.getEffectiveDestinationNumber());
+            cdrData.setTelephonyTypeId(TelephonyTypeEnum.ERRORS.getValue());
+            cdrData.setTelephonyTypeName(telephonyTypeLookupService.getTelephonyTypeName(TelephonyTypeEnum.ERRORS.getValue()));
+            cdrData.setBilledAmount(BigDecimal.ZERO);
+            return;
+        }
+
+        DestinationInfo bestDestInfo = attempt.getBestDestInfo();
+        PrefixInfo bestPrefixInfo = attempt.getBestPrefixInfo();
+
+        cdrData.setTelephonyTypeId(bestPrefixInfo.telephonyTypeId);
+        cdrData.setTelephonyTypeName(bestPrefixInfo.telephonyTypeName);
+
+        if (bestDestInfo.getOperatorId() != null && bestDestInfo.getOperatorId() != 0L) {
+            cdrData.setOperatorId(bestDestInfo.getOperatorId());
+            String operatorNameFromIndicator = prefixLookupService.findOperatorNameById(bestDestInfo.getOperatorId());
+            cdrData.setOperatorName(operatorNameFromIndicator != null ? operatorNameFromIndicator : bestPrefixInfo.operatorName);
+        } else {
+            cdrData.setOperatorId(bestPrefixInfo.operatorId);
+            cdrData.setOperatorName(bestPrefixInfo.operatorName);
+        }
+
+        cdrData.setIndicatorId(bestDestInfo.getIndicatorId());
+        cdrData.setDestinationCityName(bestDestInfo.getDestinationDescription());
+        cdrData.setEffectiveDestinationNumber(bestDestInfo.getMatchedPhoneNumber());
+
+        if (cdrData.getTelephonyTypeId() == TelephonyTypeEnum.LOCAL.getValue() &&
+            indicatorLookupService.isLocalExtended(bestDestInfo.getNdc(), commLocation.getIndicatorId(), bestDestInfo.getIndicatorId())) {
+            cdrData.setTelephonyTypeId(TelephonyTypeEnum.LOCAL_EXTENDED.getValue());
+            cdrData.setTelephonyTypeName(telephonyTypeLookupService.getTelephonyTypeName(TelephonyTypeEnum.LOCAL_EXTENDED.getValue()));
+            PrefixInfo localExtPrefixInfo = telephonyTypeLookupService.getPrefixInfoForLocalExtended(commLocation.getIndicator().getOriginCountryId());
+            if (localExtPrefixInfo != null) {
+                cdrData.setOperatorId(localExtPrefixInfo.getOperatorId());
+                cdrData.setOperatorName(localExtPrefixInfo.getOperatorName());
+                bestPrefixInfo.prefixId = localExtPrefixInfo.getPrefixId(); // Update for tariff lookup
+            }
+        }
+
+        TariffValue baseTariff = telephonyTypeLookupService.getBaseTariffValue(
+            bestPrefixInfo.prefixId, bestDestInfo.getIndicatorId(),
+            commLocation.getId(), commLocation.getIndicatorId()
+        );
+        
+        cdrData.setPricePerMinute(baseTariff.getRateValue());
+        cdrData.setPriceIncludesVat(baseTariff.isIncludesVat());
+        cdrData.setVatRate(baseTariff.getVatRate());
+
+        if (trunkInfoOpt.isPresent() && !cdrData.isNormalizedTariffApplied()) { // Don't apply trunk rates if normalization was used
+            TrunkInfo ti = trunkInfoOpt.get();
+            Optional<TrunkRateDetails> rateDetailsOpt = trunkLookupService.getRateDetailsForTrunk(
+                ti.id, cdrData.getTelephonyTypeId(), cdrData.getOperatorId()
+            );
+            if (rateDetailsOpt.isPresent()) {
+                TrunkRateDetails rd = rateDetailsOpt.get();
+                cdrData.setInitialPricePerMinute(cdrData.getPricePerMinute());
+                cdrData.setInitialPriceIncludesVat(cdrData.isPriceIncludesVat());
+                cdrData.setPricePerMinute(rd.rateValue);
+                cdrData.setPriceIncludesVat(rd.includesVat);
+                cdrData.setChargeBySecond(rd.seconds != null && rd.seconds > 0);
+                cdrData.setVatRate(telephonyTypeLookupService.getVatForPrefix(rd.telephonyTypeId, rd.operatorId, commLocation.getIndicator().getOriginCountryId()));
+                cdrData.setTelephonyTypeName(cdrData.getTelephonyTypeName() + " (Trunk: " + ti.description + ")");
+                if (ti.isCelufijo() && cdrData.getTelephonyTypeId() == TelephonyTypeEnum.CELLULAR.getValue()) {
+                    cdrData.setTelephonyTypeId(TelephonyTypeEnum.CELUFIJO.getValue());
+                    cdrData.setTelephonyTypeName("Celufijo (Trunk: " + ti.description + ")");
+                }
+            }
+        }
+    }
+
 
     private BigDecimal calculateFinalBilledAmount(CdrData cdrData) {
         if (cdrData.getPricePerMinute() == null || cdrData.getDurationSeconds() == null || cdrData.getDurationSeconds() < 0) {
