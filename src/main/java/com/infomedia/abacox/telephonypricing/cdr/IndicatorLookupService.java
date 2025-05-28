@@ -1,4 +1,3 @@
-// File: com/infomedia/abacox/telephonypricing/cdr/IndicatorLookupService.java
 package com.infomedia.abacox.telephonypricing.cdr;
 
 import jakarta.persistence.EntityManager;
@@ -19,7 +18,7 @@ public class IndicatorLookupService {
     @PersistenceContext
     private EntityManager entityManager;
 
-    // ... (getIndicatorConfigForTelephonyType remains the same)
+
     @Transactional(readOnly = true)
     public IndicatorConfig getIndicatorConfigForTelephonyType(Long telephonyTypeId, Long originCountryId) {
         log.debug("Getting indicator config for telephonyTypeId: {}, originCountryId: {}", telephonyTypeId, originCountryId);
@@ -61,15 +60,14 @@ public class IndicatorLookupService {
         return config;
     }
 
-
     @Transactional(readOnly = true)
     public Optional<DestinationInfo> findDestinationIndicator(
             String phoneNumber, Long telephonyTypeId, int minTotalNumberLength,
             Long originIndicatorIdForBandContext, Long prefixIdFromCallingFunction, Long originCountryId,
-            boolean useBandSpecificLookup, boolean isOperatorPrefixAlreadyStripped, String operatorPrefixToStripIfPresent) {
+            boolean useBandSpecificLookup, boolean isPrefixAlreadyStripped) {
 
-        log.debug("Finding destination indicator for phoneNumber: '{}', telephonyTypeId: {}, minTotalNumLen: {}, originIndForBand: {}, prefixIdFunc: {}, originCountryId: {}, useBandLookup: {}, opPrefixStripped: {}, opPrefixToStrip: {}",
-                phoneNumber, telephonyTypeId, minTotalNumberLength, originIndicatorIdForBandContext, prefixIdFromCallingFunction, originCountryId, useBandSpecificLookup, isOperatorPrefixAlreadyStripped, operatorPrefixToStripIfPresent);
+        log.debug("Finding destination indicator for phoneNumber: '{}', telephonyTypeId: {}, minTotalNumLen: {}, originIndForBand: {}, prefixIdFunc: {}, originCountryId: {}, useBandLookup: {}, prefixStripped: {}",
+                phoneNumber, telephonyTypeId, minTotalNumberLength, originIndicatorIdForBandContext, prefixIdFromCallingFunction, originCountryId, useBandSpecificLookup, isPrefixAlreadyStripped);
 
         if (phoneNumber == null || phoneNumber.isEmpty()) {
             log.debug("Phone number is empty, cannot find destination.");
@@ -77,22 +75,10 @@ public class IndicatorLookupService {
         }
 
         String effectivePhoneNumber = phoneNumber;
-        if (effectivePhoneNumber.startsWith("+")) {
-            effectivePhoneNumber = effectivePhoneNumber.substring(1);
-            log.trace("Stripped leading '+' from phone number. Now: {}", effectivePhoneNumber);
-        }
-
-        // PHP: if ($prefijotrim != '' && substr($telefono, 0, $len_prefijo ) == $prefijotrim && !$reducir) { $telefono = substr($telefono, $len_prefijo ); }
-        if (!isOperatorPrefixAlreadyStripped && operatorPrefixToStripIfPresent != null && !operatorPrefixToStripIfPresent.isEmpty() && effectivePhoneNumber.startsWith(operatorPrefixToStripIfPresent)) {
-            effectivePhoneNumber = effectivePhoneNumber.substring(operatorPrefixToStripIfPresent.length());
-            log.debug("Operator prefix '{}' stripped. Effective number for NDC/Series: {}", operatorPrefixToStripIfPresent, effectivePhoneNumber);
-        }
-
 
         if (isLocalType(telephonyTypeId)) {
-            String localNdc = findLocalNdcForIndicator(originIndicatorIdForBandContext); // This is the plant's local NDC
+            String localNdc = findLocalNdcForIndicator(originIndicatorIdForBandContext);
             if (localNdc != null && !localNdc.isEmpty() && !effectivePhoneNumber.startsWith(localNdc)) {
-                // Only prepend if the number doesn't already start with it (e.g. if localNdc is "1" and number is "5463000")
                 effectivePhoneNumber = localNdc + effectivePhoneNumber;
                 log.debug("Local type, prepended local NDC '{}'. Effective number for NDC/Series: {}", localNdc, effectivePhoneNumber);
             }
@@ -110,8 +96,6 @@ public class IndicatorLookupService {
 
         for (int i = config.minNdcLength; i <= config.maxNdcLength; i++) {
             if (i > 0 && phoneLen >= i) {
-                // minTotalNumberLength is the minimum length of (NDC + SubscriberPart)
-                // minSubscriberPartLength is minTotalNumberLength - current_NDC_length (i)
                 int minSubscriberPartLength = minTotalNumberLength - i;
                 if ((phoneLen - i) >= minSubscriberPartLength) {
                     String candidateNdc = effectivePhoneNumber.substring(0, i);
@@ -121,16 +105,13 @@ public class IndicatorLookupService {
                 }
             }
         }
-        // For local types, if no NDC candidates were formed (e.g. number is shorter than minNdcLength),
-        // we might still need to check series with an empty/default NDC if the number itself is long enough.
+
         if (ndcCandidates.isEmpty() && isLocalType(telephonyTypeId)) {
             String localNdc = findLocalNdcForIndicator(originIndicatorIdForBandContext);
             if (localNdc != null && !localNdc.isEmpty() && effectivePhoneNumber.startsWith(localNdc)) {
-                 ndcCandidates.add(localNdc);
-            } else if (localNdc != null && localNdc.equals("0")) { // Handle "0" as a valid NDC for some local contexts
+                ndcCandidates.add(localNdc);
+            } else if (localNdc != null && localNdc.equals("0")) {
                  ndcCandidates.add("0");
-            } else if (phoneLen >= minTotalNumberLength) { // If no specific local NDC, but number is long enough, allow check with empty effective NDC
-                 ndcCandidates.add(""); // This will allow matching series where NDC is effectively empty for local
             }
         }
         log.debug("NDC candidates: {}", ndcCandidates);
@@ -140,18 +121,16 @@ public class IndicatorLookupService {
              return Optional.empty();
         }
 
-
         StringBuilder queryBuilder = new StringBuilder(
-            "SELECT i.id as indicator_id, i.operator_id as indicator_operator_id, s.ndc as ndc_val, i.department_country, i.city_name, s.initial_number, s.final_number, b.id as band_id " +
+            "SELECT i.id as indicator_id, i.operator_id as indicator_operator_id, s.ndc as ndc_val, i.department_country, i.city_name, s.initial_number, s.final_number, b.id as band_id " + // Added i.operator_id
             "FROM series s JOIN indicator i ON s.indicator_id = i.id ");
 
         if (useBandSpecificLookup && prefixIdFromCallingFunction != null) {
             queryBuilder.append("LEFT JOIN band b ON b.prefix_id = :prefixIdFunc AND b.active = true ");
             queryBuilder.append("LEFT JOIN band_indicator bi ON bi.band_id = b.id AND bi.indicator_id = i.id ");
-            // PHP: AND BANDA_INDICAORIGEN_ID in (0, $indicativo_origen_id)
             queryBuilder.append("AND (b.origin_indicator_id = 0 OR b.origin_indicator_id = :originIndicatorIdForBandContext) ");
         } else {
-            queryBuilder.append("LEFT JOIN band b ON 1=0 "); // No band join effectively
+            queryBuilder.append("LEFT JOIN band b ON 1=0 "); // No band join
              if (prefixIdFromCallingFunction != null) { // Still might need to filter indicator by prefix's operator
                  queryBuilder.append("AND (i.operator_id = 0 OR i.operator_id = (SELECT p.operator_id FROM prefix p WHERE p.id = :prefixIdFunc AND p.active = true)) ");
             }
@@ -160,13 +139,11 @@ public class IndicatorLookupService {
         queryBuilder.append("WHERE i.active = true AND s.active = true AND i.telephony_type_id = :telephonyTypeId ");
         if (!ndcCandidates.isEmpty()) {
             List<Integer> ndcIntCandidates = ndcCandidates.stream()
-                                                          .filter(sVal -> !sVal.isEmpty() && sVal.matches("-?\\d+")) // Allow negative for special case
+                                                          .filter(sVal -> sVal.matches("\\d+"))
                                                           .map(Integer::parseInt)
                                                           .collect(Collectors.toList());
             if (!ndcIntCandidates.isEmpty()) {
                 queryBuilder.append("AND s.ndc IN (:ndcCandidates) ");
-            } else if (ndcCandidates.contains("")) { // Case for local type with empty effective NDC
-                queryBuilder.append("AND (s.ndc = 0 OR s.ndc IS NULL) "); // Match series with NDC 0 or NULL
             } else if (!isLocalType(telephonyTypeId)) {
                  log.warn("No valid numeric NDC candidates for non-local type. This might lead to no results.");
                  return Optional.empty();
@@ -177,9 +154,6 @@ public class IndicatorLookupService {
             queryBuilder.append("AND i.origin_country_id = :originCountryId ");
         }
         
-        // PHP: $condicionum = "AND ( $condicionum )"; (SERIE_INICIAL <= $restomin AND SERIE_FINAL >= $restomin)
-        // This part is handled in Java code after fetching, which is acceptable.
-
         if (useBandSpecificLookup) {
             queryBuilder.append("ORDER BY b.origin_indicator_id DESC NULLS LAST, LENGTH(s.ndc::text) DESC, s.initial_number ASC, s.final_number ASC");
         } else {
@@ -189,15 +163,14 @@ public class IndicatorLookupService {
         jakarta.persistence.Query nativeQuery = entityManager.createNativeQuery(queryBuilder.toString(), Tuple.class);
         nativeQuery.setParameter("telephonyTypeId", telephonyTypeId);
         if (!ndcCandidates.isEmpty()) {
-            List<Integer> ndcIntCandidates = ndcCandidates.stream()
-                                                          .filter(sVal -> !sVal.isEmpty() && sVal.matches("-?\\d+"))
+             List<Integer> ndcIntCandidates = ndcCandidates.stream()
+                                                          .filter(sVal -> sVal.matches("\\d+"))
                                                           .map(Integer::parseInt)
                                                           .collect(Collectors.toList());
             if (!ndcIntCandidates.isEmpty()) {
                 nativeQuery.setParameter("ndcCandidates", ndcIntCandidates);
             }
         }
-
 
         if (useBandSpecificLookup && prefixIdFromCallingFunction != null) {
             nativeQuery.setParameter("prefixIdFunc", prefixIdFromCallingFunction);
@@ -222,7 +195,7 @@ public class IndicatorLookupService {
 
             if (effectivePhoneNumber.startsWith(currentNdcStr)) {
                  subscriberPartOfEffectiveNumber = effectivePhoneNumber.substring(currentNdcStr.length());
-            } else if ((currentNdcStr.equals("0") || currentNdcStr.isEmpty()) && isLocalType(telephonyTypeId)) { // "" NDC means local number without explicit NDC
+            } else if (currentNdcStr.equals("0") && isLocalType(telephonyTypeId)) {
                 subscriberPartOfEffectiveNumber = effectivePhoneNumber;
             } else {
                 log.trace("NDC {} does not prefix effectivePhoneNumber {}, skipping row.", currentNdcStr, effectivePhoneNumber);
@@ -233,12 +206,13 @@ public class IndicatorLookupService {
                 log.trace("Subscriber part '{}' is not purely numeric, skipping series check for this row.", subscriberPartOfEffectiveNumber);
                 continue;
             }
-            
+            Integer subscriberPartNum = subscriberPartOfEffectiveNumber.isEmpty() ? 0 : Integer.parseInt(subscriberPartOfEffectiveNumber);
+
             Integer seriesInitial = row.get("initial_number", Integer.class);
             Integer seriesFinal = row.get("final_number", Integer.class);
             
-            log.trace("Comparing effectiveNum: '{}' (subscriber part: '{}') against series NDC: '{}', initial: '{}', final: '{}'",
-                effectivePhoneNumber, subscriberPartOfEffectiveNumber, currentNdcStr, seriesInitial, seriesFinal);
+            log.trace("Comparing effectiveNum: '{}' (subscriber part: '{}' -> num: {}) against series NDC: '{}', initial: '{}', final: '{}'",
+                effectivePhoneNumber, subscriberPartOfEffectiveNumber, subscriberPartNum, currentNdcStr, seriesInitial, seriesFinal);
 
             if (Integer.parseInt(currentNdcStr) < 0) { // PHP: if (1 * $info_indica['SERIE_NDC'] < 0)
                 if (approximateMatch == null) { // Take the first approximate match
@@ -246,63 +220,62 @@ public class IndicatorLookupService {
                     fillDestinationInfo(approximateMatch, row, currentNdcStr, effectivePhoneNumber, prefixIdFromCallingFunction, true, seriesInitial, seriesFinal);
                     log.debug("Found approximate match (negative NDC): {}", approximateMatch);
                 }
-                continue;
+                continue; // Don't process further for this row if it's an approximate match
             }
             
-            // PHP: $arreglo_serie = rellenaSerie($telefono, $info_indica['SERIE_NDC'], $info_indica['SERIE_INICIAL'], $info_indica['SERIE_FINAL']);
-            // PHP: if ($arreglo_serie['inicial'] <= $telefono && $arreglo_serie['final'] >= $telefono)
-            // This means the full effectivePhoneNumber (after NDC prepending for local) is compared against fully constructed series numbers.
+            int seriesComparisonLength = config.seriesNumberLength;
+            if (seriesComparisonLength <= 0) {
+                seriesComparisonLength = subscriberPartOfEffectiveNumber.length();
+            }
+
+            String subscriberPartForComparisonStr = subscriberPartOfEffectiveNumber;
+            if (subscriberPartOfEffectiveNumber.length() > seriesComparisonLength && seriesComparisonLength > 0) {
+                subscriberPartForComparisonStr = subscriberPartOfEffectiveNumber.substring(0, seriesComparisonLength);
+            }
             
-            // Construct full series numbers for comparison, similar to PHP's rellenaSerie
-            int seriesLengthToMatch = subscriberPartOfEffectiveNumber.length(); // Length of the part of the number *after* the NDC
-            if (config.seriesNumberLength > 0) { // If a common series length is defined, use it
-                seriesLengthToMatch = config.seriesNumberLength;
+            Integer subscriberPartForComparisonNum;
+            if (subscriberPartForComparisonStr.isEmpty()) {
+                subscriberPartForComparisonNum = 0;
+            } else if (!subscriberPartForComparisonStr.matches("\\d+")) {
+                 log.trace("Subscriber part for comparison '{}' is not numeric. Skipping.", subscriberPartForComparisonStr);
+                 continue;
+            } else {
+                subscriberPartForComparisonNum = Integer.parseInt(subscriberPartForComparisonStr);
             }
-            if (seriesLengthToMatch == 0 && subscriberPartOfEffectiveNumber.length() > 0) { // Fallback if seriesNumberLength is 0 but subscriber part exists
-                 seriesLengthToMatch = subscriberPartOfEffectiveNumber.length();
-            }
 
+            if (seriesInitial <= subscriberPartForComparisonNum && seriesFinal >= subscriberPartForComparisonNum) {
+                String seriesInitialPadded = String.format("%0" + (seriesComparisonLength > 0 ? seriesComparisonLength : subscriberPartOfEffectiveNumber.length()) + "d", seriesInitial);
+                String seriesFinalPadded = String.format("%0" + (seriesComparisonLength > 0 ? seriesComparisonLength : subscriberPartOfEffectiveNumber.length()) + "d", seriesFinal);
+                // PHP's rellenaSerie pads with 9s at the end if initial is longer than final,
+                // and with 0s at the start if final is longer than initial.
+                // The goal is to make seriesInitialFull and seriesFinalFull comparable to a segment of effectivePhoneNumber.
 
-            String seriesInitialPaddedStr = String.format("%0" + seriesLengthToMatch + "d", seriesInitial);
-            String seriesFinalPaddedStr = String.format("%0" + seriesLengthToMatch + "d", seriesFinal);
+                String seriesInitialFull = currentNdcStr + seriesInitialPadded;
+                String seriesFinalFull = currentNdcStr + seriesFinalPadded.replace(" ", "9"); // Crude way to pad with 9s if shorter
 
-            // Adjust padding if original series numbers were shorter than seriesLengthToMatch
-            // PHP's str_pad($serie_inicial, $diferencia, '0') vs str_pad($serie_final, $diferencia, '9')
-            // If seriesInitial was "30" and seriesLengthToMatch is 7, it becomes "0000030"
-            // If seriesFinal was "199" and seriesLengthToMatch is 7, it becomes "0000199"
-            // The PHP logic for padding series_final with '9' at the end if initial is longer is complex.
-            // Here, we assume series initial/final define a numeric range.
-            // The comparison should be on the numeric value of the subscriber part.
+                String effectivePhoneForFullCompare = effectivePhoneNumber;
+                if (effectivePhoneForFullCompare.length() > seriesInitialFull.length()) {
+                    effectivePhoneForFullCompare = effectivePhoneForFullCompare.substring(0, seriesInitialFull.length());
+                } else if (effectivePhoneForFullCompare.length() < seriesInitialFull.length()) {
+                    // This case means the number is too short to match the full padded series, likely not a match
+                    // unless the padding logic in PHP was more nuanced for this.
+                    // For now, we assume it should be at least as long.
+                    log.trace("Effective phone '{}' too short for padded series '{}'", effectivePhoneForFullCompare, seriesInitialFull);
+                    continue;
+                }
 
-            if (subscriberPartOfEffectiveNumber.isEmpty() && seriesInitial == 0 && seriesFinal == 0) { // Match for "empty" subscriber part if series is 0-0
-                 addMatch(validMatches, row, currentNdcStr, effectivePhoneNumber, prefixIdFromCallingFunction, false, seriesInitial, seriesFinal);
-                 log.debug("Series match for empty subscriber part (series 0-0): {}", validMatches.get(validMatches.size()-1));
-            } else if (!subscriberPartOfEffectiveNumber.isEmpty()) {
-                try {
-                    long subscriberNum = Long.parseLong(subscriberPartOfEffectiveNumber);
-                    // We need to compare the subscriber part against the series range, considering their actual lengths.
-                    // Example: series 100-199. Number 1500. Subscriber part 1500.
-                    // If series_length is 3, we compare 150 against 100-199.
-                    String subscriberForCompareStr = subscriberPartOfEffectiveNumber;
-                    if (seriesLengthToMatch > 0 && subscriberForCompareStr.length() > seriesLengthToMatch) {
-                        subscriberForCompareStr = subscriberForCompareStr.substring(0, seriesLengthToMatch);
-                    }
-                    long subscriberForCompareNum = Long.parseLong(subscriberForCompareStr);
-
-                    if (seriesInitial.longValue() <= subscriberForCompareNum && seriesFinal.longValue() >= subscriberForCompareNum) {
-                        addMatch(validMatches, row, currentNdcStr, effectivePhoneNumber, prefixIdFromCallingFunction, false, seriesInitial, seriesFinal);
-                        log.debug("Series match: SubscriberPart '{}' (compared as {}) in range [{}-{}]. Match: {}",
-                                  subscriberPartOfEffectiveNumber, subscriberForCompareNum, seriesInitial, seriesFinal, validMatches.get(validMatches.size()-1));
-                    }
-                } catch (NumberFormatException e) {
-                    log.trace("Could not parse subscriber part '{}' as number.", subscriberPartOfEffectiveNumber);
+                if (effectivePhoneForFullCompare.compareTo(seriesInitialFull) >= 0 &&
+                    effectivePhoneForFullCompare.compareTo(seriesFinalFull) <= 0) {
+                    addMatch(validMatches, row, currentNdcStr, effectivePhoneNumber, prefixIdFromCallingFunction, false, seriesInitial, seriesFinal);
+                    log.debug("Full number series match found: {}", validMatches.get(validMatches.size()-1));
+                } else {
+                     log.trace("Full number comparison failed: Effective='{}', SeriesInitialFull='{}', SeriesFinalFull='{}'", effectivePhoneForFullCompare, seriesInitialFull, seriesFinalFull);
                 }
             }
         }
         
         if (!validMatches.isEmpty()) {
-            validMatches.sort(Comparator.comparingLong(DestinationInfo::getSeriesRangeSize) // Smallest range first
-                                         .thenComparing(di -> di.getNdc() != null ? di.getNdc().length() : 0, Comparator.reverseOrder())); // Then longest NDC
+            validMatches.sort(Comparator.comparingLong(DestinationInfo::getSeriesRangeSize));
             log.debug("Found {} valid series matches. Best match: {}", validMatches.size(), validMatches.get(0));
             return Optional.of(validMatches.get(0));
         } else if (approximateMatch != null) {
@@ -314,7 +287,6 @@ public class IndicatorLookupService {
         return Optional.empty();
     }
 
-    // ... (addMatch, fillDestinationInfo, formatDestinationDescription, findLocalNdcForIndicator, isLocalExtended, isInternationalOrSatellite remain the same)
     private void addMatch(List<DestinationInfo> matches, Tuple row, String ndc, String originalPhoneNumber, Long prefixId, boolean isApprox, Integer seriesInitial, Integer seriesFinal) {
         DestinationInfo di = new DestinationInfo();
         fillDestinationInfo(di, row, ndc, originalPhoneNumber, prefixId, isApprox, seriesInitial, seriesFinal);
@@ -323,8 +295,8 @@ public class IndicatorLookupService {
     
     private void fillDestinationInfo(DestinationInfo di, Tuple row, String ndc, String originalPhoneNumber, Long prefixId, boolean isApprox, Integer seriesInitial, Integer seriesFinal) {
         di.setIndicatorId(row.get("indicator_id", Number.class).longValue());
-        Number indicatorOpIdNum = row.get("indicator_operator_id", Number.class);
-        di.setOperatorId(indicatorOpIdNum != null ? indicatorOpIdNum.longValue() : null);
+        Number indicatorOpIdNum = row.get("indicator_operator_id", Number.class); // Fetch the new column
+        di.setOperatorId(indicatorOpIdNum != null ? indicatorOpIdNum.longValue() : null); // Set it
         di.setNdc(ndc);
         di.setDestinationDescription(formatDestinationDescription(row.get("city_name", String.class), row.get("department_country", String.class)));
         di.setMatchedPhoneNumber(originalPhoneNumber);
