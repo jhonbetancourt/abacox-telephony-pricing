@@ -28,7 +28,7 @@ public class TariffCalculationService {
     private final TelephonyTypeLookupService telephonyTypeLookupService;
 
     public void calculateTariffs(CdrData cdrData, CommunicationLocation commLocation) {
-        log.debug("Calculating tariffs for CDR: {}, CommLocation: {}", cdrData.getRawCdrLine(), commLocation.getDirectory());
+        log.debug("Calculating tariffs for CDR: {}, CommLocation: {}", cdrData.getCtlHash(), commLocation.getDirectory());
 
         // PHP: if ($tiempo <= 0 && $tipotele_id > 0 && $tipotele_id != _TIPOTELE_ERRORES) { $tipotele_id = _TIPOTELE_SINCONSUMO; }
         if (cdrData.getDurationSeconds() != null && cdrData.getDurationSeconds() <= appConfigService.getMinCallDurationForTariffing()) {
@@ -55,7 +55,7 @@ public class TariffCalculationService {
                 cdrData.setBilledAmount(calculateFinalBilledAmount(cdrData));
                 return;
             } else {
-                log.warn("TelephonyType is SPECIAL_SERVICES but no SpecialServiceInfo found for CDR: {}. Marking as ERROR.", cdrData.getRawCdrLine());
+                log.warn("TelephonyType is SPECIAL_SERVICES but no SpecialServiceInfo found for CDR: {}. Marking as ERROR.", cdrData.getCtlHash());
                 cdrData.setTelephonyTypeId(TelephonyTypeEnum.ERRORS.getValue());
                 cdrData.setTelephonyTypeName(telephonyTypeLookupService.getTelephonyTypeName(TelephonyTypeEnum.ERRORS.getValue()));
                 cdrData.setBilledAmount(BigDecimal.ZERO);
@@ -145,7 +145,7 @@ public class TariffCalculationService {
         }
 
         log.info("Final tariff calculation for CDR: {}. Billed Amount: {}, Price/Min: {}, Type: {}",
-                 cdrData.getRawCdrLine(), cdrData.getBilledAmount(), cdrData.getPricePerMinute(), cdrData.getTelephonyTypeName());
+                 cdrData.getCtlHash(), cdrData.getBilledAmount(), cdrData.getPricePerMinute(), cdrData.getTelephonyTypeName());
     }
 
     private TariffingAttemptResult attemptTariffing(String numberForLookup, CdrData cdrData, CommunicationLocation commLocation,

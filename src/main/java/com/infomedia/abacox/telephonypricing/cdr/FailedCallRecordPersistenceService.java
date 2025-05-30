@@ -28,8 +28,8 @@ public class FailedCallRecordPersistenceService {
             log.error("Cannot quarantine null CdrData.");
             return null;
         }
-        log.warn("Quarantining CDR. Type: {}, Step: {}, Message: {}, Raw: {}",
-                errorType, processingStep, errorMessage, cdrData.getRawCdrLine());
+        log.warn("Quarantining CDR. Type: {}, Step: {}, Message: {}, Hash: {}",
+                errorType, processingStep, errorMessage, cdrData.getCtlHash());
 
         String cdrStringToStore = cdrData.getRawCdrLine();
         Long commLocationIdToStore = cdrData.getCommLocationId();

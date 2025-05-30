@@ -28,6 +28,7 @@ public class FailedCallRecord extends AuditedEntity {
     @Column(name = "employee_extension", length = 50)
     private String employeeExtension;
 
+    @ToString.Exclude
     @Column(name = "cdr_string", columnDefinition = "TEXT")
     private String cdrString; // The raw CDR line that failed
 
@@ -67,6 +68,7 @@ public class FailedCallRecord extends AuditedEntity {
     )
     private CommunicationLocation commLocation;
 
+    @ToString.Exclude
     @Column(name = "ctl_hash", length = 64, unique = true)
     private String ctlHash;
 }

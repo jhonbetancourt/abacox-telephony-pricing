@@ -5,6 +5,7 @@ import com.infomedia.abacox.telephonypricing.entity.Employee;
 import com.infomedia.abacox.telephonypricing.entity.FileInfo;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -14,7 +15,9 @@ import java.time.ZoneOffset;
 @NoArgsConstructor
 public class CdrData {
     // Fields from PHP's $info_arr after parsing
+    @ToString.Exclude
     private String rawCdrLine;
+    private String ctlHash;
     private LocalDateTime dateTimeOrigination; // date + time combined
     private String callingPartyNumber; // ext
     private String finalCalledPartyNumber; // dial_number (can be modified)
@@ -109,5 +112,10 @@ public class CdrData {
 
     public long getDateTimeOriginationEpochSeconds() {
         return dateTimeOrigination != null ? dateTimeOrigination.toEpochSecond(ZoneOffset.UTC) : 0;
+    }
+
+    public void setRawCdrLine(String rawCdrLine) {
+        this.rawCdrLine = rawCdrLine;
+        this.ctlHash = CdrUtil.generateCtlHash(rawCdrLine, commLocationId);
     }
 }

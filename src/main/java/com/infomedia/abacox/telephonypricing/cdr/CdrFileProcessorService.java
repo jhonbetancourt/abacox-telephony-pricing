@@ -75,7 +75,7 @@ public class CdrFileProcessorService {
             cdrData.setFileInfo(currentFileInfo); // Use the managed FileInfo
             cdrData.setCommLocationId(targetCommLocation.getId());
 
-            boolean isValid = cdrValidationService.validateInitialCdrData(cdrData, targetCommLocation.getIndicator().getOriginCountryId());
+            boolean isValid = cdrValidationService.validateInitialCdrData(cdrData);
             if (!isValid || cdrData.isMarkedForQuarantine()) {
                 QuarantineErrorType errorType = cdrData.getQuarantineStep() != null && !cdrData.getQuarantineStep().isEmpty() ?
                                                 QuarantineErrorType.valueOf(cdrData.getQuarantineStep()) :

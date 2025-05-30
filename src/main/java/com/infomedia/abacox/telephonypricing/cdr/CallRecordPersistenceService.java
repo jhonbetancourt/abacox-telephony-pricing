@@ -28,19 +28,19 @@ public class CallRecordPersistenceService {
     @Transactional
     public CallRecord saveOrUpdateCallRecord(CdrData cdrData, CommunicationLocation commLocation) {
         if (cdrData.isMarkedForQuarantine()) {
-            log.warn("CDR marked for quarantine, not saving to CallRecord: {}", cdrData.getRawCdrLine());
+            log.warn("CDR marked for quarantine, not saving to CallRecord: {}", cdrData.getCtlHash());
             // The quarantine should have already happened in CdrFileProcessorService or CdrEnrichmentService
             return null;
         }
 
         String cdrHash = CdrUtil.generateCtlHash(cdrData.getRawCdrLine(), commLocation.getId());
-        log.debug("Generated CDR Hash for line: {} is {}", cdrData.getRawCdrLine(), cdrHash);
+        log.debug("Generated CDR Hash: {}", cdrHash);
 
 
         CallRecord existingRecord = findByCtlHash(cdrHash);
         if (existingRecord != null) {
-            log.warn("Duplicate CDR detected based on hash {}, raw line: {}. Original ID: {}. Quarantining.",
-                    cdrHash, cdrData.getRawCdrLine(), existingRecord.getId());
+            log.warn("Duplicate CDR detected based on hash {}. Original ID: {}. Quarantining.",
+                    cdrHash, existingRecord.getId());
             failedCallRecordPersistenceService.quarantineRecord(cdrData,
                     QuarantineErrorType.DUPLICATE_RECORD,
                     "Duplicate record based on hash. Original ID: " + existingRecord.getId(),
@@ -55,12 +55,12 @@ public class CallRecordPersistenceService {
         try {
             log.debug("Persisting CallRecord: {}", callRecord);
             entityManager.persist(callRecord);
-            log.info("Saved new CallRecord with ID: {} for CDR line: {}", callRecord.getId(), cdrData.getRawCdrLine());
+            log.info("Saved new CallRecord with ID: {} for CDR line: {}", callRecord.getId(), cdrData.getCtlHash());
             return callRecord;
         } catch (Exception e) {
             // This catch block might still be hit if there's a race condition or other DB constraint,
             // but the primary duplicate check is now done above.
-            log.error("Database error while saving CallRecord for CDR: {}. Error: {}", cdrData.getRawCdrLine(), e.getMessage(), e);
+            log.error("Database error while saving CallRecord for CDR: {}. Error: {}", cdrData.getCtlHash(), e.getMessage(), e);
             failedCallRecordPersistenceService.quarantineRecord(cdrData,
                     QuarantineErrorType.DB_INSERT_FAILED,
                     "Database error: " + e.getMessage(),

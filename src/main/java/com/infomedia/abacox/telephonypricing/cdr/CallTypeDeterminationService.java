@@ -75,7 +75,7 @@ public class CallTypeDeterminationService {
      * Also incorporates logic from `es_llamada_interna`.
      */
     public void determineCallTypeAndDirection(CdrData cdrData, CommunicationLocation commLocation) {
-        log.debug("Determining call type and direction for CDR: {}", cdrData.getRawCdrLine());
+        log.debug("Determining call type and direction for CDR: {}", cdrData.getCtlHash());
         ExtensionLimits limits = getExtensionLimits(commLocation);
 
         // PHP: if (info_interna($info)) { $esinterna = true; }
@@ -152,7 +152,7 @@ public class CallTypeDeterminationService {
      * PHP equivalent: procesaEntrante
      */
     private void processIncomingLogic(CdrData cdrData, CommunicationLocation commLocation, ExtensionLimits limits) {
-        log.debug("Processing INCOMING logic for CDR: {}", cdrData.getRawCdrLine());
+        log.debug("Processing INCOMING logic for CDR: {}", cdrData.getCtlHash());
         // PHP: if (info_interna($info)) { InvertirLlamada($info); $control_saliente = true; }
         if (cdrData.isInternalCall()) {
             log.debug("Incoming call marked as internal. Inverting and processing as outgoing.");
@@ -230,7 +230,7 @@ public class CallTypeDeterminationService {
      * PHP equivalent: procesaSaliente
      */
     private void processOutgoingLogic(CdrData cdrData, CommunicationLocation commLocation, ExtensionLimits limits, boolean pbxSpecialRuleAppliedRecursively) {
-        log.debug("Processing OUTGOING logic for CDR: {}. Recursive PBX applied: {}", cdrData.getRawCdrLine(), pbxSpecialRuleAppliedRecursively);
+        log.debug("Processing OUTGOING logic for CDR: {}. Recursive PBX applied: {}", cdrData.getCtlHash(), pbxSpecialRuleAppliedRecursively);
 
         // PHP: $val_numero = _es_Saliente($info_cdr['dial_number']);
         TransformationResult transformedOutgoing = phoneNumberTransformationService.transformOutgoingNumberCME(
@@ -310,7 +310,7 @@ public class CallTypeDeterminationService {
      * PHP equivalent: procesaInterna
      */
     private void processInternalCallLogic(CdrData cdrData, CommunicationLocation commLocation, ExtensionLimits limits, boolean pbxSpecialRuleAppliedRecursively) {
-        log.debug("Processing INTERNAL call logic for CDR: {}. Recursive PBX applied: {}", cdrData.getRawCdrLine(), pbxSpecialRuleAppliedRecursively);
+        log.debug("Processing INTERNAL call logic for CDR: {}. Recursive PBX applied: {}", cdrData.getCtlHash(), pbxSpecialRuleAppliedRecursively);
 
         List<String> prefixesToClean = null;
         boolean stripOnlyIfPrefixMatchesAndFound = true; // PHP: $modo_seguro = true for internal calls if $pbx_especial is true

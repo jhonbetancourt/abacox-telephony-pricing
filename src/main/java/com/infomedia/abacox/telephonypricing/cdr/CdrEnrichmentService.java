@@ -23,10 +23,10 @@ public class CdrEnrichmentService {
 
     public CdrData enrichCdr(CdrData cdrData, CommunicationLocation commLocation) {
         if (cdrData == null || cdrData.isMarkedForQuarantine()) {
-            log.warn("CDR is null or already marked for quarantine. Skipping enrichment. CDR: {}", cdrData != null ? cdrData.getRawCdrLine() : "NULL");
+            log.warn("CDR is null or already marked for quarantine. Skipping enrichment. CDR: {}", cdrData != null ? cdrData.getCtlHash() : "NULL");
             return cdrData;
         }
-        log.info("Starting enrichment for CDR: {}", cdrData.getRawCdrLine());
+        log.info("Starting enrichment for CDR: {}", cdrData.getCtlHash());
         cdrData.setCommLocationId(commLocation.getId());
 
         try {
@@ -184,12 +184,12 @@ public class CdrEnrichmentService {
             }
 
         } catch (Exception e) {
-            log.error("Error during CDR enrichment for line: {}", cdrData.getRawCdrLine(), e);
+            log.error("Error during CDR enrichment for line: {}", cdrData.getCtlHash(), e);
             cdrData.setMarkedForQuarantine(true);
             cdrData.setQuarantineReason("Enrichment failed: " + e.getMessage());
             cdrData.setQuarantineStep(QuarantineErrorType.ENRICHMENT_ERROR.name());
         }
-        log.info("Finished enrichment for CDR: {}. Billed Amount: {}, Type: {}", cdrData.getRawCdrLine(), cdrData.getBilledAmount(), cdrData.getTelephonyTypeName());
+        log.info("Finished enrichment for CDR: {}. Billed Amount: {}, Type: {}", cdrData.getCtlHash(), cdrData.getBilledAmount(), cdrData.getTelephonyTypeName());
         return cdrData;
     }
 }

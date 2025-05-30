@@ -23,8 +23,8 @@ public class CdrValidationService {
      * This method now directly modifies cdrData.isMarkedForQuarantine and sets reason/step.
      * It returns true if CDR is valid, false if errors occurred.
      */
-    public boolean validateInitialCdrData(CdrData cdrData, Long originCountryId) {
-        log.debug("Validating initial CDR data: {}", cdrData.getRawCdrLine());
+    public boolean validateInitialCdrData(CdrData cdrData) {
+        log.debug("Validating initial CDR data: {}", cdrData.getCtlHash());
         List<String> errorMessages = new ArrayList<>();
         List<String> warningMessages = new ArrayList<>(); // PHP's CRNPREV type
 
