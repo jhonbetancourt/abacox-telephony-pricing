@@ -26,6 +26,7 @@ public class TariffCalculationService {
     private final TrunkRuleLookupService trunkRuleLookupService;
     private final CdrConfigService appConfigService;
     private final TelephonyTypeLookupService telephonyTypeLookupService;
+    private final OperatorLookupService operatorLookupService;
 
     public void calculateTariffs(CdrData cdrData, CommunicationLocation commLocation) {
         log.debug("Calculating tariffs for CDR: {}, CommLocation: {}", cdrData.getCtlHash(), commLocation.getDirectory());
@@ -240,7 +241,7 @@ public class TariffCalculationService {
 
             if (result.bestDestInfo.getOperatorId() != null && result.bestDestInfo.getOperatorId() != 0L) {
                 cdrData.setOperatorId(result.bestDestInfo.getOperatorId());
-                String operatorNameFromIndicator = prefixLookupService.findOperatorNameById(result.bestDestInfo.getOperatorId());
+                String operatorNameFromIndicator = operatorLookupService.findOperatorNameById(result.bestDestInfo.getOperatorId());
                 cdrData.setOperatorName(operatorNameFromIndicator != null ? operatorNameFromIndicator : result.bestPrefixInfo.operatorName);
             } else {
                 cdrData.setOperatorId(result.bestPrefixInfo.operatorId);
@@ -374,7 +375,7 @@ public class TariffCalculationService {
                     }
                     if (rule.newOperatorId != null && rule.newOperatorId != 0L) {
                         cdrData.setOperatorId(rule.newOperatorId);
-                        cdrData.setOperatorName(rule.newOperatorName != null ? rule.newOperatorName : prefixLookupService.findOperatorNameById(rule.newOperatorId));
+                        cdrData.setOperatorName(rule.newOperatorName != null ? rule.newOperatorName : operatorLookupService.findOperatorNameById(rule.newOperatorId));
                     }
                     cdrData.setVatRate(rule.vatRate);
                     cdrData.setTelephonyTypeName(cdrData.getTelephonyTypeName() + " (Rule Applied)");
