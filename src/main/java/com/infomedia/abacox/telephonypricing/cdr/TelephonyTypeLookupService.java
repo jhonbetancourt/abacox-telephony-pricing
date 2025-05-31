@@ -12,8 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -125,9 +124,6 @@ public class TelephonyTypeLookupService {
                     bandQueryBuilder.append("JOIN band_indicator bi ON b.id = bi.band_id AND bi.indicator_id = :destinationIndicatorId ");
                 }
                 bandQueryBuilder.append("WHERE b.active = true AND b.prefix_id = :prefixId ");
-                // PHP: $sql_consulta_comid = "BANDA_INDICAORIGEN_ID in (0, $indicativo_origen_id)";
-                // The PHP logic also checks against COMUBICACION_ID if originIndicatorIdForBand is not passed (which it is here).
-                // So, we only need to check against originIndicatorIdForBand.
                 bandQueryBuilder.append("AND (b.origin_indicator_id = 0 OR b.origin_indicator_id = :originIndicatorIdForBand) ");
                 bandQueryBuilder.append("ORDER BY b.origin_indicator_id DESC NULLS LAST LIMIT 1");
 
@@ -198,11 +194,97 @@ public class TelephonyTypeLookupService {
     }
 
     public List<Long> getInternalTypeIds() {
-        return Arrays.asList(
+        return new ArrayList<>(Arrays.asList(
                 TelephonyTypeEnum.INTERNAL_SIMPLE.getValue(),
                 TelephonyTypeEnum.LOCAL_IP.getValue(),
                 TelephonyTypeEnum.NATIONAL_IP.getValue(),
                 TelephonyTypeEnum.INTERNAL_INTERNATIONAL_IP.getValue()
-        );
+        ));
+    }
+
+    @Transactional(readOnly = true)
+    public List<IncomingTelephonyTypePriority> getIncomingTelephonyTypePriorities(Long originCountryId) {
+        String queryStr = "SELECT DISTINCT " +
+                "p.telephony_type_id, tt.name as telephony_type_name, p.code as prefix_code, " +
+                "ttc.min_value as cfg_min_len, ttc.max_value as cfg_max_len, " +
+                "LENGTH(p.code) as prefix_code_len " + // Added for ORDER BY
+                "FROM prefix p " +
+                "JOIN telephony_type tt ON p.telephony_type_id = tt.id " +
+                "JOIN operator o ON p.operator_id = o.id " +
+                "LEFT JOIN telephony_type_config ttc ON p.telephony_type_id = ttc.telephony_type_id AND ttc.origin_country_id = :originCountryId AND ttc.active = true " +
+                "WHERE p.active = true AND tt.active = true AND o.active = true AND o.origin_country_id = :originCountryId " +
+                "AND p.telephony_type_id NOT IN (:excludedTypeIds) " +
+                "AND p.code IS NOT NULL AND p.code != '' " +
+                "ORDER BY prefix_code_len DESC"; // Use the alias or the expression
+
+        List<Long> excludedTypeIds = new ArrayList<>(getInternalTypeIds());
+        excludedTypeIds.add(TelephonyTypeEnum.CELUFIJO.getValue());
+        excludedTypeIds.add(TelephonyTypeEnum.SPECIAL_SERVICES.getValue());
+
+
+        jakarta.persistence.Query nativeQuery = entityManager.createNativeQuery(queryStr, Tuple.class);
+        nativeQuery.setParameter("originCountryId", originCountryId);
+        nativeQuery.setParameter("excludedTypeIds", excludedTypeIds);
+
+
+        List<Tuple> results = nativeQuery.getResultList();
+        Map<Long, IncomingTelephonyTypePriority> typeMap = new HashMap<>();
+
+        for (Tuple row : results) {
+            Long ttId = row.get("telephony_type_id", Number.class).longValue();
+            String ttName = row.get("telephony_type_name", String.class);
+            String prefixCode = row.get("prefix_code", String.class);
+            Integer cfgMin = row.get("cfg_min_len", Number.class) != null ? row.get("cfg_min_len", Number.class).intValue() : 0;
+            Integer cfgMax = row.get("cfg_max_len", Number.class) != null ? row.get("cfg_max_len", Number.class).intValue() : 99;
+
+            int prefixLen = (prefixCode != null) ? prefixCode.length() : 0;
+            int subscriberMinLen = Math.max(0, cfgMin - prefixLen);
+            int subscriberMaxLen = Math.max(0, cfgMax - prefixLen);
+
+            IncomingTelephonyTypePriority current = typeMap.get(ttId);
+            if (current == null) {
+                current = new IncomingTelephonyTypePriority(ttId, ttName, subscriberMinLen, subscriberMaxLen, "");
+                typeMap.put(ttId, current);
+            } else {
+                current.setMinSubscriberLength(Math.max(current.getMinSubscriberLength(), subscriberMinLen));
+                current.setMaxSubscriberLength(Math.min(current.getMaxSubscriberLength(), subscriberMaxLen));
+            }
+        }
+        
+        if (!typeMap.containsKey(TelephonyTypeEnum.LOCAL.getValue())) {
+            TelephonyTypeConfig localCfg = getTelephonyTypeConfig(TelephonyTypeEnum.LOCAL.getValue(), originCountryId);
+            typeMap.put(TelephonyTypeEnum.LOCAL.getValue(), new IncomingTelephonyTypePriority(
+                TelephonyTypeEnum.LOCAL.getValue(),
+                getTelephonyTypeName(TelephonyTypeEnum.LOCAL.getValue()),
+                localCfg != null ? localCfg.getMinValue() : 0,
+                localCfg != null ? localCfg.getMaxValue() : 99,
+                ""
+            ));
+        }
+
+
+        List<IncomingTelephonyTypePriority> sortedList = new ArrayList<>(typeMap.values());
+        for (IncomingTelephonyTypePriority item : sortedList) {
+            item.setOrderKey(String.format("%02d", item.getMinSubscriberLength()));
+        }
+
+        sortedList.sort(Comparator.comparing(IncomingTelephonyTypePriority::getOrderKey, Comparator.reverseOrder()));
+        log.debug("Sorted incoming telephony type priorities for country {}: {}", originCountryId, sortedList);
+        return sortedList;
+    }
+
+    @Transactional(readOnly = true)
+    public TelephonyTypeConfig getTelephonyTypeConfig(Long telephonyTypeId, Long originCountryId) {
+        try {
+            return entityManager.createQuery(
+                            "SELECT ttc FROM TelephonyTypeConfig ttc " +
+                                    "WHERE ttc.telephonyTypeId = :telephonyTypeId AND ttc.originCountryId = :originCountryId AND ttc.active = true",
+                            TelephonyTypeConfig.class)
+                    .setParameter("telephonyTypeId", telephonyTypeId)
+                    .setParameter("originCountryId", originCountryId)
+                    .getSingleResult();
+        } catch (NoResultException e) {
+            return null;
+        }
     }
 }

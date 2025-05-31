@@ -22,19 +22,19 @@ public class CallOriginDeterminationService {
     private final IndicatorLookupService indicatorLookupService;
     private final PhoneNumberTransformationService phoneNumberTransformationService;
     private final PbxSpecialRuleLookupService pbxSpecialRuleLookupService;
-    private final OperatorLookupService operatorLookupService; // Added
+    private final OperatorLookupService operatorLookupService;
 
 
     public IncomingCallOriginInfo determineIncomingCallOrigin(String originalIncomingNumber, CommunicationLocation commLocation) {
         IncomingCallOriginInfo originInfo = new IncomingCallOriginInfo();
-        originInfo.setEffectiveNumber(originalIncomingNumber); // Initial effective number
-        originInfo.setTelephonyTypeId(TelephonyTypeEnum.LOCAL.getValue()); // Default
+        originInfo.setEffectiveNumber(originalIncomingNumber);
+        originInfo.setTelephonyTypeId(TelephonyTypeEnum.LOCAL.getValue());
         originInfo.setTelephonyTypeName(telephonyTypeLookupService.getTelephonyTypeName(TelephonyTypeEnum.LOCAL.getValue()));
         if (commLocation != null && commLocation.getIndicator() != null) {
             originInfo.setIndicatorId(commLocation.getIndicatorId());
         } else {
             log.warn("CommLocation or its Indicator is null in determineIncomingCallOrigin. Cannot set default indicatorId.");
-            originInfo.setIndicatorId(0L); // Default or error indicator
+            originInfo.setIndicatorId(0L);
         }
 
         if (originalIncomingNumber == null || originalIncomingNumber.isEmpty() || commLocation == null || commLocation.getIndicator() == null) {
@@ -47,34 +47,35 @@ public class CallOriginDeterminationService {
         Long currentPlantIndicatorId = commLocation.getIndicatorId();
         String numberForProcessing = originalIncomingNumber;
 
+        // 1. Apply PBX incoming rules (PHP: evaluarPBXEspecial with incoming=1)
         Optional<String> pbxTransformedNumberOpt = pbxSpecialRuleLookupService.applyPbxSpecialRule(
-                numberForProcessing, commLocation.getDirectory(), 1
+                numberForProcessing, commLocation.getDirectory(), 1 // 1 for incoming
         );
         if (pbxTransformedNumberOpt.isPresent()) {
-            log.debug("Original incoming number '{}' transformed by PBX rule to '{}'", numberForProcessing, pbxTransformedNumberOpt.get());
+            log.debug("Original incoming number '{}' transformed by PBX incoming rule to '{}'", numberForProcessing, pbxTransformedNumberOpt.get());
             numberForProcessing = pbxTransformedNumberOpt.get();
         }
 
+        // 2. Apply CME-specific incoming transformations (PHP: _esEntrante_60)
         TransformationResult cmeTransformed = phoneNumberTransformationService.transformIncomingNumberCME(
                 numberForProcessing, originCountryId
         );
         if (cmeTransformed.isTransformed()) {
             log.debug("Number '{}' transformed by CME incoming rule to '{}'", numberForProcessing, cmeTransformed.getTransformedNumber());
             numberForProcessing = cmeTransformed.getTransformedNumber();
-            if (cmeTransformed.getNewTelephonyTypeId() != null) {
-                log.debug("CME transformation hinted telephony type: {}", cmeTransformed.getNewTelephonyTypeId());
-            }
+            // Hinted type from CME transform is not directly used here, but could be a factor later if needed
         }
-        originInfo.setEffectiveNumber(numberForProcessing);
+        originInfo.setEffectiveNumber(numberForProcessing); // Store number after initial transformations
 
         DestinationInfo bestMatchDestInfo = null;
         PrefixInfo bestMatchedPrefixInfo = null;
 
+        // --- Path A: PBX Exit Prefix + Operator Prefix ---
         List<String> pbxExitPrefixes = commLocation.getPbxPrefix() != null && !commLocation.getPbxPrefix().isEmpty() ?
                 Arrays.asList(commLocation.getPbxPrefix().split(",")) :
                 Collections.emptyList();
 
-        String numberAfterPbxExitStrip = numberForProcessing;
+        String numberAfterPbxExitStrip = numberForProcessing; // Start with the number after PBX-incoming and CME rules
         boolean pbxExitPrefixFoundAndStripped = false;
 
         if (!pbxExitPrefixes.isEmpty()) {
@@ -95,22 +96,37 @@ public class CallOriginDeterminationService {
         }
 
         if (pbxExitPrefixFoundAndStripped) {
+            // Try to find operator prefixes in the remainder
             List<PrefixInfo> operatorPrefixes = prefixLookupService.findMatchingPrefixes(
-                    numberAfterPbxExitStrip, commLocation, false, null
+                    numberAfterPbxExitStrip, commLocation, false, null // false for isTrunkCall
             );
-            log.debug("Path 1 (PBX Stripped): Found {} potential operator prefixes for '{}'", operatorPrefixes.size(), numberAfterPbxExitStrip);
+            log.debug("Path A (PBX Exit Stripped): Found {} potential operator prefixes for '{}'", operatorPrefixes.size(), numberAfterPbxExitStrip);
 
             for (PrefixInfo prefixInfo : operatorPrefixes) {
+                // The number passed to findDestinationIndicator should be the one *after* the operator prefix is stripped.
+                String numberForDestLookup = numberAfterPbxExitStrip;
+                boolean opPrefixStrippedForThisIteration = false;
+                String opPrefixToStrip = null;
+
+                if (prefixInfo.getPrefixCode() != null && !prefixInfo.getPrefixCode().isEmpty() && numberAfterPbxExitStrip.startsWith(prefixInfo.getPrefixCode())) {
+                    // This path implies we are using the operator prefix, so it should be stripped before findDestinationIndicator
+                    // unless findDestinationIndicator is told not to strip it.
+                    // PHP's buscarDestino: if ($prefijotrim != '' && substr($telefono, 0, $len_prefijo ) == $prefijotrim && !$reducir)
+                    // Here, $reducir would be false because we are providing the operator prefix.
+                    opPrefixToStrip = prefixInfo.getPrefixCode();
+                }
+
+
                 Optional<DestinationInfo> destInfoOpt = indicatorLookupService.findDestinationIndicator(
-                        numberAfterPbxExitStrip,
+                        numberAfterPbxExitStrip, // Pass number after PBX exit strip
                         prefixInfo.getTelephonyTypeId(),
                         prefixInfo.getTelephonyTypeMinLength() != null ? prefixInfo.getTelephonyTypeMinLength() : 0,
                         currentPlantIndicatorId,
                         prefixInfo.getPrefixId(),
                         originCountryId,
                         prefixInfo.getBandsAssociatedCount() > 0,
-                        false,
-                        prefixInfo.getPrefixCode()
+                        false, // Operator prefix is NOT YET stripped from numberAfterPbxExitStrip by findDestinationIndicator
+                        opPrefixToStrip // Tell findDestinationIndicator which operator prefix to conceptually strip
                 );
 
                 if (destInfoOpt.isPresent()) {
@@ -118,72 +134,91 @@ public class CallOriginDeterminationService {
                     if (bestMatchDestInfo == null || currentDestInfo.getSeriesRangeSize() < bestMatchDestInfo.getSeriesRangeSize() || (!bestMatchDestInfo.isApproximateMatch() && currentDestInfo.isApproximateMatch())) {
                         bestMatchDestInfo = currentDestInfo;
                         bestMatchedPrefixInfo = prefixInfo;
-                        if (!bestMatchDestInfo.isApproximateMatch()) break;
+                        if (!bestMatchDestInfo.isApproximateMatch()) break; // Found an exact match
                     }
                 }
             }
             if (bestMatchDestInfo != null) {
-                log.debug("Path 1 (PBX Stripped): Best match found: Dest='{}', Prefix='{}'", bestMatchDestInfo.getDestinationDescription(), bestMatchedPrefixInfo.getPrefixCode());
+                log.debug("Path A (PBX Exit Stripped): Best match found: Dest='{}', Prefix='{}'", bestMatchDestInfo.getDestinationDescription(), bestMatchedPrefixInfo.getPrefixCode());
             }
         }
 
+        // --- Path B: General Telephony Type Iteration ---
+        // PHP: if ($arreglo['INDICATIVO_ID'] <= 0) // Modelo original (no PBX exit prefix, or no match after it)
         if (bestMatchDestInfo == null || bestMatchDestInfo.getIndicatorId() == null || bestMatchDestInfo.getIndicatorId() <= 0) {
-            log.debug("Path 1 did not yield a definitive result. Proceeding with Path 2 (General Lookup) on: {}", numberForProcessing);
-            List<PrefixInfo> generalPrefixes = prefixLookupService.findMatchingPrefixes(
-                    numberForProcessing, commLocation, false, null
-            );
-            log.debug("Path 2 (General): Found {} potential prefixes for '{}'", generalPrefixes.size(), numberForProcessing);
+            log.debug("Path A did not yield a definitive result. Proceeding with Path B (General Lookup) on number: {}", numberForProcessing);
+            // numberForProcessing is after PBX incoming and CME rules, but *before* PBX exit prefix stripping for this path.
 
-            for (PrefixInfo prefixInfo : generalPrefixes) {
+            List<IncomingTelephonyTypePriority> incomingTypes = telephonyTypeLookupService.getIncomingTelephonyTypePriorities(originCountryId);
+            log.debug("Path B (General): Iterating through {} incoming telephony types.", incomingTypes.size());
+
+            for (IncomingTelephonyTypePriority typePriority : incomingTypes) {
+                // For this path, no operator prefix is assumed yet.
+                // `isOperatorPrefixAlreadyStripped` is true because `numberForProcessing` is the full number to check.
+                // `operatorPrefixToStripIfPresent` is null.
                 Optional<DestinationInfo> destInfoOpt = indicatorLookupService.findDestinationIndicator(
                         numberForProcessing,
-                        prefixInfo.getTelephonyTypeId(),
-                        prefixInfo.getTelephonyTypeMinLength() != null ? prefixInfo.getTelephonyTypeMinLength() : 0,
+                        typePriority.getTelephonyTypeId(),
+                        typePriority.getMinSubscriberLength(),
                         currentPlantIndicatorId,
-                        prefixInfo.getPrefixId(),
+                        null, // No specific operator prefix ID known at this stage for this path
                         originCountryId,
-                        prefixInfo.getBandsAssociatedCount() > 0,
-                        false,
-                        prefixInfo.getPrefixCode()
+                        false, // Assume no specific prefix bands unless discovered by findDestinationIndicator
+                        true,  // The numberForProcessing is passed as is, findDestinationIndicator handles NDC.
+                        null
                 );
 
                 if (destInfoOpt.isPresent()) {
                     DestinationInfo currentDestInfo = destInfoOpt.get();
-                     if (bestMatchDestInfo == null || currentDestInfo.getSeriesRangeSize() < bestMatchDestInfo.getSeriesRangeSize() || (!bestMatchDestInfo.isApproximateMatch() && currentDestInfo.isApproximateMatch())) {
+                    // We need to find the PrefixInfo that corresponds to this telephony type (usually the one with empty code or a generic one)
+                    // This is tricky because findDestinationIndicator doesn't return the PrefixInfo.
+                    // For now, we'll create a placeholder PrefixInfo.
+                    PrefixInfo currentPrefixInfo = new PrefixInfo();
+                    currentPrefixInfo.setTelephonyTypeId(typePriority.getTelephonyTypeId());
+                    currentPrefixInfo.setTelephonyTypeName(typePriority.getTelephonyTypeName());
+                    // Operator would be determined by the indicator if possible, or default.
+
+                    if (bestMatchDestInfo == null || currentDestInfo.getSeriesRangeSize() < bestMatchDestInfo.getSeriesRangeSize() || (!bestMatchDestInfo.isApproximateMatch() && currentDestInfo.isApproximateMatch())) {
                         bestMatchDestInfo = currentDestInfo;
-                        bestMatchedPrefixInfo = prefixInfo;
+                        bestMatchedPrefixInfo = currentPrefixInfo; // This is a simplified PrefixInfo
                         if (!bestMatchDestInfo.isApproximateMatch()) break;
                     }
                 }
             }
             if (bestMatchDestInfo != null) {
-                log.debug("Path 2 (General): Best match found: Dest='{}', Prefix='{}'", bestMatchDestInfo.getDestinationDescription(), bestMatchedPrefixInfo.getPrefixCode());
+                log.debug("Path B (General): Best match found: Dest='{}', Type='{}'", bestMatchDestInfo.getDestinationDescription(), bestMatchedPrefixInfo.getTelephonyTypeName());
             }
         }
 
+        // Finalizing the originInfo based on the best match
         if (bestMatchDestInfo != null && bestMatchedPrefixInfo != null) {
             originInfo.setIndicatorId(bestMatchDestInfo.getIndicatorId());
             originInfo.setDestinationDescription(bestMatchDestInfo.getDestinationDescription());
-            originInfo.setOperatorId(bestMatchedPrefixInfo.getOperatorId());
-            originInfo.setOperatorName(bestMatchedPrefixInfo.getOperatorName());
-            originInfo.setEffectiveNumber(bestMatchDestInfo.getMatchedPhoneNumber());
+            // Operator ID from the matched prefix, or from the indicator if prefix's is null/0
+            originInfo.setOperatorId(bestMatchedPrefixInfo.getOperatorId() != null && bestMatchedPrefixInfo.getOperatorId() != 0L ?
+                                     bestMatchedPrefixInfo.getOperatorId() : bestMatchDestInfo.getOperatorId());
+            originInfo.setOperatorName(bestMatchedPrefixInfo.getOperatorId() != null && bestMatchedPrefixInfo.getOperatorId() != 0L ?
+                                       bestMatchedPrefixInfo.getOperatorName() : operatorLookupService.findOperatorNameById(bestMatchDestInfo.getOperatorId()));
+
+            originInfo.setEffectiveNumber(bestMatchDestInfo.getMatchedPhoneNumber()); // This is number after op prefix strip, before local NDC prepend
             originInfo.setTelephonyTypeId(bestMatchedPrefixInfo.getTelephonyTypeId());
             originInfo.setTelephonyTypeName(bestMatchedPrefixInfo.getTelephonyTypeName());
 
-            if (!Objects.equals(currentPlantIndicatorId, bestMatchDestInfo.getIndicatorId())) {
-                if (indicatorLookupService.isLocalExtended(bestMatchDestInfo.getNdc(), currentPlantIndicatorId, bestMatchDestInfo.getIndicatorId())) {
-                    originInfo.setTelephonyTypeId(TelephonyTypeEnum.LOCAL_EXTENDED.getValue());
-                    originInfo.setTelephonyTypeName(telephonyTypeLookupService.getTelephonyTypeName(TelephonyTypeEnum.LOCAL_EXTENDED.getValue()) + " (Incoming)");
-                }
-            } else {
+            // PHP: if ($indicativo_destino != $arreglo['INDICATIVO_ID']) { ... elseif ($tipotele != $tipotele_id) ... }
+            // PHP: else { $tipotele = _TIPOTELE_LOCAL; $tipotele_nombre = 'Local'; }
+            if (Objects.equals(currentPlantIndicatorId, bestMatchDestInfo.getIndicatorId())) {
                 originInfo.setTelephonyTypeId(TelephonyTypeEnum.LOCAL.getValue());
                 originInfo.setTelephonyTypeName(telephonyTypeLookupService.getTelephonyTypeName(TelephonyTypeEnum.LOCAL.getValue()) + " (Incoming)");
+            } else if (indicatorLookupService.isLocalExtended(bestMatchDestInfo.getNdc(), currentPlantIndicatorId, bestMatchDestInfo.getIndicatorId())) {
+                originInfo.setTelephonyTypeId(TelephonyTypeEnum.LOCAL_EXTENDED.getValue());
+                originInfo.setTelephonyTypeName(telephonyTypeLookupService.getTelephonyTypeName(TelephonyTypeEnum.LOCAL_EXTENDED.getValue()) + " (Incoming)");
             }
+            // else, it remains the type determined by the prefix.
 
             // PHP: Solo para celulares cuando no se detectan automaticamente
             if (originInfo.getTelephonyTypeId() == TelephonyTypeEnum.CELLULAR.getValue() &&
                 (originInfo.getOperatorId() == null || originInfo.getOperatorId() == 0L)) {
-                log.debug("Incoming cellular call with generic operator from prefix. Attempting band-based operator lookup for indicator ID: {}", originInfo.getIndicatorId());
+                log.debug("Incoming cellular call with generic operator. Attempting band-based operator lookup for indicator ID: {}", originInfo.getIndicatorId());
                 Optional<OperatorInfo> bandOperatorOpt = operatorLookupService.findOperatorForIncomingCellularByIndicatorBands(originInfo.getIndicatorId());
                 if (bandOperatorOpt.isPresent()) {
                     log.info("Found operator {} via bands for incoming cellular to indicator {}", bandOperatorOpt.get().getName(), originInfo.getIndicatorId());
@@ -194,7 +229,7 @@ public class CallOriginDeterminationService {
                 }
             }
         } else {
-            log.warn("No definitive origin found for incoming number: '{}' (after all transforms: '{}'). Using defaults.", originalIncomingNumber, numberForProcessing);
+            log.warn("No definitive origin found for incoming number: '{}' (after initial transforms: '{}'). Using defaults.", originalIncomingNumber, numberForProcessing);
         }
 
         log.info("Final determined incoming call origin for '{}': {}", originalIncomingNumber, originInfo);
