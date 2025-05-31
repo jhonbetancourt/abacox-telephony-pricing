@@ -1,3 +1,4 @@
+// File: com/infomedia/abacox/telephonypricing/cdr/CiscoCm60CdrProcessor.java
 package com.infomedia.abacox.telephonypricing.cdr;
 
 import com.infomedia.abacox.telephonypricing.entity.CommunicationLocation;
@@ -25,14 +26,17 @@ public class CiscoCm60CdrProcessor implements CdrTypeProcessor {
     private final Map<String, String> conceptualToActualHeaderMap = new HashMap<>();
     private final Map<String, Integer> currentHeaderPositions = new HashMap<>();
     private String conferenceIdentifierActual = DEFAULT_CONFERENCE_IDENTIFIER_PREFIX;
-    private int minExpectedFieldsForValidCdr = 0;
+    private int minExpectedFieldsForValidCdr = 0; // Will be set by parseHeader
 
-    private final EmployeeLookupService employeeLookupService;
-    private final CallTypeDeterminationService callTypeDeterminationService;
+    private final EmployeeLookupService employeeLookupService; // For ExtensionPosible
+    private final CallTypeDeterminationService callTypeDeterminationService; // For getExtensionLimits
 
 
     @PostConstruct
     public void initDefaultHeaderMappings() {
+        // Conceptual keys (used internally in CdrData or as keys in this map)
+        // mapped to default actual header names (lowercase) expected in the CDR file.
+        // These actual header names will be used to find positions if no custom mapping is loaded.
         conceptualToActualHeaderMap.put("callingPartyNumberPartition", "callingPartyNumberPartition".toLowerCase());
         conceptualToActualHeaderMap.put("callingPartyNumber", "callingPartyNumber".toLowerCase());
         conceptualToActualHeaderMap.put("finalCalledPartyNumberPartition", "finalCalledPartyNumberPartition".toLowerCase());
@@ -61,6 +65,8 @@ public class CiscoCm60CdrProcessor implements CdrTypeProcessor {
         conceptualToActualHeaderMap.put("globalCallIDCallId", "globalCallID_callId".toLowerCase());
         conceptualToActualHeaderMap.put("durationSeconds", "duration".toLowerCase());
         conceptualToActualHeaderMap.put("authCodeDescription", "authCodeDescription".toLowerCase());
+
+        // PHP: $cm_config['cdr_conferencia'] = 'b';
         this.conferenceIdentifierActual = DEFAULT_CONFERENCE_IDENTIFIER_PREFIX.toUpperCase();
     }
 
@@ -69,7 +75,10 @@ public class CiscoCm60CdrProcessor implements CdrTypeProcessor {
         if (line == null || line.isEmpty()) {
             return false;
         }
-        List<String> fields = CdrUtil.parseCsvLine(line, CDR_SEPARATOR);
+        // PHP: $primer_campo = $arreglo_string[0]; if (strtolower($primer_campo) == strtolower($cm_config['llave']))
+        // $cm_config['llave'] is 'cdrRecordType'
+        // The PHP logic splits by comma first, then checks the first field.
+        List<String> fields = CdrUtil.parseCsvLine(line, CDR_SEPARATOR); // parseCsvLine also cleans
         if (!fields.isEmpty()) {
             return INTERNAL_CDR_RECORD_TYPE_HEADER_KEY.equalsIgnoreCase(fields.get(0));
         }
@@ -78,12 +87,15 @@ public class CiscoCm60CdrProcessor implements CdrTypeProcessor {
 
     @Override
     public void parseHeader(String headerLine) {
+        // PHP: CM_ValidarCab(&$cm_config, $campos, false);
         currentHeaderPositions.clear();
-        List<String> headers = CdrUtil.parseCsvLine(headerLine, CDR_SEPARATOR);
+        List<String> headers = CdrUtil.parseCsvLine(headerLine, CDR_SEPARATOR); // parseCsvLine also cleans fields
         int maxIndex = -1;
         for (int i = 0; i < headers.size(); i++) {
-            String actualHeaderFromFile = headers.get(i).toLowerCase();
+            String actualHeaderFromFile = headers.get(i).toLowerCase(); // PHP uses strtolower for matching
             currentHeaderPositions.put(actualHeaderFromFile, i);
+
+            // Check if this actual header from file corresponds to one of our conceptual fields
             for (Map.Entry<String, String> entry : conceptualToActualHeaderMap.entrySet()) {
                 if (entry.getValue().equals(actualHeaderFromFile)) {
                     if (i > maxIndex) {
@@ -93,23 +105,25 @@ public class CiscoCm60CdrProcessor implements CdrTypeProcessor {
                 }
             }
         }
-        this.minExpectedFieldsForValidCdr = maxIndex + 1;
-        currentHeaderPositions.put("_max_mapped_header_index_", maxIndex);
+        this.minExpectedFieldsForValidCdr = maxIndex + 1; // Need at least this many fields if all mapped headers are present
+        currentHeaderPositions.put("_max_mapped_header_index_", maxIndex); // Store for field count check
         log.debug("Parsed Cisco CM 6.0 headers. Mapped positions: {}. Min expected fields: {}", currentHeaderPositions, minExpectedFieldsForValidCdr);
     }
 
     private String getFieldValue(List<String> fields, String conceptualFieldName) {
+        // This method now assumes actualHeaderName is what's in currentHeaderPositions keys
         String actualHeaderName = conceptualToActualHeaderMap.getOrDefault(conceptualFieldName, conceptualFieldName.toLowerCase());
         Integer position = currentHeaderPositions.get(actualHeaderName);
 
-        if (position == null) {
+        if (position == null) { // Fallback: if the conceptual name itself was used as a header
             position = currentHeaderPositions.get(conceptualFieldName.toLowerCase());
         }
 
         if (position != null && position >= 0 && position < fields.size()) {
-            String rawValue = fields.get(position);
+            String rawValue = fields.get(position); // Fields are already cleaned by parseCsvLine
             if (rawValue == null) return "";
 
+            // PHP: if (strpos($cab, 'ipaddr') !== false || strpos($cab, 'address_ip') !== false)
             if (actualHeaderName.contains("ipaddr") || actualHeaderName.contains("address_ip")) {
                 try {
                     if (!rawValue.isEmpty() && !rawValue.equals("0") && !rawValue.equals("-1")) {
@@ -121,6 +135,7 @@ public class CiscoCm60CdrProcessor implements CdrTypeProcessor {
                     return rawValue;
                 }
             }
+            // Date conversion (epoch to string) is handled when setting CdrData fields
             return rawValue;
         }
         log.trace("Field for conceptual name '{}' (actual header: '{}') not found or out of bounds.", conceptualFieldName, actualHeaderName);
@@ -174,7 +189,7 @@ public class CiscoCm60CdrProcessor implements CdrTypeProcessor {
         CdrData cdrData = new CdrData();
         cdrData.setRawCdrLine(cdrLine);
 
-        String firstField = fields.isEmpty() ? "" : fields.get(0);
+        String firstField = fields.isEmpty() ? "" : fields.get(0); // Already cleaned by parseCsvLine
         if (INTERNAL_CDR_RECORD_TYPE_HEADER_KEY.equalsIgnoreCase(firstField)) {
             log.debug("Skipping header line found mid-stream.");
             return null;
@@ -184,11 +199,12 @@ public class CiscoCm60CdrProcessor implements CdrTypeProcessor {
             return null;
         }
 
+        // PHP: if (count($arreglo_string) < $_cm_config['cdr_campos'])
         if (fields.size() < this.minExpectedFieldsForValidCdr) {
             log.warn("Cisco CM 6.0 CDR line has insufficient fields ({}). Expected at least {}. Line: {}", fields.size(), this.minExpectedFieldsForValidCdr, cdrLine);
             cdrData.setMarkedForQuarantine(true);
             cdrData.setQuarantineReason("Insufficient fields. Found " + fields.size() + ", expected " + this.minExpectedFieldsForValidCdr);
-            cdrData.setQuarantineStep(QuarantineErrorType.PARSER_ERROR.name());
+            cdrData.setQuarantineStep(QuarantineErrorType.PARSER_ERROR.name()); // More specific than INITIAL_VALIDATION
             return cdrData;
         }
 
@@ -209,6 +225,7 @@ public class CiscoCm60CdrProcessor implements CdrTypeProcessor {
         cdrData.setRingingTimeSeconds(Math.max(0, ringingTime));
         if (cdrData.getDurationSeconds() == null) cdrData.setDurationSeconds(0);
 
+
         cdrData.setCallingPartyNumber(getFieldValue(fields, "callingPartyNumber"));
         cdrData.setCallingPartyNumberPartition(getFieldValue(fields, "callingPartyNumberPartition").toUpperCase());
         cdrData.setFinalCalledPartyNumber(getFieldValue(fields, "finalCalledPartyNumber"));
@@ -223,6 +240,7 @@ public class CiscoCm60CdrProcessor implements CdrTypeProcessor {
         cdrData.setOriginalFinalCalledPartyNumber(cdrData.getFinalCalledPartyNumber());
         cdrData.setOriginalFinalCalledPartyNumberPartition(cdrData.getFinalCalledPartyNumberPartition());
         cdrData.setOriginalLastRedirectDn(cdrData.getLastRedirectDn());
+
 
         cdrData.setAuthCodeDescription(getFieldValue(fields, "authCodeDescription"));
         cdrData.setLastRedirectRedirectReason(parseIntField(getFieldValue(fields, "lastRedirectRedirectReason")));
@@ -312,7 +330,7 @@ public class CiscoCm60CdrProcessor implements CdrTypeProcessor {
             if (isConferenceEffectivelyIncoming) {
                 cdrData.setCallDirection(CallDirection.INCOMING);
             } else if (invertTrunksForConference && cdrData.getCallDirection() != CallDirection.INCOMING) {
-                 if (cdrData.getJoinOnBehalfOf() == null || cdrData.getJoinOnBehalfOf() != 7) { // Only swap trunks if parties were also swapped
+                if (cdrData.getJoinOnBehalfOf() == null || cdrData.getJoinOnBehalfOf() != 7) {
                     CdrUtil.swapTrunks(cdrData);
                 }
             }
@@ -326,7 +344,7 @@ public class CiscoCm60CdrProcessor implements CdrTypeProcessor {
 
             if (isCallingPartyEffectivelyExternal && (isFinalCalledPartyInternalFormat || isRedirectPartyInternalFormat)) {
                 cdrData.setCallDirection(CallDirection.INCOMING);
-                CdrUtil.swapPartyInfo(cdrData);
+                CdrUtil.swapPartyInfo(cdrData); // PHP: _invertir($info_arr['dial_number'], $info_arr['ext']);
                 log.debug("Non-conference incoming detected. Swapped calling/called numbers. Calling: {}, Called: {}",
                         cdrData.getCallingPartyNumber(), cdrData.getFinalCalledPartyNumber());
             }
@@ -343,18 +361,18 @@ public class CiscoCm60CdrProcessor implements CdrTypeProcessor {
             cdrData.setInternalCall(false);
         }
 
+        // Transfer logic
         boolean numberChangedByRedirect = false;
         if (cdrData.getLastRedirectDn() != null && !cdrData.getLastRedirectDn().isEmpty()) {
             if (cdrData.getCallDirection() == CallDirection.OUTGOING && !Objects.equals(cdrData.getFinalCalledPartyNumber(), cdrData.getLastRedirectDn())) {
                 numberChangedByRedirect = true;
             } else if (cdrData.getCallDirection() == CallDirection.INCOMING && !Objects.equals(cdrData.getCallingPartyNumber(), cdrData.getLastRedirectDn())) {
-                // For incoming, after swap, callingPartyNumber is our extension. If lastRedirectDn is different, it's a redirect.
                 numberChangedByRedirect = true;
             }
         }
 
         if (numberChangedByRedirect) {
-            if (cdrData.getTransferCause() == TransferCause.NONE) { // Only set if not already set by conference logic
+            if (cdrData.getTransferCause() == TransferCause.NONE) {
                 Integer lastRedirectReason = cdrData.getLastRedirectRedirectReason();
                 if (lastRedirectReason != null && lastRedirectReason > 0 && lastRedirectReason <= 16) {
                     cdrData.setTransferCause(TransferCause.NORMAL);
@@ -377,17 +395,11 @@ public class CiscoCm60CdrProcessor implements CdrTypeProcessor {
                     }
                 }
             } else { // INCOMING
-                // After swap, finalCalledPartyNumber is the external number, callingPartyNumber is our extension.
-                // If our extension (callingPartyNumber) is different from finalMobileCalledPartyNumber, it's a redirect to mobile.
-                if (!Objects.equals(cdrData.getCallingPartyNumber(), cdrData.getFinalMobileCalledPartyNumber())) {
+                if (!Objects.equals(cdrData.getFinalCalledPartyNumber(), cdrData.getFinalMobileCalledPartyNumber())) {
                     numberChangedByMobileRedirect = true;
-                    // The call was to our extension (callingPartyNumber), but redirected to finalMobileCalledPartyNumber.
-                    // The "final destination" of this leg from the PBX's perspective is the mobile number.
-                    // So, the external party (finalCalledPartyNumber) called our extension (callingPartyNumber) which forwarded to mobile.
-                    // The effective "callee" for this CDR segment becomes the mobile number.
-                    cdrData.setCallingPartyNumber(cdrData.getFinalMobileCalledPartyNumber()); // Our "extension" is now the mobile
-                    cdrData.setCallingPartyNumberPartition(cdrData.getDestMobileDeviceName()); // Partition of the mobile
-                    cdrData.setInternalCall(false); // It's no longer an internal call to our original extension
+                    cdrData.setFinalCalledPartyNumber(cdrData.getFinalMobileCalledPartyNumber());
+                    cdrData.setFinalCalledPartyNumberPartition(cdrData.getDestMobileDeviceName());
+                    cdrData.setInternalCall(false);
                 }
             }
             if (numberChangedByMobileRedirect) {
@@ -427,11 +439,10 @@ public class CiscoCm60CdrProcessor implements CdrTypeProcessor {
         if (number == null || number.isEmpty() || conferenceIdentifierActual == null || conferenceIdentifierActual.isEmpty()) {
             return false;
         }
-        String prefixToMatch = conferenceIdentifierActual.toUpperCase();
+        String prefix = conferenceIdentifierActual;
         String numUpper = number.toUpperCase();
-
-        if (numUpper.startsWith(prefixToMatch)) {
-            String rest = numUpper.substring(prefixToMatch.length());
+        if (numUpper.startsWith(prefix)) {
+            String rest = numUpper.substring(prefix.length());
             return !rest.isEmpty() && rest.matches("\\d+");
         }
         return false;

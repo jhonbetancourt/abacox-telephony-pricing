@@ -1,3 +1,4 @@
+// File: com/infomedia/abacox/telephonypricing/cdr/TelephonyTypeLookupService.java
 package com.infomedia.abacox.telephonypricing.cdr;
 
 import com.infomedia.abacox.telephonypricing.entity.Prefix;
@@ -32,66 +33,6 @@ public class TelephonyTypeLookupService {
             return TelephonyTypeEnum.fromId(telephonyTypeId).getDefaultName();
         }
     }
-
-    @Transactional(readOnly = true)
-    public TelephonyTypeConfig getTelephonyTypeConfig(Long telephonyTypeId, Long originCountryId) {
-        if (telephonyTypeId == null || originCountryId == null) return null;
-        String queryStr = "SELECT ttc.* FROM telephony_type_config ttc " +
-                          "WHERE ttc.telephony_type_id = :telephonyTypeId AND ttc.origin_country_id = :originCountryId AND ttc.active = true " +
-                          "LIMIT 1";
-        jakarta.persistence.Query nativeQuery = entityManager.createNativeQuery(queryStr, TelephonyTypeConfig.class);
-        nativeQuery.setParameter("telephonyTypeId", telephonyTypeId);
-        nativeQuery.setParameter("originCountryId", originCountryId);
-        try {
-            return (TelephonyTypeConfig) nativeQuery.getSingleResult();
-        } catch (NoResultException e) {
-            log.trace("No TelephonyTypeConfig found for type {} and country {}", telephonyTypeId, originCountryId);
-            return null;
-        }
-    }
-
-    @Transactional(readOnly = true)
-    public PrefixInfo getRepresentativePrefixInfo(Long telephonyTypeId, Long originCountryId) {
-        // Find a common/default prefix for this type and country, prioritizing those with empty codes
-        String queryStr = "SELECT p.*, ttc.min_value as ttc_min, ttc.max_value as ttc_max, " +
-                "(SELECT COUNT(*) FROM band b WHERE b.prefix_id = p.id AND b.active = true) as bands_count " +
-                "FROM prefix p " +
-                "JOIN operator o ON p.operator_id = o.id " +
-                "JOIN telephony_type tt ON p.telephony_type_id = tt.id " +
-                "LEFT JOIN telephony_type_config ttc ON tt.id = ttc.telephony_type_id AND ttc.origin_country_id = :originCountryId AND ttc.active = true " +
-                "WHERE p.active = true AND o.active = true AND tt.active = true AND o.origin_country_id = :originCountryId " +
-                "AND p.telephony_type_id = :telephonyTypeId " +
-                "ORDER BY CASE WHEN p.code = '' THEN 0 ELSE 1 END, LENGTH(p.code) ASC LIMIT 1"; // Prefer empty prefix code
-
-        jakarta.persistence.Query nativeQuery = entityManager.createNativeQuery(queryStr, Tuple.class);
-        nativeQuery.setParameter("originCountryId", originCountryId);
-        nativeQuery.setParameter("telephonyTypeId", telephonyTypeId);
-
-        try {
-            Tuple tuple = (Tuple) nativeQuery.getSingleResult();
-            Prefix p = entityManager.find(Prefix.class, tuple.get("id", Number.class).longValue());
-            TelephonyTypeConfig cfg = new TelephonyTypeConfig();
-            cfg.setMinValue(tuple.get("ttc_min", Number.class) != null ? tuple.get("ttc_min", Number.class).intValue() : 0);
-            cfg.setMaxValue(tuple.get("ttc_max", Number.class) != null ? tuple.get("ttc_max", Number.class).intValue() : 99);
-            int bandsCount = tuple.get("bands_count", Number.class).intValue();
-            return new PrefixInfo(p, cfg, bandsCount);
-        } catch (NoResultException e) {
-            log.warn("No representative prefix found for telephony type {} and country {}", telephonyTypeId, originCountryId);
-            // Construct a default PrefixInfo if needed, or return null
-            PrefixInfo defaultPi = new PrefixInfo();
-            defaultPi.setTelephonyTypeId(telephonyTypeId);
-            defaultPi.setTelephonyTypeName(getTelephonyTypeName(telephonyTypeId));
-            defaultPi.setOperatorId(0L); // Generic
-            defaultPi.setOperatorName("Unknown");
-            TelephonyTypeConfig cfg = getTelephonyTypeConfig(telephonyTypeId, originCountryId);
-            if (cfg != null) {
-                defaultPi.setTelephonyTypeMinLength(cfg.getMinValue());
-                defaultPi.setTelephonyTypeMaxLength(cfg.getMaxValue());
-            }
-            return defaultPi;
-        }
-    }
-
 
     @Transactional(readOnly = true)
     public PrefixInfo getPrefixInfoForLocalExtended(Long originCountryId) {
@@ -184,6 +125,9 @@ public class TelephonyTypeLookupService {
                     bandQueryBuilder.append("JOIN band_indicator bi ON b.id = bi.band_id AND bi.indicator_id = :destinationIndicatorId ");
                 }
                 bandQueryBuilder.append("WHERE b.active = true AND b.prefix_id = :prefixId ");
+                // PHP: $sql_consulta_comid = "BANDA_INDICAORIGEN_ID in (0, $indicativo_origen_id)";
+                // The PHP logic also checks against COMUBICACION_ID if originIndicatorIdForBand is not passed (which it is here).
+                // So, we only need to check against originIndicatorIdForBand.
                 bandQueryBuilder.append("AND (b.origin_indicator_id = 0 OR b.origin_indicator_id = :originIndicatorIdForBand) ");
                 bandQueryBuilder.append("ORDER BY b.origin_indicator_id DESC NULLS LAST LIMIT 1");
 
