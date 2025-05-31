@@ -1,12 +1,10 @@
 package com.infomedia.abacox.telephonypricing.cdr;
 
 import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.Setter;
+import lombok.Data;
 
-@Getter
-@Setter
 @AllArgsConstructor
+@Data
 public class IndicatorConfig {
     public int minNdcLength;
     public int maxNdcLength;
