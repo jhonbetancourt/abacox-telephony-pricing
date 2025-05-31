@@ -22,17 +22,29 @@ public class IndicatorLookupService {
     @Transactional(readOnly = true)
     public IndicatorConfig getIndicatorConfigForTelephonyType(Long telephonyTypeId, Long originCountryId) {
         log.debug("Getting indicator config for telephonyTypeId: {}, originCountryId: {}", telephonyTypeId, originCountryId);
+        // For International/Satellite, originCountryId filter on Indicator might not apply or needs to be handled differently
+        // if indicators for all countries are in the same table.
+        // The PHP logic removes the MPORIGEN_ID filter for these types.
+        // Let's assume indicators for all destination countries are available.
+        // The query for min/max NDC length should consider all relevant indicators for that telephony type.
+
         String queryStr = "SELECT " +
                           "COALESCE(MIN(LENGTH(s.ndc::text)), 0) as min_ndc_len, " +
                           "COALESCE(MAX(LENGTH(s.ndc::text)), 0) as max_ndc_len, " +
-                          "(SELECT LENGTH(s2.initial_number::text) FROM series s2 JOIN indicator i2 ON s2.indicator_id = i2.id WHERE i2.telephony_type_id = :telephonyTypeId AND i2.origin_country_id = :originCountryId AND s2.active = true AND i2.active = true AND s2.initial_number >= 0 GROUP BY LENGTH(s2.initial_number::text) ORDER BY COUNT(*) DESC LIMIT 1) as common_series_len " +
+                          "(SELECT LENGTH(s2.initial_number::text) FROM series s2 JOIN indicator i2 ON s2.indicator_id = i2.id WHERE i2.telephony_type_id = :telephonyTypeId " +
+                          (isInternationalOrSatellite(telephonyTypeId) ? "" : "AND i2.origin_country_id = :originCountryId ") + // Conditional originCountryId
+                          "AND s2.active = true AND i2.active = true AND s2.initial_number >= 0 GROUP BY LENGTH(s2.initial_number::text) ORDER BY COUNT(*) DESC LIMIT 1) as common_series_len " +
                           "FROM series s JOIN indicator i ON s.indicator_id = i.id " +
-                          "WHERE i.telephony_type_id = :telephonyTypeId AND i.origin_country_id = :originCountryId " +
+                          "WHERE i.telephony_type_id = :telephonyTypeId " +
+                          (isInternationalOrSatellite(telephonyTypeId) ? "" : "AND i.origin_country_id = :originCountryId ") + // Conditional originCountryId
                           "AND s.active = true AND i.active = true AND s.initial_number >= 0";
 
         jakarta.persistence.Query nativeQuery = entityManager.createNativeQuery(queryStr, Tuple.class);
         nativeQuery.setParameter("telephonyTypeId", telephonyTypeId);
-        nativeQuery.setParameter("originCountryId", originCountryId);
+        if (!isInternationalOrSatellite(telephonyTypeId)) {
+            nativeQuery.setParameter("originCountryId", originCountryId);
+        }
+
 
         IndicatorConfig config = new IndicatorConfig();
         try {
@@ -41,31 +53,28 @@ public class IndicatorLookupService {
             config.maxNdcLength = result.get("max_ndc_len", Number.class).intValue();
             Number commonSeriesLenNum = result.get("common_series_len", Number.class);
             config.seriesNumberLength = (commonSeriesLenNum != null) ? commonSeriesLenNum.intValue() : 0;
+
+            // If international/satellite and min/max NDC length is 0 (no specific country codes found as NDCs),
+            // set a sensible default for country code lengths (e.g., 1 to 3 or 4 digits).
+            if (isInternationalOrSatellite(telephonyTypeId) && config.minNdcLength == 0 && config.maxNdcLength == 0) {
+                log.warn("No specific NDC length config found for International/Satellite type {}. Defaulting min/max NDC length to 1-4.", telephonyTypeId);
+                config.minNdcLength = 1; // Smallest country code length
+                config.maxNdcLength = 4; // Longest typical country code length
+            }
+
             log.debug("Indicator config found: {}", config);
         } catch (NoResultException e) {
-            log.warn("No indicator configuration found for telephonyTypeId {} and originCountryId {}. Using defaults (0).", telephonyTypeId, originCountryId);
+            log.warn("No indicator configuration found for telephonyTypeId {} (originCountryId {} if applicable). Using defaults (0).", telephonyTypeId, originCountryId);
+             if (isInternationalOrSatellite(telephonyTypeId)) {
+                log.warn("Defaulting min/max NDC length to 1-4 for International/Satellite type {} due to NoResultException.", telephonyTypeId);
+                config.minNdcLength = 1;
+                config.maxNdcLength = 4;
+            }
         }
         return config;
     }
 
 
-    /**
-     * Finds the destination indicator for a given phone number and context.
-     *
-     * @param phoneNumberToMatch The phone number part to match against series (after NDC is conceptually identified).
-     *                           For calls where operator prefix was stripped, this is (number - operator_prefix).
-     *                           For calls iterated by telephony type, this is the full number (after initial PBX/CME transforms).
-     * @param telephonyTypeId The telephony type being evaluated.
-     * @param minSubscriberLength This parameter represents TelephonyTypeConfig.minValue for the given telephonyTypeId.
-     *                            It's the minimum total length of the number *after* any operator prefix has been stripped.
-     * @param originIndicatorIdForBandContext The indicator ID of the calling plant, for band context.
-     * @param prefixIdFromCallingFunction The ID of the operator prefix if one was matched prior to calling this. Null otherwise.
-     * @param originCountryId The country ID of the calling plant.
-     * @param prefixHasAssociatedBands True if the operator prefix (if any) has bands.
-     * @param isOperatorPrefixAlreadyStripped True if `phoneNumberToMatch` has already had an operator prefix removed.
-     * @param operatorPrefixToStripIfPresent The operator prefix string, if known and not yet stripped.
-     * @return Optional<DestinationInfo>
-     */
     @Transactional(readOnly = true)
     public Optional<DestinationInfo> findDestinationIndicator(
             String phoneNumberToMatch, Long telephonyTypeId, int minSubscriberLength,
@@ -85,13 +94,12 @@ public class IndicatorLookupService {
             effectiveNumberForNdcSeriesLookup = effectiveNumberForNdcSeriesLookup.substring(1);
         }
 
-        // If an operator prefix is known and *not* yet stripped, strip it now.
         if (!isOperatorPrefixAlreadyStripped && operatorPrefixToStripIfPresent != null && !operatorPrefixToStripIfPresent.isEmpty() &&
             effectiveNumberForNdcSeriesLookup.startsWith(operatorPrefixToStripIfPresent)) {
             effectiveNumberForNdcSeriesLookup = effectiveNumberForNdcSeriesLookup.substring(operatorPrefixToStripIfPresent.length());
             log.debug("Operator prefix '{}' stripped for NDC/Series lookup. Number is now: {}", operatorPrefixToStripIfPresent, effectiveNumberForNdcSeriesLookup);
         }
-        String originalNumberForMatchStorage = effectiveNumberForNdcSeriesLookup;
+        String originalNumberForMatchStorage = effectiveNumberForNdcSeriesLookup; // Store this version
 
         Long effectiveTelephonyTypeId = telephonyTypeId;
         if (isLocalType(telephonyTypeId)) {
@@ -105,27 +113,23 @@ public class IndicatorLookupService {
 
         IndicatorConfig config = getIndicatorConfigForTelephonyType(effectiveTelephonyTypeId, originCountryId);
         log.debug("Indicator config for type {}: {}", effectiveTelephonyTypeId, config);
-        if (config.maxNdcLength == 0 && !isLocalType(effectiveTelephonyTypeId)) {
-            log.debug("Max NDC length is 0 and not local type, cannot find destination.");
+        if (config.maxNdcLength == 0 && !isLocalType(effectiveTelephonyTypeId) && !isInternationalOrSatellite(effectiveTelephonyTypeId)) {
+             log.debug("Max NDC length is 0 and not local/international/satellite type, cannot find destination.");
             return Optional.empty();
         }
 
+
         List<String> ndcCandidates = new ArrayList<>();
         int phoneLenForNdcSeries = effectiveNumberForNdcSeriesLookup.length();
-        // minSubscriberLength is TelephonyTypeConfig.minValue for the current effectiveTelephonyTypeId
         int configuredMinTotalLengthForType = minSubscriberLength;
 
         if (phoneLenForNdcSeries >= configuredMinTotalLengthForType) {
             log.trace("Phone length {} >= configured min total length {} for type {}. Generating NDC candidates.",
                 phoneLenForNdcSeries, configuredMinTotalLengthForType, effectiveTelephonyTypeId);
             for (int i = config.minNdcLength; i <= config.maxNdcLength; i++) {
-                // Ensure NDC length 'i' is positive and fits within the number
                 if (i > 0 && phoneLenForNdcSeries >= i) {
                     String candidateNdc = effectiveNumberForNdcSeriesLookup.substring(0, i);
-                    // The subscriber part length would be phoneLenForNdcSeries - i.
-                    // The main check is that the overall number length (phoneLenForNdcSeries)
-                    // meets the minimum for the type (configuredMinTotalLengthForType).
-                    if (candidateNdc.matches("-?\\d+")) { // Allows negative NDCs like -1
+                    if (candidateNdc.matches("-?\\d+")) {
                         ndcCandidates.add(candidateNdc);
                         log.trace("Added NDC candidate: '{}' (length {})", candidateNdc, i);
                     }
@@ -136,12 +140,9 @@ public class IndicatorLookupService {
                 phoneLenForNdcSeries, configuredMinTotalLengthForType, effectiveTelephonyTypeId);
         }
 
-        // For local types, "0" or empty NDC is often implied if no other NDC matches.
-        // PHP's CargarIndicativos sets min/max for INDICATIVO_TIPOTELE_ID. If local type has no specific NDCs,
-        // minNdcLength and maxNdcLength might be 0 from the query.
         if (isLocalType(effectiveTelephonyTypeId) && phoneLenForNdcSeries >= configuredMinTotalLengthForType) {
              if (config.minNdcLength == 0 && config.maxNdcLength == 0 && !ndcCandidates.contains("0")) {
-                 ndcCandidates.add("0"); // "0" is a common placeholder for local NDCs in some systems
+                 ndcCandidates.add("0");
                  log.trace("Added '0' as NDC candidate for local type processing as min/max NDC length is 0.");
              }
         }
@@ -158,11 +159,11 @@ public class IndicatorLookupService {
 
         if (prefixHasAssociatedBands && prefixIdFromCallingFunction != null) {
             queryBuilder.append("LEFT JOIN band b ON b.prefix_id = :prefixIdFunc AND b.active = true ");
-            queryBuilder.append("LEFT JOIN band_indicator bi ON bi.band_id = b.id AND bi.indicator_id = i.id "); // Join condition
+            queryBuilder.append("LEFT JOIN band_indicator bi ON bi.band_id = b.id AND bi.indicator_id = i.id ");
             queryBuilder.append("AND (b.origin_indicator_id = 0 OR b.origin_indicator_id = :originIndicatorIdForBandContext) ");
         } else {
-            queryBuilder.append("LEFT JOIN band b ON 1=0 "); // Effectively no join if no bands
-             if (prefixIdFromCallingFunction != null) { // If a prefix was identified, filter indicators by its operator
+            queryBuilder.append("LEFT JOIN band b ON 1=0 ");
+             if (prefixIdFromCallingFunction != null) {
                  queryBuilder.append("AND (i.operator_id = 0 OR i.operator_id = (SELECT p.operator_id FROM prefix p WHERE p.id = :prefixIdFunc AND p.active = true)) ");
             }
         }
@@ -179,6 +180,7 @@ public class IndicatorLookupService {
              return Optional.empty();
         }
 
+        // PHP: $filtro_origen is NOT applied for International/Satellite
         if (!isInternationalOrSatellite(effectiveTelephonyTypeId)) {
             queryBuilder.append("AND i.origin_country_id = :originCountryId ");
         }
@@ -198,7 +200,7 @@ public class IndicatorLookupService {
         if (prefixHasAssociatedBands && prefixIdFromCallingFunction != null) {
             nativeQuery.setParameter("prefixIdFunc", prefixIdFromCallingFunction);
             nativeQuery.setParameter("originIndicatorIdForBandContext", originIndicatorIdForBandContext);
-        } else if (prefixIdFromCallingFunction != null) { // Only prefixId, no bands
+        } else if (prefixIdFromCallingFunction != null) {
             nativeQuery.setParameter("prefixIdFunc", prefixIdFromCallingFunction);
         }
         if (!isInternationalOrSatellite(effectiveTelephonyTypeId)) {
@@ -210,7 +212,7 @@ public class IndicatorLookupService {
         List<Tuple> results = nativeQuery.getResultList();
         log.debug("Destination indicator query returned {} results.", results.size());
         List<DestinationInfo> validMatches = new ArrayList<>();
-        DestinationInfo approximateMatch = null; // For negative NDCs
+        DestinationInfo approximateMatch = null;
 
         for (Tuple row : results) {
             String currentNdcStr = String.valueOf(row.get("ndc_val", Number.class).intValue());
@@ -236,13 +238,13 @@ public class IndicatorLookupService {
             log.trace("Comparing effectiveNum: '{}' (subscriber part: '{}') against series NDC: '{}', initial: '{}', final: '{}'",
                 effectiveNumberForNdcSeriesLookup, subscriberPartOfEffectiveNumber, currentNdcStr, seriesInitialInt, seriesFinalInt);
 
-            if (Integer.parseInt(currentNdcStr) < 0) {
-                if (approximateMatch == null) {
+            if (Integer.parseInt(currentNdcStr) < 0) { // PHP: if (1 * $info_indica['SERIE_NDC'] < 0)
+                if (approximateMatch == null) { // Take the first one found for negative NDCs
                     approximateMatch = new DestinationInfo();
                     fillDestinationInfo(approximateMatch, row, currentNdcStr, originalNumberForMatchStorage, prefixIdFromCallingFunction, true, seriesInitialInt, seriesFinalInt);
                     log.debug("Found approximate match (negative NDC): {}", approximateMatch);
                 }
-                continue;
+                continue; // Don't process further for this row if it's an approximate match
             }
             
             String seriesInitialOriginalStr = seriesInitialInt.toString();
@@ -304,7 +306,7 @@ public class IndicatorLookupService {
         di.setOperatorId(indicatorOpIdNum != null ? indicatorOpIdNum.longValue() : null);
         di.setNdc(ndc);
         di.setDestinationDescription(formatDestinationDescription(row.get("city_name", String.class), row.get("department_country", String.class)));
-        di.setMatchedPhoneNumber(originalPhoneNumber);
+        di.setMatchedPhoneNumber(originalPhoneNumber); // Store the number that was used for matching after operator prefix strip
         di.setPrefixIdUsed(prefixId);
         Number bandIdNum = row.get("band_id", Number.class);
         di.setBandId(bandIdNum != null ? bandIdNum.longValue() : null);
