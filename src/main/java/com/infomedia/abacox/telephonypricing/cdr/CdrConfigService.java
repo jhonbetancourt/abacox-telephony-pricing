@@ -27,16 +27,20 @@ public class CdrConfigService {
     private static final List<String> IGNORED_AUTH_CODE_DESCRIPTIONS =
             Collections.unmodifiableList(Arrays.asList("Invalid Authorization Code", "Invalid Authorization Level"));
 
+    // Simulates fetching a parameter from a database table like 'parametros_cliente' or 'global_parameters'
+    // In a real system, this would query the database.
     private String getParameter(String paramName, String defaultValue, Long plantTypeId, String clientBdName) {
+        // log.debug("Fetching parameter: {} (PlantType: {}, Client: {})", paramName, plantTypeId, clientBdName);
+        // Example: SELECT valor FROM client_parameters WHERE client_db = :clientBdName AND param_key = :paramName
+        // For now, return hardcoded defaults based on PHP analysis
         if ("CAPTURAS_TIEMPOCERO".equals(paramName)) return "0";
         if ("CAPTURAS_TIEMPOMAX".equals(paramName)) return "2880"; // minutes
         if ("CAPTURAS_FECHAMIN".equals(paramName)) return "2000-01-01";
         if ("CAPTURAS_FECHAMAX".equals(paramName)) return "90"; // days
         if ("CAPTURAS_CREARFUN".equals(paramName)) return "1"; // 0=false, >0=true
-        if ("CAPTURAS_INTERNADEF".equals(paramName)) return String.valueOf(TelephonyTypeEnum.NATIONAL_IP.getValue());
-        if (("EXT_GLOBALES_PLANT_" + plantTypeId).equals(paramName) || "EXT_GLOBALES".equals(paramName)) return "0";
-        if (("CLAVES_GLOBALES_PLANT_" + plantTypeId).equals(paramName) || "CLAVES_GLOBALES".equals(paramName)) return "0";
-        if ("TRUNK_NORMALIZATION_ENABLED".equals(paramName)) return "1"; // Default to true for normalization
+        if ("CAPTURAS_INTERNADEF".equals(paramName)) return String.valueOf(TelephonyTypeEnum.NATIONAL_IP.getValue()); // Default from PHP
+        if (("EXT_GLOBALES_PLANT_" + plantTypeId).equals(paramName) || "EXT_GLOBALES".equals(paramName)) return "0"; // 0=false
+        if (("CLAVES_GLOBALES_PLANT_" + plantTypeId).equals(paramName) || "CLAVES_GLOBALES".equals(paramName)) return "0"; // 0=false
 
         return defaultValue;
     }
@@ -57,12 +61,12 @@ public class CdrConfigService {
 
     public int getMinCallDurationForTariffing() {
         int val = getIntParameter("CAPTURAS_TIEMPOCERO", 0, null, null);
-        return Math.max(0, val);
+        return Math.max(0, val); // PHP: if (!is_numeric($min_tiempo) || $min_tiempo < 0) { $min_tiempo = 0; }
     }
 
     public int getMaxCallDurationSeconds() {
         int maxMinutes = getIntParameter("CAPTURAS_TIEMPOMAX", 2880, null, null);
-        if (maxMinutes < 0) maxMinutes = 2880;
+        if (maxMinutes < 0) maxMinutes = 2880; // PHP default if invalid
         return maxMinutes * 60;
     }
 
@@ -88,12 +92,17 @@ public class CdrConfigService {
     }
 
     public Long getDefaultTelephonyTypeForUnresolvedInternalCalls() {
+        // PHP: if (!in_array($interna_defecto, $tt_internas)) { $interna_defecto = -1; }
+        // This implies checking if the configured default is actually an internal type.
+        // For simplicity now, we just return the configured value.
+        // The PHP logic for Cisco CM 6.0 seems to default to NATIONAL_IP if not found.
         String valStr = getParameter("CAPTURAS_INTERNADEF", String.valueOf(TelephonyTypeEnum.NATIONAL_IP.getValue()), null, null);
         try {
             long val = Long.parseLong(valStr);
+            // Further validation if it's a valid internal type could be added here if needed.
             return val > 0 ? val : null;
         } catch (NumberFormatException e) {
-            return TelephonyTypeEnum.NATIONAL_IP.getValue();
+            return TelephonyTypeEnum.NATIONAL_IP.getValue(); // Fallback
         }
     }
 
@@ -107,11 +116,5 @@ public class CdrConfigService {
 
     public boolean areAuthCodesGlobal(Long plantTypeId) {
         return getBooleanParameter("CLAVES_GLOBALES", false, plantTypeId, null);
-    }
-
-    public boolean isTrunkNormalizationEnabled(Long plantTypeId) {
-        // PHP: && $existe_troncal['normalizar'] - this flag doesn't exist in Trunk entity.
-        // Assuming normalization is generally enabled if the initial trunk evaluation is poor.
-        return getBooleanParameter("TRUNK_NORMALIZATION_ENABLED", true, plantTypeId, null);
     }
 }
