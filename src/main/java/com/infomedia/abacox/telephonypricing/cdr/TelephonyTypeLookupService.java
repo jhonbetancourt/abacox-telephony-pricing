@@ -35,6 +35,15 @@ public class TelephonyTypeLookupService {
 
     @Transactional(readOnly = true)
     public PrefixInfo getPrefixInfoForLocalExtended(Long originCountryId) {
+        return getPrefixInfoForSpecificType(TelephonyTypeEnum.LOCAL_EXTENDED.getValue(), originCountryId);
+    }
+
+    @Transactional(readOnly = true)
+    public PrefixInfo getPrefixInfoForLocalType(Long originCountryId) {
+        return getPrefixInfoForSpecificType(TelephonyTypeEnum.LOCAL.getValue(), originCountryId);
+    }
+
+    private PrefixInfo getPrefixInfoForSpecificType(Long targetTelephonyTypeId, Long originCountryId) {
         String queryStr = "SELECT p.*, ttc.min_value as ttc_min, ttc.max_value as ttc_max, " +
                 "(SELECT COUNT(*) FROM band b WHERE b.prefix_id = p.id AND b.active = true) as bands_count " +
                 "FROM prefix p " +
@@ -42,11 +51,11 @@ public class TelephonyTypeLookupService {
                 "JOIN telephony_type tt ON p.telephony_type_id = tt.id " +
                 "LEFT JOIN telephony_type_config ttc ON tt.id = ttc.telephony_type_id AND ttc.origin_country_id = :originCountryId AND ttc.active = true " +
                 "WHERE p.active = true AND o.active = true AND tt.active = true AND o.origin_country_id = :originCountryId " +
-                "AND p.telephony_type_id = :localExtendedTypeId LIMIT 1";
+                "AND p.telephony_type_id = :targetTelephonyTypeId LIMIT 1";
 
         jakarta.persistence.Query nativeQuery = entityManager.createNativeQuery(queryStr, Tuple.class);
         nativeQuery.setParameter("originCountryId", originCountryId);
-        nativeQuery.setParameter("localExtendedTypeId", TelephonyTypeEnum.LOCAL_EXTENDED.getValue());
+        nativeQuery.setParameter("targetTelephonyTypeId", targetTelephonyTypeId);
 
         try {
             Tuple tuple = (Tuple) nativeQuery.getSingleResult();
@@ -57,10 +66,11 @@ public class TelephonyTypeLookupService {
             int bandsCount = tuple.get("bands_count", Number.class).intValue();
             return new PrefixInfo(p, cfg, bandsCount);
         } catch (NoResultException e) {
-            log.warn("No prefix definition found for LOCAL_EXTENDED type in country {}", originCountryId);
+            log.warn("No prefix definition found for type {} in country {}", targetTelephonyTypeId, originCountryId);
             return null;
         }
     }
+
 
     @Transactional(readOnly = true)
     public OperatorInfo getInternalOperatorInfo(Long telephonyTypeId, Long originCountryId) {
