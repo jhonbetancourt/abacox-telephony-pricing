@@ -13,6 +13,7 @@ public class IncomingTelephonyTypePriority {
     private String telephonyTypeName;
     private int minSubscriberLength; // Minimum length of the number *after* any operator prefix is removed
     private int maxSubscriberLength; // Maximum length of the number *after* any operator prefix is removed
-    // This orderKey is derived from minSubscriberLength to mimic PHP's krsort on string-padded min lengths
-    private String orderKey;
+    private int minTotalLength; // From TelephonyTypeConfig.minValue (NDC + Subscriber)
+    private int maxTotalLength; // From TelephonyTypeConfig.maxValue (NDC + Subscriber)
+    private String orderKey; // Derived from minTotalLength for sorting
 }

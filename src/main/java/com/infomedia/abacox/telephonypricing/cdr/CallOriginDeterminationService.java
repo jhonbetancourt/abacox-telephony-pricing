@@ -115,26 +115,23 @@ public class CallOriginDeterminationService {
                 Optional<DestinationInfo> destInfoOpt = indicatorLookupService.findDestinationIndicator(
                         numberAfterPbxExitStrip,
                         prefixInfo.getTelephonyTypeId(),
-                        prefixInfo.getTelephonyTypeMinLength() != null ? prefixInfo.getTelephonyTypeMinLength() : 0,
+                        prefixInfo.getTelephonyTypeMinLength() != null ? prefixInfo.getTelephonyTypeMinLength() : 0, // This is total min length for type
                         currentPlantIndicatorId,
                         prefixInfo.getPrefixId(),
                         originCountryId,
                         prefixInfo.getBandsAssociatedCount() > 0,
-                        false,
+                        false, 
                         opPrefixToStrip
                 );
 
                 if (destInfoOpt.isPresent()) {
                     DestinationInfo currentDestInfo = destInfoOpt.get();
-                    // PHP's Path A also uses "first match wins" implicitly by iterating prefixes
-                    // and then breaking if a destination is found.
-                    // Here, we take the first valid (non-approximate) one.
                     if (!currentDestInfo.isApproximateMatch()) {
                         bestMatchDestInfo = currentDestInfo;
                         bestMatchedPrefixInfo = prefixInfo;
                         log.debug("Path A: Found non-approximate match. Dest='{}', Prefix='{}'", bestMatchDestInfo.getDestinationDescription(), bestMatchedPrefixInfo.getPrefixCode());
-                        break; // First non-approximate match is taken
-                    } else if (bestMatchDestInfo == null) { // Keep first approximate if no exact yet
+                        break; 
+                    } else if (bestMatchDestInfo == null) { 
                         bestMatchDestInfo = currentDestInfo;
                         bestMatchedPrefixInfo = prefixInfo;
                     }
@@ -145,7 +142,7 @@ public class CallOriginDeterminationService {
             }
         }
 
-        // --- Path B: General Telephony Type Iteration (if Path A didn't yield a result or if no PBX exit prefix was found) ---
+
         if (bestMatchDestInfo == null || bestMatchDestInfo.getIndicatorId() == null || bestMatchDestInfo.getIndicatorId() <= 0) {
             log.debug("Path A did not yield a definitive result or no PBX exit prefix. Proceeding with Path B (General Lookup) on number: {}", numberForProcessing);
 
@@ -160,45 +157,51 @@ public class CallOriginDeterminationService {
                 ).distinct();
             }
             List<IncomingTelephonyTypePriority> typesToIterate = prioritizedStream.collect(Collectors.toList());
+            final String finalNumberForProcessingPathB = numberForProcessing; 
 
             for (IncomingTelephonyTypePriority typePriority : typesToIterate) {
-                log.trace("Path B: Trying TelephonyType: {} (MinSubLen: {}) for number: {}", typePriority.getTelephonyTypeName(), typePriority.getMinSubscriberLength(), numberForProcessing);
+                log.trace("Path B: Trying TelephonyType: {} (MinSubLen: {}, MaxSubLen: {}) for number: {}",
+                        typePriority.getTelephonyTypeName(), typePriority.getMinSubscriberLength(), typePriority.getMaxSubscriberLength(), finalNumberForProcessingPathB);
 
-                // Check if number length is suitable for this telephony type's subscriber length requirements
-                // PHP: if ($tipotele_valido && $len_telefono >= $tipotele_min && $len_telefono <= $tipotele_max)
-                // Here, numberForProcessing is the full number. min/maxSubscriberLength is for the part *after* NDC.
-                // This check is implicitly handled by findDestinationIndicator's NDC iteration.
-                // If numberForProcessing is too short to even contain an NDC + minSubscriberLength, findDestinationIndicator won't match.
+                // PHP: if ($len_telefono >= $tipotele_min_for_check && $len_telefono <= $tipotele_max_for_check)
+                // Where $tipotele_min_for_check is min *subscriber* length for the type.
+                if (finalNumberForProcessingPathB.length() >= typePriority.getMinSubscriberLength() &&
+                    finalNumberForProcessingPathB.length() <= typePriority.getMaxSubscriberLength()) {
 
-                Optional<DestinationInfo> destInfoOpt = indicatorLookupService.findDestinationIndicator(
-                        numberForProcessing,
-                        typePriority.getTelephonyTypeId(),
-                        typePriority.getMinSubscriberLength(), // This is min subscriber part length
-                        currentPlantIndicatorId,
-                        null,
-                        originCountryId,
-                        false,
-                        true,
-                        null
-                );
+                    Optional<DestinationInfo> destInfoOpt = indicatorLookupService.findDestinationIndicator(
+                            finalNumberForProcessingPathB,
+                            typePriority.getTelephonyTypeId(),
+                            typePriority.getMinSubscriberLength(), 
+                            currentPlantIndicatorId,
+                            null,
+                            originCountryId,
+                            false,
+                            true,
+                            null
+                    );
 
-                if (destInfoOpt.isPresent()) {
-                    DestinationInfo currentDestInfo = destInfoOpt.get();
-                    log.debug("Path B: Found a match for Type {}: Dest='{}'", typePriority.getTelephonyTypeName(), currentDestInfo.getDestinationDescription());
-                    // First match wins in PHP's Path B
-                    bestMatchDestInfo = currentDestInfo;
-                    bestMatchedPrefixInfo = new PrefixInfo(); // Create a placeholder
-                    bestMatchedPrefixInfo.setTelephonyTypeId(typePriority.getTelephonyTypeId());
-                    bestMatchedPrefixInfo.setTelephonyTypeName(typePriority.getTelephonyTypeName());
-                    if (currentDestInfo.getOperatorId() != null) {
-                        bestMatchedPrefixInfo.setOperatorId(currentDestInfo.getOperatorId());
-                        bestMatchedPrefixInfo.setOperatorName(operatorLookupService.findOperatorNameById(currentDestInfo.getOperatorId()));
+                    if (destInfoOpt.isPresent()) {
+                        DestinationInfo currentDestInfo = destInfoOpt.get();
+                        log.debug("Path B: Found a match for Type {}: Dest='{}'", typePriority.getTelephonyTypeName(), currentDestInfo.getDestinationDescription());
+                        
+                        bestMatchDestInfo = currentDestInfo;
+                        bestMatchedPrefixInfo = new PrefixInfo();
+                        bestMatchedPrefixInfo.setTelephonyTypeId(typePriority.getTelephonyTypeId());
+                        bestMatchedPrefixInfo.setTelephonyTypeName(typePriority.getTelephonyTypeName());
+                        if (currentDestInfo.getOperatorId() != null) {
+                            bestMatchedPrefixInfo.setOperatorId(currentDestInfo.getOperatorId());
+                            bestMatchedPrefixInfo.setOperatorName(operatorLookupService.findOperatorNameById(currentDestInfo.getOperatorId()));
+                        }
+                        
+                        if (!bestMatchDestInfo.isApproximateMatch()) {
+                            log.debug("Path B: Non-approximate match found. Breaking loop.");
+                            break; 
+                        }
                     }
-                    // If it's an exact match (not approximate), we take it and stop.
-                    if (!bestMatchDestInfo.isApproximateMatch()) {
-                        log.debug("Path B: Non-approximate match found. Breaking loop.");
-                        break;
-                    }
+                } else {
+                    log.trace("Path B: Number '{}' (len {}) does not fit subscriber length requirements ({}-{}) for type {}",
+                            finalNumberForProcessingPathB, finalNumberForProcessingPathB.length(),
+                            typePriority.getMinSubscriberLength(), typePriority.getMaxSubscriberLength(), typePriority.getTelephonyTypeName());
                 }
             }
             if (bestMatchDestInfo != null) {

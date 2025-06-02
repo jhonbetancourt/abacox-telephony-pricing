@@ -141,7 +141,7 @@ public class TelephonyTypeLookupService {
                     return new TariffValue(
                             bRes.get("band_value", BigDecimal.class),
                             bRes.get("band_vat_included", Boolean.class),
-                            vatValue
+                            vatValue // VAT rate is from prefix, not band
                     );
                 }
             }
@@ -204,28 +204,28 @@ public class TelephonyTypeLookupService {
 
     @Transactional(readOnly = true)
     public List<IncomingTelephonyTypePriority> getIncomingTelephonyTypePriorities(Long originCountryId) {
+        // PHP's prefijos_OrdenarEntrantes
+        // It iterates prefixes, then groups by telephony_type_id, calculating min/max subscriber lengths.
+        // Then adds LOCAL if not present. Finally sorts by min_subscriber_length (derived from total_length) descending.
+
         String queryStr = "SELECT DISTINCT " +
                 "p.telephony_type_id, tt.name as telephony_type_name, p.code as prefix_code, " +
-                "ttc.min_value as cfg_min_len, ttc.max_value as cfg_max_len, " +
-                "LENGTH(p.code) as prefix_code_len " + // Added for ORDER BY
+                "ttc.min_value as cfg_min_len, ttc.max_value as cfg_max_len " +
                 "FROM prefix p " +
                 "JOIN telephony_type tt ON p.telephony_type_id = tt.id " +
                 "JOIN operator o ON p.operator_id = o.id " +
                 "LEFT JOIN telephony_type_config ttc ON p.telephony_type_id = ttc.telephony_type_id AND ttc.origin_country_id = :originCountryId AND ttc.active = true " +
                 "WHERE p.active = true AND tt.active = true AND o.active = true AND o.origin_country_id = :originCountryId " +
                 "AND p.telephony_type_id NOT IN (:excludedTypeIds) " +
-                "AND p.code IS NOT NULL AND p.code != '' " +
-                "ORDER BY prefix_code_len DESC"; // Use the alias or the expression
+                "AND p.code IS NOT NULL AND p.code != '' "; // Only consider types that have operator prefixes defined for this initial gathering
 
         List<Long> excludedTypeIds = new ArrayList<>(getInternalTypeIds());
         excludedTypeIds.add(TelephonyTypeEnum.CELUFIJO.getValue());
         excludedTypeIds.add(TelephonyTypeEnum.SPECIAL_SERVICES.getValue());
 
-
         jakarta.persistence.Query nativeQuery = entityManager.createNativeQuery(queryStr, Tuple.class);
         nativeQuery.setParameter("originCountryId", originCountryId);
         nativeQuery.setParameter("excludedTypeIds", excludedTypeIds);
-
 
         List<Tuple> results = nativeQuery.getResultList();
         Map<Long, IncomingTelephonyTypePriority> typeMap = new HashMap<>();
@@ -243,31 +243,42 @@ public class TelephonyTypeLookupService {
 
             IncomingTelephonyTypePriority current = typeMap.get(ttId);
             if (current == null) {
-                current = new IncomingTelephonyTypePriority(ttId, ttName, subscriberMinLen, subscriberMaxLen, "");
+                current = new IncomingTelephonyTypePriority(ttId, ttName, subscriberMinLen, subscriberMaxLen, cfgMin, cfgMax, "");
                 typeMap.put(ttId, current);
             } else {
-                current.setMinSubscriberLength(Math.max(current.getMinSubscriberLength(), subscriberMinLen));
-                current.setMaxSubscriberLength(Math.min(current.getMaxSubscriberLength(), subscriberMaxLen));
+                // If a type is associated with multiple prefixes, take the most lenient subscriber lengths
+                // and the original total lengths (cfgMin/Max should be consistent for a type/country).
+                current.setMinSubscriberLength(Math.min(current.getMinSubscriberLength(), subscriberMinLen));
+                current.setMaxSubscriberLength(Math.max(current.getMaxSubscriberLength(), subscriberMaxLen));
+                // cfgMin and cfgMax should ideally be the same for all prefixes of the same type, so no change needed here.
             }
         }
         
+        // Add LOCAL type explicitly if not covered by prefixes, as PHP does
         if (!typeMap.containsKey(TelephonyTypeEnum.LOCAL.getValue())) {
             TelephonyTypeConfig localCfg = getTelephonyTypeConfig(TelephonyTypeEnum.LOCAL.getValue(), originCountryId);
+            int localMin = localCfg != null ? localCfg.getMinValue() : 0;
+            int localMax = localCfg != null ? localCfg.getMaxValue() : 99;
             typeMap.put(TelephonyTypeEnum.LOCAL.getValue(), new IncomingTelephonyTypePriority(
                 TelephonyTypeEnum.LOCAL.getValue(),
                 getTelephonyTypeName(TelephonyTypeEnum.LOCAL.getValue()),
-                localCfg != null ? localCfg.getMinValue() : 0,
-                localCfg != null ? localCfg.getMaxValue() : 99,
+                localMin, // For LOCAL, subscriber length is total length as no operator prefix is stripped
+                localMax,
+                localMin, // Total min length
+                localMax, // Total max length
                 ""
             ));
         }
 
-
         List<IncomingTelephonyTypePriority> sortedList = new ArrayList<>(typeMap.values());
         for (IncomingTelephonyTypePriority item : sortedList) {
-            item.setOrderKey(String.format("%02d", item.getMinSubscriberLength()));
+            // PHP sorts by str_repeat('9', min_subscriber_len_for_type_after_op_prefix) DESC
+            // This means types that expect longer subscriber numbers (after op prefix) are tried first.
+            // For Path B, the relevant length for the outer loop condition in PHP is the total length.
+            item.setOrderKey(String.format("%02d", item.getMinTotalLength()));
         }
 
+        // Sort by orderKey (derived from minTotalLength) descending.
         sortedList.sort(Comparator.comparing(IncomingTelephonyTypePriority::getOrderKey, Comparator.reverseOrder()));
         log.debug("Sorted incoming telephony type priorities for country {}: {}", originCountryId, sortedList);
         return sortedList;
