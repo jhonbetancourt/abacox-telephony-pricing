@@ -18,13 +18,13 @@ public class DestinationInfo {
     public String ndc; // The NDC part from the database series record
     public String destinationDescription;
     public Long operatorId; // Operator ID from the Indicator record
-    public Long prefixIdUsed; // Prefix ID from the calling function (PrefixInfo.prefixId)
+    public Long prefixId; // Prefix ID from the calling function (PrefixInfo.prefixId)
     public Long bandId;
     public boolean isApproximateMatch;
 
-    // Store the original DB series values for reference
-    public Integer seriesInitialDb;
-    public Integer seriesFinalDb;
+    // Store the original series values for reference
+    public Integer seriesInitial;
+    public Integer seriesFinal;
 
     // Store the fully constructed and padded comparable values
     // These will be like "NDC" + "padded_series_initial_subscriber_part"

@@ -288,25 +288,25 @@ public class IndicatorLookupService {
         return Optional.empty();
     }
 
-    private void addMatch(List<DestinationInfo> matches, Tuple row, String ndc, String originalPhoneNumberUsedForMatch, Long prefixId, boolean isApprox, Integer seriesInitialDb, Integer seriesFinalDb, String comparableInitial, String comparableFinal) {
+    private void addMatch(List<DestinationInfo> matches, Tuple row, String ndc, String originalPhoneNumberUsedForMatch, Long prefixId, boolean isApprox, Integer seriesInitial, Integer seriesFinal, String comparableInitial, String comparableFinal) {
         DestinationInfo di = new DestinationInfo();
-        fillDestinationInfo(di, row, ndc, originalPhoneNumberUsedForMatch, prefixId, isApprox, seriesInitialDb, seriesFinalDb, comparableInitial, comparableFinal);
+        fillDestinationInfo(di, row, ndc, originalPhoneNumberUsedForMatch, prefixId, isApprox, seriesInitial, seriesFinal, comparableInitial, comparableFinal);
         matches.add(di);
     }
 
-    private void fillDestinationInfo(DestinationInfo di, Tuple row, String ndc, String originalPhoneNumberUsedForMatch, Long prefixId, boolean isApprox, Integer seriesInitialDb, Integer seriesFinalDb, String comparableInitial, String comparableFinal) {
+    private void fillDestinationInfo(DestinationInfo di, Tuple row, String ndc, String originalPhoneNumberUsedForMatch, Long prefixId, boolean isApprox, Integer seriesInitial, Integer seriesFinal, String comparableInitial, String comparableFinal) {
         di.setIndicatorId(row.get("indicator_id", Number.class).longValue());
         Number indicatorOpIdNum = row.get("indicator_operator_id", Number.class);
         di.setOperatorId(indicatorOpIdNum != null ? indicatorOpIdNum.longValue() : null);
         di.setNdc(ndc);
         di.setDestinationDescription(formatDestinationDescription(row.get("city_name", String.class), row.get("department_country", String.class)));
         di.setMatchedPhoneNumber(originalPhoneNumberUsedForMatch);
-        di.setPrefixIdUsed(prefixId);
+        di.setPrefixId(prefixId);
         Number bandIdNum = row.get("band_id", Number.class);
         di.setBandId(bandIdNum != null ? bandIdNum.longValue() : null);
         di.setApproximateMatch(isApprox);
-        di.setSeriesInitialDb(seriesInitialDb);
-        di.setSeriesFinalDb(seriesFinalDb);
+        di.setSeriesInitial(seriesInitial);
+        di.setSeriesFinal(seriesFinal);
         di.setComparableInitialValue(comparableInitial);
         di.setComparableFinalValue(comparableFinal);
         if (isApprox) {
