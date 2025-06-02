@@ -229,7 +229,7 @@ public class TariffCalculationService {
             if (destInfoOpt.isPresent()) {
                  DestinationInfo currentDestInfo = destInfoOpt.get();
                  if (result.bestDestInfo == null ||
-                     (currentDestInfo.isApproximateMatch() == result.bestDestInfo.isApproximateMatch() && currentDestInfo.getSeriesRangeSize() < result.bestDestInfo.getSeriesRangeSize()) ||
+                     (currentDestInfo.isApproximateMatch() == result.bestDestInfo.isApproximateMatch() && currentDestInfo.getPaddedSeriesRangeSize() < result.bestDestInfo.getPaddedSeriesRangeSize()) ||
                      (!currentDestInfo.isApproximateMatch() && result.bestDestInfo.isApproximateMatch())
                  ) {
                     result.bestDestInfo = currentDestInfo;
@@ -300,7 +300,7 @@ public class TariffCalculationService {
             if (trunkInfoOpt.isPresent() && !cdrData.isNormalizedTariffApplied()) {
                 applyTrunkSpecificRates(cdrData, trunkInfoOpt.get(), commLocation);
             }
-            
+
             // Apply special rates and rules (which might further modify pricePerMinute, etc.)
             applySpecialRatesAndRules(cdrData, commLocation, result.bestDestInfo, trunkInfoOpt.orElse(null));
 

@@ -9,6 +9,7 @@ import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigInteger;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -18,6 +19,8 @@ public class IndicatorLookupService {
 
     @PersistenceContext
     private EntityManager entityManager;
+
+    // Constructor if needed, or @RequiredArgsConstructor if fields are final
 
     @Transactional(readOnly = true)
     public IndicatorConfig getIndicatorConfigForTelephonyType(Long telephonyTypeId, Long originCountryId) {
@@ -65,28 +68,6 @@ public class IndicatorLookupService {
         return config;
     }
 
-
-    /**
-     * Finds the destination indicator and related information for a given phone number.
-     * This method aims to replicate the logic of PHP's `buscarDestino`.
-     *
-     * @param phoneNumberToMatch The phone number to analyze. This number should be *after* any known operator prefix
-     *                           has been stripped by the caller if `isOperatorPrefixAlreadyStripped` is true.
-     *                           If `isOperatorPrefixAlreadyStripped` is false, this number *includes* the `operatorPrefixToStripIfPresent`.
-     * @param telephonyTypeId The current telephony type ID being considered.
-     * @param minTotalLengthForType This is the `TIPOTELECFG_MIN` for the given telephony type and origin country.
-     *                              It represents the minimum total length of (NDC + Subscriber Part) for this type,
-     *                              *after* any operator prefix has been stripped.
-     * @param originIndicatorIdForBandContext The indicator ID of the calling plant/location, used for band filtering.
-     * @param prefixIdFromCallingFunction The ID of the operator prefix (from `prefix` table) that was identified by the caller.
-     *                                    Can be null if no specific operator prefix is being tested.
-     * @param originCountryId The origin country ID.
-     * @param prefixHasAssociatedBands True if the `prefixIdFromCallingFunction` has associated bands.
-     * @param isOperatorPrefixAlreadyStripped True if `operatorPrefixToStripIfPresent` was already removed from `phoneNumberToMatch` by the caller.
-     * @param operatorPrefixToStripIfPresent The operator prefix string (e.g., "09"). If `isOperatorPrefixAlreadyStripped` is false,
-     *                                       this method will attempt to strip this prefix from `phoneNumberToMatch`.
-     * @return Optional<DestinationInfo> containing the best match.
-     */
     @Transactional(readOnly = true)
     public Optional<DestinationInfo> findDestinationIndicator(
             String phoneNumberToMatch, Long telephonyTypeId, int minTotalLengthForType,
@@ -111,7 +92,7 @@ public class IndicatorLookupService {
             numberForProcessing = numberForProcessing.substring(operatorPrefixToStripIfPresent.length());
             log.debug("Operator prefix '{}' stripped internally. Number for processing is now: '{}'", operatorPrefixToStripIfPresent, numberForProcessing);
         }
-        String finalNumberUsedForMatching = numberForProcessing;
+        String finalNumberUsedForMatching = numberForProcessing; // This is the number after op-prefix strip
 
         Long effectiveTelephonyTypeId = telephonyTypeId;
         if (isLocalType(telephonyTypeId)) {
@@ -133,12 +114,12 @@ public class IndicatorLookupService {
         List<String> ndcCandidates = new ArrayList<>();
         int phoneLenForNdcSeries = finalNumberUsedForMatching.length();
 
-        for (int i = config.minNdcLength; i <= config.maxNdcLength; i++) { // i is current NDC length
-            if (i > 0 && phoneLenForNdcSeries >= i) { // Current NDC length must be positive and fit in the number
-                // The total length of the number (NDC + Subscriber) must meet the minimum required total length for this telephony type.
+        for (int i = config.minNdcLength; i <= config.maxNdcLength; i++) {
+            if (i > 0 && phoneLenForNdcSeries >= i) {
+                // minTotalLengthForType is the length *after* operator prefix stripping
                 if (phoneLenForNdcSeries >= minTotalLengthForType) {
                     String candidateNdc = finalNumberUsedForMatching.substring(0, i);
-                    if (candidateNdc.matches("-?\\d+")) {
+                    if (candidateNdc.matches("-?\\d+")) { // Allows negative NDCs for approximate matches
                         ndcCandidates.add(candidateNdc);
                         log.trace("Added NDC candidate: '{}' (length {}), subscriber part would be length {}", candidateNdc, i, phoneLenForNdcSeries - i);
                     }
@@ -147,7 +128,6 @@ public class IndicatorLookupService {
                 }
             }
         }
-
 
         if (isLocalType(effectiveTelephonyTypeId) && phoneLenForNdcSeries >= minTotalLengthForType) {
              if (config.minNdcLength == 0 && config.maxNdcLength == 0 && !ndcCandidates.contains("0")) {
@@ -162,7 +142,6 @@ public class IndicatorLookupService {
              return Optional.empty();
         }
 
-        // Build SQL Query
         StringBuilder queryBuilder = new StringBuilder(
             "SELECT i.id as indicator_id, i.operator_id as indicator_operator_id, s.ndc as ndc_val, i.department_country, i.city_name, s.initial_number, s.final_number, b.id as band_id " +
             "FROM series s JOIN indicator i ON s.indicator_id = i.id ");
@@ -242,7 +221,7 @@ public class IndicatorLookupService {
             }
 
             if (!subscriberPartOfEffectiveNumber.matches("\\d*")) {
-                log.trace("Subscriber part '{}' is not purely numeric, skipping series check for this row.", subscriberPartOfEffectiveNumber);
+                log.trace("Subscriber part '{}' is not purely numeric (or empty), skipping series check for this row.", subscriberPartOfEffectiveNumber);
                 continue;
             }
 
@@ -255,7 +234,10 @@ public class IndicatorLookupService {
             if (Integer.parseInt(dbNdcStr) < 0) {
                 if (approximateMatch == null) {
                     approximateMatch = new DestinationInfo();
-                    fillDestinationInfo(approximateMatch, row, dbNdcStr, finalNumberUsedForMatching, prefixIdFromCallingFunction, true, seriesInitialInt, seriesFinalInt);
+                    RellenaSerieResult paddedApprox = rellenaSerieEquivalents(subscriberPartOfEffectiveNumber, seriesInitialInt.toString(), seriesFinalInt.toString());
+                    String approxComparableInitial = dbNdcStr + paddedApprox.getPaddedInitial();
+                    String approxComparableFinal = dbNdcStr + paddedApprox.getPaddedFinal();
+                    fillDestinationInfo(approximateMatch, row, dbNdcStr, finalNumberUsedForMatching, prefixIdFromCallingFunction, true, seriesInitialInt, seriesFinalInt, approxComparableInitial, approxComparableFinal);
                     log.debug("Found approximate match (negative NDC): {}", approximateMatch);
                 }
                 continue;
@@ -264,19 +246,37 @@ public class IndicatorLookupService {
             RellenaSerieResult paddedSeries = rellenaSerieEquivalents(subscriberPartOfEffectiveNumber, seriesInitialInt.toString(), seriesFinalInt.toString());
             String fullComparableSeriesInitial = dbNdcStr + paddedSeries.getPaddedInitial();
             String fullComparableSeriesFinal = dbNdcStr + paddedSeries.getPaddedFinal();
-            String numberToCompareAgainstSeries = dbNdcStr + subscriberPartOfEffectiveNumber;
+            String numberToCompareAgainstSeries = finalNumberUsedForMatching; // Use the full number (NDC + subscriber) for comparison
 
-            if (numberToCompareAgainstSeries.compareTo(fullComparableSeriesInitial) >= 0 &&
-                numberToCompareAgainstSeries.compareTo(fullComparableSeriesFinal) <= 0) {
-                addMatch(validMatches, row, dbNdcStr, finalNumberUsedForMatching, prefixIdFromCallingFunction, false, seriesInitialInt, seriesFinalInt);
+            BigInteger numToCompareBI;
+            BigInteger seriesInitialBI;
+            BigInteger seriesFinalBI;
+            try {
+                // Ensure strings are purely numeric before BigInteger conversion, or handle non-numeric NDCs if they are possible
+                if (!numberToCompareAgainstSeries.matches("\\d+") || !fullComparableSeriesInitial.matches("\\d+") || !fullComparableSeriesFinal.matches("\\d+")) {
+                     log.warn("Non-numeric string for BigInteger comparison. Num: '{}', Initial: '{}', Final: '{}'. Skipping series.",
+                             numberToCompareAgainstSeries, fullComparableSeriesInitial, fullComparableSeriesFinal);
+                     continue;
+                }
+                numToCompareBI = new BigInteger(numberToCompareAgainstSeries);
+                seriesInitialBI = new BigInteger(fullComparableSeriesInitial);
+                seriesFinalBI = new BigInteger(fullComparableSeriesFinal);
+            } catch (NumberFormatException e) {
+                log.warn("Could not parse numbers for BigInteger comparison: num='{}', initial='{}', final='{}'. Skipping series.",
+                        numberToCompareAgainstSeries, fullComparableSeriesInitial, fullComparableSeriesFinal);
+                continue;
+            }
+
+            if (numToCompareBI.compareTo(seriesInitialBI) >= 0 &&
+                numToCompareBI.compareTo(seriesFinalBI) <= 0) {
+                addMatch(validMatches, row, dbNdcStr, finalNumberUsedForMatching, prefixIdFromCallingFunction, false, seriesInitialInt, seriesFinalInt, fullComparableSeriesInitial, fullComparableSeriesFinal);
                 log.debug("Series match: Number '{}' (used for compare: '{}') in range [{}-{}]. Match: {}",
                           finalNumberUsedForMatching, numberToCompareAgainstSeries, fullComparableSeriesInitial, fullComparableSeriesFinal, validMatches.get(validMatches.size()-1));
             }
         }
 
         if (!validMatches.isEmpty()) {
-            validMatches.sort(Comparator.comparingLong(DestinationInfo::getSeriesRangeSize)
-                                         );
+            validMatches.sort(Comparator.comparingLong(DestinationInfo::getPaddedSeriesRangeSize));
             log.debug("Found {} valid series matches. Best match after sorting: {}", validMatches.size(), validMatches.get(0));
             return Optional.of(validMatches.get(0));
         } else if (approximateMatch != null) {
@@ -288,38 +288,13 @@ public class IndicatorLookupService {
         return Optional.empty();
     }
 
-    private RellenaSerieResult rellenaSerieEquivalents(String inputSubscriberPart, String dbSeriesInitial, String dbSeriesFinal) {
-        int lenInitialDb = dbSeriesInitial.length();
-        int lenFinalDb = dbSeriesFinal.length();
-        String equalizedDbInitial = dbSeriesInitial;
-        String equalizedDbFinal = dbSeriesFinal;
-
-        if (lenInitialDb < lenFinalDb) {
-            equalizedDbInitial = String.format("%0" + lenFinalDb + "d", Long.parseLong(dbSeriesInitial));
-        } else if (lenFinalDb < lenInitialDb) {
-            equalizedDbFinal = String.format("%-" + lenInitialDb + "s", dbSeriesFinal).replace(' ', '9');
-        }
-
-        int inputSubLen = inputSubscriberPart.length();
-        int currentEqualizedSeriesLen = equalizedDbInitial.length();
-
-        String finalPaddedInitial = equalizedDbInitial;
-        String finalPaddedFinal = equalizedDbFinal;
-
-        if (inputSubLen != currentEqualizedSeriesLen) {
-            finalPaddedInitial = String.format("%-" + inputSubLen + "s", equalizedDbInitial).replace(' ', '0');
-            finalPaddedFinal = String.format("%-" + inputSubLen + "s", equalizedDbFinal).replace(' ', '9');
-        }
-        return new RellenaSerieResult(finalPaddedInitial, finalPaddedFinal);
-    }
-
-    private void addMatch(List<DestinationInfo> matches, Tuple row, String ndc, String originalPhoneNumberUsedForMatch, Long prefixId, boolean isApprox, Integer seriesInitial, Integer seriesFinal) {
+    private void addMatch(List<DestinationInfo> matches, Tuple row, String ndc, String originalPhoneNumberUsedForMatch, Long prefixId, boolean isApprox, Integer seriesInitialDb, Integer seriesFinalDb, String comparableInitial, String comparableFinal) {
         DestinationInfo di = new DestinationInfo();
-        fillDestinationInfo(di, row, ndc, originalPhoneNumberUsedForMatch, prefixId, isApprox, seriesInitial, seriesFinal);
+        fillDestinationInfo(di, row, ndc, originalPhoneNumberUsedForMatch, prefixId, isApprox, seriesInitialDb, seriesFinalDb, comparableInitial, comparableFinal);
         matches.add(di);
     }
 
-    private void fillDestinationInfo(DestinationInfo di, Tuple row, String ndc, String originalPhoneNumberUsedForMatch, Long prefixId, boolean isApprox, Integer seriesInitial, Integer seriesFinal) {
+    private void fillDestinationInfo(DestinationInfo di, Tuple row, String ndc, String originalPhoneNumberUsedForMatch, Long prefixId, boolean isApprox, Integer seriesInitialDb, Integer seriesFinalDb, String comparableInitial, String comparableFinal) {
         di.setIndicatorId(row.get("indicator_id", Number.class).longValue());
         Number indicatorOpIdNum = row.get("indicator_operator_id", Number.class);
         di.setOperatorId(indicatorOpIdNum != null ? indicatorOpIdNum.longValue() : null);
@@ -330,8 +305,10 @@ public class IndicatorLookupService {
         Number bandIdNum = row.get("band_id", Number.class);
         di.setBandId(bandIdNum != null ? bandIdNum.longValue() : null);
         di.setApproximateMatch(isApprox);
-        di.setSeriesInitial(seriesInitial);
-        di.setSeriesFinal(seriesFinal);
+        di.setSeriesInitialDb(seriesInitialDb);
+        di.setSeriesFinalDb(seriesFinalDb);
+        di.setComparableInitialValue(comparableInitial);
+        di.setComparableFinalValue(comparableFinal);
         if (isApprox) {
             di.setDestinationDescription(di.getDestinationDescription() + " (aprox)");
         }
@@ -393,5 +370,72 @@ public class IndicatorLookupService {
         return telephonyTypeId != null &&
                (telephonyTypeId.equals(TelephonyTypeEnum.INTERNATIONAL.getValue()) ||
                 telephonyTypeId.equals(TelephonyTypeEnum.SATELLITE.getValue()));
+    }
+
+    private RellenaSerieResult rellenaSerieEquivalents(String inputSubscriberPart, String dbSeriesInitial, String dbSeriesFinal) {
+        // Ensure dbSeriesInitial and dbSeriesFinal are not null
+        String safeDbSeriesInitial = dbSeriesInitial != null ? dbSeriesInitial : "0";
+        String safeDbSeriesFinal = dbSeriesFinal != null ? dbSeriesFinal : "0";
+
+        int lenInitialDb = safeDbSeriesInitial.length();
+        int lenFinalDb = safeDbSeriesFinal.length();
+        String equalizedDbInitial = safeDbSeriesInitial;
+        String equalizedDbFinal = safeDbSeriesFinal;
+
+        if (lenInitialDb < lenFinalDb) {
+            equalizedDbInitial = String.format("%0" + lenFinalDb + "d", Long.parseLong(safeDbSeriesInitial));
+        } else if (lenFinalDb < lenInitialDb) {
+            equalizedDbFinal = String.format("%-" + lenInitialDb + "s", safeDbSeriesFinal).replace(' ', '9');
+        }
+
+        int inputSubLen = inputSubscriberPart.length();
+        int currentEqualizedSeriesLen = equalizedDbInitial.length();
+
+        String finalPaddedInitial = equalizedDbInitial;
+        String finalPaddedFinal = equalizedDbFinal;
+
+        if (inputSubLen != currentEqualizedSeriesLen) {
+            if (inputSubLen == 0) {
+                finalPaddedInitial = ""; // Represents the "empty" subscriber part
+                finalPaddedFinal = "";
+            } else {
+                 finalPaddedInitial = String.format("%-" + inputSubLen + "s", equalizedDbInitial).replace(' ', '0');
+                 finalPaddedFinal = String.format("%-" + inputSubLen + "s", equalizedDbFinal).replace(' ', '9');
+            }
+        }
+        return new RellenaSerieResult(finalPaddedInitial, finalPaddedFinal);
+    }
+
+    public long getPaddedSeriesRangeSize(String comparableInitialValue, String comparableFinalValue) {
+        if (comparableInitialValue == null || comparableFinalValue == null) {
+            return Long.MAX_VALUE;
+        }
+        try {
+            // Use BigInteger for safety with potentially long phone numbers
+            // Ensure strings are purely numeric before BigInteger conversion
+            if (!comparableInitialValue.matches("\\d*") || !comparableFinalValue.matches("\\d*")) {
+                log.warn("Non-numeric comparableInitialValue ('{}') or comparableFinalValue ('{}') for range size calculation.", comparableInitialValue, comparableFinalValue);
+                // Handle cases where NDC might be non-numeric (e.g. negative for approximate)
+                // or padding resulted in non-numeric, though it shouldn't.
+                // If they are not numeric, a simple length comparison or default max might be better.
+                // For now, if non-numeric, assume largest range to push it down in sort.
+                if (comparableInitialValue.isEmpty() && comparableFinalValue.isEmpty()) return 0; // Empty range
+                return Long.MAX_VALUE;
+            }
+            if (comparableInitialValue.isEmpty() && !comparableFinalValue.isEmpty()) return Long.MAX_VALUE;
+            if (!comparableInitialValue.isEmpty() && comparableFinalValue.isEmpty()) return Long.MAX_VALUE;
+            if (comparableInitialValue.isEmpty() && comparableFinalValue.isEmpty()) return 0;
+
+
+            BigInteger initial = new BigInteger(comparableInitialValue);
+            BigInteger finalVal = new BigInteger(comparableFinalValue);
+            return finalVal.subtract(initial).longValueExact();
+        } catch (NumberFormatException e) {
+            log.error("NumberFormatException during getPaddedSeriesRangeSize for initial='{}', final='{}'. Returning MAX_VALUE.", comparableInitialValue, comparableFinalValue, e);
+            return Long.MAX_VALUE;
+        } catch (ArithmeticException e) {
+            log.error("ArithmeticException (likely longValueExact overflow) during getPaddedSeriesRangeSize for initial='{}', final='{}'. Returning MAX_VALUE.", comparableInitialValue, comparableFinalValue, e);
+            return Long.MAX_VALUE;
+        }
     }
 }
