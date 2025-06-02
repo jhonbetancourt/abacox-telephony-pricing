@@ -78,6 +78,7 @@ public class CdrData {
     private Long indicatorId; // Destination indicator for outgoing, Source indicator for incoming
     private String destinationCityName; // For display/logging (destination for outgoing, source for incoming)
     private String effectiveDestinationNumber; // The number used for tariffing after cleaning/PBX rules
+    private String originalDialNumberForTariffing; // Stores the number passed to tariffing before any internal cleaning
 
     private BigDecimal billedAmount = BigDecimal.ZERO;
     private BigDecimal pricePerMinute = BigDecimal.ZERO;
