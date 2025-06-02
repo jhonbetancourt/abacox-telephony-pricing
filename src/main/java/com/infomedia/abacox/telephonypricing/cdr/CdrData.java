@@ -108,7 +108,6 @@ public class CdrData {
     private String originalDialNumberBeforeCMETransform;
     private String originalDialNumberBeforePbxOutgoing;
     private String originalDialNumberBeforePbxIncoming;
-    private String originalDialNumberForTariffing; // Stores the number before PBX prefix cleaning for tariffing
 
 
     public long getDateTimeOriginationEpochSeconds() {

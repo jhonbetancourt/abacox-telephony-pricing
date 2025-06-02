@@ -1,4 +1,3 @@
-// File: com/infomedia/abacox/telephonypricing/cdr/CallTypeDeterminationService.java
 package com.infomedia.abacox.telephonypricing.cdr;
 
 import com.infomedia.abacox.telephonypricing.entity.CommunicationLocation;
@@ -128,7 +127,6 @@ public class CallTypeDeterminationService {
         // Set effective destination number before processing logic.
         // This will be refined within processIncomingLogic/processOutgoingLogic.
         cdrData.setEffectiveDestinationNumber(cdrData.getFinalCalledPartyNumber());
-        cdrData.setOriginalDialNumberForTariffing(cdrData.getFinalCalledPartyNumber()); // Store before any PBX cleaning for tariffing
 
 
         log.info("Initial call direction: {}, Is internal: {}", cdrData.getCallDirection(), cdrData.isInternalCall());
@@ -238,14 +236,8 @@ public class CallTypeDeterminationService {
         }
         // For outgoing, effective destination is the final called party number after initial transformations
         cdrData.setEffectiveDestinationNumber(cdrData.getFinalCalledPartyNumber());
-        // Store this potentially CME-transformed number as the base for tariffing's PBX cleaning
-        cdrData.setOriginalDialNumberForTariffing(cdrData.getEffectiveDestinationNumber());
-
 
         if (!pbxSpecialRuleAppliedRecursively && !cdrData.isInternalCall()) {
-            // PHP: $telefono_orig = limpiar_numero($info['dial_number'], $_PREFIJO_SALIDA_PBX, true);
-            // For special number check, we use the effective destination (which might have been CME-transformed)
-            // and clean it with PBX prefixes.
             String numToCheckSpecial = CdrUtil.cleanPhoneNumber(
                     cdrData.getEffectiveDestinationNumber(),
                     commLocation.getPbxPrefix() != null ? Arrays.asList(commLocation.getPbxPrefix().split(",")) : Collections.emptyList(),
@@ -267,8 +259,6 @@ public class CallTypeDeterminationService {
                     cdrData.setOperatorName(specialServiceInfo.get().operatorName);
                     cdrData.setIndicatorId(commLocation.getIndicatorId()); // Origin indicator for outgoing special
                     cdrData.setEffectiveDestinationNumber(numToCheckSpecial); // Use the matched special number
-                    // OriginalDialNumberForTariffing should also reflect this if it's a special number
-                    cdrData.setOriginalDialNumberForTariffing(numToCheckSpecial);
                     cdrData.setSpecialServiceTariff(specialServiceInfo.get());
                     return; // Tariffing for special service will be handled separately
                 }
@@ -291,7 +281,6 @@ public class CallTypeDeterminationService {
                 cdrData.setOriginalDialNumberBeforePbxOutgoing(originalDest);
                 cdrData.setFinalCalledPartyNumber(pbxTransformedDest.get());
                 cdrData.setEffectiveDestinationNumber(pbxTransformedDest.get()); // Update effective destination
-                cdrData.setOriginalDialNumberForTariffing(pbxTransformedDest.get()); // Update for tariffing
                 cdrData.setPbxSpecialRuleAppliedInfo("PBX Outgoing Rule: " + originalDest + " -> " + pbxTransformedDest.get());
                 processOutgoingLogic(cdrData, commLocation, limits, true); // Recursive call
                 return;
@@ -329,7 +318,6 @@ public class CallTypeDeterminationService {
                 stripOnlyIfPrefixMatchesAndFound
         );
         cdrData.setEffectiveDestinationNumber(cleanedDestination); // Update effective destination after cleaning
-        cdrData.setOriginalDialNumberForTariffing(cleanedDestination); // Update for tariffing
         log.debug("Cleaned internal destination: {}", cleanedDestination);
 
         if (cdrData.getCallingPartyNumber() != null && !cdrData.getCallingPartyNumber().trim().isEmpty() &&
