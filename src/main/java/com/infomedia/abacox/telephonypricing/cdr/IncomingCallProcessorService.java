@@ -63,6 +63,18 @@ public class IncomingCallProcessorService {
             }
         }
 
+        if (transformedIncomingCME.isTransformed()) {
+            log.debug("External Caller ID '{}' transformed by CME rule to '{}'", externalCallerId, transformedIncomingCME.getTransformedNumber());
+            cdrData.setOriginalCallerIdBeforeCMETransform(externalCallerId);
+            externalCallerId = transformedIncomingCME.getTransformedNumber();
+        }
+        // Always check for a hint, regardless of whether the number string itself was modified
+        if (transformedIncomingCME.getNewTelephonyTypeId() != null) {
+            hintedTelephonyTypeId = transformedIncomingCME.getNewTelephonyTypeId();
+            cdrData.setHintedTelephonyTypeIdFromTransform(hintedTelephonyTypeId);
+            log.debug("Captured TelephonyType hint from transformation: {}", hintedTelephonyTypeId);
+        }
+
         IncomingCallOriginInfo originInfo = callOriginDeterminationService.determineIncomingCallOrigin(
             externalCallerId,
             hintedTelephonyTypeId, // Pass the hint
