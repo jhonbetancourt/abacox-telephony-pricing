@@ -21,7 +21,6 @@ public class PhoneNumberTransformationService {
 
     @PersistenceContext
     private EntityManager entityManager;
-    private final IndicatorLookupService indicatorLookupService; // Already exists
 
     public TransformationResult transformIncomingNumberCME(String phoneNumber, Long originCountryId) {
         if (phoneNumber == null) return new TransformationResult(null, false, null);

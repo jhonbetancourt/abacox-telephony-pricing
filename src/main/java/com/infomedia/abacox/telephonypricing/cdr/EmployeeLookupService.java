@@ -14,7 +14,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 @Log4j2
@@ -24,6 +26,33 @@ public class EmployeeLookupService {
     @PersistenceContext
     private EntityManager entityManager;
     private final CdrConfigService cdrConfigService;
+    private final Map<Long, ExtensionLimits> extensionLimitsCache = new ConcurrentHashMap<>();
+
+    @Transactional(readOnly = true)
+    public void resetExtensionLimitsCache() {
+        extensionLimitsCache.clear();
+    }
+
+    @Transactional(readOnly = true)
+    public ExtensionLimits getExtensionLimits(CommunicationLocation commLocation) {
+        if (commLocation == null || commLocation.getId() == null) {
+            log.warn("getExtensionLimits called with null or invalid commLocation.");
+            return new ExtensionLimits(); // Return default empty limits
+        }
+        return this.extensionLimitsCache.computeIfAbsent(commLocation.getId(), id -> {
+            log.debug("Extension limits not found in cache for CommLocation ID: {}. Fetching.", id);
+            if (commLocation.getIndicator() != null && commLocation.getIndicator().getOriginCountryId() != null) {
+                return getExtensionLimitsLookup(
+                        commLocation.getIndicator().getOriginCountryId(),
+                        id,
+                        commLocation.getPlantTypeId()
+                );
+            }
+            log.warn("Cannot fetch extension limits: Indicator or OriginCountryId is null for CommLocation ID: {}", id);
+            return new ExtensionLimits();
+        });
+    }
+
 
     @Transactional(readOnly = true)
     public Optional<Employee> findEmployeeByExtensionOrAuthCode(String extension, String authCode,
@@ -119,7 +148,7 @@ public class EmployeeLookupService {
     }
 
     @Transactional(readOnly = true)
-    public ExtensionLimits getExtensionLimits(Long originCountryId, Long commLocationId, Long plantTypeId) {
+    public ExtensionLimits getExtensionLimitsLookup(Long originCountryId, Long commLocationId, Long plantTypeId) {
         int finalMinVal = 100;
         int finalMaxVal = CdrConfigService.ACUMTOTAL_MAX_EXTENSION_LENGTH_FOR_INTERNAL_CHECK;
 

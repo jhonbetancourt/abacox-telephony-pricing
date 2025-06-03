@@ -15,11 +15,11 @@ import java.util.Objects;
 @RequiredArgsConstructor
 public class CdrEnrichmentService {
 
-    private final CallTypeDeterminationService callTypeDeterminationService;
+    private final CallTypeAndDirectionService callTypeAndDirectionService;
     private final EmployeeLookupService employeeLookupService;
-    private final TariffCalculationService tariffCalculationService;
+    // TariffCalculationService is now called by specific processors (Incoming/Outgoing/Internal)
     private final CdrConfigService appConfigService;
-    private final TelephonyTypeLookupService telephonyTypeLookupService;
+    private final TelephonyTypeLookupService telephonyTypeLookupService; // For default names
 
     public CdrData enrichCdr(CdrData cdrData, CommunicationLocation commLocation) {
         if (cdrData == null || cdrData.isMarkedForQuarantine()) {
@@ -28,161 +28,158 @@ public class CdrEnrichmentService {
         }
         log.info("Starting enrichment for CDR: {}", cdrData.getCtlHash());
         cdrData.setCommLocationId(commLocation.getId());
+        ExtensionLimits limits = employeeLookupService.getExtensionLimits(commLocation); // Get limits once
 
         try {
-            callTypeDeterminationService.determineCallTypeAndDirection(cdrData, commLocation);
-            log.debug("After call type determination: Direction={}, Internal={}, TelephonyType={}",
-                    cdrData.getCallDirection(), cdrData.isInternalCall(), cdrData.getTelephonyTypeId());
+            // This call now handles the main flow: es_llamada_interna -> procesaEntrante/procesaSaliente
+            callTypeAndDirectionService.processCall(cdrData, commLocation, limits);
 
-            if (cdrData.isMarkedForQuarantine() && QuarantineErrorType.INTERNAL_SELF_CALL.name().equals(cdrData.getQuarantineStep())) {
+            if (cdrData.isMarkedForQuarantine() &&
+                (QuarantineErrorType.INTERNAL_SELF_CALL.name().equals(cdrData.getQuarantineStep()) ||
+                 (cdrData.getQuarantineStep() != null && cdrData.getQuarantineStep().contains("IgnorePolicy"))
+                )) {
+                log.warn("CDR quarantined during call type processing (Self-call/Ignore Policy). Skipping further enrichment. Hash: {}", cdrData.getCtlHash());
                 return cdrData;
             }
 
-            String searchExtForEmployee;
-            String searchAuthCodeForEmployee;
-            String partyToIdentifyAsEmployee = cdrData.getCallingPartyNumber(); // Default for outgoing
+            // Employee assignment logic (PHP: ObtenerFuncionario_Arreglo and parts of acumtotal_Insertar)
+            assignEmployeeToCdr(cdrData, commLocation, limits);
 
-            if (cdrData.getCallDirection() == CallDirection.INCOMING) {
-                // For incoming, after parser swaps, callingPartyNumber is OUR extension, finalCalledPartyNumber is external.
-                // PHP's ObtenerFuncionario_Arreglo uses $ext (our extension) and $clave (auth code, but ignored for incoming).
-                partyToIdentifyAsEmployee = cdrData.getCallingPartyNumber(); // This is our extension
-                searchAuthCodeForEmployee = null; // Auth code not relevant for identifying our extension on an incoming call
-            } else { // OUTGOING or internal processed as outgoing
-                partyToIdentifyAsEmployee = cdrData.getCallingPartyNumber();
-                searchAuthCodeForEmployee = cdrData.getAuthCodeDescription();
-            }
-            searchExtForEmployee = partyToIdentifyAsEmployee;
-
-
-            Employee foundEmployee = employeeLookupService.findEmployeeByExtensionOrAuthCode(
-                            searchExtForEmployee,
-                            searchAuthCodeForEmployee,
-                            commLocation.getId(),
-                            cdrData.getDateTimeOrigination())
-                    .orElse(null);
-
-            if (foundEmployee != null) {
-                cdrData.setEmployeeId(foundEmployee.getId());
-                cdrData.setEmployee(foundEmployee);
-                log.info("Found employee: ID={}, Ext={}", foundEmployee.getId(), foundEmployee.getExtension());
-
-                boolean authCodeProvided = searchAuthCodeForEmployee != null && !searchAuthCodeForEmployee.isEmpty();
-                boolean authCodeMatchedAndValid = authCodeProvided &&
-                                          foundEmployee.getAuthCode() != null &&
-                                          foundEmployee.getAuthCode().equalsIgnoreCase(searchAuthCodeForEmployee) &&
-                                          !appConfigService.getIgnoredAuthCodeDescriptions().stream()
-                                            .anyMatch(desc -> desc.equalsIgnoreCase(searchAuthCodeForEmployee));
-
-                if (authCodeMatchedAndValid) {
-                    cdrData.setAssignmentCause(AssignmentCause.AUTH_CODE);
-                } else if (authCodeProvided) { // Auth code provided but didn't match or was invalid type
-                    cdrData.setAssignmentCause(AssignmentCause.IGNORED_AUTH_CODE);
-                } else { // No auth code provided, or it was ignored type, so assignment is by extension
-                    cdrData.setAssignmentCause(AssignmentCause.EXTENSION);
-                }
-
-                if (foundEmployee.getId() == null && cdrData.getAssignmentCause() == AssignmentCause.EXTENSION) {
-                    cdrData.setAssignmentCause(AssignmentCause.RANGES);
-                }
-                log.debug("Employee assignment cause: {}", cdrData.getAssignmentCause());
-
-            } else {
-                 cdrData.setAssignmentCause(AssignmentCause.NOT_ASSIGNED);
-                 log.warn("Employee not found for Ext: {}, AuthCode: {}", searchExtForEmployee, searchAuthCodeForEmployee);
-            }
-
-            if (cdrData.isInternalCall() && cdrData.getEffectiveDestinationNumber() != null && cdrData.getDestinationEmployeeId() == null) {
-                 employeeLookupService.findEmployeeByExtensionOrAuthCode(
-                                 cdrData.getEffectiveDestinationNumber(), null,
-                                 null,
-                                 cdrData.getDateTimeOrigination())
-                    .ifPresent(destEmployee -> {
-                        cdrData.setDestinationEmployeeId(destEmployee.getId());
-                        cdrData.setDestinationEmployee(destEmployee);
-                        log.debug("Internal call destination employee found: ID={}, Ext={}", destEmployee.getId(), destEmployee.getExtension());
-                    });
-            }
-
-            // PHP: if (!ExtensionEncontrada($arreglo_fun) && !$es_interna && isset($info['funcionario_redir']) && $info['funcionario_redir']['comid'] == $COMUBICACION_ID)
-            // This logic assigns the call to the redirecting employee if the primary employee wasn't found and it's a transfer.
-            if (cdrData.getEmployeeId() == null && !cdrData.isInternalCall() &&
-                cdrData.getLastRedirectDn() != null && !cdrData.getLastRedirectDn().isEmpty() &&
-                cdrData.getTransferCause() != TransferCause.NONE && cdrData.getTransferCause() != TransferCause.CONFERENCE_END) { // Don't reassign for conference end
-                Employee redirEmployee = employeeLookupService.findEmployeeByExtensionOrAuthCode(
-                                cdrData.getLastRedirectDn(), null,
-                                commLocation.getId(),
-                                cdrData.getDateTimeOrigination())
-                        .orElse(null);
-                if (redirEmployee != null &&
-                    redirEmployee.getCommunicationLocation() != null &&
-                    Objects.equals(redirEmployee.getCommunicationLocation().getId(), commLocation.getId())) {
-                    cdrData.setEmployeeId(redirEmployee.getId());
-                    cdrData.setEmployee(redirEmployee);
-                    cdrData.setAssignmentCause(AssignmentCause.TRANSFER); // This is the employee who *received* the transfer
-                    log.info("Assigned call to redirecting employee (due to transfer): ID={}, Ext={}", redirEmployee.getId(), redirEmployee.getExtension());
-                }
-            }
-
-
+            // Final duration check (PHP: if ($tiempo <= 0 && $tipotele_id > 0 && $tipotele_id != _TIPOTELE_ERRORES))
             if (cdrData.getDurationSeconds() != null && cdrData.getDurationSeconds() <= appConfigService.getMinCallDurationForTariffing()) {
                 if (cdrData.getTelephonyTypeId() != null &&
                     cdrData.getTelephonyTypeId() > 0 &&
                     cdrData.getTelephonyTypeId() != TelephonyTypeEnum.ERRORS.getValue()) {
-                    log.info("Call duration {}s <= min. Setting type to NO_CONSUMPTION.", cdrData.getDurationSeconds());
+                    log.info("Call duration {}s <= min. Setting type to NO_CONSUMPTION after all processing.", cdrData.getDurationSeconds());
                     cdrData.setTelephonyTypeId(TelephonyTypeEnum.NO_CONSUMPTION.getValue());
                     cdrData.setTelephonyTypeName(telephonyTypeLookupService.getTelephonyTypeName(TelephonyTypeEnum.NO_CONSUMPTION.getValue()));
-                    cdrData.setBilledAmount(BigDecimal.ZERO);
-                }
-            } else if (cdrData.getTelephonyTypeId() != null &&
-                       cdrData.getTelephonyTypeId() != TelephonyTypeEnum.ERRORS.getValue() &&
-                       cdrData.getTelephonyTypeId() != TelephonyTypeEnum.NO_CONSUMPTION.getValue()) {
-                log.debug("Proceeding to tariff calculation for type: {}", cdrData.getTelephonyTypeId());
-                tariffCalculationService.calculateTariffs(cdrData, commLocation);
-            } else {
-                log.debug("Skipping tariff calculation. Duration: {}, Type: {}", cdrData.getDurationSeconds(), cdrData.getTelephonyTypeId());
-                 if (cdrData.getBilledAmount() == null) cdrData.setBilledAmount(BigDecimal.ZERO);
-            }
-
-            if (cdrData.getTransferCause() != TransferCause.NONE &&
-                cdrData.getLastRedirectDn() != null && !cdrData.getLastRedirectDn().isEmpty()) {
-                cdrData.setEmployeeTransferExtension(cdrData.getLastRedirectDn());
-
-                boolean transferToSelfOrOtherParty = false;
-                String currentPartyExtension = null;
-                String otherPartyExtension = null;
-
-                if (cdrData.getCallDirection() == CallDirection.INCOMING) {
-                    currentPartyExtension = cdrData.getCallingPartyNumber(); // Our extension
-                    otherPartyExtension = cdrData.getFinalCalledPartyNumber(); // External number
-                } else {
-                    currentPartyExtension = cdrData.getCallingPartyNumber(); // Our extension
-                    otherPartyExtension = cdrData.getFinalCalledPartyNumber(); // External/Internal number
-                }
-
-                if (Objects.equals(cdrData.getLastRedirectDn(), currentPartyExtension) ||
-                    Objects.equals(cdrData.getLastRedirectDn(), otherPartyExtension)) {
-                    transferToSelfOrOtherParty = true;
-                }
-
-                if (transferToSelfOrOtherParty &&
-                    cdrData.getTransferCause() != TransferCause.CONFERENCE &&
-                    cdrData.getTransferCause() != TransferCause.CONFERENCE_NOW &&
-                    cdrData.getTransferCause() != TransferCause.PRE_CONFERENCE_NOW) {
-                    log.debug("Clearing transfer info as it's a transfer to self/current party for non-conference. Original transfer ext: {}", cdrData.getLastRedirectDn());
-                    cdrData.setEmployeeTransferExtension(null);
-                    cdrData.setTransferCause(TransferCause.NONE);
-                } else {
-                    log.debug("Finalized transfer info. Transfer Ext: {}, Cause: {}", cdrData.getEmployeeTransferExtension(), cdrData.getTransferCause());
+                    cdrData.setBilledAmount(BigDecimal.ZERO); // Ensure billed amount is zero
+                    cdrData.setPricePerMinute(BigDecimal.ZERO);
+                    cdrData.setInitialPricePerMinute(BigDecimal.ZERO);
                 }
             }
+
+            // Transfer cleanup (PHP: if ($ext_transfer !== '' && ($ext_transfer === $extension || ...) ))
+            finalizeTransferInformation(cdrData);
 
         } catch (Exception e) {
-            log.error("Error during CDR enrichment for line: {}", cdrData.getCtlHash(), e);
+            log.error("Unhandled exception during CDR enrichment for line: {}", cdrData.getCtlHash(), e);
             cdrData.setMarkedForQuarantine(true);
             cdrData.setQuarantineReason("Enrichment failed: " + e.getMessage());
             cdrData.setQuarantineStep(QuarantineErrorType.ENRICHMENT_ERROR.name());
         }
         log.info("Finished enrichment for CDR: {}. Billed Amount: {}, Type: {}", cdrData.getCtlHash(), cdrData.getBilledAmount(), cdrData.getTelephonyTypeName());
         return cdrData;
+    }
+
+    private void assignEmployeeToCdr(CdrData cdrData, CommunicationLocation commLocation, ExtensionLimits limits) {
+        String searchExtForEmployee;
+        String searchAuthCodeForEmployee;
+
+        // PHP: $arreglo_fun = ObtenerFuncionario_Arreglo($link, $ext, $clave, $incoming, $info_cdr['date'], $funext, $COMUBICACION_ID, $tipo_fun);
+        // $ext is callingPartyNumber, $clave is authCode, $incoming is callDirection
+        // $tipo_fun (0=any_origin, 2=local_origin) depends on ext_globales.
+        // For incoming, PHP's ObtenerFuncionario_Arreglo uses $ext (our extension) and $clave (auth code, but ignored for incoming).
+        // For outgoing, it uses $ext (our extension) and $clave (auth code).
+
+        if (cdrData.getCallDirection() == CallDirection.INCOMING) {
+            searchExtForEmployee = cdrData.getCallingPartyNumber(); // This is our extension after parser swap
+            searchAuthCodeForEmployee = null; // Auth code not relevant for identifying our extension on an incoming call
+        } else { // OUTGOING or internal processed as outgoing
+            searchExtForEmployee = cdrData.getCallingPartyNumber();
+            searchAuthCodeForEmployee = cdrData.getAuthCodeDescription();
+        }
+
+        Employee foundEmployee = employeeLookupService.findEmployeeByExtensionOrAuthCode(
+                        searchExtForEmployee,
+                        searchAuthCodeForEmployee,
+                        commLocation.getId(), // Context for non-global search
+                        cdrData.getDateTimeOrigination())
+                .orElse(null);
+
+        if (foundEmployee != null) {
+            cdrData.setEmployeeId(foundEmployee.getId());
+            cdrData.setEmployee(foundEmployee);
+            log.info("Found employee: ID={}, Ext={}", foundEmployee.getId(), foundEmployee.getExtension());
+
+            boolean authCodeProvided = searchAuthCodeForEmployee != null && !searchAuthCodeForEmployee.isEmpty();
+            boolean authCodeMatchedAndValid = authCodeProvided &&
+                                      foundEmployee.getAuthCode() != null &&
+                                      foundEmployee.getAuthCode().equalsIgnoreCase(searchAuthCodeForEmployee) &&
+                                      !appConfigService.getIgnoredAuthCodeDescriptions().stream()
+                                        .anyMatch(desc -> desc.equalsIgnoreCase(searchAuthCodeForEmployee));
+
+            if (authCodeMatchedAndValid) {
+                cdrData.setAssignmentCause(AssignmentCause.AUTH_CODE);
+            } else if (authCodeProvided) {
+                cdrData.setAssignmentCause(AssignmentCause.IGNORED_AUTH_CODE);
+            } else {
+                cdrData.setAssignmentCause(AssignmentCause.EXTENSION);
+            }
+            // If employee was found via range (ID is null for conceptual employee from range)
+            if (foundEmployee.getId() == null && cdrData.getAssignmentCause() == AssignmentCause.EXTENSION) {
+                cdrData.setAssignmentCause(AssignmentCause.RANGES);
+            }
+            log.debug("Employee assignment cause: {}", cdrData.getAssignmentCause());
+
+        } else {
+             cdrData.setAssignmentCause(AssignmentCause.NOT_ASSIGNED);
+             log.warn("Employee not found for Ext: {}, AuthCode: {}", searchExtForEmployee, searchAuthCodeForEmployee);
+        }
+
+        // PHP: if (!ExtensionEncontrada($arreglo_fun) && !$es_interna && isset($info['funcionario_redir']) && $info['funcionario_redir']['comid'] == $COMUBICACION_ID)
+        // This logic assigns the call to the redirecting employee if the primary employee wasn't found and it's a transfer.
+        if (cdrData.getEmployeeId() == null && !cdrData.isInternalCall() &&
+            cdrData.getLastRedirectDn() != null && !cdrData.getLastRedirectDn().isEmpty() &&
+            cdrData.getTransferCause() != TransferCause.NONE && cdrData.getTransferCause() != TransferCause.CONFERENCE_END) {
+            Employee redirEmployee = employeeLookupService.findEmployeeByExtensionOrAuthCode(
+                            cdrData.getLastRedirectDn(), null, // No auth code for redirect lookup
+                            commLocation.getId(), // Redirecting employee must be in current commLocation
+                            cdrData.getDateTimeOrigination())
+                    .orElse(null);
+            if (redirEmployee != null &&
+                redirEmployee.getCommunicationLocation() != null &&
+                Objects.equals(redirEmployee.getCommunicationLocation().getId(), commLocation.getId())) {
+                cdrData.setEmployeeId(redirEmployee.getId());
+                cdrData.setEmployee(redirEmployee);
+                cdrData.setAssignmentCause(AssignmentCause.TRANSFER);
+                log.info("Assigned call to redirecting employee (due to transfer): ID={}, Ext={}", redirEmployee.getId(), redirEmployee.getExtension());
+            }
+        }
+    }
+
+    private void finalizeTransferInformation(CdrData cdrData) {
+        if (cdrData.getTransferCause() != TransferCause.NONE &&
+            cdrData.getLastRedirectDn() != null && !cdrData.getLastRedirectDn().isEmpty()) {
+            cdrData.setEmployeeTransferExtension(cdrData.getLastRedirectDn());
+
+            boolean transferToSelfOrOtherParty = false;
+            String currentPartyExtension = null;
+            String otherPartyExtension = null;
+
+            if (cdrData.getCallDirection() == CallDirection.INCOMING) {
+                currentPartyExtension = cdrData.getCallingPartyNumber(); // Our extension
+                otherPartyExtension = cdrData.getFinalCalledPartyNumber(); // External number
+            } else { // OUTGOING or internal
+                currentPartyExtension = cdrData.getCallingPartyNumber(); // Our extension
+                otherPartyExtension = cdrData.getFinalCalledPartyNumber(); // External/Internal number
+            }
+
+            if (Objects.equals(cdrData.getLastRedirectDn(), currentPartyExtension) ||
+                Objects.equals(cdrData.getLastRedirectDn(), otherPartyExtension)) {
+                transferToSelfOrOtherParty = true;
+            }
+
+            if (transferToSelfOrOtherParty &&
+                cdrData.getTransferCause() != TransferCause.CONFERENCE &&
+                cdrData.getTransferCause() != TransferCause.CONFERENCE_NOW &&
+                cdrData.getTransferCause() != TransferCause.PRE_CONFERENCE_NOW) {
+                log.debug("Clearing transfer info as it's a transfer to self/current party for non-conference. Original transfer ext: {}", cdrData.getLastRedirectDn());
+                cdrData.setEmployeeTransferExtension(null);
+                cdrData.setTransferCause(TransferCause.NONE);
+            } else {
+                log.debug("Finalized transfer info. Transfer Ext: {}, Cause: {}", cdrData.getEmployeeTransferExtension(), cdrData.getTransferCause());
+            }
+        }
     }
 }

@@ -29,7 +29,6 @@ public class CdrFileProcessorService {
     private final CommunicationLocationLookupService communicationLocationLookupService;
     private final FileInfoPersistenceService fileInfoPersistenceService;
     private final CdrValidationService cdrValidationService;
-    private final CallTypeDeterminationService callTypeDeterminationService;
     private final CdrConfigService cdrConfigService;
     private final List<CdrTypeProcessor> cdrTypeProcessors;
     private final EntityManager entityManager; // Added
@@ -138,9 +137,6 @@ public class CdrFileProcessorService {
         }
         Long fileInfoId = fileInfo.getId(); // Get the ID after it's persisted/fetched
         log.debug("Using FileInfo ID: {} for pre-routed stream: {}", fileInfoId, filename);
-
-
-        callTypeDeterminationService.resetExtensionLimitsCache(commLocation);
 
         CdrTypeProcessor processor = getProcessorForPlantType(commLocation.getPlantTypeId());
         boolean headerProcessed = false;

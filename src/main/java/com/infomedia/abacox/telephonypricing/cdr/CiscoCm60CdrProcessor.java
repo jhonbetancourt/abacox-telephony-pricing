@@ -29,7 +29,6 @@ public class CiscoCm60CdrProcessor implements CdrTypeProcessor {
     private int minExpectedFieldsForValidCdr = 0;
 
     private final EmployeeLookupService employeeLookupService;
-    private final CallTypeDeterminationService callTypeDeterminationService;
 
 
     @PostConstruct
@@ -264,7 +263,7 @@ public class CiscoCm60CdrProcessor implements CdrTypeProcessor {
             }
         }
 
-        ExtensionLimits limits = callTypeDeterminationService.getExtensionLimits(commLocation);
+        ExtensionLimits limits = employeeLookupService.getExtensionLimits(commLocation);
 
         if (isConferenceByFinalCalled) {
             boolean isConferenceEffectivelyIncoming = (!isPartitionPresent(cdrData.getFinalCalledPartyNumberPartition())) &&
