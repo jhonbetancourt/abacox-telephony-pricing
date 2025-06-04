@@ -23,7 +23,6 @@ public class CdrConfigService {
     // --- Constants based on PHP defines ---
     public static final int ACUMTOTAL_MAX_EXTENSION_LENGTH_FOR_INTERNAL_CHECK = 1000000; // PHP: _ACUMTOTAL_MAXEXT
     public static final int CDR_PROCESSING_BATCH_SIZE = 500; // PHP: _IMDEX_MAXLINEAS
-    public static final String NN_VALIDA_PARTITION = "NN-VALIDA"; // PHP: _NN_VALIDA
     public static final long DEFAULT_OPERATOR_ID_FOR_INTERNAL = 0L; // Implied default if operador_interno fails
 
     // --- Default values for configurable parameters ---
@@ -35,7 +34,7 @@ public class CdrConfigService {
     private static final int DEFAULT_MAX_CALL_DURATION_MINUTES = 2880; // 48 hours
     private static final String DEFAULT_MIN_ALLOWED_CAPTURE_DATE = "2000-01-01";
     private static final int DEFAULT_MAX_ALLOWED_CAPTURE_DATE_DAYS_IN_FUTURE = 90;
-    private static final boolean DEFAULT_CREATE_EMPLOYEES_AUTOMATICALLY_FROM_RANGE = true;
+    private static final boolean DEFAULT_CREATE_EMPLOYEES_AUTOMATICALLY_FROM_RANGE = false;
     private static final Long DEFAULT_TELEPHONY_TYPE_FOR_UNRESOLVED_INTERNAL = TelephonyTypeEnum.NATIONAL_IP.getValue();
     private static final boolean DEFAULT_EXTENSIONS_GLOBAL = false;
     private static final boolean DEFAULT_AUTH_CODES_GLOBAL = false;

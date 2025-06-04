@@ -22,11 +22,12 @@ import java.util.Optional;
 public class CdrRoutingService {
 
     private final CommunicationLocationLookupService commLocationLookupService;
-    private final CdrFileProcessorService cdrFileProcessorService;
+    private final CdrProcessorService cdrProcessorService;
     private final FileInfoPersistenceService fileInfoPersistenceService;
     private final FailedCallRecordPersistenceService failedCallRecordPersistenceService;
     private final CdrConfigService cdrConfigService;
     private final List<CdrTypeProcessor> cdrTypeProcessors;
+    private final EmployeeLookupService employeeLookupService;
 
     private CdrTypeProcessor getProcessorForPlantType(Long plantTypeId) {
         return cdrTypeProcessors.stream()
@@ -55,7 +56,9 @@ public class CdrRoutingService {
         }
         Long fileInfoId = fileInfo.getId(); // Get the ID after it's persisted/fetched
         log.debug("Using FileInfo ID: {} for routed stream: {}", fileInfoId, filename);
-
+        
+        // Reset extension limits cache to ensure fresh data
+        employeeLookupService.resetExtensionLimitsCache();
 
         boolean headerProcessedByInitialParser = false;
         long lineCount = 0;
@@ -114,7 +117,7 @@ public class CdrRoutingService {
                     CdrTypeProcessor finalProcessor = getProcessorForPlantType(targetCommLocation.getPlantTypeId());
                     // Assuming header is globally parsed by initialParser if plant types are same,
                     // or finalProcessor handles its own header state if different.
-                    cdrFileProcessorService.processSingleCdrLine(trimmedLine, fileInfoId, targetCommLocation, finalProcessor); // Pass ID
+                    cdrProcessorService.processSingleCdrLine(trimmedLine, fileInfoId, targetCommLocation, finalProcessor); // Pass ID
                     routedCdrCount++;
                 } else {
                     log.warn("Could not determine target CommunicationLocation for line {}: {}", lineCount, trimmedLine);

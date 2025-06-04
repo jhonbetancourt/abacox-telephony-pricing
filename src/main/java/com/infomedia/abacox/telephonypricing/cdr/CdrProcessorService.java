@@ -11,36 +11,18 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 @Service
 @Log4j2
 @RequiredArgsConstructor
-public class CdrFileProcessorService {
+public class CdrProcessorService {
 
     private final CdrEnrichmentService cdrEnrichmentService;
     private final CallRecordPersistenceService callRecordPersistenceService;
     private final FailedCallRecordPersistenceService failedCallRecordPersistenceService;
-    private final CommunicationLocationLookupService communicationLocationLookupService;
-    private final FileInfoPersistenceService fileInfoPersistenceService;
     private final CdrValidationService cdrValidationService;
-    private final CdrConfigService cdrConfigService;
-    private final List<CdrTypeProcessor> cdrTypeProcessors;
-    private final EntityManager entityManager; // Added
-
-    private CdrTypeProcessor getProcessorForPlantType(Long plantTypeId) {
-        String plantTypeIdStr = String.valueOf(plantTypeId);
-        return cdrTypeProcessors.stream()
-                .filter(p -> p.getPlantTypeIdentifier().equals(plantTypeIdStr))
-                .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("No CDR processor found for plant type ID: " + plantTypeId));
-    }
-
+    private final EntityManager entityManager;
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void processSingleCdrLine(String cdrLine, Long fileInfoId, CommunicationLocation targetCommLocation, CdrTypeProcessor processor) {
@@ -111,73 +93,6 @@ public class CdrFileProcessorService {
 
             failedCallRecordPersistenceService.quarantineRecord(cdrData,
                     QuarantineErrorType.UNHANDLED_EXCEPTION, e.getMessage(), step, null);
-        }
-    }
-
-
-    @Transactional
-    public void processCdrStreamForKnownCommLocation(String filename, InputStream inputStream, Long commLocationId) {
-        log.info("Starting CDR stream processing for KNOWN CommLocationID: {}, File: {}", commLocationId, filename);
-        CommunicationLocation commLocation = communicationLocationLookupService.findById(commLocationId)
-                .orElseThrow(() -> {
-                    log.error("CommunicationLocation not found for ID: {}", commLocationId);
-                    return new IllegalArgumentException("CommunicationLocation not found: " + commLocationId);
-                });
-
-        FileInfo fileInfo = fileInfoPersistenceService.createOrGetFileInfo(filename, null, "PRE_ROUTED_STREAM");
-        if (fileInfo == null || fileInfo.getId() == null) {
-            log.error("Failed to create or get FileInfo for stream: {}. Aborting processing.", filename);
-            // Optionally quarantine a generic stream error record
-            CdrData streamErrorData = new CdrData();
-            streamErrorData.setRawCdrLine("STREAM_FILEINFO_ERROR: " + filename);
-            streamErrorData.setCommLocationId(commLocationId);
-            failedCallRecordPersistenceService.quarantineRecord(streamErrorData, QuarantineErrorType.IO_EXCEPTION,
-                "Failed to establish FileInfo for stream " + filename, "StreamInit_FileInfo", null);
-            return;
-        }
-        Long fileInfoId = fileInfo.getId(); // Get the ID after it's persisted/fetched
-        log.debug("Using FileInfo ID: {} for pre-routed stream: {}", fileInfoId, filename);
-
-        CdrTypeProcessor processor = getProcessorForPlantType(commLocation.getPlantTypeId());
-        boolean headerProcessed = false;
-
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))) {
-            String line;
-            long lineCount = 0;
-            long processedCdrCount = 0;
-            while ((line = reader.readLine()) != null) {
-                lineCount++;
-                String trimmedLine = line.trim();
-                if (trimmedLine.isEmpty()) continue;
-
-                if (!headerProcessed && processor.isHeaderLine(trimmedLine)) {
-                    processor.parseHeader(trimmedLine);
-                    headerProcessed = true;
-                    log.info("Processed header line for known CommLocation stream: {}", filename);
-                    continue;
-                }
-
-                if (!headerProcessed) {
-                    log.warn("Skipping line {} as header has not been processed (known CommLocation stream): {}", lineCount, trimmedLine);
-                    CdrData tempData = new CdrData(); tempData.setRawCdrLine(trimmedLine); tempData.setFileInfo(fileInfo); tempData.setCommLocationId(commLocationId);
-                    failedCallRecordPersistenceService.quarantineRecord(tempData,
-                            QuarantineErrorType.MISSING_HEADER, "CDR data encountered before header", "KnownCommLocStream_HeaderCheck", null);
-                    continue;
-                }
-
-                processSingleCdrLine(trimmedLine, fileInfoId, commLocation, processor); // Pass ID
-                processedCdrCount++;
-                 if (processedCdrCount > 0 && processedCdrCount % cdrConfigService.CDR_PROCESSING_BATCH_SIZE == 0) {
-                    log.info("Processed a batch of {} CDRs from known CommLocation stream {}. Total processed so far: {}",
-                            cdrConfigService.CDR_PROCESSING_BATCH_SIZE, filename, processedCdrCount);
-                }
-            }
-            log.info("Finished processing known CommLocation stream: {}. Total lines read: {}, Total CDRs processed: {}", filename, lineCount, processedCdrCount);
-        } catch (IOException e) {
-            log.error("Error reading known CommLocation CDR stream: {}", filename, e);
-            CdrData tempData = new CdrData(); tempData.setRawCdrLine("KNOWN_COMMLOC_STREAM_READ_ERROR"); tempData.setFileInfo(fileInfo); tempData.setCommLocationId(commLocationId);
-            failedCallRecordPersistenceService.quarantineRecord(tempData,
-                    QuarantineErrorType.IO_EXCEPTION, e.getMessage(), "KnownCommLocStream_IOException", null);
         }
     }
 }
