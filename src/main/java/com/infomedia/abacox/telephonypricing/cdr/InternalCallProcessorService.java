@@ -143,7 +143,7 @@ public class InternalCallProcessorService {
             log.debug("Destination employee not found for internal call; assuming destination is within current commLocation: {}", currentCommLocation.getDirectory());
         }
 
-        boolean extGlobales = appConfigService.areExtensionsGlobal(currentCommLocation.getPlantTypeId());
+        boolean extGlobales = appConfigService.areExtensionsGlobal();
         if (extGlobales && originCommLoc != null && destCommLoc != null &&
             (!Objects.equals(currentCommLocation.getId(), originCommLoc.getId()) || !Objects.equals(currentCommLocation.getId(), destCommLoc.getId()))) {
             if (!Objects.equals(currentCommLocation.getId(), originCommLoc.getId()) && Objects.equals(currentCommLocation.getId(), destCommLoc.getId())) {

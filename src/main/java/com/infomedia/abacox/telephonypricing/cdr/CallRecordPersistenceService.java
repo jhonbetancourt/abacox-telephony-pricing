@@ -117,6 +117,7 @@ public class CallRecordPersistenceService {
         if (cdrData.getFileInfo() != null) {
             callRecord.setFileInfoId(cdrData.getFileInfo().getId());
         }
+        callRecord.setCdrString(cdrData.getRawCdrLine());
         callRecord.setCtlHash(cdrHash);
     }
 }
