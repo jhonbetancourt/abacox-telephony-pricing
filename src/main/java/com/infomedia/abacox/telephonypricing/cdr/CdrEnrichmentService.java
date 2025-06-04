@@ -93,8 +93,7 @@ public class CdrEnrichmentService {
         Employee foundEmployee = employeeLookupService.findEmployeeByExtensionOrAuthCode(
                         searchExtForEmployee,
                         searchAuthCodeForEmployee,
-                        commLocation.getId(), // Context for non-global search
-                        cdrData.getDateTimeOrigination())
+                        commLocation.getId())
                 .orElse(null);
 
         if (foundEmployee != null) {
@@ -134,8 +133,7 @@ public class CdrEnrichmentService {
             cdrData.getTransferCause() != TransferCause.NONE && cdrData.getTransferCause() != TransferCause.CONFERENCE_END) {
             Employee redirEmployee = employeeLookupService.findEmployeeByExtensionOrAuthCode(
                             cdrData.getLastRedirectDn(), null, // No auth code for redirect lookup
-                            commLocation.getId(), // Redirecting employee must be in current commLocation
-                            cdrData.getDateTimeOrigination())
+                            commLocation.getId())
                     .orElse(null);
             if (redirEmployee != null &&
                 redirEmployee.getCommunicationLocation() != null &&

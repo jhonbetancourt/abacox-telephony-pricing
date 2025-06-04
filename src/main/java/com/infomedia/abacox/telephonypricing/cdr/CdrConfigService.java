@@ -165,17 +165,15 @@ public class CdrConfigService {
 
     /**
      * PHP equivalent: ObtenerGlobales($link, 'ext_globales')
-     * @param plantTypeId Can be null if a truly global setting is desired, or specific plant type ID.
      */
-    public boolean areExtensionsGlobal(Long plantTypeId) {
+    public boolean areExtensionsGlobal() {
         return getBooleanParameter("EXT_GLOBALES", DEFAULT_EXTENSIONS_GLOBAL);
     }
 
     /**
      * PHP equivalent: ObtenerGlobales($link, 'claves_globales')
-     * @param plantTypeId Can be null if a truly global setting is desired, or specific plant type ID.
      */
-    public boolean areAuthCodesGlobal(Long plantTypeId) {
+    public boolean areAuthCodesGlobal() {
         return getBooleanParameter("CLAVES_GLOBALES", DEFAULT_AUTH_CODES_GLOBAL);
     }
 

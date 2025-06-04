@@ -84,9 +84,7 @@ public class CallTypeAndDirectionService {
                 log.debug("Destination '{}' is numeric, not starting with 0 (or is '0'). Checking extension ranges.", destinationForInternalCheck);
                 Optional<Employee> employeeFromRange = employeeLookupService.findEmployeeByExtensionRange(
                         destinationForInternalCheck,
-                        null, // Search globally for ranges if not tied to a specific commLocation context initially
-                        cdrData.getDateTimeOrigination()
-                );
+                        null); // Search globally for ranges if not tied to a specific commLocation context initially
                 if (employeeFromRange.isPresent()) {
                     cdrData.setInternalCall(true);
                     log.debug("Marked as internal call based on destination '{}' matching an extension range.", destinationForInternalCheck);

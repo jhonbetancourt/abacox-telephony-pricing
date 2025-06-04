@@ -5,19 +5,14 @@ import com.infomedia.abacox.telephonypricing.entity.CommunicationLocation;
 import com.infomedia.abacox.telephonypricing.entity.Employee;
 import com.infomedia.abacox.telephonypricing.entity.ExtensionRange;
 import jakarta.persistence.EntityManager;
-import jakarta.persistence.NoResultException;
 import jakarta.persistence.PersistenceContext;
+import jakarta.persistence.Query;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
@@ -69,8 +64,7 @@ public class EmployeeLookupService {
      */
     @Transactional // Keep @Transactional for potential employee creation
     public Optional<Employee> findEmployeeByExtensionOrAuthCode(String extension, String authCode,
-                                                                Long commLocationIdContext,
-                                                                LocalDateTime callTime) {
+                                                                Long commLocationIdContext) {
         StringBuilder queryStr = new StringBuilder("SELECT e.* FROM employee e ");
         queryStr.append(" LEFT JOIN communication_location cl ON e.communication_location_id = cl.id ");
         queryStr.append(" WHERE e.active = true ");
@@ -94,14 +88,9 @@ public class EmployeeLookupService {
             return Optional.empty();
         }
 
-        Long plantTypeIdForGlobalCheck = null;
-        if (commLocationIdContext != null) {
-            plantTypeIdForGlobalCheck = getPlantTypeIdForCommLocation(commLocationIdContext);
-        }
-
         boolean searchGlobally = (hasAuthCode && !isAuthCodeIgnoredType) ?
-                                 cdrConfigService.areAuthCodesGlobal(plantTypeIdForGlobalCheck) :
-                                 cdrConfigService.areExtensionsGlobal(plantTypeIdForGlobalCheck);
+                                 cdrConfigService.areAuthCodesGlobal() :
+                                 cdrConfigService.areExtensionsGlobal();
 
         if (!searchGlobally && commLocationIdContext != null) {
             queryStr.append(" AND e.communication_location_id = :commLocationIdContext ");
@@ -141,7 +130,7 @@ public class EmployeeLookupService {
                                          cleanedExtension.matches("^[0-9#*+]+$");
 
             if (phpExtensionValida) {
-                Optional<Employee> conceptualEmployeeOpt = findEmployeeByExtensionRange(cleanedExtension, commLocationIdContext, callTime);
+                Optional<Employee> conceptualEmployeeOpt = findEmployeeByExtensionRange(cleanedExtension, commLocationIdContext);
                 if (conceptualEmployeeOpt.isPresent()) {
                     Employee conceptualEmployee = conceptualEmployeeOpt.get();
                     if (conceptualEmployee.getId() == null && cdrConfigService.createEmployeesAutomaticallyFromRange()) {
@@ -322,7 +311,7 @@ public class EmployeeLookupService {
     }
 
     @Transactional(readOnly = true)
-    public Optional<Employee> findEmployeeByExtensionRange(String extension, Long commLocationIdContext, LocalDateTime callTime) {
+    public Optional<Employee> findEmployeeByExtensionRange(String extension, Long commLocationId) {
         if (extension == null || !extension.matches("\\d+")) {
             return Optional.empty();
         }
@@ -333,18 +322,12 @@ public class EmployeeLookupService {
             return Optional.empty();
         }
 
-        Long plantTypeIdForGlobalCheck = null;
-        if (commLocationIdContext != null) {
-            plantTypeIdForGlobalCheck = getPlantTypeIdForCommLocation(commLocationIdContext);
-        }
-        boolean searchRangesGlobally = cdrConfigService.areExtensionsGlobal(plantTypeIdForGlobalCheck);
+        long commLocationIdContext = commLocationId != null ? commLocationId : 0L; // Use 0L for global context
+
+        boolean searchRangesGlobally = cdrConfigService.areExtensionsGlobal();
 
         // Use cached ranges if available for the context (global or specific commLocation)
         Long cacheKey = searchRangesGlobally ? 0L : commLocationIdContext; // 0L for global cache key
-        if (cacheKey == null && !searchRangesGlobally) { // Should not happen if commLocationIdContext is required for non-global
-            log.warn("Non-global range search requested but commLocationIdContext is null.");
-            return Optional.empty();
-        }
 
         List<ExtensionRange> rangesToSearch = extensionRangesCache.computeIfAbsent(cacheKey, k -> {
             log.debug("Extension ranges not in cache for key {}. Fetching.", k);
@@ -353,7 +336,7 @@ public class EmployeeLookupService {
                 "JOIN communication_location cl ON er.comm_location_id = cl.id " +
                 "WHERE er.active = true AND cl.active = true ");
 
-            if (!searchRangesGlobally && commLocationIdContext != null) {
+            if (!searchRangesGlobally) {
                 queryStrBuilder.append("AND er.comm_location_id = :commLocationIdContext ");
             }
             // If searchRangesGlobally, we don't filter by comm_location_id here, but might order by it later.
@@ -361,8 +344,8 @@ public class EmployeeLookupService {
             // Historical part is omitted for now.
             queryStrBuilder.append("ORDER BY (er.range_end - er.range_start) ASC, er.created_date DESC");
 
-            jakarta.persistence.Query nativeQuery = entityManager.createNativeQuery(queryStrBuilder.toString(), ExtensionRange.class);
-            if (!searchRangesGlobally && commLocationIdContext != null) {
+            Query nativeQuery = entityManager.createNativeQuery(queryStrBuilder.toString(), ExtensionRange.class);
+            if (!searchRangesGlobally) {
                 nativeQuery.setParameter("commLocationIdContext", commLocationIdContext);
             }
             return nativeQuery.getResultList();
@@ -373,11 +356,9 @@ public class EmployeeLookupService {
             .filter(er -> extNum >= er.getRangeStart() && extNum <= er.getRangeEnd())
             .collect(Collectors.toList());
 
-        if (searchRangesGlobally && commLocationIdContext != null) {
-            // Prioritize ranges from the specific commLocationIdContext if extensions are global
-            final Long finalCommLocationIdContext = commLocationIdContext;
+        if (searchRangesGlobally) {
             matchingRanges.sort(Comparator
-                .comparing((ExtensionRange er) -> !Objects.equals(er.getCommLocationId(), finalCommLocationIdContext)) // false (0) for match, true (1) for non-match
+                .comparing((ExtensionRange er) -> !Objects.equals(er.getCommLocationId(), commLocationIdContext)) // false (0) for match, true (1) for non-match
                 .thenComparingLong(er -> er.getRangeEnd() - er.getRangeStart()) // tighter range
                 .thenComparing(ExtensionRange::getCreatedDate, Comparator.nullsLast(Comparator.reverseOrder()))
             );

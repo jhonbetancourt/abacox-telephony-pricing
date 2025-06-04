@@ -121,19 +121,17 @@ public class InternalCallProcessorService {
 
         Optional<Employee> originEmpOpt = employeeLookupService.findEmployeeByExtensionOrAuthCode(
                 cdrData.getCallingPartyNumber(), null,
-                currentCommLocation.getId(),
-                cdrData.getDateTimeOrigination());
+                currentCommLocation.getId());
         if (originEmpOpt.isEmpty() && employeeLookupService.isPossibleExtension(cdrData.getCallingPartyNumber(), limits)) {
-            originEmpOpt = employeeLookupService.findEmployeeByExtensionRange(cdrData.getCallingPartyNumber(), currentCommLocation.getId(), cdrData.getDateTimeOrigination());
+            originEmpOpt = employeeLookupService.findEmployeeByExtensionRange(cdrData.getCallingPartyNumber(), currentCommLocation.getId());
         }
         result.setOriginEmployee(originEmpOpt.orElse(null));
 
         Optional<Employee> destEmpOpt = employeeLookupService.findEmployeeByExtensionOrAuthCode(
                 cdrData.getEffectiveDestinationNumber(), null,
-                null, // Search globally for destination
-                cdrData.getDateTimeOrigination());
+                null); // Search globally for destination
         if (destEmpOpt.isEmpty() && employeeLookupService.isPossibleExtension(cdrData.getEffectiveDestinationNumber(), limits)) {
-            destEmpOpt = employeeLookupService.findEmployeeByExtensionRange(cdrData.getEffectiveDestinationNumber(), null, cdrData.getDateTimeOrigination());
+            destEmpOpt = employeeLookupService.findEmployeeByExtensionRange(cdrData.getEffectiveDestinationNumber(), null);
         }
         result.setDestinationEmployee(destEmpOpt.orElse(null));
 
