@@ -104,9 +104,9 @@ public class CdrEnrichmentService {
             boolean authCodeProvided = searchAuthCodeForEmployee != null && !searchAuthCodeForEmployee.isEmpty();
             boolean authCodeMatchedAndValid = authCodeProvided &&
                                       foundEmployee.getAuthCode() != null &&
-                                      foundEmployee.getAuthCode().equalsIgnoreCase(searchAuthCodeForEmployee) &&
-                                      !appConfigService.getIgnoredAuthCodeDescriptions().stream()
-                                        .anyMatch(desc -> desc.equalsIgnoreCase(searchAuthCodeForEmployee));
+                                      foundEmployee.getAuthCode()
+                                              .equalsIgnoreCase(searchAuthCodeForEmployee) && appConfigService.getIgnoredAuthCodeDescriptions().stream()
+                      .noneMatch(desc -> desc.equalsIgnoreCase(searchAuthCodeForEmployee));
 
             if (authCodeMatchedAndValid) {
                 cdrData.setAssignmentCause(AssignmentCause.AUTH_CODE);
