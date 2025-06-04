@@ -31,7 +31,7 @@ public class CdrTestController {
     public MessageResponse processCdr(@RequestParam("file") MultipartFile file) {
         log.info("Processing CDR file: {}", file.getOriginalFilename());
         try {
-            cdrRoutingService.routeAndProcessCdrStream(file.getOriginalFilename()
+            cdrRoutingService.submitCdrStreamProcessing(file.getOriginalFilename()
                     , file.getInputStream(), CiscoCm60CdrProcessor.PLANT_TYPE_IDENTIFIER);
         } catch (IOException e) {
             throw new RuntimeException(e);

@@ -3,10 +3,11 @@ package com.infomedia.abacox.telephonypricing.cdr;
 
 import com.infomedia.abacox.telephonypricing.entity.CommunicationLocation;
 import com.infomedia.abacox.telephonypricing.entity.FileInfo;
+import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional; // Keep this for the outer method
+import org.springframework.transaction.annotation.Transactional;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -15,6 +16,10 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 @Service
 @Log4j2
@@ -27,7 +32,10 @@ public class CdrRoutingService {
     private final FailedCallRecordPersistenceService failedCallRecordPersistenceService;
     private final CdrConfigService cdrConfigService;
     private final List<CdrTypeProcessor> cdrTypeProcessors;
-    private final EmployeeLookupService employeeLookupService;
+    private final EmployeeLookupService employeeLookupService; // For cache reset
+
+    // Single-threaded executor to ensure sequential processing
+    private final ExecutorService sequentialExecutor = Executors.newSingleThreadExecutor();
 
     private CdrTypeProcessor getProcessorForPlantType(Long plantTypeId) {
         return cdrTypeProcessors.stream()
@@ -36,9 +44,38 @@ public class CdrRoutingService {
                 .orElseThrow(() -> new IllegalArgumentException("No CDR processor found for plant type ID: " + plantTypeId));
     }
 
+    /**
+     * Submits the CDR stream processing task to a sequential executor.
+     * This method returns immediately, and the processing happens asynchronously
+     * in a single-threaded queue.
+     *
+     * @param filename       Name of the CDR file/stream.
+     * @param inputStream    The CDR data stream.
+     * @param plantTypeId    The ID of the plant type for initial parsing.
+     * @return A Future representing the pending completion of the task.
+     */
+    public Future<?> submitCdrStreamProcessing(String filename, InputStream inputStream, Long plantTypeId) {
+        log.info("Submitting CDR stream processing task for file: {}, PlantTypeID: {}", filename, plantTypeId);
+        return sequentialExecutor.submit(() -> {
+            try {
+                // Reset caches at the beginning of each stream processing run
+                employeeLookupService.resetCachesForNewStream();
+                routeAndProcessCdrStreamInternal(filename, inputStream, plantTypeId);
+            } catch (Exception e) {
+                log.error("Uncaught exception during sequential execution of routeAndProcessCdrStream for file: {}", filename, e);
+                // Basic error handling for the task itself
+                CdrData streamErrorData = new CdrData();
+                streamErrorData.setRawCdrLine("STREAM_PROCESSING_FATAL_ERROR: " + filename);
+                failedCallRecordPersistenceService.quarantineRecord(streamErrorData, QuarantineErrorType.UNHANDLED_EXCEPTION,
+                    "Fatal error in sequential executor task: " + e.getMessage(), "SequentialExecutorTask", null);
+            }
+        });
+    }
 
+
+    // Renamed original method to be called by the executor
     @Transactional // Manages transaction for the whole stream processing
-    public void routeAndProcessCdrStream(String filename, InputStream inputStream, Long plantTypeId) {
+    protected void routeAndProcessCdrStreamInternal(String filename, InputStream inputStream, Long plantTypeId) {
         log.info("Starting CDR stream routing and processing for file: {}, PlantTypeID: {}", filename, plantTypeId);
 
         CdrTypeProcessor initialParser = getProcessorForPlantType(plantTypeId);
@@ -49,16 +86,12 @@ public class CdrRoutingService {
             log.error("Failed to create or get FileInfo for stream: {}. Aborting processing.", filename);
             CdrData streamErrorData = new CdrData();
             streamErrorData.setRawCdrLine("STREAM_FILEINFO_ERROR_ROUTING: " + filename);
-            // Cannot set commLocationId yet as it's not determined
             failedCallRecordPersistenceService.quarantineRecord(streamErrorData, QuarantineErrorType.IO_EXCEPTION,
                 "Failed to establish FileInfo for routed stream " + filename, "RouteStreamInit_FileInfo", null);
             return;
         }
-        Long fileInfoId = fileInfo.getId(); // Get the ID after it's persisted/fetched
+        Long fileInfoId = fileInfo.getId();
         log.debug("Using FileInfo ID: {} for routed stream: {}", fileInfoId, filename);
-        
-        // Reset extension limits cache to ensure fresh data
-        employeeLookupService.resetExtensionLimitsCache();
 
         boolean headerProcessedByInitialParser = false;
         long lineCount = 0;
@@ -115,13 +148,11 @@ public class CdrRoutingService {
                     CommunicationLocation targetCommLocation = targetCommLocationOpt.get();
                     log.debug("Line {} routed to CommLocation ID: {}", lineCount, targetCommLocation.getId());
                     CdrTypeProcessor finalProcessor = getProcessorForPlantType(targetCommLocation.getPlantTypeId());
-                    // Assuming header is globally parsed by initialParser if plant types are same,
-                    // or finalProcessor handles its own header state if different.
-                    cdrProcessorService.processSingleCdrLine(trimmedLine, fileInfoId, targetCommLocation, finalProcessor); // Pass ID
+                    cdrProcessorService.processSingleCdrLine(trimmedLine, fileInfoId, targetCommLocation, finalProcessor);
                     routedCdrCount++;
                 } else {
                     log.warn("Could not determine target CommunicationLocation for line {}: {}", lineCount, trimmedLine);
-                    preliminaryCdrData.setCommLocationId(null); // Explicitly null as it's unroutable
+                    preliminaryCdrData.setCommLocationId(null);
                     failedCallRecordPersistenceService.quarantineRecord(preliminaryCdrData,
                             QuarantineErrorType.PENDING_ASSOCIATION, "Could not route CDR to a CommunicationLocation", "CdrRoutingService_Unroutable", null);
                     unroutableCdrCount++;
@@ -141,5 +172,23 @@ public class CdrRoutingService {
             failedCallRecordPersistenceService.quarantineRecord(tempData,
                     QuarantineErrorType.IO_EXCEPTION, e.getMessage(), "RouteStream_IOException", null);
         }
+    }
+
+    @PreDestroy
+    public void shutdownExecutor() {
+        log.info("Shutting down CDR Routing sequential executor...");
+        sequentialExecutor.shutdown();
+        try {
+            if (!sequentialExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
+                log.warn("CDR Routing executor did not terminate in the specified time.");
+                List<Runnable> droppedTasks = sequentialExecutor.shutdownNow();
+                log.warn("CDR Routing executor was forcefully shut down. {} tasks were dropped.", droppedTasks.size());
+            }
+        } catch (InterruptedException e) {
+            log.error("CDR Routing executor shutdown interrupted.", e);
+            sequentialExecutor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+        log.info("CDR Routing sequential executor shut down.");
     }
 }

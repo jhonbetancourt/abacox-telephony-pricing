@@ -10,15 +10,16 @@ import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 @Service
 @Log4j2
@@ -29,10 +30,15 @@ public class EmployeeLookupService {
     private EntityManager entityManager;
     private final CdrConfigService cdrConfigService;
     private final Map<Long, ExtensionLimits> extensionLimitsCache = new ConcurrentHashMap<>();
+    // Cache for ExtensionRanges per CommunicationLocation ID for the current stream processing run
+    private final Map<Long, List<ExtensionRange>> extensionRangesCache = new ConcurrentHashMap<>();
+
 
     @Transactional(readOnly = true)
-    public void resetExtensionLimitsCache() {
+    public void resetCachesForNewStream() {
         extensionLimitsCache.clear();
+        extensionRangesCache.clear();
+        log.info("ExtensionLimits and ExtensionRanges caches cleared for new stream processing.");
     }
 
     @Transactional(readOnly = true)
@@ -61,7 +67,7 @@ public class EmployeeLookupService {
      * and the extension is valid, it attempts to find a match in extension ranges.
      * If a range matches and auto-creation is enabled, the employee will be persisted.
      */
-    @Transactional
+    @Transactional // Keep @Transactional for potential employee creation
     public Optional<Employee> findEmployeeByExtensionOrAuthCode(String extension, String authCode,
                                                                 Long commLocationIdContext,
                                                                 LocalDateTime callTime) {
@@ -130,7 +136,6 @@ public class EmployeeLookupService {
             log.debug("Found existing employee by extension/auth_code: {}", employee.getId());
             return Optional.of(employee);
         } catch (jakarta.persistence.NoResultException e) {
-            // PHP: if ($retornar['id'] <= 0 && ExtensionValida($ext, true)) { $retornar = Validar_RangoExt(...); }
             boolean phpExtensionValida = hasExtension &&
                                          (!cleanedExtension.startsWith("0") || cleanedExtension.equals("0")) &&
                                          cleanedExtension.matches("^[0-9#*+]+$");
@@ -140,16 +145,11 @@ public class EmployeeLookupService {
                 if (conceptualEmployeeOpt.isPresent()) {
                     Employee conceptualEmployee = conceptualEmployeeOpt.get();
                     if (conceptualEmployee.getId() == null && cdrConfigService.createEmployeesAutomaticallyFromRange()) {
-                        // Persist the conceptually created employee
                         log.info("Persisting new employee for extension {} from range, CommLocation ID: {}",
                                 conceptualEmployee.getExtension(), conceptualEmployee.getCommunicationLocationId());
                         entityManager.persist(conceptualEmployee);
-                        // No need to flush here, transaction will handle it.
-                        // The ID will be populated after persist within the same transaction.
                         return Optional.of(conceptualEmployee);
                     } else if (conceptualEmployee.getId() != null) {
-                        // This case should ideally not happen if findEmployeeByExtensionRange only returns conceptual ones
-                        // or if the initial query would have found it. But as a safeguard:
                         return Optional.of(conceptualEmployee);
                     }
                 }
@@ -158,7 +158,6 @@ public class EmployeeLookupService {
         }
     }
 
-    // This method now just creates the object, persistence is handled above.
     private Employee createEmployeeFromRange(String extension, Long subdivisionId, Long commLocationId, String namePrefix) {
         Employee newEmployee = new Employee();
         newEmployee.setExtension(extension);
@@ -166,7 +165,6 @@ public class EmployeeLookupService {
         newEmployee.setSubdivisionId(subdivisionId);
         newEmployee.setCommunicationLocationId(commLocationId);
         newEmployee.setActive(true);
-        // Set other defaults if necessary, e.g., auth_code to empty string
         newEmployee.setAuthCode("");
         newEmployee.setEmail("");
         newEmployee.setPhone("");
@@ -323,7 +321,7 @@ public class EmployeeLookupService {
         return false;
     }
 
-    @Transactional(readOnly = true) // Keep readOnly for the lookup part
+    @Transactional(readOnly = true)
     public Optional<Employee> findEmployeeByExtensionRange(String extension, Long commLocationIdContext, LocalDateTime callTime) {
         if (extension == null || !extension.matches("\\d+")) {
             return Optional.empty();
@@ -341,34 +339,53 @@ public class EmployeeLookupService {
         }
         boolean searchRangesGlobally = cdrConfigService.areExtensionsGlobal(plantTypeIdForGlobalCheck);
 
-        StringBuilder queryStrBuilder = new StringBuilder(
-            "SELECT er.* FROM extension_range er " +
-            "JOIN communication_location cl ON er.comm_location_id = cl.id " +
-            "WHERE er.active = true AND cl.active = true " +
-            "AND er.range_start <= :extNum AND er.range_end >= :extNum ");
-
-        if (!searchRangesGlobally && commLocationIdContext != null) {
-            queryStrBuilder.append("AND er.comm_location_id = :commLocationIdContext ");
+        // Use cached ranges if available for the context (global or specific commLocation)
+        Long cacheKey = searchRangesGlobally ? 0L : commLocationIdContext; // 0L for global cache key
+        if (cacheKey == null && !searchRangesGlobally) { // Should not happen if commLocationIdContext is required for non-global
+            log.warn("Non-global range search requested but commLocationIdContext is null.");
+            return Optional.empty();
         }
+
+        List<ExtensionRange> rangesToSearch = extensionRangesCache.computeIfAbsent(cacheKey, k -> {
+            log.debug("Extension ranges not in cache for key {}. Fetching.", k);
+            StringBuilder queryStrBuilder = new StringBuilder(
+                "SELECT er.* FROM extension_range er " +
+                "JOIN communication_location cl ON er.comm_location_id = cl.id " +
+                "WHERE er.active = true AND cl.active = true ");
+
+            if (!searchRangesGlobally && commLocationIdContext != null) {
+                queryStrBuilder.append("AND er.comm_location_id = :commLocationIdContext ");
+            }
+            // If searchRangesGlobally, we don't filter by comm_location_id here, but might order by it later.
+            // PHP: ORDER BY RANGOEXT_HISTODESDE DESC, RANGOEXT_DESDE DESC, RANGOEXT_HASTA ASC
+            // Historical part is omitted for now.
+            queryStrBuilder.append("ORDER BY (er.range_end - er.range_start) ASC, er.created_date DESC");
+
+            jakarta.persistence.Query nativeQuery = entityManager.createNativeQuery(queryStrBuilder.toString(), ExtensionRange.class);
+            if (!searchRangesGlobally && commLocationIdContext != null) {
+                nativeQuery.setParameter("commLocationIdContext", commLocationIdContext);
+            }
+            return nativeQuery.getResultList();
+        });
+
+        // Filter the (potentially cached) list
+        List<ExtensionRange> matchingRanges = rangesToSearch.stream()
+            .filter(er -> extNum >= er.getRangeStart() && extNum <= er.getRangeEnd())
+            .collect(Collectors.toList());
 
         if (searchRangesGlobally && commLocationIdContext != null) {
-            queryStrBuilder.append("ORDER BY CASE WHEN er.comm_location_id = :commLocationIdContext THEN 0 ELSE 1 END, (er.range_end - er.range_start) ASC, er.created_date DESC LIMIT 1");
-        } else {
-            queryStrBuilder.append("ORDER BY (er.range_end - er.range_start) ASC, er.created_date DESC LIMIT 1");
+            // Prioritize ranges from the specific commLocationIdContext if extensions are global
+            final Long finalCommLocationIdContext = commLocationIdContext;
+            matchingRanges.sort(Comparator
+                .comparing((ExtensionRange er) -> !Objects.equals(er.getCommLocationId(), finalCommLocationIdContext)) // false (0) for match, true (1) for non-match
+                .thenComparingLong(er -> er.getRangeEnd() - er.getRangeStart()) // tighter range
+                .thenComparing(ExtensionRange::getCreatedDate, Comparator.nullsLast(Comparator.reverseOrder()))
+            );
         }
+        // If not global or no context, existing sort (tighter range, newer) is fine.
 
-
-        jakarta.persistence.Query nativeQuery = entityManager.createNativeQuery(queryStrBuilder.toString(), ExtensionRange.class);
-        nativeQuery.setParameter("extNum", extNum);
-        if (!searchRangesGlobally && commLocationIdContext != null) {
-            nativeQuery.setParameter("commLocationIdContext", commLocationIdContext);
-        } else if (searchRangesGlobally && commLocationIdContext != null) {
-            nativeQuery.setParameter("commLocationIdContext", commLocationIdContext);
-        }
-
-        List<ExtensionRange> ranges = nativeQuery.getResultList();
-        if (!ranges.isEmpty()) {
-            ExtensionRange matchedRange = ranges.get(0);
+        if (!matchingRanges.isEmpty()) {
+            ExtensionRange matchedRange = matchingRanges.get(0); // Get the best match after sorting
             log.debug("Extension {} matched range: {}", extension, matchedRange.getId());
             Employee conceptualEmployee = createEmployeeFromRange(
                     extension,
@@ -378,7 +395,7 @@ public class EmployeeLookupService {
             );
             if (matchedRange.getCommLocationId() != null) {
                 CommunicationLocation cl = entityManager.find(CommunicationLocation.class, matchedRange.getCommLocationId());
-                conceptualEmployee.setCommunicationLocation(cl); // Set the actual CommLocation object
+                conceptualEmployee.setCommunicationLocation(cl);
             }
             return Optional.of(conceptualEmployee);
         }
