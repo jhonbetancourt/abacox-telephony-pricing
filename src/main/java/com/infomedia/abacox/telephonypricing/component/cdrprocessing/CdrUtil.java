@@ -1,6 +1,9 @@
 // File: com/infomedia/abacox/telephonypricing/cdr/CdrUtil.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.regex.Pattern;
@@ -171,6 +174,22 @@ public class CdrUtil {
     public static String generateCtlHash(String cdrString, Long commLocationId) {
         // PHP: $cdr5 = sha256($comubicacion_id.'@'.$cdr);
         String ctlHashContent = (commLocationId != null ? commLocationId.toString() : "0") + "@" + (cdrString != null ? cdrString : "");
-        return HashUtil.sha256(ctlHashContent);
+        return sha256(ctlHashContent);
+    }
+
+    public static String sha256(String base) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(base.getBytes(StandardCharsets.UTF_8));
+            StringBuilder hexString = new StringBuilder();
+            for (byte b : hash) {
+                String hex = Integer.toHexString(0xff & b);
+                if (hex.length() == 1) hexString.append('0');
+                hexString.append(hex);
+            }
+            return hexString.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException("SHA-256 algorithm not found", e);
+        }
     }
 }

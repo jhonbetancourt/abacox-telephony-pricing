@@ -35,7 +35,7 @@ public class FileInfoPersistenceService {
         // For a stream, we use filename + parentId + current time to ensure a new record for each processing attempt of a stream.
 
         String uniqueKey = filename + "|" + (parentId != null ? parentId : "null") + "|" + System.currentTimeMillis();
-        String checksum = HashUtil.sha256(uniqueKey);
+        String checksum = CdrUtil.sha256(uniqueKey);
         log.debug("Attempting to create/get FileInfo. Filename: {}, ParentId: {}, Type: {}, Checksum: {}", filename, parentId, type, checksum);
 
 

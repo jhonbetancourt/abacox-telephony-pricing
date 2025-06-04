@@ -233,7 +233,7 @@ public class IndicatorLookupService {
             if (Integer.parseInt(dbNdcStr) < 0) {
                 if (approximateMatch == null) {
                     approximateMatch = new DestinationInfo();
-                    RellenaSerieResult paddedApprox = rellenaSerieEquivalents(subscriberPartOfEffectiveNumber, seriesInitialInt.toString(), seriesFinalInt.toString());
+                    PaddedSeriesResult paddedApprox = rellenaSerieEquivalents(subscriberPartOfEffectiveNumber, seriesInitialInt.toString(), seriesFinalInt.toString());
                     String approxComparableInitial = dbNdcStr + paddedApprox.getPaddedInitial();
                     String approxComparableFinal = dbNdcStr + paddedApprox.getPaddedFinal();
                     fillDestinationInfo(approximateMatch, row, dbNdcStr, finalNumberUsedForMatching, prefixIdFromCallingFunction, true, seriesInitialInt, seriesFinalInt, approxComparableInitial, approxComparableFinal);
@@ -242,7 +242,7 @@ public class IndicatorLookupService {
                 continue;
             }
 
-            RellenaSerieResult paddedSeries = rellenaSerieEquivalents(subscriberPartOfEffectiveNumber, seriesInitialInt.toString(), seriesFinalInt.toString());
+            PaddedSeriesResult paddedSeries = rellenaSerieEquivalents(subscriberPartOfEffectiveNumber, seriesInitialInt.toString(), seriesFinalInt.toString());
             String fullComparableSeriesInitial = dbNdcStr + paddedSeries.getPaddedInitial();
             String fullComparableSeriesFinal = dbNdcStr + paddedSeries.getPaddedFinal();
             String numberToCompareAgainstSeries = finalNumberUsedForMatching; // Use the full number (NDC + subscriber) for comparison
@@ -371,7 +371,7 @@ public class IndicatorLookupService {
                 telephonyTypeId.equals(TelephonyTypeEnum.SATELLITE.getValue()));
     }
 
-    private RellenaSerieResult rellenaSerieEquivalents(String inputSubscriberPart, String dbSeriesInitial, String dbSeriesFinal) {
+    private PaddedSeriesResult rellenaSerieEquivalents(String inputSubscriberPart, String dbSeriesInitial, String dbSeriesFinal) {
         // Ensure dbSeriesInitial and dbSeriesFinal are not null
         String safeDbSeriesInitial = dbSeriesInitial != null ? dbSeriesInitial : "0";
         String safeDbSeriesFinal = dbSeriesFinal != null ? dbSeriesFinal : "0";
@@ -402,7 +402,7 @@ public class IndicatorLookupService {
                  finalPaddedFinal = String.format("%-" + inputSubLen + "s", equalizedDbFinal).replace(' ', '9');
             }
         }
-        return new RellenaSerieResult(finalPaddedInitial, finalPaddedFinal);
+        return new PaddedSeriesResult(finalPaddedInitial, finalPaddedFinal);
     }
 
     public long getPaddedSeriesRangeSize(String comparableInitialValue, String comparableFinalValue) {
