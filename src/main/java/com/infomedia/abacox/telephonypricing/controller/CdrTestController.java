@@ -1,8 +1,7 @@
 package com.infomedia.abacox.telephonypricing.controller;
 
-import com.infomedia.abacox.telephonypricing.cdr.CdrProcessingExecutor;
-import com.infomedia.abacox.telephonypricing.cdr.CdrRoutingService;
-import com.infomedia.abacox.telephonypricing.cdr.CiscoCm60CdrProcessor;
+import com.infomedia.abacox.telephonypricing.component.cdrprocessing.CdrProcessingExecutor;
+import com.infomedia.abacox.telephonypricing.component.cdrprocessing.CiscoCm60CdrProcessor;
 import com.infomedia.abacox.telephonypricing.dto.generic.MessageResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
