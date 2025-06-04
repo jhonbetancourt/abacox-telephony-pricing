@@ -1,5 +1,6 @@
 package com.infomedia.abacox.telephonypricing.controller;
 
+import com.infomedia.abacox.telephonypricing.cdr.CdrProcessingExecutor;
 import com.infomedia.abacox.telephonypricing.cdr.CdrRoutingService;
 import com.infomedia.abacox.telephonypricing.cdr.CiscoCm60CdrProcessor;
 import com.infomedia.abacox.telephonypricing.dto.generic.MessageResponse;
@@ -25,13 +26,13 @@ import java.io.IOException;
 @RequestMapping("/api/cdr")
 public class CdrTestController {
 
-    private final CdrRoutingService cdrRoutingService;
+    private final CdrProcessingExecutor cdrProcessingExecutor;
 
     @PostMapping(value = "/process", consumes = MediaType.MULTIPART_FORM_DATA_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public MessageResponse processCdr(@RequestParam("file") MultipartFile file) {
         log.info("Processing CDR file: {}", file.getOriginalFilename());
         try {
-            cdrRoutingService.submitCdrStreamProcessing(file.getOriginalFilename()
+            cdrProcessingExecutor.submitCdrStreamProcessing(file.getOriginalFilename()
                     , file.getInputStream(), CiscoCm60CdrProcessor.PLANT_TYPE_IDENTIFIER);
         } catch (IOException e) {
             throw new RuntimeException(e);
