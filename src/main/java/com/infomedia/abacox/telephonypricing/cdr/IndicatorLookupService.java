@@ -199,7 +199,6 @@ public class IndicatorLookupService {
         if (!isInternationalOrSatellite(effectiveTelephonyTypeId)) {
             nativeQuery.setParameter("originCountryId", originCountryId);
         }
-        log.debug("Executing destination indicator query: {}", queryBuilder.toString().replaceAll(":(\\w+)", "?"));
 
         List<Tuple> results = nativeQuery.getResultList();
         log.debug("Destination indicator query returned {} results.", results.size());

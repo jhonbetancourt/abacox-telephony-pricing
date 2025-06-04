@@ -19,17 +19,17 @@ public enum TelephonyTypeEnum {
     INTERNAL_INTERNATIONAL_IP(14L, "Interna Internacional"),
     // ID 15 is missing in CSV
     NO_CONSUMPTION(16L, "Sin Consumo"),
-    ERRORS(99L, "Errores (No Válido)"); // PHP: _TIPOTELE_ERRORES
+    ERRORS(null, "Errores (No Válido)"); // PHP: _TIPOTELE_ERRORES
 
-    private final long value;
+    private final Long value;
     private final String defaultName;
 
-    TelephonyTypeEnum(long value, String defaultName) {
+    TelephonyTypeEnum(Long value, String defaultName) {
         this.value = value;
         this.defaultName = defaultName;
     }
 
-    public long getValue() {
+    public Long getValue() {
         return value;
     }
 
