@@ -149,19 +149,9 @@ public class PrefixLookupService {
             }
         }
 
-
-        // PHP: krsort($arr_retornar); (sorts by key which was sprintf("%05s.%s",$lprefijo, $kpos))
-        // This effectively means:
-        // 1. Longer operator prefixes first (already handled by initial query sort and bestMatchPrefixCode logic)
-        // 2. Then, within same operator prefix length, it's complex due to $kpos.
-        // The PHP $kpos was decremented, so smaller $kpos (later in original $arr_prefijo_id) came first.
-        // $arr_prefijo_id was from $_lista_Prefijos['prefijo'][$eval_prefijo] or $_lista_Prefijos['tipotele'][$tipotele_destino].
-        // The original query for $_lista_Prefijos was `ORDER BY $campo_len DESC, TIPOTELECFG_MIN DESC, TIPOTELE_ID`.
-        // This means for the same prefix code length, those with larger min cfg length came first.
-        // Let's simplify the Java sort to: longer prefix, then larger min length.
         matchedPrefixes.sort(Comparator
                 .comparing((PrefixInfo pi) -> pi.getPrefixCode() != null ? pi.getPrefixCode().length() : 0, Comparator.reverseOrder())
-                .thenComparing((PrefixInfo pi) -> pi.getTelephonyTypeMinLength() != null ? pi.getTelephonyTypeMinLength() : 0, Comparator.reverseOrder()));
+                .thenComparing((PrefixInfo pi) -> pi.getTelephonyTypeMinLength() != null ? pi.getTelephonyTypeMinLength() : 0));
 
         log.debug("Final sorted matched prefixes ({}): {}", matchedPrefixes.size(), matchedPrefixes);
         return matchedPrefixes;

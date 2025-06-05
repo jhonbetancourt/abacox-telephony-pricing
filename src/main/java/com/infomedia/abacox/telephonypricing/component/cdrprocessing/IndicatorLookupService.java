@@ -178,14 +178,14 @@ public class IndicatorLookupService {
             if (Integer.parseInt(dbNdcStr) < 0) {
                 if (approximateMatch == null) {
                     approximateMatch = new DestinationInfo();
-                    PaddedSeriesResult paddedApprox = rellenaSerieEquivalents(subscriberPartOfEffectiveNumber, seriesInitialInt.toString(), seriesFinalInt.toString());
+                    PaddedSeriesResult paddedApprox = padSeries(subscriberPartOfEffectiveNumber, seriesInitialInt.toString(), seriesFinalInt.toString());
                     String approxComparableInitial = dbNdcStr + paddedApprox.getPaddedInitial();
                     String approxComparableFinal = dbNdcStr + paddedApprox.getPaddedFinal();
                     fillDestinationInfo(approximateMatch, row, dbNdcStr, finalNumberUsedForMatching, prefixId, true, seriesInitialInt, seriesFinalInt, approxComparableInitial, approxComparableFinal);
                 }
                 continue;
             }
-            PaddedSeriesResult paddedSeries = rellenaSerieEquivalents(subscriberPartOfEffectiveNumber, seriesInitialInt.toString(), seriesFinalInt.toString());
+            PaddedSeriesResult paddedSeries = padSeries(subscriberPartOfEffectiveNumber, seriesInitialInt.toString(), seriesFinalInt.toString());
             String fullComparableSeriesInitial = dbNdcStr + paddedSeries.getPaddedInitial();
             String fullComparableSeriesFinal = dbNdcStr + paddedSeries.getPaddedFinal();
             String numberToCompareAgainstSeries = finalNumberUsedForMatching;
@@ -254,7 +254,7 @@ public class IndicatorLookupService {
         return sb.toString();
     }
 
-    private PaddedSeriesResult rellenaSerieEquivalents(String inputSubscriberPart, String dbSeriesInitial, String dbSeriesFinal) {
+    private PaddedSeriesResult padSeries(String inputSubscriberPart, String dbSeriesInitial, String dbSeriesFinal) {
         String safeDbSeriesInitial = dbSeriesInitial != null ? dbSeriesInitial : "0";
         String safeDbSeriesFinal = dbSeriesFinal != null ? dbSeriesFinal : "0";
         int lenInitialDb = safeDbSeriesInitial.length();
