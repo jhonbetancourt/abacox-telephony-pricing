@@ -41,10 +41,12 @@ public class PhoneNumberTransformationService {
                     newTelephonyTypeId = TelephonyTypeEnum.CELLULAR.getValue();
                 } else if ("6060".equals(p4) || "5760".equals(p4)) { // Fixed line with new prefix + old city prefix
                     transformedNumber = phoneNumber.substring(len - 8); // Last 8 digits (city code + number)
+                    newTelephonyTypeId = TelephonyTypeEnum.NATIONAL.getValue();
                 }
             } else if (len == 11) {
                 if ("604".equals(p3)) { // Specific fixed line prefix (e.g., Antioquia "4" + 7 digits)
                     transformedNumber = phoneNumber.substring(len - 8); // "4" + 7 digits
+                    newTelephonyTypeId = TelephonyTypeEnum.NATIONAL.getValue();
                 } else if ("03".equals(p2)) { // Potential mobile starting with 03...
                     String n3_digits_after_0 = (len > 3) ? phoneNumber.substring(1, 4) : "";
                     try {
@@ -79,6 +81,7 @@ public class PhoneNumberTransformationService {
                 // This implies a 7-digit subscriber number after "60" + single digit city code (e.g. 60XNNNNNN)
                 if ("60".equals(p2)) {
                     transformedNumber = phoneNumber.substring(len - 7); // NNNNNNN (subscriber number)
+                    newTelephonyTypeId = TelephonyTypeEnum.NATIONAL.getValue();
                 }
             }
         }
