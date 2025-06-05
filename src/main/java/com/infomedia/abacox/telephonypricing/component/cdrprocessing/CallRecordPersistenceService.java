@@ -1,4 +1,4 @@
-// File: com/infomedia/abacox/telephonypricing/cdr/CallRecordPersistenceService.java
+// File: com/infomedia/abacox/telephonypricing/component/cdrprocessing/CallRecordPersistenceService.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
 import com.infomedia.abacox.telephonypricing.entity.CallRecord;
@@ -10,7 +10,7 @@ import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime; // Added
+import java.time.LocalDateTime;
 
 @Service
 @Log4j2
@@ -19,9 +19,8 @@ public class CallRecordPersistenceService {
     @PersistenceContext
     private EntityManager entityManager;
     private final FailedCallRecordPersistenceService failedCallRecordPersistenceService;
-    private final CdrConfigService cdrConfigService; // Added
+    private final CdrConfigService cdrConfigService;
 
-    // Updated constructor
     public CallRecordPersistenceService(FailedCallRecordPersistenceService failedCallRecordPersistenceService, CdrConfigService cdrConfigService) {
         this.failedCallRecordPersistenceService = failedCallRecordPersistenceService;
         this.cdrConfigService = cdrConfigService;
@@ -82,10 +81,11 @@ public class CallRecordPersistenceService {
 
 
     private void mapCdrDataToCallRecord(CdrData cdrData, CallRecord callRecord, CommunicationLocation commLocation, String cdrHash) {
+
         callRecord.setDial(cdrData.getEffectiveDestinationNumber() != null ? cdrData.getEffectiveDestinationNumber().substring(0, Math.min(cdrData.getEffectiveDestinationNumber().length(), 50)) : "");
+        callRecord.setDestinationPhone(cdrData.getOriginalFinalCalledPartyNumber() != null ? cdrData.getOriginalFinalCalledPartyNumber().substring(0, Math.min(cdrData.getOriginalFinalCalledPartyNumber().length(), 50)) : "");
         callRecord.setCommLocationId(commLocation.getId());
 
-        // Convert serviceDate to target timezone
         LocalDateTime serviceDateUtc = cdrData.getDateTimeOrigination();
         if (serviceDateUtc != null) {
             LocalDateTime serviceDateInTargetZone = DateTimeUtil.convertToZone(serviceDateUtc, cdrConfigService.getTargetDatabaseZoneId());
@@ -99,7 +99,6 @@ public class CallRecordPersistenceService {
         callRecord.setEmployeeExtension(cdrData.getCallingPartyNumber() != null ? cdrData.getCallingPartyNumber().substring(0, Math.min(cdrData.getCallingPartyNumber().length(), 50)) : "");
         callRecord.setEmployeeAuthCode(cdrData.getAuthCodeDescription() != null ? cdrData.getAuthCodeDescription().substring(0, Math.min(cdrData.getAuthCodeDescription().length(), 50)) : "");
         callRecord.setIndicatorId(cdrData.getIndicatorId());
-        callRecord.setDestinationPhone(cdrData.getFinalCalledPartyNumber() != null ? cdrData.getFinalCalledPartyNumber().substring(0, Math.min(cdrData.getFinalCalledPartyNumber().length(), 50)) : "");
         callRecord.setDuration(cdrData.getDurationSeconds());
         callRecord.setRingCount(cdrData.getRingingTimeSeconds());
         callRecord.setTelephonyTypeId(cdrData.getTelephonyTypeId());
@@ -115,7 +114,7 @@ public class CallRecordPersistenceService {
         callRecord.setAssignmentCause(cdrData.getAssignmentCause().getValue());
         callRecord.setDestinationEmployeeId(cdrData.getDestinationEmployeeId());
         if (cdrData.getFileInfo() != null) {
-            callRecord.setFileInfoId(cdrData.getFileInfo().getId());
+            callRecord.setFileInfoId(cdrData.getFileInfo().getId().longValue());
         }
         callRecord.setCdrString(cdrData.getRawCdrLine());
         callRecord.setCtlHash(cdrHash);

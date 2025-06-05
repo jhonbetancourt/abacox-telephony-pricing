@@ -1,4 +1,4 @@
-// File: com/infomedia/abacox/telephonypricing/cdr/CiscoCm60CdrProcessor.java
+// File: com/infomedia/abacox/telephonypricing/component/cdrprocessing/CiscoCm60CdrProcessor.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
 import com.infomedia.abacox.telephonypricing.entity.CommunicationLocation;
@@ -189,9 +189,10 @@ public class CiscoCm60CdrProcessor implements CdrTypeProcessor {
         cdrData.setDestMobileDeviceName(getFieldValue(fields, "destMobileDeviceName").toUpperCase());
         cdrData.setFinalMobileCalledPartyNumber(getFieldValue(fields, "finalMobileCalledPartyNumber"));
 
-        cdrData.setOriginalFinalCalledPartyNumber(cdrData.getFinalCalledPartyNumber());
-        cdrData.setOriginalFinalCalledPartyNumberPartition(cdrData.getFinalCalledPartyNumberPartition());
         cdrData.setOriginalLastRedirectDn(cdrData.getLastRedirectDn());
+
+        cdrData.setOriginalFinalCalledPartyNumber(getFieldValue(fields, "finalCalledPartyNumber"));
+        cdrData.setOriginalFinalCalledPartyNumberPartition(getFieldValue(fields, "finalCalledPartyNumberPartition").toUpperCase());
 
         cdrData.setAuthCodeDescription(getFieldValue(fields, "authCodeDescription"));
         cdrData.setLastRedirectRedirectReason(parseIntField(getFieldValue(fields, "lastRedirectRedirectReason")));
@@ -360,6 +361,7 @@ public class CiscoCm60CdrProcessor implements CdrTypeProcessor {
             log.info("Conference call where caller and callee are the same after all processing. Discarding CDR: {}", cdrLine);
             return null;
         }
+
         cdrData.setEffectiveDestinationNumber(cdrData.getFinalCalledPartyNumber()); // Set default effective destination
 
         log.debug("Final evaluated Cisco CM 6.0 CDR data: {}", cdrData);
