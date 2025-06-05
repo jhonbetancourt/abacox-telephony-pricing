@@ -360,7 +360,8 @@ public class CiscoCm60CdrProcessor implements CdrTypeProcessor {
             log.info("Conference call where caller and callee are the same after all processing. Discarding CDR: {}", cdrLine);
             return null;
         }
-        cdrData.setEffectiveDestinationNumber(cdrData.getFinalCalledPartyNumber()); // Set default effective destination
+        cdrData.setEffectiveDestinationNumber(cdrData.getFinalCalledPartyNumber());
+        cdrData.setOriginalFinalCalledPartyNumber(cdrData.getFinalCalledPartyNumber());
 
         log.debug("Final evaluated Cisco CM 6.0 CDR data: {}", cdrData);
         return cdrData;
