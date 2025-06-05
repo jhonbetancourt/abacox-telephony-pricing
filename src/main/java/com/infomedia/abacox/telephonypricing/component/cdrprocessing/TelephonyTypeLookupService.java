@@ -247,9 +247,10 @@ public class TelephonyTypeLookupService {
             } else {
                 // If a type is associated with multiple prefixes, take the most lenient subscriber lengths
                 // and the original total lengths (cfgMin/Max should be consistent for a type/country).
-                current.setMinSubscriberLength(Math.min(current.getMinSubscriberLength(), subscriberMinLen));
-                current.setMaxSubscriberLength(Math.max(current.getMaxSubscriberLength(), subscriberMaxLen));
-                // cfgMin and cfgMax should ideally be the same for all prefixes of the same type, so no change needed here.
+                // Take the HIGHEST of the minimums.
+                current.setMinSubscriberLength(Math.max(current.getMinSubscriberLength(), subscriberMinLen));
+                // Take the LOWEST of the maximums.
+                current.setMaxSubscriberLength(Math.min(current.getMaxSubscriberLength(), subscriberMaxLen));
             }
         }
         
