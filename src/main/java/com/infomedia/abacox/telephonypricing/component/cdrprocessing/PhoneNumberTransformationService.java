@@ -62,6 +62,8 @@ public class PhoneNumberTransformationService {
             } else if (len == 10) {
                 if ("60".equals(p2) || "57".equals(p2)) { // National fixed line with country/new prefix (e.g., 60XNNNNNNN or 57XNNNNNNN)
                     transformedNumber = phoneNumber.substring(len - 8); // XNNNNNNN (city code + number)
+                    // *** FIX: Add the hint that this must be a NATIONAL call ***
+                    newTelephonyTypeId = TelephonyTypeEnum.NATIONAL.getValue();
                 } else if (phoneNumber.startsWith("3")) { // Mobile number (e.g. 3XXXXXXXXX)
                     try {
                         int n3val = Integer.parseInt(phoneNumber.substring(0, 3));
