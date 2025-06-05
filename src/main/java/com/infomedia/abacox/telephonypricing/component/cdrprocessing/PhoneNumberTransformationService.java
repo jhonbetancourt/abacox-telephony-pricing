@@ -1,4 +1,4 @@
-// File: com/infomedia/abacox/telephonypricing/cdr/PhoneNumberTransformationService.java
+// File: com/infomedia/abacox/telephonypricing/component/cdrprocessing/PhoneNumberTransformationService.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
 import com.infomedia.abacox.telephonypricing.entity.CommunicationLocation;
@@ -22,6 +22,14 @@ public class PhoneNumberTransformationService {
     @PersistenceContext
     private EntityManager entityManager;
 
+    /**
+     * Transforms an incoming phone number based on CME (Colombia) rules.
+     * PHP equivalent: _esEntrante_60
+     *
+     * @param phoneNumber     The incoming phone number.
+     * @param originCountryId The ID of the origin country for context.
+     * @return A TransformationResult containing the potentially modified number and a hint for the telephony type.
+     */
     public TransformationResult transformIncomingNumberCME(String phoneNumber, Long originCountryId) {
         if (phoneNumber == null) return new TransformationResult(null, false, null);
         String originalPhoneNumber = phoneNumber;
@@ -41,12 +49,10 @@ public class PhoneNumberTransformationService {
                     newTelephonyTypeId = TelephonyTypeEnum.CELLULAR.getValue();
                 } else if ("6060".equals(p4) || "5760".equals(p4)) { // Fixed line with new prefix + old city prefix
                     transformedNumber = phoneNumber.substring(len - 8); // Last 8 digits (city code + number)
-                    newTelephonyTypeId = TelephonyTypeEnum.NATIONAL.getValue();
                 }
             } else if (len == 11) {
                 if ("604".equals(p3)) { // Specific fixed line prefix (e.g., Antioquia "4" + 7 digits)
                     transformedNumber = phoneNumber.substring(len - 8); // "4" + 7 digits
-                    newTelephonyTypeId = TelephonyTypeEnum.NATIONAL.getValue();
                 } else if ("03".equals(p2)) { // Potential mobile starting with 03...
                     String n3_digits_after_0 = (len > 3) ? phoneNumber.substring(1, 4) : "";
                     try {
@@ -64,7 +70,6 @@ public class PhoneNumberTransformationService {
             } else if (len == 10) {
                 if ("60".equals(p2) || "57".equals(p2)) { // National fixed line with country/new prefix (e.g., 60XNNNNNNN or 57XNNNNNNN)
                     transformedNumber = phoneNumber.substring(len - 8); // XNNNNNNN (city code + number)
-                    newTelephonyTypeId = TelephonyTypeEnum.NATIONAL.getValue();
                 } else if (phoneNumber.startsWith("3")) { // Mobile number (e.g. 3XXXXXXXXX)
                     try {
                         int n3val = Integer.parseInt(phoneNumber.substring(0, 3));
@@ -81,7 +86,6 @@ public class PhoneNumberTransformationService {
                 // This implies a 7-digit subscriber number after "60" + single digit city code (e.g. 60XNNNNNN)
                 if ("60".equals(p2)) {
                     transformedNumber = phoneNumber.substring(len - 7); // NNNNNNN (subscriber number)
-                    newTelephonyTypeId = TelephonyTypeEnum.NATIONAL.getValue();
                 }
             }
         }
@@ -91,6 +95,14 @@ public class PhoneNumberTransformationService {
         return new TransformationResult(transformedNumber, transformed, newTelephonyTypeId);
     }
 
+    /**
+     * Transforms an outgoing phone number based on CME (Colombia) rules.
+     * PHP equivalent: _es_Saliente
+     *
+     * @param phoneNumber     The outgoing phone number.
+     * @param originCountryId The ID of the origin country for context.
+     * @return A TransformationResult containing the potentially modified number.
+     */
     public TransformationResult transformOutgoingNumberCME(String phoneNumber, Long originCountryId) {
         if (phoneNumber == null) return new TransformationResult(null, false, null);
         String originalPhoneNumber = phoneNumber;
@@ -117,6 +129,15 @@ public class PhoneNumberTransformationService {
         return new TransformationResult(transformedNumber, transformed, null);
     }
 
+    /**
+     * Transforms a number for the purpose of prefix lookup, mimicking the logic
+     * of prepending prefixes for cellular or determining if a fixed-line call is local.
+     * PHP equivalent: _esCelular_fijo
+     *
+     * @param phoneNumber    The phone number to transform.
+     * @param commLocation   The communication location context.
+     * @return A TransformationResult with the transformed number and a potential telephony type hint.
+     */
     @Transactional(readOnly = true)
     public TransformationResult transformForPrefixLookup(String phoneNumber, CommunicationLocation commLocation) {
         if (phoneNumber == null || commLocation == null || commLocation.getIndicator() == null ||

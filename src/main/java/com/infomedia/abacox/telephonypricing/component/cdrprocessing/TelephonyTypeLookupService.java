@@ -271,13 +271,12 @@ public class TelephonyTypeLookupService {
 
         List<IncomingTelephonyTypePriority> sortedList = new ArrayList<>(typeMap.values());
         for (IncomingTelephonyTypePriority item : sortedList) {
-            // PHP sorts by str_repeat('9', min_subscriber_len_for_type_after_op_prefix) DESC
-            // This means types that expect longer subscriber numbers (after op prefix) are tried first.
-            // For Path B, the relevant length for the outer loop condition in PHP is the total length.
-            item.setOrderKey(String.format("%02d", item.getMinTotalLength()));
+            // This now correctly mimics the PHP logic of sorting by the length of the
+            // subscriber number part, not the total number length.
+            item.setOrderKey(String.format("%02d", item.getMinSubscriberLength()));
         }
 
-        // Sort by orderKey (derived from minTotalLength) descending.
+        // The reverse sort on this new key will now produce the correct priority order.
         sortedList.sort(Comparator.comparing(IncomingTelephonyTypePriority::getOrderKey, Comparator.reverseOrder()));
         log.debug("Sorted incoming telephony type priorities for country {}: {}", originCountryId, sortedList);
         return sortedList;
