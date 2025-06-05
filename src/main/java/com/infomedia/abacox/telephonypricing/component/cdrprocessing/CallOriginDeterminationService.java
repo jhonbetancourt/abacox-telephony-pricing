@@ -107,7 +107,7 @@ public class CallOriginDeterminationService {
             if (hintedTypePriorityOpt.isPresent()) {
                 IncomingTelephonyTypePriority hintedTypePriority = hintedTypePriorityOpt.get();
                 int phoneLen = numberForProcessing.length();
-                if (phoneLen >= hintedTypePriority.getMinTotalLength() && phoneLen <= hintedTypePriority.getMaxTotalLength()) {
+                if (phoneLen >= hintedTypePriority.getMinSubscriberLength() && phoneLen <= hintedTypePriority.getMaxSubscriberLength()) {
                     Optional<DestinationInfo> destInfoOpt = indicatorLookupService.findDestinationIndicator(
                             numberForProcessing,
                             hintedTypePriority.getTelephonyTypeId(),
