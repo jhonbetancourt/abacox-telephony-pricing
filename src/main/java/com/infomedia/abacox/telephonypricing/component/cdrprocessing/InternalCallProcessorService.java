@@ -44,7 +44,7 @@ public class InternalCallProcessorService {
                 cdrData.getEffectiveDestinationNumber(),
                 prefixesToClean,
                 stripOnlyIfPrefixMatchesAndFound
-        );
+        ).getCleanedNumber();
         cdrData.setEffectiveDestinationNumber(cleanedDestination);
         log.debug("Cleaned internal destination: {}", cleanedDestination);
 

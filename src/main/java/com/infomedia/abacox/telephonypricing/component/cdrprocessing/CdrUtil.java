@@ -65,14 +65,20 @@ public class CdrUtil {
     }
 
 
-    public static String cleanPhoneNumber(String number, List<String> pbxExitPrefixes, boolean modoSeguro) {
-        if (number == null) return "";
+    // ... inside CdrUtil.java
+
+    public static CleanPhoneNumberResult cleanPhoneNumber(String number, List<String> pbxExitPrefixes, boolean modoSeguro) {
+        if (number == null) {
+            return new CleanPhoneNumberResult("", false);
+        }
         String currentNumber = number.trim();
         log.trace("Cleaning phone number: '{}', PBX Prefixes: {}, ModoSeguro: {}", number, pbxExitPrefixes, modoSeguro);
 
         String numberAfterPrefixStrip = currentNumber;
+        boolean pbxPrefixWasStripped = false;
+
         boolean pbxPrefixDefined = pbxExitPrefixes != null && !pbxExitPrefixes.isEmpty();
-        int phpMaxCaracterAExtraer = -1; // -1: no prefixes or not found yet, 0: prefixes defined but none matched, >0: length of matched prefix
+        int phpMaxCaracterAExtraer = -1; // -1: no prefixes, 0: no match, >0: match
 
         if (pbxPrefixDefined) {
             String longestMatchingPrefix = "";
@@ -87,22 +93,21 @@ public class CdrUtil {
             if (!longestMatchingPrefix.isEmpty()) {
                 numberAfterPrefixStrip = currentNumber.substring(longestMatchingPrefix.length());
                 phpMaxCaracterAExtraer = longestMatchingPrefix.length();
+                pbxPrefixWasStripped = true;
                 log.trace("PBX prefix '{}' stripped. Number is now: '{}'", longestMatchingPrefix, numberAfterPrefixStrip);
             } else {
-                phpMaxCaracterAExtraer = 0; // Prefixes defined, but none matched
+                phpMaxCaracterAExtraer = 0;
                 log.trace("PBX prefixes defined but none matched current number '{}'", currentNumber);
             }
         }
 
-        // PHP: if ($maxCaracterAExtraer == 0) { $nuevo = ''; }
-        if (phpMaxCaracterAExtraer == 0) { // This means prefixes were defined, but none matched
+        if (phpMaxCaracterAExtraer == 0) {
             numberAfterPrefixStrip = "";
         }
 
-        // PHP: if ($modo_seguro && $nuevo == '') { $nuevo = trim($numero); }
         if (modoSeguro && numberAfterPrefixStrip.isEmpty() && phpMaxCaracterAExtraer == 0) {
-            numberAfterPrefixStrip = currentNumber; // Revert to original (trimmed) number
-            log.trace("ModoSeguro is true and no PBX prefix matched (or resulted in empty after strip), reverting to original for further cleaning: '{}'", numberAfterPrefixStrip);
+            numberAfterPrefixStrip = currentNumber;
+            log.trace("ModoSeguro is true and no PBX prefix matched, reverting to original for further cleaning: '{}'", numberAfterPrefixStrip);
         }
 
         String numToClean = numberAfterPrefixStrip;
@@ -114,14 +119,9 @@ public class CdrUtil {
 
         if (numToClean.isEmpty()) {
             log.trace("Number is empty after initial cleaning. Returning empty.");
-            return "";
+            return new CleanPhoneNumberResult("", pbxPrefixWasStripped);
         }
 
-        // PHP: $primercar = substr($nuevo, 0, 1); $parcial = substr($nuevo, 1);
-        // PHP: if ($parcial != '' && !is_numeric($parcial)) { $parcial2 = preg_replace('/[^0-9]/','?', $parcial); ... $p = strpos($parcial2, '?'); if ($p > 0) { $parcial = substr($parcial2, 0, $p); } }
-        // This means it only cleans non-digits *after the first character*.
-        // And it stops at the *first* non-digit encountered after the first character.
-        // The first character is kept as is (unless it was '+').
         String firstChar = String.valueOf(numToClean.charAt(0));
         String restOfNumber = numToClean.length() > 1 ? numToClean.substring(1) : "";
         StringBuilder cleanedRest = new StringBuilder();
@@ -131,10 +131,6 @@ public class CdrUtil {
                 if (Character.isDigit(c)) {
                     cleanedRest.append(c);
                 } else {
-                    // PHP: $p = strpos($parcial2, '?'); if ($p > 0) { $parcial = substr($parcial2, 0, $p); }
-                    // This means if the first char of 'restOfNumber' is non-digit, 'cleanedRest' remains empty.
-                    // If 'restOfNumber' is "A123", 'cleanedRest' is empty.
-                    // If 'restOfNumber' is "1A23", 'cleanedRest' is "1".
                     log.trace("Non-digit '{}' found after first char. Stopping cleaning of rest.", c);
                     break;
                 }
@@ -142,8 +138,8 @@ public class CdrUtil {
         }
 
         String finalCleanedNumber = firstChar + cleanedRest.toString();
-        log.debug("Cleaned phone number result: '{}'", finalCleanedNumber);
-        return finalCleanedNumber;
+        log.debug("Cleaned phone number result: '{}', Prefix Stripped: {}", finalCleanedNumber, pbxPrefixWasStripped);
+        return new CleanPhoneNumberResult(finalCleanedNumber, pbxPrefixWasStripped);
     }
 
 

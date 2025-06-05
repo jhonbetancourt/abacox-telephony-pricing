@@ -59,7 +59,7 @@ public class CallTypeAndDirectionService {
 
         if (employeeLookupService.isPossibleExtension(cdrData.getCallingPartyNumber(), limits)) {
             log.debug("Calling party '{}' is a possible extension. Checking destination for internal call.", cdrData.getCallingPartyNumber());
-            String destinationForInternalCheck = CdrUtil.cleanPhoneNumber(cdrData.getFinalCalledPartyNumber(), null, false);
+            String destinationForInternalCheck = CdrUtil.cleanPhoneNumber(cdrData.getFinalCalledPartyNumber(), null, false).getCleanedNumber();
             log.debug("Cleaned destination for internal check: {}", destinationForInternalCheck);
 
             // PHP: $telefono_eval = evaluarPBXEspecial($link, $destino, $directorio, $cliente, 3); // internas

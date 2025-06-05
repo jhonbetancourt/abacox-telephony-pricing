@@ -47,7 +47,7 @@ public class TariffCalculationService {
 
         String initialNumberForPrefixLookup = numberForTariffing;
         if (trunkInfoOpt.isEmpty()) {
-            initialNumberForPrefixLookup = CdrUtil.cleanPhoneNumber(numberForTariffing, pbxPrefixes, true);
+            initialNumberForPrefixLookup = CdrUtil.cleanPhoneNumber(numberForTariffing, pbxPrefixes, true).getCleanedNumber();
             log.debug("Non-trunk call. Number for prefix lookup (after PBX clean): {}", initialNumberForPrefixLookup);
         } else {
             log.debug("Trunk call. Initial number for prefix lookup (before trunk-specific PBX clean): {}", initialNumberForPrefixLookup);
@@ -62,7 +62,7 @@ public class TariffCalculationService {
             if (trunkInfoOpt.get().noPbxPrefix != null && trunkInfoOpt.get().noPbxPrefix) {
                 pbxPrefixesForNormalization = Collections.emptyList();
             }
-            String normalizedNumberForLookup = CdrUtil.cleanPhoneNumber(numberForTariffing, pbxPrefixesForNormalization, true);
+            String normalizedNumberForLookup = CdrUtil.cleanPhoneNumber(numberForTariffing, pbxPrefixesForNormalization, true).getCleanedNumber();
             log.debug("Normalized number for lookup (treated as non-trunk): {}", normalizedNumberForLookup);
 
             TariffingAttemptResult attempt2 = attemptTariffing(normalizedNumberForLookup, cdrData, commLocation, Optional.empty(), pbxPrefixes, true);

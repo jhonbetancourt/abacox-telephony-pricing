@@ -44,7 +44,7 @@ public class OutgoingCallProcessorService {
                     cdrData.getEffectiveDestinationNumber(),
                     pbxPrefixes,
                     true // modo_seguro = true for special number check
-            );
+            ).getCleanedNumber();
             if (numToCheckSpecial != null && !numToCheckSpecial.isEmpty()) {
                 log.debug("Checking for special service with number: {}", numToCheckSpecial);
                 Optional<SpecialServiceInfo> specialServiceInfoOpt =

@@ -115,7 +115,7 @@ public class CommunicationLocationLookupService {
         if (extensionNumber == null || extensionNumber.isEmpty()) {
             return Optional.empty();
         }
-        String cleanedExtension = CdrUtil.cleanPhoneNumber(extensionNumber, null, false);
+        String cleanedExtension = CdrUtil.cleanPhoneNumber(extensionNumber, null, false).getCleanedNumber();
         if (cleanedExtension.startsWith("+")) cleanedExtension = cleanedExtension.substring(1);
 
 

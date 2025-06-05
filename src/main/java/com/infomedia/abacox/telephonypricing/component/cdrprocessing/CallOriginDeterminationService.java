@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -47,13 +48,12 @@ public class CallOriginDeterminationService {
 
         String numberForProcessing = processedExternalCallerId;
         List<String> pbxPrefixes = commLocation.getPbxPrefix() != null ?
-                java.util.Arrays.asList(commLocation.getPbxPrefix().split(",")) : java.util.Collections.emptyList();
+                Arrays.asList(commLocation.getPbxPrefix().split(",")) : java.util.Collections.emptyList();
 
-        String numberAfterPbxStrip = CdrUtil.cleanPhoneNumber(numberForProcessing, pbxPrefixes, false);
-        boolean pbxPrefixWasStripped = !numberAfterPbxStrip.equals(numberForProcessing) &&
-                                       CdrUtil.cleanPhoneNumber(numberForProcessing, pbxPrefixes, true).length() > numberAfterPbxStrip.length();
+        CleanPhoneNumberResult cleanPhoneNumber = CdrUtil.cleanPhoneNumber(numberForProcessing, pbxPrefixes, false);
 
-        if (pbxPrefixWasStripped) {
+        if (cleanPhoneNumber.isPbxPrefixStripped()) {
+            String numberAfterPbxStrip = cleanPhoneNumber.getCleanedNumber();
             log.debug("Path A (PBX prefix stripped): Number for prefix lookup: {}", numberAfterPbxStrip);
             List<PrefixInfo> prefixes = prefixLookupService.findMatchingPrefixes(
                     numberAfterPbxStrip, commLocation, false, null

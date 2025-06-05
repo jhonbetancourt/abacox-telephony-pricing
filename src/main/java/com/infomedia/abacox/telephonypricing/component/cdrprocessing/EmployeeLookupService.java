@@ -70,7 +70,7 @@ public class EmployeeLookupService {
         queryStr.append(" WHERE e.active = true ");
 
         boolean hasAuthCode = authCode != null && !authCode.isEmpty();
-        String cleanedExtension = (extension != null) ? CdrUtil.cleanPhoneNumber(extension, null, false) : null;
+        String cleanedExtension = (extension != null) ? CdrUtil.cleanPhoneNumber(extension, null, false).getCleanedNumber() : null;
         if (cleanedExtension != null && cleanedExtension.startsWith("+")) {
             cleanedExtension = cleanedExtension.substring(1);
         }
@@ -289,7 +289,7 @@ public class EmployeeLookupService {
         if (extensionNumber == null || extensionNumber.isEmpty()) {
             return false;
         }
-        String cleanedExt = CdrUtil.cleanPhoneNumber(extensionNumber, null, false);
+        String cleanedExt = CdrUtil.cleanPhoneNumber(extensionNumber, null, false).getCleanedNumber();
         if (cleanedExt.startsWith("+")) cleanedExt = cleanedExt.substring(1);
 
         if (limits.getSpecialFullExtensions() != null && limits.getSpecialFullExtensions().contains(cleanedExt)) {
