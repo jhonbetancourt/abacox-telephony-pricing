@@ -1,4 +1,4 @@
-// File: com/infomedia/abacox/telephonypricing/cdr/CallOriginDeterminationService.java
+// File: com/infomedia/abacox/telephonypricing/component/cdrprocessing/CallOriginDeterminationService.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
 import com.infomedia.abacox.telephonypricing.entity.CommunicationLocation;
@@ -23,11 +23,6 @@ public class CallOriginDeterminationService {
 
     /**
      * PHP equivalent: buscarOrigen
-     *
-     * @param processedExternalCallerId The phone number *after* initial transformations (like _esEntrante_60)
-     * @param hintedTelephonyTypeIdFromTransform The telephony type ID hinted by the transformation, if any.
-     * @param commLocation The current communication location.
-     * @return IncomingCallOriginInfo
      */
     public IncomingCallOriginInfo determineIncomingCallOrigin(String processedExternalCallerId,
                                                               Long hintedTelephonyTypeIdFromTransform,
@@ -53,7 +48,6 @@ public class CallOriginDeterminationService {
         CleanPhoneNumberResult cleanPhoneNumber = CdrUtil.cleanPhoneNumber(numberForProcessing, pbxPrefixes, false);
 
         // --- Path A (PHP: if ($maxCaracterAExtraer > 0)) ---
-        // This path is taken if a PBX prefix was successfully stripped.
         if (cleanPhoneNumber.isPbxPrefixStripped()) {
             String numberAfterPbxStrip = cleanPhoneNumber.getCleanedNumber();
             log.debug("Path A (PBX prefix stripped): Number for prefix lookup: {}", numberAfterPbxStrip);
@@ -61,8 +55,6 @@ public class CallOriginDeterminationService {
                     numberAfterPbxStrip, commLocation, false, null
             );
             for (PrefixInfo pi : prefixes) {
-                // If a hint was provided and it matches the current prefix's type, prioritize it.
-                // Or, if no hint, proceed normally.
                 if (hintedTelephonyTypeIdFromTransform == null || hintedTelephonyTypeIdFromTransform.equals(pi.getTelephonyTypeId())) {
                     Optional<DestinationInfo> destInfoOpt = indicatorLookupService.findDestinationIndicator(
                             numberAfterPbxStrip,
@@ -72,19 +64,19 @@ public class CallOriginDeterminationService {
                             pi.getPrefixId(),
                             commLocation.getIndicator().getOriginCountryId(),
                             pi.getBandsAssociatedCount() > 0,
-                            false, // Prefix is NOT already stripped from numberAfterPbxStrip
+                            false,
                             pi.getPrefixCode()
                     );
                     if (destInfoOpt.isPresent() && destInfoOpt.get().getIndicatorId() != null && destInfoOpt.get().getIndicatorId() > 0) {
                         DestinationInfo di = destInfoOpt.get();
+                        // The operator is the one from the PrefixInfo (pi) that we are currently testing.
                         result.setOperatorId(pi.getOperatorId());
                         result.setOperatorName(pi.getOperatorName());
                         result.setEffectiveNumber(di.getMatchedPhoneNumber());
                         updateResultFromDestinationInfo(result, di, pi.getTelephonyTypeId(), pi.getTelephonyTypeName(), commLocation);
-                        log.debug("Path A match found (hint considered if present): {}", result);
-                        return result;
+                        log.debug("Path A match found: {}", result);
+                        return result; // Return immediately, mimicking PHP's 'break'
                     }
-                    // If hint was used and didn't match, don't try other prefixes for Path A with this hint.
                     if (hintedTelephonyTypeIdFromTransform != null && hintedTelephonyTypeIdFromTransform.equals(pi.getTelephonyTypeId())) {
                         log.debug("Hinted type {} used in Path A but no destination found. Breaking from Path A prefix loop.", hintedTelephonyTypeIdFromTransform);
                         break;
@@ -94,13 +86,11 @@ public class CallOriginDeterminationService {
         }
 
         // --- Path B (PHP: if ($arreglo['INDICATIVO_ID'] <= 0)) ---
-        // This path is taken if no PBX prefix was stripped, or if Path A failed to find a match.
         log.debug("Path B (No PBX prefix stripped or Path A failed): Number for processing: {}", numberForProcessing);
         List<IncomingTelephonyTypePriority> typePriorities = telephonyTypeLookupService.getIncomingTelephonyTypePriorities(
                 commLocation.getIndicator().getOriginCountryId()
         );
 
-        // If a hint is present, try it first with high priority in Path B
         if (hintedTelephonyTypeIdFromTransform != null) {
             log.debug("Path B: Prioritizing hinted telephony type: {}", hintedTelephonyTypeIdFromTransform);
             Optional<IncomingTelephonyTypePriority> hintedTypePriorityOpt = typePriorities.stream()
@@ -116,15 +106,15 @@ public class CallOriginDeterminationService {
                             hintedTypePriority.getTelephonyTypeId(),
                             hintedTypePriority.getMinSubscriberLength(),
                             commLocation.getIndicatorId(),
-                            null, // No specific prefixId in this path
+                            null,
                             commLocation.getIndicator().getOriginCountryId(),
-                            false, // Assume no specific band context without a prefix
-                            true, // Prefix is considered "stripped" as we match the whole number
+                            false,
+                            true,
                             null
                     );
                     if (destInfoOpt.isPresent() && destInfoOpt.get().getIndicatorId() != null && destInfoOpt.get().getIndicatorId() > 0) {
                         DestinationInfo di = destInfoOpt.get();
-                        setOperatorForIncomingPathB(result, hintedTypePriority.getTelephonyTypeId(), di);
+                        setOperatorForIncomingPathB(result, hintedTypePriority.getTelephonyTypeId(), di, commLocation);
                         result.setEffectiveNumber(di.getMatchedPhoneNumber());
                         updateResultFromDestinationInfo(result, di, hintedTypePriority.getTelephonyTypeId(), hintedTypePriority.getTelephonyTypeName(), commLocation);
                         log.debug("Path B match found using HINTED type {}: {}", hintedTelephonyTypeIdFromTransform, result);
@@ -134,9 +124,7 @@ public class CallOriginDeterminationService {
             }
         }
 
-        // If hint didn't lead to a match, or no hint, proceed with normal Path B iteration
         for (IncomingTelephonyTypePriority typePriority : typePriorities) {
-            // Skip the hinted type if we already tried it and it failed
             if (hintedTelephonyTypeIdFromTransform != null && typePriority.getTelephonyTypeId().equals(hintedTelephonyTypeIdFromTransform)) {
                 continue;
             }
@@ -156,11 +144,11 @@ public class CallOriginDeterminationService {
                 );
                 if (destInfoOpt.isPresent() && destInfoOpt.get().getIndicatorId() != null && destInfoOpt.get().getIndicatorId() > 0) {
                     DestinationInfo di = destInfoOpt.get();
-                    setOperatorForIncomingPathB(result, typePriority.getTelephonyTypeId(), di);
+                    setOperatorForIncomingPathB(result, typePriority.getTelephonyTypeId(), di, commLocation);
                     result.setEffectiveNumber(di.getMatchedPhoneNumber());
                     updateResultFromDestinationInfo(result, di, typePriority.getTelephonyTypeId(), typePriority.getTelephonyTypeName(), commLocation);
                     log.debug("Path B match found: {}", result);
-                    return result;
+                    return result; // Return immediately, mimicking PHP's 'break 2'
                 }
             }
         }
@@ -168,15 +156,7 @@ public class CallOriginDeterminationService {
         return result;
     }
 
-    /**
-     * Helper to set the operator based on the call type, specifically for Path B logic.
-     * This method is now corrected to match the PHP implementation.
-     */
-    private void setOperatorForIncomingPathB(IncomingCallOriginInfo result, Long telephonyTypeId, DestinationInfo di) {
-        // In the PHP's "Path B" (no prefix stripped), the operator is ONLY determined
-        // for cellular calls via a specific lookup on the destination indicator's bands.
-        // For all other call types (like National), the operator is NOT determined from the
-        // destination indicator's operator_id field. It remains unassigned.
+    private void setOperatorForIncomingPathB(IncomingCallOriginInfo result, Long telephonyTypeId, DestinationInfo di, CommunicationLocation commLocation) {
         if (telephonyTypeId.equals(TelephonyTypeEnum.CELLULAR.getValue())) {
             operatorLookupService.findOperatorForIncomingCellularByIndicatorBands(di.getIndicatorId())
                 .ifPresent(opInfo -> {
