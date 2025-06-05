@@ -124,7 +124,7 @@ public class CallOriginDeterminationService {
                     );
                     if (destInfoOpt.isPresent() && destInfoOpt.get().getIndicatorId() != null && destInfoOpt.get().getIndicatorId() > 0) {
                         DestinationInfo di = destInfoOpt.get();
-                        setOperatorForIncomingPathB(result, hintedTypePriority.getTelephonyTypeId(), di, commLocation);
+                        setOperatorForIncomingPathB(result, hintedTypePriority.getTelephonyTypeId(), di);
                         result.setEffectiveNumber(di.getMatchedPhoneNumber());
                         updateResultFromDestinationInfo(result, di, hintedTypePriority.getTelephonyTypeId(), hintedTypePriority.getTelephonyTypeName(), commLocation);
                         log.debug("Path B match found using HINTED type {}: {}", hintedTelephonyTypeIdFromTransform, result);
@@ -156,7 +156,7 @@ public class CallOriginDeterminationService {
                 );
                 if (destInfoOpt.isPresent() && destInfoOpt.get().getIndicatorId() != null && destInfoOpt.get().getIndicatorId() > 0) {
                     DestinationInfo di = destInfoOpt.get();
-                    setOperatorForIncomingPathB(result, typePriority.getTelephonyTypeId(), di, commLocation);
+                    setOperatorForIncomingPathB(result, typePriority.getTelephonyTypeId(), di);
                     result.setEffectiveNumber(di.getMatchedPhoneNumber());
                     updateResultFromDestinationInfo(result, di, typePriority.getTelephonyTypeId(), typePriority.getTelephonyTypeName(), commLocation);
                     log.debug("Path B match found: {}", result);
@@ -172,7 +172,7 @@ public class CallOriginDeterminationService {
      * Helper to set the operator based on the call type, specifically for Path B logic.
      * This method is now corrected to match the PHP implementation.
      */
-    private void setOperatorForIncomingPathB(IncomingCallOriginInfo result, Long telephonyTypeId, DestinationInfo di, CommunicationLocation commLocation) {
+    private void setOperatorForIncomingPathB(IncomingCallOriginInfo result, Long telephonyTypeId, DestinationInfo di) {
         // In the PHP's "Path B" (no prefix stripped), the operator is ONLY determined
         // for cellular calls via a specific lookup on the destination indicator's bands.
         // For all other call types (like National), the operator is NOT determined from the
