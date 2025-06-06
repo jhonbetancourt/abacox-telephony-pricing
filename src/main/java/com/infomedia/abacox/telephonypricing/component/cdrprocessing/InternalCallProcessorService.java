@@ -30,7 +30,8 @@ public class InternalCallProcessorService {
     /**
      * PHP equivalent: procesaInterna
      */
-    public void processInternal(CdrData cdrData, CommunicationLocation commLocation, ExtensionLimits limits, boolean pbxSpecialRuleAppliedRecursively) {
+    public void processInternal(CdrData cdrData, ProcessingContext processingContext, ExtensionLimits limits, boolean pbxSpecialRuleAppliedRecursively) {
+        CommunicationLocation commLocation = processingContext.getCommLocation();
         log.debug("Processing INTERNAL call logic for CDR: {}. Recursive PBX applied: {}", cdrData.getCtlHash(), pbxSpecialRuleAppliedRecursively);
 
         List<String> prefixesToClean = Collections.emptyList();
@@ -59,7 +60,7 @@ public class InternalCallProcessorService {
             return;
         }
 
-        InternalCallTypeInfo internalTypeInfo = determineSpecificInternalCallType(cdrData, commLocation, limits);
+        InternalCallTypeInfo internalTypeInfo = determineSpecificInternalCallType(cdrData, processingContext, limits);
         log.debug("Determined specific internal call type info: {}", internalTypeInfo);
 
         if (internalTypeInfo.isIgnoreCall()) {
@@ -111,7 +112,9 @@ public class InternalCallProcessorService {
     /**
      * PHP equivalent: tipo_llamada_interna
      */
-    private InternalCallTypeInfo determineSpecificInternalCallType(CdrData cdrData, CommunicationLocation currentCommLocation, ExtensionLimits limits) {
+    private InternalCallTypeInfo determineSpecificInternalCallType(CdrData cdrData, ProcessingContext processingContext, ExtensionLimits limits) {
+        CommunicationLocation currentCommLocation = processingContext.getCommLocation();
+        List<String> ignoredAuthCodes = processingContext.getCdrProcessor().getIgnoredAuthCodeDescriptions();
         log.debug("Determining specific internal call type for Calling: {}, Destination: {}", cdrData.getCallingPartyNumber(), cdrData.getEffectiveDestinationNumber());
         InternalCallTypeInfo result = new InternalCallTypeInfo();
         result.setTelephonyTypeId(appConfigService.getDefaultInternalCallTypeId());
@@ -121,7 +124,7 @@ public class InternalCallProcessorService {
 
         Optional<Employee> originEmpOpt = employeeLookupService.findEmployeeByExtensionOrAuthCode(
                 cdrData.getCallingPartyNumber(), null,
-                currentCommLocation.getId());
+                currentCommLocation.getId(), ignoredAuthCodes);
         if (originEmpOpt.isEmpty() && CdrUtil.isPossibleExtension(cdrData.getCallingPartyNumber(), limits)) {
             originEmpOpt = employeeLookupService.findEmployeeByExtensionRange(cdrData.getCallingPartyNumber(), currentCommLocation.getId());
         }
@@ -129,7 +132,7 @@ public class InternalCallProcessorService {
 
         Optional<Employee> destEmpOpt = employeeLookupService.findEmployeeByExtensionOrAuthCode(
                 cdrData.getEffectiveDestinationNumber(), null,
-                null); // Search globally for destination
+                null, ignoredAuthCodes); // Search globally for destination
         if (destEmpOpt.isEmpty() && CdrUtil.isPossibleExtension(cdrData.getEffectiveDestinationNumber(), limits)) {
             destEmpOpt = employeeLookupService.findEmployeeByExtensionRange(cdrData.getEffectiveDestinationNumber(), null);
         }

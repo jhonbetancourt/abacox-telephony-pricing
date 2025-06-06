@@ -24,10 +24,10 @@ public class CdrRoutingService {
     private final CdrProcessorService cdrProcessorService;
     private final FileInfoPersistenceService fileInfoPersistenceService;
     private final FailedCallRecordPersistenceService failedCallRecordPersistenceService;
-    private final List<CdrTypeProcessor> cdrTypeProcessors;
+    private final List<CdrProcessor> cdrProcessors;
 
-    private CdrTypeProcessor getProcessorForPlantType(Long plantTypeId) {
-        return cdrTypeProcessors.stream()
+    private CdrProcessor getProcessorForPlantType(Long plantTypeId) {
+        return cdrProcessors.stream()
                 .filter(p -> p.getPlantTypeIdentifier().equals(plantTypeId))
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("No CDR processor found for plant type ID: " + plantTypeId));
@@ -45,7 +45,7 @@ public class CdrRoutingService {
     protected void routeAndProcessCdrStreamInternal(String filename, InputStream inputStream, Long plantTypeId) {
         log.info("Starting CDR stream routing and processing for file: {}, PlantTypeID: {}", filename, plantTypeId);
 
-        CdrTypeProcessor initialParser = getProcessorForPlantType(plantTypeId);
+        CdrProcessor initialParser = getProcessorForPlantType(plantTypeId);
         log.debug("Using initial parser: {}", initialParser.getClass().getSimpleName());
 
         FileInfo fileInfo = fileInfoPersistenceService.createOrGetFileInfo(filename, plantTypeId, "ROUTED_STREAM");
@@ -115,7 +115,7 @@ public class CdrRoutingService {
 
                 if (targetCommLocationOpt.isPresent()) {
                     CommunicationLocation targetCommLocation = targetCommLocationOpt.get();
-                    CdrTypeProcessor finalProcessor = getProcessorForPlantType(targetCommLocation.getPlantTypeId());
+                    CdrProcessor finalProcessor = getProcessorForPlantType(targetCommLocation.getPlantTypeId());
                     batch.add(new CdrLineContext(trimmedLine, fileInfoId, targetCommLocation, finalProcessor));
                 } else {
                     log.warn("Could not determine target CommunicationLocation for line {}: {}", lineCount, trimmedLine);

@@ -23,7 +23,8 @@ public class CallTypeAndDirectionService {
      * leading into `procesaEntrante` or `procesaSaliente`.
      * This method determines the initial nature of the call and then delegates.
      */
-    public void processCall(CdrData cdrData, CommunicationLocation commLocation, ExtensionLimits limits) {
+    public void processCall(CdrData cdrData, ProcessingContext processingContext, ExtensionLimits limits) {
+        CommunicationLocation commLocation = processingContext.getCommLocation();
         log.debug("Processing call for CDR: {}", cdrData.getCtlHash());
 
         // Initial determination of internal call (PHP: es_llamada_interna)
@@ -41,9 +42,9 @@ public class CallTypeAndDirectionService {
         cdrData.setEffectiveDestinationNumber(cdrData.getFinalCalledPartyNumber());
 
         if (cdrData.getCallDirection() == CallDirection.INCOMING) {
-            incomingCallProcessorService.processIncoming(cdrData, commLocation, limits);
+            incomingCallProcessorService.processIncoming(cdrData, processingContext, limits);
         } else { // OUTGOING or internal initially parsed as outgoing
-            outgoingCallProcessorService.processOutgoing(cdrData, commLocation, limits, false);
+            outgoingCallProcessorService.processOutgoing(cdrData, processingContext, limits, false);
         }
         log.info("Finished processing call. Final Direction: {}, Internal: {}, TelephonyType: {}",
                  cdrData.getCallDirection(), cdrData.isInternalCall(), cdrData.getTelephonyTypeId());

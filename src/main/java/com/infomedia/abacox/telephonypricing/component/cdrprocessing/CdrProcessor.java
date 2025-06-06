@@ -3,7 +3,9 @@ package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
 import com.infomedia.abacox.telephonypricing.entity.CommunicationLocation;
 
-public interface CdrTypeProcessor {
+import java.util.List;
+
+public interface CdrProcessor {
     /**
      * Checks if the given line is a header line for this CDR type.
      * The line passed here should be the raw (or trimmed) line from the file.
@@ -37,4 +39,13 @@ public interface CdrTypeProcessor {
      * @return String identifier.
      */
     Long getPlantTypeIdentifier();
+
+    /**
+     * Gets a list of authorization code descriptions that should be ignored
+     * during employee lookup for this specific plant type. These are typically
+     * error messages from the PBX that appear in the auth code field.
+     *
+     * @return A list of strings to ignore. Can be an empty list if none.
+     */
+    List<String> getIgnoredAuthCodeDescriptions();
 }

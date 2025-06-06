@@ -15,5 +15,5 @@ public class CdrLineContext {
     private final String cdrLine;
     private final Long fileInfoId;
     private final CommunicationLocation targetCommLocation;
-    private final CdrTypeProcessor processor;
+    private final CdrProcessor processor;
 }

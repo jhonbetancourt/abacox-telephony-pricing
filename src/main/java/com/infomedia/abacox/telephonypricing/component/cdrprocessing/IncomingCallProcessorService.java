@@ -23,7 +23,8 @@ public class IncomingCallProcessorService {
     /**
      * PHP equivalent: procesaEntrante
      */
-    public void processIncoming(CdrData cdrData, CommunicationLocation commLocation, ExtensionLimits limits) {
+    public void processIncoming(CdrData cdrData, ProcessingContext processingContext, ExtensionLimits limits) {
+        CommunicationLocation commLocation = processingContext.getCommLocation();
         log.debug("Processing INCOMING logic for CDR: {}", cdrData.getCtlHash());
 
         if (cdrData.isInternalCall()) {
@@ -31,7 +32,7 @@ public class IncomingCallProcessorService {
             CdrUtil.swapPartyInfo(cdrData);
             CdrUtil.swapTrunks(cdrData);
             cdrData.setCallDirection(CallDirection.OUTGOING);
-            outgoingCallProcessorService.processOutgoing(cdrData, commLocation, limits, false);
+            outgoingCallProcessorService.processOutgoing(cdrData, processingContext, limits, false);
             return;
         }
 

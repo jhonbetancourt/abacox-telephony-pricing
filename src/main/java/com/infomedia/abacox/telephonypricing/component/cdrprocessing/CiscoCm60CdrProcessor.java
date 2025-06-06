@@ -8,15 +8,12 @@ import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 
 @Component("ciscoCm60Processor")
 @Log4j2
 @RequiredArgsConstructor
-public class CiscoCm60CdrProcessor implements CdrTypeProcessor {
+public class CiscoCm60CdrProcessor implements CdrProcessor {
 
     public static final Long PLANT_TYPE_IDENTIFIER = 26L; // CM_6_0
     private static final String INTERNAL_CDR_RECORD_TYPE_HEADER_KEY = "cdrrecordtype";
@@ -27,6 +24,8 @@ public class CiscoCm60CdrProcessor implements CdrTypeProcessor {
     private final Map<String, Integer> currentHeaderPositions = new HashMap<>();
     private String conferenceIdentifierActual = DEFAULT_CONFERENCE_IDENTIFIER_PREFIX;
     private int minExpectedFieldsForValidCdr = 0;
+
+    private static final List<String> IGNORED_AUTH_CODES = List.of("Invalid Authorization Code", "Invalid Authorization Level");
 
     private final EmployeeLookupService employeeLookupService;
     private final CdrConfigService cdrConfigService;
@@ -419,5 +418,10 @@ public class CiscoCm60CdrProcessor implements CdrTypeProcessor {
             return !rest.isEmpty() && rest.matches("\\d+");
         }
         return false;
+    }
+
+    @Override
+    public List<String> getIgnoredAuthCodeDescriptions() {
+        return IGNORED_AUTH_CODES;
     }
 }

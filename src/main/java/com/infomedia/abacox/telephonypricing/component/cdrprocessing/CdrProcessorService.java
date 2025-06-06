@@ -57,7 +57,7 @@ public class CdrProcessorService {
      * This is now a private helper method containing the logic to process one line.
      * It is called by the public transactional `processCdrBatch` method.
      */
-    private void processSingleCdrLine(String cdrLine, Long fileInfoId, CommunicationLocation targetCommLocation, CdrTypeProcessor processor) {
+    private void processSingleCdrLine(String cdrLine, Long fileInfoId, CommunicationLocation targetCommLocation, CdrProcessor processor) {
         CdrData cdrData = null;
         FileInfo currentFileInfo = null;
         log.trace("Processing single CDR line for CommLocation {}: {}, FileInfo ID: {}", targetCommLocation.getId(), cdrLine, fileInfoId);
@@ -95,7 +95,7 @@ public class CdrProcessorService {
                 return;
             }
 
-            cdrData = cdrEnrichmentService.enrichCdr(cdrData, targetCommLocation);
+            cdrData = cdrEnrichmentService.enrichCdr(cdrData, new ProcessingContext(targetCommLocation, processor));
 
             if (cdrData.isMarkedForQuarantine()) {
                 log.warn("CDR marked for quarantine after enrichment. Reason: {}, Step: {}", cdrData.getQuarantineReason(), cdrData.getQuarantineStep());

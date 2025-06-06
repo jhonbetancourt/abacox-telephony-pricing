@@ -87,7 +87,7 @@ public class EmployeeLookupService {
      */
     @Transactional // Keep @Transactional for potential employee creation
     public Optional<Employee> findEmployeeByExtensionOrAuthCode(String extension, String authCode,
-                                                                Long commLocationIdContext) {
+                                                                Long commLocationIdContext, List<String> ignoredAuthCodeDescriptions) {
         StringBuilder queryStr = new StringBuilder("SELECT e.* FROM employee e ");
         queryStr.append(" LEFT JOIN communication_location cl ON e.communication_location_id = cl.id ");
         queryStr.append(" WHERE e.active = true ");
@@ -99,7 +99,7 @@ public class EmployeeLookupService {
         }
         boolean hasExtension = cleanedExtension != null && !cleanedExtension.isEmpty();
 
-        boolean isAuthCodeIgnoredType = hasAuthCode && cdrConfigService.getIgnoredAuthCodeDescriptions().stream()
+        boolean isAuthCodeIgnoredType = hasAuthCode && ignoredAuthCodeDescriptions.stream()
                 .anyMatch(ignored -> ignored.equalsIgnoreCase(authCode));
 
         if (hasAuthCode && !isAuthCodeIgnoredType) {

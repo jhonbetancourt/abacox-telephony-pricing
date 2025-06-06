@@ -8,6 +8,7 @@ import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Objects;
 
 @Service
@@ -17,11 +18,11 @@ public class CdrEnrichmentService {
 
     private final CallTypeAndDirectionService callTypeAndDirectionService;
     private final EmployeeLookupService employeeLookupService;
-    // TariffCalculationService is now called by specific processors (Incoming/Outgoing/Internal)
     private final CdrConfigService appConfigService;
     private final TelephonyTypeLookupService telephonyTypeLookupService; // For default names
 
-    public CdrData enrichCdr(CdrData cdrData, CommunicationLocation commLocation) {
+    public CdrData enrichCdr(CdrData cdrData, ProcessingContext processingContext) {
+        CommunicationLocation commLocation = processingContext.getCommLocation();
         if (cdrData == null || cdrData.isMarkedForQuarantine()) {
             log.warn("CDR is null or already marked for quarantine. Skipping enrichment. CDR: {}", cdrData != null ? cdrData.getCtlHash() : "NULL");
             return cdrData;
@@ -32,7 +33,7 @@ public class CdrEnrichmentService {
 
         try {
             // This call now handles the main flow: es_llamada_interna -> procesaEntrante/procesaSaliente
-            callTypeAndDirectionService.processCall(cdrData, commLocation, limits);
+            callTypeAndDirectionService.processCall(cdrData, processingContext, limits);
 
             if (cdrData.isMarkedForQuarantine() &&
                 (QuarantineErrorType.INTERNAL_SELF_CALL.name().equals(cdrData.getQuarantineStep()) ||
@@ -43,7 +44,7 @@ public class CdrEnrichmentService {
             }
 
             // Employee assignment logic (PHP: ObtenerFuncionario_Arreglo and parts of acumtotal_Insertar)
-            assignEmployeeToCdr(cdrData, commLocation, limits);
+            assignEmployeeToCdr(cdrData, processingContext);
 
             // Final duration check (PHP: if ($tiempo <= 0 && $tipotele_id > 0 && $tipotele_id != _TIPOTELE_ERRORES))
             if (cdrData.getDurationSeconds() != null && cdrData.getDurationSeconds() <= appConfigService.getMinCallDurationForTariffing()) {
@@ -72,9 +73,11 @@ public class CdrEnrichmentService {
         return cdrData;
     }
 
-    private void assignEmployeeToCdr(CdrData cdrData, CommunicationLocation commLocation, ExtensionLimits limits) {
+    private void assignEmployeeToCdr(CdrData cdrData, ProcessingContext processingContext) {
         String searchExtForEmployee;
         String searchAuthCodeForEmployee;
+        Long commLocationId = processingContext.getCommLocation().getId();
+        List<String> ignoredAuthCodes = processingContext.getCdrProcessor().getIgnoredAuthCodeDescriptions();
 
         // PHP: $arreglo_fun = ObtenerFuncionario_Arreglo($link, $ext, $clave, $incoming, $info_cdr['date'], $funext, $COMUBICACION_ID, $tipo_fun);
         // $ext is callingPartyNumber, $clave is authCode, $incoming is callDirection
@@ -93,7 +96,8 @@ public class CdrEnrichmentService {
         Employee foundEmployee = employeeLookupService.findEmployeeByExtensionOrAuthCode(
                         searchExtForEmployee,
                         searchAuthCodeForEmployee,
-                        commLocation.getId())
+                        commLocationId
+                        , ignoredAuthCodes)
                 .orElse(null);
 
         if (foundEmployee != null) {
@@ -133,11 +137,11 @@ public class CdrEnrichmentService {
             cdrData.getTransferCause() != TransferCause.NONE && cdrData.getTransferCause() != TransferCause.CONFERENCE_END) {
             Employee redirEmployee = employeeLookupService.findEmployeeByExtensionOrAuthCode(
                             cdrData.getLastRedirectDn(), null, // No auth code for redirect lookup
-                            commLocation.getId())
+                            commLocationId, ignoredAuthCodes)
                     .orElse(null);
             if (redirEmployee != null &&
                 redirEmployee.getCommunicationLocation() != null &&
-                Objects.equals(redirEmployee.getCommunicationLocation().getId(), commLocation.getId())) {
+                Objects.equals(redirEmployee.getCommunicationLocation().getId(), commLocationId)) {
                 cdrData.setEmployeeId(redirEmployee.getId());
                 cdrData.setEmployee(redirEmployee);
                 cdrData.setAssignmentCause(AssignmentCause.TRANSFER);
