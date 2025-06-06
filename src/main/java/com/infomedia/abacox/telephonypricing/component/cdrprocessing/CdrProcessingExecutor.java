@@ -19,7 +19,6 @@ public class CdrProcessingExecutor {
 
     // Single-threaded executor to ensure sequential processing
     private final ExecutorService sequentialExecutor = Executors.newSingleThreadExecutor();
-    private final EmployeeLookupService employeeLookupService; // For cache reset
     private final CdrRoutingService cdrRoutingService;
     private final FailedCallRecordPersistenceService failedCallRecordPersistenceService;
 
@@ -37,8 +36,6 @@ public class CdrProcessingExecutor {
         log.info("Submitting CDR stream processing task for file: {}, PlantTypeID: {}", filename, plantTypeId);
         return sequentialExecutor.submit(() -> {
             try {
-                // Reset caches at the beginning of each stream processing run
-                employeeLookupService.resetCachesForNewStream();
                 cdrRoutingService.routeAndProcessCdrStreamInternal(filename, inputStream, plantTypeId);
             } catch (Exception e) {
                 log.error("Uncaught exception during sequential execution of routeAndProcessCdrStream for file: {}", filename, e);

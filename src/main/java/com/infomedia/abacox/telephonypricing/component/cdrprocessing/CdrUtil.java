@@ -191,7 +191,7 @@ public class CdrUtil {
 
 
     public static boolean isPossibleExtension(String extensionNumber, ExtensionLimits limits) {
-        if (extensionNumber == null || extensionNumber.isEmpty()) {
+        if (limits == null || extensionNumber == null || extensionNumber.isEmpty()) {
             return false;
         }
         String cleanedExt = CdrUtil.cleanPhoneNumber(extensionNumber, null, false).getCleanedNumber();

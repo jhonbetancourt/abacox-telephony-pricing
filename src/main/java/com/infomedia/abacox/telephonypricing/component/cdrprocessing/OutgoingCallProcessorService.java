@@ -22,7 +22,7 @@ public class OutgoingCallProcessorService {
     /**
      * PHP equivalent: procesaSaliente
      */
-    public void processOutgoing(CdrData cdrData, ProcessingContext processingContext, ExtensionLimits limits, boolean pbxSpecialRuleAppliedRecursively) {
+    public void processOutgoing(CdrData cdrData, LineProcessingContext processingContext, boolean pbxSpecialRuleAppliedRecursively) {
         CommunicationLocation commLocation = processingContext.getCommLocation();
         log.debug("Processing OUTGOING logic for CDR: {}. Recursive PBX applied: {}", cdrData.getCtlHash(), pbxSpecialRuleAppliedRecursively);
 
@@ -73,7 +73,7 @@ public class OutgoingCallProcessorService {
         // PHP: if ($esinterna) { $infovalor = procesaInterna(...); }
         if (cdrData.isInternalCall()) {
             log.debug("Processing as internal call.");
-            internalCallProcessorService.processInternal(cdrData, processingContext, limits, pbxSpecialRuleAppliedRecursively);
+            internalCallProcessorService.processInternal(cdrData, processingContext, pbxSpecialRuleAppliedRecursively);
             return;
         }
 
@@ -89,7 +89,7 @@ public class OutgoingCallProcessorService {
                 cdrData.setFinalCalledPartyNumber(pbxTransformedDest.get());
                 cdrData.setEffectiveDestinationNumber(pbxTransformedDest.get()); // Update effective destination
                 cdrData.setPbxSpecialRuleAppliedInfo("PBX Outgoing Rule: " + originalDest + " -> " + pbxTransformedDest.get());
-                processOutgoing(cdrData, processingContext, limits, true); // Recursive call
+                processOutgoing(cdrData, processingContext, true); // Recursive call
                 return;
             }
         }

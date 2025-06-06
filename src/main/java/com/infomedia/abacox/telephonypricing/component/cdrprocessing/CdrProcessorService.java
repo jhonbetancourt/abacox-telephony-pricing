@@ -34,16 +34,11 @@ public class CdrProcessorService {
      * @param batch A list of CdrLineContext objects to be processed.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void processCdrBatch(List<CdrLineContext> batch) {
+    public void processCdrBatch(List<LineProcessingContext> batch) {
         log.info("Starting transactional processing for a batch of {} records.", batch.size());
-        for (CdrLineContext context : batch) {
+        for (LineProcessingContext context : batch) {
             // The original processSingleCdrLine logic is now called here for each item in the batch.
-            processSingleCdrLine(
-                    context.getCdrLine(),
-                    context.getFileInfoId(),
-                    context.getTargetCommLocation(),
-                    context.getProcessor()
-            );
+            processSingleCdrLine(context);
         }
         // After processing all items in the batch, flush and clear the persistence context.
         // This is the key to efficiency and preventing memory leaks.
@@ -57,9 +52,13 @@ public class CdrProcessorService {
      * This is now a private helper method containing the logic to process one line.
      * It is called by the public transactional `processCdrBatch` method.
      */
-    private void processSingleCdrLine(String cdrLine, Long fileInfoId, CommunicationLocation targetCommLocation, CdrProcessor processor) {
+    private void processSingleCdrLine(LineProcessingContext lineProcessingContext) {
+        CommunicationLocation targetCommLocation = lineProcessingContext.getCommLocation();
+        String cdrLine = lineProcessingContext.getCdrLine();
+        Long fileInfoId = lineProcessingContext.getFileInfoId();
         CdrData cdrData = null;
         FileInfo currentFileInfo = null;
+        CdrProcessor processor = lineProcessingContext.getCdrProcessor();
         log.trace("Processing single CDR line for CommLocation {}: {}, FileInfo ID: {}", targetCommLocation.getId(), cdrLine, fileInfoId);
         try {
             if (fileInfoId != null) {
@@ -77,7 +76,7 @@ public class CdrProcessorService {
                 }
             }
 
-            cdrData = processor.evaluateFormat(cdrLine, targetCommLocation);
+            cdrData = processor.evaluateFormat(cdrLine, targetCommLocation, lineProcessingContext.getCommLocationExtensionLimits());
             if (cdrData == null) {
                 log.trace("Processor returned null for line, skipping: {}", cdrLine);
                 return;
@@ -95,7 +94,7 @@ public class CdrProcessorService {
                 return;
             }
 
-            cdrData = cdrEnrichmentService.enrichCdr(cdrData, new ProcessingContext(targetCommLocation, processor));
+            cdrData = cdrEnrichmentService.enrichCdr(cdrData, lineProcessingContext);
 
             if (cdrData.isMarkedForQuarantine()) {
                 log.warn("CDR marked for quarantine after enrichment. Reason: {}, Step: {}", cdrData.getQuarantineReason(), cdrData.getQuarantineStep());

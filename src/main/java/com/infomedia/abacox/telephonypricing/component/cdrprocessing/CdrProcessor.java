@@ -31,7 +31,7 @@ public interface CdrProcessor {
      * @param commLocation The communication location context.
      * @return CdrData object, or null if the line should be skipped (e.g., comment, type definition).
      */
-    CdrData evaluateFormat(String cdrLine, CommunicationLocation commLocation);
+    CdrData evaluateFormat(String cdrLine, CommunicationLocation commLocation, ExtensionLimits extensionLimits);
 
     /**
      * Gets a unique identifier for the plant type this processor handles.

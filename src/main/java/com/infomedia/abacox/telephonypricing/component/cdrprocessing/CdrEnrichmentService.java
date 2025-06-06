@@ -21,7 +21,7 @@ public class CdrEnrichmentService {
     private final CdrConfigService appConfigService;
     private final TelephonyTypeLookupService telephonyTypeLookupService; // For default names
 
-    public CdrData enrichCdr(CdrData cdrData, ProcessingContext processingContext) {
+    public CdrData enrichCdr(CdrData cdrData, LineProcessingContext processingContext) {
         CommunicationLocation commLocation = processingContext.getCommLocation();
         if (cdrData == null || cdrData.isMarkedForQuarantine()) {
             log.warn("CDR is null or already marked for quarantine. Skipping enrichment. CDR: {}", cdrData != null ? cdrData.getCtlHash() : "NULL");
@@ -29,11 +29,10 @@ public class CdrEnrichmentService {
         }
         log.info("Starting enrichment for CDR: {}", cdrData.getCtlHash());
         cdrData.setCommLocationId(commLocation.getId());
-        ExtensionLimits limits = employeeLookupService.getExtensionLimits(commLocation); // Get limits once
 
         try {
             // This call now handles the main flow: es_llamada_interna -> procesaEntrante/procesaSaliente
-            callTypeAndDirectionService.processCall(cdrData, processingContext, limits);
+            callTypeAndDirectionService.processCall(cdrData, processingContext);
 
             if (cdrData.isMarkedForQuarantine() &&
                 (QuarantineErrorType.INTERNAL_SELF_CALL.name().equals(cdrData.getQuarantineStep()) ||
@@ -73,7 +72,7 @@ public class CdrEnrichmentService {
         return cdrData;
     }
 
-    private void assignEmployeeToCdr(CdrData cdrData, ProcessingContext processingContext) {
+    private void assignEmployeeToCdr(CdrData cdrData, LineProcessingContext processingContext) {
         String searchExtForEmployee;
         String searchAuthCodeForEmployee;
         Long commLocationId = processingContext.getCommLocation().getId();
@@ -97,7 +96,7 @@ public class CdrEnrichmentService {
                         searchExtForEmployee,
                         searchAuthCodeForEmployee,
                         commLocationId
-                        , ignoredAuthCodes)
+                        , ignoredAuthCodes, processingContext.getExtensionRanges())
                 .orElse(null);
 
         if (foundEmployee != null) {
@@ -137,7 +136,7 @@ public class CdrEnrichmentService {
             cdrData.getTransferCause() != TransferCause.NONE && cdrData.getTransferCause() != TransferCause.CONFERENCE_END) {
             Employee redirEmployee = employeeLookupService.findEmployeeByExtensionOrAuthCode(
                             cdrData.getLastRedirectDn(), null, // No auth code for redirect lookup
-                            commLocationId, ignoredAuthCodes)
+                            commLocationId, ignoredAuthCodes, processingContext.getExtensionRanges())
                     .orElse(null);
             if (redirEmployee != null &&
                 redirEmployee.getCommunicationLocation() != null &&

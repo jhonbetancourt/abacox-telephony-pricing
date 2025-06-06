@@ -7,6 +7,7 @@ import com.infomedia.abacox.telephonypricing.entity.ExtensionRange;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.Query;
+import jakarta.persistence.Tuple;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
@@ -23,11 +24,7 @@ public class EmployeeLookupService {
 
     @PersistenceContext
     private EntityManager entityManager;
-    private final CdrConfigService cdrConfigService; // Injected
-    private final Map<Long, ExtensionLimits> extensionLimitsCache = new ConcurrentHashMap<>();
-    private final Map<Long, List<ExtensionRange>> extensionRangesCache = new ConcurrentHashMap<>();
-
-    // ... (resetCachesForNewStream, getExtensionLimits, findEmployeeByExtensionOrAuthCode methods remain the same) ...
+    private final CdrConfigService cdrConfigService;
 
     private Employee createEmployeeFromRange(String extension, Long subdivisionId, Long commLocationId, String namePrefix) {
         Employee newEmployee = new Employee();
@@ -51,35 +48,6 @@ public class EmployeeLookupService {
         return newEmployee;
     }
 
-    // ... (findEmployeeByExtensionRange, getExtensionLimitsLookup, isPossibleExtension, getPlantTypeIdForCommLocation methods remain the same) ...
-    @Transactional(readOnly = true)
-    public void resetCachesForNewStream() {
-        extensionLimitsCache.clear();
-        extensionRangesCache.clear();
-        log.info("ExtensionLimits and ExtensionRanges caches cleared for new stream processing.");
-    }
-
-    @Transactional(readOnly = true)
-    public ExtensionLimits getExtensionLimits(CommunicationLocation commLocation) {
-        if (commLocation == null || commLocation.getId() == null) {
-            log.warn("getExtensionLimits called with null or invalid commLocation.");
-            return new ExtensionLimits();
-        }
-        return this.extensionLimitsCache.computeIfAbsent(commLocation.getId(), id -> {
-            log.debug("Extension limits not found in cache for CommLocation ID: {}. Fetching.", id);
-            if (commLocation.getIndicator() != null && commLocation.getIndicator().getOriginCountryId() != null) {
-                return getExtensionLimitsLookup(
-                        commLocation.getIndicator().getOriginCountryId(),
-                        id,
-                        commLocation.getPlantTypeId()
-                );
-            }
-            log.warn("Cannot fetch extension limits: Indicator or OriginCountryId is null for CommLocation ID: {}", id);
-            return new ExtensionLimits();
-        });
-    }
-
-
     /**
      * Finds an employee by extension or auth code. If not found by direct match,
      * and the extension is valid, it attempts to find a match in extension ranges.
@@ -87,7 +55,7 @@ public class EmployeeLookupService {
      */
     @Transactional // Keep @Transactional for potential employee creation
     public Optional<Employee> findEmployeeByExtensionOrAuthCode(String extension, String authCode,
-                                                                Long commLocationIdContext, List<String> ignoredAuthCodeDescriptions) {
+                                                                Long commLocationIdContext, List<String> ignoredAuthCodeDescriptions, Map<Long, List<ExtensionRange>> extensionRanges) {
         StringBuilder queryStr = new StringBuilder("SELECT e.* FROM employee e ");
         queryStr.append(" LEFT JOIN communication_location cl ON e.communication_location_id = cl.id ");
         queryStr.append(" WHERE e.active = true ");
@@ -153,7 +121,7 @@ public class EmployeeLookupService {
                                          cleanedExtension.matches("^[0-9#*+]+$");
 
             if (phpExtensionValida) {
-                Optional<Employee> conceptualEmployeeOpt = findEmployeeByExtensionRange(cleanedExtension, commLocationIdContext);
+                Optional<Employee> conceptualEmployeeOpt = findEmployeeByExtensionRange(cleanedExtension, commLocationIdContext, extensionRanges);
                 if (conceptualEmployeeOpt.isPresent()) {
                     Employee conceptualEmployee = conceptualEmployeeOpt.get();
                     if (conceptualEmployee.getId() == null && cdrConfigService.createEmployeesAutomaticallyFromRange()) {
@@ -170,131 +138,123 @@ public class EmployeeLookupService {
         }
     }
 
+    /**
+     * Fetches the ExtensionLimits for all active CommunicationLocations from the database in a single, efficient operation.
+     * This method performs bulk lookups and processes the data in memory to avoid N+1 query issues.
+     * It bypasses the internal cache.
+     *
+     * @return A map where the key is the CommunicationLocation ID and the value is its calculated ExtensionLimits.
+     */
     @Transactional(readOnly = true)
-    public ExtensionLimits getExtensionLimitsLookup(Long originCountryId, Long commLocationId, Long plantTypeId) {
-        int finalMinVal = 100;
-        int finalMaxVal = CdrConfigService.ACUMTOTAL_MAX_EXTENSION_LENGTH_FOR_INTERNAL_CHECK;
+    public Map<Long, ExtensionLimits> getExtensionLimits() {
+        log.info("Fetching all extension limits for all active Communication Locations using bulk operations.");
 
-        int maxLenEmployees = 0;
-        int minLenEmployees = Integer.MAX_VALUE;
-        boolean empLenSet = false;
+        // 1. Initialize a result map with default limits for all active locations.
+        // This ensures every location has an entry, even if it has no employees or ranges.
+        String commLocationQuery = "SELECT cl FROM CommunicationLocation cl WHERE cl.active = true";
+        List<CommunicationLocation> allCommLocations = entityManager.createQuery(commLocationQuery, CommunicationLocation.class).getResultList();
+        Map<Long, ExtensionLimits> resultMap = allCommLocations.stream()
+                .collect(Collectors.toMap(CommunicationLocation::getId, id -> new ExtensionLimits()));
+
+        if (allCommLocations.isEmpty()) {
+            log.warn("No active Communication Locations found to fetch extension limits for.");
+            return Collections.emptyMap();
+        }
 
         String maxAllowedLenStr = String.valueOf(CdrConfigService.ACUMTOTAL_MAX_EXTENSION_LENGTH_FOR_INTERNAL_CHECK);
         int maxStandardExtLength = maxAllowedLenStr.length() - 1;
         if (maxStandardExtLength < 1) maxStandardExtLength = 1;
 
-        StringBuilder empQueryBuilder = new StringBuilder(
-            "SELECT CAST(LENGTH(e.extension) AS INTEGER) as ext_len " +
-            "FROM employee e " +
-            "JOIN communication_location cl ON e.communication_location_id = cl.id " +
-            "JOIN indicator i ON cl.indicator_id = i.id " +
-            "WHERE e.active = true AND cl.active = true AND i.active = true " +
-            "  AND e.extension ~ '^[1-9][0-9]*$' " +
-            "  AND LENGTH(e.extension) BETWEEN 1 AND :maxStandardExtLength ");
-        if (originCountryId != null) empQueryBuilder.append(" AND i.origin_country_id = :originCountryId ");
-        if (commLocationId != null) empQueryBuilder.append(" AND e.communication_location_id = :commLocationId ");
-        if (plantTypeId != null) empQueryBuilder.append(" AND cl.plant_type_id = :plantTypeId ");
+        // 2. Bulk fetch Employee extension lengths
+        String empLenQueryStr = "SELECT e.communication_location_id as comm_id, " +
+                "  CAST(MIN(LENGTH(e.extension)) AS INTEGER) as min_len, " +
+                "  CAST(MAX(LENGTH(e.extension)) AS INTEGER) as max_len " +
+                "FROM employee e " +
+                "JOIN communication_location cl ON e.communication_location_id = cl.id " +
+                "WHERE e.active = true AND cl.active = true " +
+                "  AND e.extension ~ '^[1-9][0-9]*$' " +
+                "  AND LENGTH(e.extension) BETWEEN 1 AND :maxStandardExtLength " +
+                "GROUP BY e.communication_location_id";
+        Query empLenQuery = entityManager.createNativeQuery(empLenQueryStr, Tuple.class);
+        empLenQuery.setParameter("maxStandardExtLength", maxStandardExtLength);
+        List<Tuple> empLenResults = empLenQuery.getResultList();
 
-        jakarta.persistence.Query empQuery = entityManager.createNativeQuery(empQueryBuilder.toString());
-        empQuery.setParameter("maxStandardExtLength", maxStandardExtLength);
-        if (originCountryId != null) empQuery.setParameter("originCountryId", originCountryId);
-        if (commLocationId != null) empQuery.setParameter("commLocationId", commLocationId);
-        if (plantTypeId != null) empQuery.setParameter("plantTypeId", plantTypeId);
-
-        List<Number> empLengths = empQuery.getResultList();
-        for (Number lenNum : empLengths) {
-            int len = lenNum.intValue();
-            if (len > maxLenEmployees) maxLenEmployees = len;
-            if (len < minLenEmployees) minLenEmployees = len;
-            empLenSet = true;
+        for (Tuple row : empLenResults) {
+            Long commId = row.get("comm_id", Number.class).longValue();
+            int minLen = row.get("min_len", Number.class).intValue();
+            int maxLen = row.get("max_len", Number.class).intValue();
+            resultMap.computeIfPresent(commId, (k, v) -> v.updateLengths(minLen, maxLen));
         }
-        if (!empLenSet) minLenEmployees = 0;
+        log.debug("Processed {} employee length groups.", empLenResults.size());
 
-        int maxLenRanges = 0;
-        int minLenRanges = Integer.MAX_VALUE;
-        boolean rangeLenSet = false;
+        // 3. Bulk fetch ExtensionRange lengths
+        String rangeLenQueryStr = "SELECT er.comm_location_id as comm_id, " +
+                "  CAST(MIN(LENGTH(er.range_start::text)) AS INTEGER) as min_len, " +
+                "  CAST(MAX(LENGTH(er.range_end::text)) AS INTEGER) as max_len " +
+                "FROM extension_range er " +
+                "JOIN communication_location cl ON er.comm_location_id = cl.id " +
+                "WHERE er.active = true AND cl.active = true " +
+                "  AND er.range_start::text ~ '^[0-9]+$' AND er.range_end::text ~ '^[0-9]+$' " +
+                "  AND LENGTH(er.range_start::text) BETWEEN 1 AND :maxStandardExtLength " +
+                "  AND LENGTH(er.range_end::text) BETWEEN 1 AND :maxStandardExtLength " +
+                "GROUP BY er.comm_location_id";
+        Query rangeLenQuery = entityManager.createNativeQuery(rangeLenQueryStr, Tuple.class);
+        rangeLenQuery.setParameter("maxStandardExtLength", maxStandardExtLength);
+        List<Tuple> rangeLenResults = rangeLenQuery.getResultList();
 
-        StringBuilder rangeQueryBuilder = new StringBuilder(
-            "SELECT CAST(LENGTH(er.range_start::text) AS INTEGER) as len_desde, CAST(LENGTH(er.range_end::text) AS INTEGER) as len_hasta " +
-            "FROM extension_range er " +
-            "JOIN communication_location cl ON er.comm_location_id = cl.id " +
-            "JOIN indicator i ON cl.indicator_id = i.id " +
-            "WHERE er.active = true AND cl.active = true AND i.active = true " +
-            "  AND er.range_start::text ~ '^[0-9]+$' AND er.range_end::text ~ '^[0-9]+$' " +
-            "  AND LENGTH(er.range_start::text) BETWEEN 1 AND :maxStandardExtLength " +
-            "  AND LENGTH(er.range_end::text) BETWEEN 1 AND :maxStandardExtLength ");
-        if (originCountryId != null) rangeQueryBuilder.append(" AND i.origin_country_id = :originCountryId ");
-        if (commLocationId != null) rangeQueryBuilder.append(" AND er.comm_location_id = :commLocationId ");
-        if (plantTypeId != null) rangeQueryBuilder.append(" AND cl.plant_type_id = :plantTypeId ");
-
-        jakarta.persistence.Query rangeQuery = entityManager.createNativeQuery(rangeQueryBuilder.toString());
-        rangeQuery.setParameter("maxStandardExtLength", maxStandardExtLength);
-        if (originCountryId != null) rangeQuery.setParameter("originCountryId", originCountryId);
-        if (commLocationId != null) rangeQuery.setParameter("commLocationId", commLocationId);
-        if (plantTypeId != null) rangeQuery.setParameter("plantTypeId", plantTypeId);
-
-        List<Object[]> rangeLengthPairs = rangeQuery.getResultList();
-        for (Object[] pair : rangeLengthPairs) {
-            int lenDesde = ((Number) pair[0]).intValue();
-            int lenHasta = ((Number) pair[1]).intValue();
-            if (lenHasta > maxLenRanges) maxLenRanges = lenHasta;
-            if (lenDesde < minLenRanges) minLenRanges = lenDesde;
-            rangeLenSet = true;
+        for (Tuple row : rangeLenResults) {
+            Long commId = row.get("comm_id", Number.class).longValue();
+            int minLen = row.get("min_len", Number.class).intValue();
+            int maxLen = row.get("max_len", Number.class).intValue();
+            resultMap.computeIfPresent(commId, (k, v) -> v.updateLengths(minLen, maxLen));
         }
-        if (!rangeLenSet) minLenRanges = 0;
+        log.debug("Processed {} extension range length groups.", rangeLenResults.size());
 
-        int effectiveMinLen = Integer.MAX_VALUE;
-        int effectiveMaxLen = 0;
-
-        if (empLenSet) {
-            effectiveMinLen = Math.min(effectiveMinLen, minLenEmployees);
-            effectiveMaxLen = Math.max(effectiveMaxLen, maxLenEmployees);
-        }
-        if (rangeLenSet) {
-            effectiveMinLen = Math.min(effectiveMinLen, minLenRanges);
-            effectiveMaxLen = Math.max(effectiveMaxLen, maxLenRanges);
-        }
-
-        if (effectiveMinLen == Integer.MAX_VALUE) effectiveMinLen = 0;
-
-        if (effectiveMaxLen > 0) {
-            finalMaxVal = Integer.parseInt("9".repeat(effectiveMaxLen));
-        }
-        if (effectiveMinLen > 0) {
-            finalMinVal = Integer.parseInt("1" + "0".repeat(Math.max(0, effectiveMinLen - 1)));
-        }
-
-        if (finalMinVal > finalMaxVal && finalMaxVal > 0 && effectiveMinLen > 0 && effectiveMaxLen > 0) {
-            finalMinVal = finalMaxVal;
-        }
-
-
-        StringBuilder specialExtQueryBuilder = new StringBuilder(
-            "SELECT DISTINCT e.extension FROM employee e " +
-            "JOIN communication_location cl ON e.communication_location_id = cl.id " +
-            "JOIN indicator i ON cl.indicator_id = i.id " +
-            "WHERE e.active = true AND cl.active = true AND i.active = true " +
-            "  AND e.extension NOT LIKE '%-%' " +
-            "  AND (LENGTH(e.extension) >= :maxExtStandardLenForFullList OR e.extension LIKE '0%' OR e.extension LIKE '*%' OR e.extension LIKE '#%') ");
-        if (originCountryId != null) specialExtQueryBuilder.append(" AND i.origin_country_id = :originCountryId ");
-        if (commLocationId != null) specialExtQueryBuilder.append(" AND e.communication_location_id = :commLocationId ");
-        if (plantTypeId != null) specialExtQueryBuilder.append(" AND cl.plant_type_id = :plantTypeId ");
-
-        jakarta.persistence.Query specialExtQuery = entityManager.createNativeQuery(specialExtQueryBuilder.toString(), String.class);
+        // 4. Bulk fetch Special Extensions
+        String specialExtQueryStr = "SELECT e.communication_location_id as comm_id, e.extension " +
+                "FROM employee e " +
+                "JOIN communication_location cl ON e.communication_location_id = cl.id " +
+                "WHERE e.active = true AND cl.active = true " +
+                "  AND e.extension NOT LIKE '%-%' " +
+                "  AND (LENGTH(e.extension) >= :maxExtStandardLenForFullList OR e.extension LIKE '0%' OR e.extension LIKE '*%' OR e.extension LIKE '#%')";
+        Query specialExtQuery = entityManager.createNativeQuery(specialExtQueryStr, Tuple.class);
         specialExtQuery.setParameter("maxExtStandardLenForFullList", maxAllowedLenStr.length());
-        if (originCountryId != null) specialExtQuery.setParameter("originCountryId", originCountryId);
-        if (commLocationId != null) specialExtQuery.setParameter("commLocationId", commLocationId);
-        if (plantTypeId != null) specialExtQuery.setParameter("plantTypeId", plantTypeId);
+        List<Tuple> specialExtResults = specialExtQuery.getResultList();
 
-        List<String> specialFullExtensions = specialExtQuery.getResultList();
+        // Group results by comm_id in memory
+        Map<Long, List<String>> specialExtensionsByCommId = specialExtResults.stream()
+                .collect(Collectors.groupingBy(
+                        tuple -> tuple.get("comm_id", Number.class).longValue(),
+                        Collectors.mapping(tuple -> tuple.get("extension", String.class), Collectors.toList())
+                ));
 
-        log.debug("Calculated extension limits: minVal={}, maxVal={}, specialCount={}", finalMinVal, finalMaxVal, specialFullExtensions.size());
-        return new ExtensionLimits(finalMinVal, finalMaxVal, specialFullExtensions);
+        specialExtensionsByCommId.forEach((commId, extensions) ->
+                resultMap.computeIfPresent(commId, (k, v) -> {
+                    v.setSpecialFullExtensions(extensions);
+                    return v;
+                })
+        );
+        log.debug("Processed special extensions for {} locations.", specialExtensionsByCommId.size());
+
+        // 5. Finalize the numeric min/max values from the collected lengths
+        resultMap.values().forEach(ExtensionLimits::calculateFinalMinMaxValues);
+        log.info("Finished fetching and calculating all extension limits. Found limits for {} locations.", resultMap.size());
+
+        return resultMap;
     }
 
+    /**
+     * Finds a conceptual employee by checking if an extension falls within a given set of ranges.
+     * This version receives the extension ranges as a parameter, bypassing the internal cache.
+     *
+     * @param extension The extension number to check.
+     * @param commLocationId The context of the current communication location, used for global vs. local search logic.
+     * @param extensionRanges A pre-fetched map of all relevant extension ranges.
+     * @return An Optional containing a conceptual Employee if a match is found.
+     */
     @Transactional(readOnly = true)
-    public Optional<Employee> findEmployeeByExtensionRange(String extension, Long commLocationId) {
-        if (extension == null || !extension.matches("\\d+")) {
+    public Optional<Employee> findEmployeeByExtensionRange(String extension, Long commLocationId, Map<Long, List<ExtensionRange>> extensionRanges) {
+        if (extension == null || !extension.matches("\\d+") || extensionRanges == null || extensionRanges.isEmpty()) {
             return Optional.empty();
         }
         long extNum;
@@ -304,76 +264,74 @@ public class EmployeeLookupService {
             return Optional.empty();
         }
 
-        long commLocationIdContext = commLocationId != null ? commLocationId : 0L; // Use 0L for global context
-
         boolean searchRangesGlobally = cdrConfigService.areExtensionsGlobal();
-
-        // Use cached ranges if available for the context (global or specific commLocation)
-        Long cacheKey = searchRangesGlobally ? 0L : commLocationIdContext; // 0L for global cache key
-
-        List<ExtensionRange> rangesToSearch = extensionRangesCache.computeIfAbsent(cacheKey, k -> {
-            log.debug("Extension ranges not in cache for key {}. Fetching.", k);
-            StringBuilder queryStrBuilder = new StringBuilder(
-                "SELECT er.* FROM extension_range er " +
-                "JOIN communication_location cl ON er.comm_location_id = cl.id " +
-                "WHERE er.active = true AND cl.active = true ");
-
-            if (!searchRangesGlobally) {
-                queryStrBuilder.append("AND er.comm_location_id = :commLocationIdContext ");
-            }
-            // If searchRangesGlobally, we don't filter by comm_location_id here, but might order by it later.
-            // PHP: ORDER BY RANGOEXT_HISTODESDE DESC, RANGOEXT_DESDE DESC, RANGOEXT_HASTA ASC
-            // Historical part is omitted for now.
-            queryStrBuilder.append("ORDER BY (er.range_end - er.range_start) ASC, er.created_date DESC");
-
-            Query nativeQuery = entityManager.createNativeQuery(queryStrBuilder.toString(), ExtensionRange.class);
-            if (!searchRangesGlobally) {
-                nativeQuery.setParameter("commLocationIdContext", commLocationIdContext);
-            }
-            return nativeQuery.getResultList();
-        });
-
-        // Filter the (potentially cached) list
-        List<ExtensionRange> matchingRanges = rangesToSearch.stream()
-            .filter(er -> extNum >= er.getRangeStart() && extNum <= er.getRangeEnd())
-            .collect(Collectors.toList());
+        List<ExtensionRange> matchingRanges = new ArrayList<>();
 
         if (searchRangesGlobally) {
+            // If global, check all ranges from all comm locations
+            extensionRanges.values().stream()
+                    .flatMap(List::stream) // Flatten the lists of ranges from all locations
+                    .filter(er -> extNum >= er.getRangeStart() && extNum <= er.getRangeEnd())
+                    .forEach(matchingRanges::add);
+
+            // Sort to prioritize the range from the current context commLocationId
             matchingRanges.sort(Comparator
-                .comparing((ExtensionRange er) -> !Objects.equals(er.getCommLocationId(), commLocationIdContext)) // false (0) for match, true (1) for non-match
-                .thenComparingLong(er -> er.getRangeEnd() - er.getRangeStart()) // tighter range
-                .thenComparing(ExtensionRange::getCreatedDate, Comparator.nullsLast(Comparator.reverseOrder()))
+                    .comparing((ExtensionRange er) -> !Objects.equals(er.getCommLocationId(), commLocationId)) // false (0) for match, true (1) for non-match
+                    .thenComparingLong(er -> er.getRangeEnd() - er.getRangeStart()) // then by tighter range
+                    .thenComparing(ExtensionRange::getCreatedDate, Comparator.nullsLast(Comparator.reverseOrder()))
             );
+        } else {
+            // If not global, only check ranges for the specific commLocationId
+            List<ExtensionRange> rangesForLocation = extensionRanges.get(commLocationId);
+            if (rangesForLocation != null) {
+                rangesForLocation.stream()
+                        .filter(er -> extNum >= er.getRangeStart() && extNum <= er.getRangeEnd())
+                        .forEach(matchingRanges::add);
+                // The list is already sorted by tightness/date from the fetch query
+            }
         }
-        // If not global or no context, existing sort (tighter range, newer) is fine.
 
         if (!matchingRanges.isEmpty()) {
-            ExtensionRange matchedRange = matchingRanges.get(0); // Get the best match after sorting
-            log.debug("Extension {} matched range: {}", extension, matchedRange.getId());
+            ExtensionRange bestMatch = matchingRanges.get(0); // The best match is the first one after sorting
+            log.debug("Extension {} matched range (via parameter): {}", extension, bestMatch.getId());
             Employee conceptualEmployee = createEmployeeFromRange(
                     extension,
-                    matchedRange.getSubdivisionId(),
-                    matchedRange.getCommLocationId(),
-                    matchedRange.getPrefix()
+                    bestMatch.getSubdivisionId(),
+                    bestMatch.getCommLocationId(),
+                    bestMatch.getPrefix()
             );
-            if (matchedRange.getCommLocationId() != null) {
-                CommunicationLocation cl = entityManager.find(CommunicationLocation.class, matchedRange.getCommLocationId());
+            // Eagerly fetch the associated CommunicationLocation for the conceptual employee
+            if (bestMatch.getCommLocationId() != null) {
+                CommunicationLocation cl = entityManager.find(CommunicationLocation.class, bestMatch.getCommLocationId());
                 conceptualEmployee.setCommunicationLocation(cl);
             }
             return Optional.of(conceptualEmployee);
         }
+
         return Optional.empty();
     }
 
+    /**
+     * Fetches all active extension ranges from the database, organized by CommunicationLocation ID.
+     *
+     * @return A map where the key is the CommunicationLocation ID and the value is a list of its ExtensionRanges.
+     */
     @Transactional(readOnly = true)
-    protected Long getPlantTypeIdForCommLocation(Long commLocationId) {
-        if (commLocationId == null) return null;
-        try {
-            return entityManager.createQuery("SELECT cl.plantTypeId FROM CommunicationLocation cl WHERE cl.id = :id", Long.class)
-                    .setParameter("id", commLocationId)
-                    .getSingleResult();
-        } catch (jakarta.persistence.NoResultException e) {
-            return null;
-        }
+    public Map<Long, List<ExtensionRange>> getExtensionRanges() {
+        log.debug("Fetching all active extension ranges from the database (cache bypassed).");
+
+        String queryStr = "SELECT er.* FROM extension_range er " +
+                "JOIN communication_location cl ON er.comm_location_id = cl.id " +
+                "WHERE er.active = true AND cl.active = true " +
+                // PHP: ORDER BY RANGOEXT_HISTODESDE DESC, RANGOEXT_DESDE DESC, RANGOEXT_HASTA ASC
+                // Historical part is omitted for now. Sorting by range size and creation date is a good practice.
+                "ORDER BY (er.range_end - er.range_start) ASC, er.created_date DESC";
+
+        Query nativeQuery = entityManager.createNativeQuery(queryStr, ExtensionRange.class);
+        List<ExtensionRange> allRanges = nativeQuery.getResultList();
+
+        // Group the results by CommunicationLocation ID
+        return allRanges.stream()
+                .collect(Collectors.groupingBy(ExtensionRange::getCommLocationId));
     }
 }

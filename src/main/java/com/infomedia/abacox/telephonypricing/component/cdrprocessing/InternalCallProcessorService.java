@@ -30,7 +30,7 @@ public class InternalCallProcessorService {
     /**
      * PHP equivalent: procesaInterna
      */
-    public void processInternal(CdrData cdrData, ProcessingContext processingContext, ExtensionLimits limits, boolean pbxSpecialRuleAppliedRecursively) {
+    public void processInternal(CdrData cdrData, LineProcessingContext processingContext, boolean pbxSpecialRuleAppliedRecursively) {
         CommunicationLocation commLocation = processingContext.getCommLocation();
         log.debug("Processing INTERNAL call logic for CDR: {}. Recursive PBX applied: {}", cdrData.getCtlHash(), pbxSpecialRuleAppliedRecursively);
 
@@ -60,7 +60,7 @@ public class InternalCallProcessorService {
             return;
         }
 
-        InternalCallTypeInfo internalTypeInfo = determineSpecificInternalCallType(cdrData, processingContext, limits);
+        InternalCallTypeInfo internalTypeInfo = determineSpecificInternalCallType(cdrData, processingContext);
         log.debug("Determined specific internal call type info: {}", internalTypeInfo);
 
         if (internalTypeInfo.isIgnoreCall()) {
@@ -112,7 +112,7 @@ public class InternalCallProcessorService {
     /**
      * PHP equivalent: tipo_llamada_interna
      */
-    private InternalCallTypeInfo determineSpecificInternalCallType(CdrData cdrData, ProcessingContext processingContext, ExtensionLimits limits) {
+    private InternalCallTypeInfo determineSpecificInternalCallType(CdrData cdrData, LineProcessingContext processingContext) {
         CommunicationLocation currentCommLocation = processingContext.getCommLocation();
         List<String> ignoredAuthCodes = processingContext.getCdrProcessor().getIgnoredAuthCodeDescriptions();
         log.debug("Determining specific internal call type for Calling: {}, Destination: {}", cdrData.getCallingPartyNumber(), cdrData.getEffectiveDestinationNumber());
@@ -122,19 +122,21 @@ public class InternalCallProcessorService {
         result.setDestinationIndicatorId(currentCommLocation.getIndicatorId());
         result.setOriginIndicatorId(currentCommLocation.getIndicatorId());
 
+        ExtensionLimits limits = processingContext.getCommLocationExtensionLimits();
+
         Optional<Employee> originEmpOpt = employeeLookupService.findEmployeeByExtensionOrAuthCode(
                 cdrData.getCallingPartyNumber(), null,
-                currentCommLocation.getId(), ignoredAuthCodes);
+                currentCommLocation.getId(), ignoredAuthCodes, processingContext.getExtensionRanges());
         if (originEmpOpt.isEmpty() && CdrUtil.isPossibleExtension(cdrData.getCallingPartyNumber(), limits)) {
-            originEmpOpt = employeeLookupService.findEmployeeByExtensionRange(cdrData.getCallingPartyNumber(), currentCommLocation.getId());
+            originEmpOpt = employeeLookupService.findEmployeeByExtensionRange(cdrData.getCallingPartyNumber(), currentCommLocation.getId(), processingContext.getExtensionRanges());
         }
         result.setOriginEmployee(originEmpOpt.orElse(null));
 
         Optional<Employee> destEmpOpt = employeeLookupService.findEmployeeByExtensionOrAuthCode(
                 cdrData.getEffectiveDestinationNumber(), null,
-                null, ignoredAuthCodes); // Search globally for destination
+                null, ignoredAuthCodes, processingContext.getExtensionRanges()); // Search globally for destination
         if (destEmpOpt.isEmpty() && CdrUtil.isPossibleExtension(cdrData.getEffectiveDestinationNumber(), limits)) {
-            destEmpOpt = employeeLookupService.findEmployeeByExtensionRange(cdrData.getEffectiveDestinationNumber(), null);
+            destEmpOpt = employeeLookupService.findEmployeeByExtensionRange(cdrData.getEffectiveDestinationNumber(), null, processingContext.getExtensionRanges());
         }
         result.setDestinationEmployee(destEmpOpt.orElse(null));
 

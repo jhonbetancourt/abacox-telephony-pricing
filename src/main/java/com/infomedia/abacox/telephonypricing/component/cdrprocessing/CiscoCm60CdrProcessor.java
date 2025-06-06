@@ -31,7 +31,7 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
     private final CdrConfigService cdrConfigService;
 
     @Override
-    public CdrData evaluateFormat(String cdrLine, CommunicationLocation commLocation) {
+    public CdrData evaluateFormat(String cdrLine, CommunicationLocation commLocation, ExtensionLimits extensionLimits) {
         log.debug("Evaluating Cisco CM 6.0 CDR line: {}", cdrLine);
         if (currentHeaderPositions.isEmpty() || !currentHeaderPositions.containsKey("_max_mapped_header_index_")) {
             log.error("Cisco CM 6.0 Headers not parsed. Cannot process line: {}", cdrLine);
@@ -39,10 +39,6 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
             errorData.setMarkedForQuarantine(true); errorData.setQuarantineReason("Header not parsed prior to CDR line processing.");
             errorData.setQuarantineStep(QuarantineErrorType.MISSING_HEADER.name()); return errorData;
         }
-
-        // Get ExtensionLimits for the current context. If commLocation is null (during routing),
-        // a default/empty limits object will be returned, which is acceptable for the initial parse.
-        ExtensionLimits extensionLimits = employeeLookupService.getExtensionLimits(commLocation);
 
         List<String> fields = CdrUtil.parseCsvLine(cdrLine, CDR_SEPARATOR);
         CdrData cdrData = new CdrData();
@@ -81,7 +77,7 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
         // --- Apply _NN_VALIDA logic during extraction ---
         String callingNumber = getFieldValue(fields, "callingPartyNumber");
         String callingPartition = getFieldValue(fields, "callingPartyNumberPartition").toUpperCase();
-        if (callingPartition.isEmpty() && CdrUtil.isPossibleExtension(callingNumber, extensionLimits)) {
+        if (callingPartition.isEmpty() && extensionLimits!=null && CdrUtil.isPossibleExtension(callingNumber, extensionLimits)) {
             callingPartition = cdrConfigService.getNoPartitionPlaceholder();
         }
         cdrData.setCallingPartyNumber(callingNumber);
@@ -89,7 +85,7 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
 
         String finalCalledNumber = getFieldValue(fields, "finalCalledPartyNumber");
         String finalCalledPartition = getFieldValue(fields, "finalCalledPartyNumberPartition").toUpperCase();
-        if (finalCalledPartition.isEmpty() && CdrUtil.isPossibleExtension(finalCalledNumber, extensionLimits)) {
+        if (finalCalledPartition.isEmpty() && extensionLimits!=null && CdrUtil.isPossibleExtension(finalCalledNumber, extensionLimits)) {
             finalCalledPartition = cdrConfigService.getNoPartitionPlaceholder();
         }
         cdrData.setFinalCalledPartyNumber(finalCalledNumber);
@@ -128,7 +124,6 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
         cdrData.setDestConversationId(parseLongField(getFieldValue(fields, "destConversationId")));
         cdrData.setGlobalCallIDCallId(parseLongField(getFieldValue(fields, "globalCallIDCallId")));
 
-        // ... (The rest of the evaluateFormat method remains the same) ...
         log.debug("Initial parsed Cisco CM 6.0 fields: {}", cdrData);
 
         boolean isConferenceByLastRedirectDn = isConferenceIdentifier(cdrData.getLastRedirectDn());

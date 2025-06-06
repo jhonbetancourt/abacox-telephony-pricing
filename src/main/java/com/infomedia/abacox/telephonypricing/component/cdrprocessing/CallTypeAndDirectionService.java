@@ -3,10 +3,13 @@ package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
 import com.infomedia.abacox.telephonypricing.entity.CommunicationLocation;
 import com.infomedia.abacox.telephonypricing.entity.Employee;
+import com.infomedia.abacox.telephonypricing.entity.ExtensionRange;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Service
@@ -23,9 +26,9 @@ public class CallTypeAndDirectionService {
      * leading into `procesaEntrante` or `procesaSaliente`.
      * This method determines the initial nature of the call and then delegates.
      */
-    public void processCall(CdrData cdrData, ProcessingContext processingContext, ExtensionLimits limits) {
-        CommunicationLocation commLocation = processingContext.getCommLocation();
+    public void processCall(CdrData cdrData, LineProcessingContext processingContext) {
         log.debug("Processing call for CDR: {}", cdrData.getCtlHash());
+        ExtensionLimits extensionLimits = processingContext.getCommLocationExtensionLimits();
 
         // Initial determination of internal call (PHP: es_llamada_interna)
         // The Cisco CM 6.0 parser already sets cdrData.isInternalCall() based on partitions.
@@ -33,7 +36,7 @@ public class CallTypeAndDirectionService {
         // For CM 6.0, we trust the parser's initial assessment.
         // If further checks are needed (like PHP's es_llamada_interna for non-partition based plants):
         if (!cdrData.isInternalCall()) { // If parser didn't mark it internal, do PHP-like checks
-             checkIfPotentiallyInternal(cdrData, commLocation, limits);
+             checkIfPotentiallyInternal(cdrData, processingContext);
         }
         log.info("Initial call attributes - Direction: {}, Internal: {}", cdrData.getCallDirection(), cdrData.isInternalCall());
 
@@ -42,9 +45,9 @@ public class CallTypeAndDirectionService {
         cdrData.setEffectiveDestinationNumber(cdrData.getFinalCalledPartyNumber());
 
         if (cdrData.getCallDirection() == CallDirection.INCOMING) {
-            incomingCallProcessorService.processIncoming(cdrData, processingContext, limits);
+            incomingCallProcessorService.processIncoming(cdrData, processingContext);
         } else { // OUTGOING or internal initially parsed as outgoing
-            outgoingCallProcessorService.processOutgoing(cdrData, processingContext, limits, false);
+            outgoingCallProcessorService.processOutgoing(cdrData, processingContext, false);
         }
         log.info("Finished processing call. Final Direction: {}, Internal: {}, TelephonyType: {}",
                  cdrData.getCallDirection(), cdrData.isInternalCall(), cdrData.getTelephonyTypeId());
@@ -54,9 +57,11 @@ public class CallTypeAndDirectionService {
      * Logic adapted from PHP's `es_llamada_interna`
      * This is called if the parser (like Cisco CM 6.0) hasn't already definitively marked the call as internal.
      */
-    private void checkIfPotentiallyInternal(CdrData cdrData, CommunicationLocation commLocation, ExtensionLimits limits) {
+    private void checkIfPotentiallyInternal(CdrData cdrData, LineProcessingContext lineProcessingContext) {
         log.debug("Checking if call is potentially internal. Calling: '{}', FinalCalled: '{}'",
                 cdrData.getCallingPartyNumber(), cdrData.getFinalCalledPartyNumber());
+        ExtensionLimits limits = lineProcessingContext.getCommLocationExtensionLimits();
+        CommunicationLocation commLocation = lineProcessingContext.getCommLocation();
 
         if (CdrUtil.isPossibleExtension(cdrData.getCallingPartyNumber(), limits)) {
             log.debug("Calling party '{}' is a possible extension. Checking destination for internal call.", cdrData.getCallingPartyNumber());
@@ -85,7 +90,7 @@ public class CallTypeAndDirectionService {
                 log.debug("Destination '{}' is numeric, not starting with 0 (or is '0'). Checking extension ranges.", destinationForInternalCheck);
                 Optional<Employee> employeeFromRange = employeeLookupService.findEmployeeByExtensionRange(
                         destinationForInternalCheck,
-                        null); // Search globally for ranges if not tied to a specific commLocation context initially
+                        null, lineProcessingContext.getExtensionRanges()); // Search globally for ranges if not tied to a specific commLocation context initially
                 if (employeeFromRange.isPresent()) {
                     cdrData.setInternalCall(true);
                     log.debug("Marked as internal call based on destination '{}' matching an extension range.", destinationForInternalCheck);
