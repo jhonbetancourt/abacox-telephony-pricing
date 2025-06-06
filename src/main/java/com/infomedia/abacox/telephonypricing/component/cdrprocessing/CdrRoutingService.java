@@ -1,4 +1,3 @@
-// File: com/infomedia/abacox/telephonypricing/cdr/CdrRoutingService.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
 import com.infomedia.abacox.telephonypricing.entity.CommunicationLocation;
@@ -6,13 +5,13 @@ import com.infomedia.abacox.telephonypricing.entity.FileInfo;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -25,9 +24,7 @@ public class CdrRoutingService {
     private final CdrProcessorService cdrProcessorService;
     private final FileInfoPersistenceService fileInfoPersistenceService;
     private final FailedCallRecordPersistenceService failedCallRecordPersistenceService;
-    private final CdrConfigService cdrConfigService;
     private final List<CdrTypeProcessor> cdrTypeProcessors;
-
 
     private CdrTypeProcessor getProcessorForPlantType(Long plantTypeId) {
         return cdrTypeProcessors.stream()
@@ -36,15 +33,22 @@ public class CdrRoutingService {
                 .orElseThrow(() -> new IllegalArgumentException("No CDR processor found for plant type ID: " + plantTypeId));
     }
 
-    // Renamed original method to be called by the executor
-    @Transactional // Manages transaction for the whole stream processing
+    /**
+     * Orchestrates the processing of a CDR stream. This method is NOT transactional.
+     * It reads the stream, groups lines into batches, and delegates the processing of each
+     * batch to a separate, transactional service method.
+     *
+     * @param filename    Name of the CDR file/stream.
+     * @param inputStream The CDR data stream.
+     * @param plantTypeId The ID of the plant type for initial parsing.
+     */
     protected void routeAndProcessCdrStreamInternal(String filename, InputStream inputStream, Long plantTypeId) {
         log.info("Starting CDR stream routing and processing for file: {}, PlantTypeID: {}", filename, plantTypeId);
 
         CdrTypeProcessor initialParser = getProcessorForPlantType(plantTypeId);
         log.debug("Using initial parser: {}", initialParser.getClass().getSimpleName());
 
-        FileInfo fileInfo = fileInfoPersistenceService.createOrGetFileInfo(filename, null, "ROUTED_STREAM");
+        FileInfo fileInfo = fileInfoPersistenceService.createOrGetFileInfo(filename, plantTypeId, "ROUTED_STREAM");
         if (fileInfo == null || fileInfo.getId() == null) {
             log.error("Failed to create or get FileInfo for stream: {}. Aborting processing.", filename);
             CdrData streamErrorData = new CdrData();
@@ -53,13 +57,15 @@ public class CdrRoutingService {
                 "Failed to establish FileInfo for routed stream " + filename, "RouteStreamInit_FileInfo", null);
             return;
         }
-        Long fileInfoId = fileInfo.getId();
+        Long fileInfoId = fileInfo.getId().longValue();
         log.debug("Using FileInfo ID: {} for routed stream: {}", fileInfoId, filename);
 
         boolean headerProcessedByInitialParser = false;
         long lineCount = 0;
-        long routedCdrCount = 0;
+        long totalProcessedCount = 0;
         long unroutableCdrCount = 0;
+
+        List<CdrLineContext> batch = new ArrayList<>(CdrConfigService.CDR_PROCESSING_BATCH_SIZE);
 
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))) {
             String line;
@@ -109,10 +115,8 @@ public class CdrRoutingService {
 
                 if (targetCommLocationOpt.isPresent()) {
                     CommunicationLocation targetCommLocation = targetCommLocationOpt.get();
-                    log.debug("Line {} routed to CommLocation ID: {}", lineCount, targetCommLocation.getId());
                     CdrTypeProcessor finalProcessor = getProcessorForPlantType(targetCommLocation.getPlantTypeId());
-                    cdrProcessorService.processSingleCdrLine(trimmedLine, fileInfoId, targetCommLocation, finalProcessor);
-                    routedCdrCount++;
+                    batch.add(new CdrLineContext(trimmedLine, fileInfoId, targetCommLocation, finalProcessor));
                 } else {
                     log.warn("Could not determine target CommunicationLocation for line {}: {}", lineCount, trimmedLine);
                     preliminaryCdrData.setCommLocationId(null);
@@ -121,13 +125,23 @@ public class CdrRoutingService {
                     unroutableCdrCount++;
                 }
 
-                if ((routedCdrCount + unroutableCdrCount) > 0 && (routedCdrCount + unroutableCdrCount) % cdrConfigService.CDR_PROCESSING_BATCH_SIZE == 0) {
-                    log.info("Routing service processed a batch of {} lines from stream {}. Routed: {}, Unroutable: {}",
-                            cdrConfigService.CDR_PROCESSING_BATCH_SIZE, filename, routedCdrCount, unroutableCdrCount);
+                if (batch.size() >= CdrConfigService.CDR_PROCESSING_BATCH_SIZE) {
+                    log.info("Processing a batch of {} CDRs...", batch.size());
+                    cdrProcessorService.processCdrBatch(batch);
+                    totalProcessedCount += batch.size();
+                    batch.clear();
                 }
             }
-            log.info("Finished routing and processing stream: {}. Total lines read: {}, Routed CDRs: {}, Unroutable CDRs: {}",
-                    filename, lineCount, routedCdrCount, unroutableCdrCount);
+
+            if (!batch.isEmpty()) {
+                log.info("Processing the final batch of {} CDRs...", batch.size());
+                cdrProcessorService.processCdrBatch(batch);
+                totalProcessedCount += batch.size();
+                batch.clear();
+            }
+
+            log.info("Finished routing and processing stream: {}. Total lines read: {}, Processed CDRs: {}, Unroutable CDRs: {}",
+                    filename, lineCount, totalProcessedCount, unroutableCdrCount);
 
         } catch (IOException e) {
             log.error("Error reading CDR stream for routing: {}", filename, e);

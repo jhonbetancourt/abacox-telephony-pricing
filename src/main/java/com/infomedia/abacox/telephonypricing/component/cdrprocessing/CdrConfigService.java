@@ -39,7 +39,6 @@ public class CdrConfigService {
     private static final String DEFAULT_ASSUMED_TEXT = "(ASUMIDO)";
     private static final String DEFAULT_ORIGIN_TEXT = "(ORIGEN)";
     private static final String DEFAULT_PREFIX_TEXT = "(PREFIJO)";
-    // --- NEWLY ADDED CONFIGURATIONS ---
     private static final String DEFAULT_EMPLOYEE_NAME_PREFIX_FROM_RANGE = "Funcionario"; // PHP: _FUNCIONARIO
     private static final String DEFAULT_NO_PARTITION_PLACEHOLDER = "NN-VALIDA"; // PHP: _NN_VALIDA
 
