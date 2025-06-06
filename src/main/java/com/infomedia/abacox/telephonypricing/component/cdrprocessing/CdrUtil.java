@@ -188,4 +188,30 @@ public class CdrUtil {
             throw new RuntimeException("SHA-256 algorithm not found", e);
         }
     }
+
+
+    public static boolean isPossibleExtension(String extensionNumber, ExtensionLimits limits) {
+        if (extensionNumber == null || extensionNumber.isEmpty()) {
+            return false;
+        }
+        String cleanedExt = CdrUtil.cleanPhoneNumber(extensionNumber, null, false).getCleanedNumber();
+        if (cleanedExt.startsWith("+")) cleanedExt = cleanedExt.substring(1);
+
+        if (limits.getSpecialFullExtensions() != null && limits.getSpecialFullExtensions().contains(cleanedExt)) {
+            return true;
+        }
+
+        boolean phpExtensionValidaForNumericRange = (!cleanedExt.startsWith("0") || cleanedExt.equals("0")) &&
+                cleanedExt.matches("\\d+");
+
+        if (phpExtensionValidaForNumericRange) {
+            try {
+                long extNumValue = Long.parseLong(cleanedExt);
+                return extNumValue >= limits.getMinLength() && extNumValue <= limits.getMaxLength();
+            } catch (NumberFormatException e) {
+                return false;
+            }
+        }
+        return false;
+    }
 }

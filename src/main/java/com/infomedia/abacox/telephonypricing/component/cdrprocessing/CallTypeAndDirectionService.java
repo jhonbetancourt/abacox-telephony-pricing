@@ -57,7 +57,7 @@ public class CallTypeAndDirectionService {
         log.debug("Checking if call is potentially internal. Calling: '{}', FinalCalled: '{}'",
                 cdrData.getCallingPartyNumber(), cdrData.getFinalCalledPartyNumber());
 
-        if (employeeLookupService.isPossibleExtension(cdrData.getCallingPartyNumber(), limits)) {
+        if (CdrUtil.isPossibleExtension(cdrData.getCallingPartyNumber(), limits)) {
             log.debug("Calling party '{}' is a possible extension. Checking destination for internal call.", cdrData.getCallingPartyNumber());
             String destinationForInternalCheck = CdrUtil.cleanPhoneNumber(cdrData.getFinalCalledPartyNumber(), null, false).getCleanedNumber();
             log.debug("Cleaned destination for internal check: {}", destinationForInternalCheck);
@@ -75,7 +75,7 @@ public class CallTypeAndDirectionService {
             // PHP: $esinterna = ($len_destino == 1 || ExtensionPosible($destino) || ExtensionEspecial($destino));
             // PHP: if (!$esinterna && $no_inicia_cero && $es_numerico && $destino != '' ) { $retornar = Validar_RangoExt(...); $esinterna = $retornar['nuevo']; }
             if ((destinationForInternalCheck.length() == 1 && destinationForInternalCheck.matches("\\d")) ||
-                    employeeLookupService.isPossibleExtension(destinationForInternalCheck, limits)) {
+                    CdrUtil.isPossibleExtension(destinationForInternalCheck, limits)) {
                 cdrData.setInternalCall(true);
                 log.debug("Marked as internal call based on destination '{}' format/possibility.", destinationForInternalCheck);
             } else if (destinationForInternalCheck.matches("\\d+") &&

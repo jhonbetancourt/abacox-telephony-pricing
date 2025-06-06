@@ -1,4 +1,4 @@
-// File: com/infomedia/abacox/telephonypricing/cdr/CiscoCm60CdrProcessor.java
+// File: com/infomedia/abacox/telephonypricing/component/cdrprocessing/CiscoCm60CdrProcessor.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
 import com.infomedia.abacox.telephonypricing.entity.CommunicationLocation;
@@ -29,7 +29,263 @@ public class CiscoCm60CdrProcessor implements CdrTypeProcessor {
     private int minExpectedFieldsForValidCdr = 0;
 
     private final EmployeeLookupService employeeLookupService;
+    private final CdrConfigService cdrConfigService;
 
+    @Override
+    public CdrData evaluateFormat(String cdrLine, CommunicationLocation commLocation) {
+        log.debug("Evaluating Cisco CM 6.0 CDR line: {}", cdrLine);
+        if (currentHeaderPositions.isEmpty() || !currentHeaderPositions.containsKey("_max_mapped_header_index_")) {
+            log.error("Cisco CM 6.0 Headers not parsed. Cannot process line: {}", cdrLine);
+            CdrData errorData = new CdrData(); errorData.setRawCdrLine(cdrLine);
+            errorData.setMarkedForQuarantine(true); errorData.setQuarantineReason("Header not parsed prior to CDR line processing.");
+            errorData.setQuarantineStep(QuarantineErrorType.MISSING_HEADER.name()); return errorData;
+        }
+
+        // Get ExtensionLimits for the current context. If commLocation is null (during routing),
+        // a default/empty limits object will be returned, which is acceptable for the initial parse.
+        ExtensionLimits extensionLimits = employeeLookupService.getExtensionLimits(commLocation);
+
+        List<String> fields = CdrUtil.parseCsvLine(cdrLine, CDR_SEPARATOR);
+        CdrData cdrData = new CdrData();
+        cdrData.setRawCdrLine(cdrLine);
+
+        String firstField = fields.isEmpty() ? "" : fields.get(0);
+        if (INTERNAL_CDR_RECORD_TYPE_HEADER_KEY.equalsIgnoreCase(firstField)) {
+            log.debug("Skipping header line found mid-stream."); return null;
+        }
+        if ("INTEGER".equalsIgnoreCase(firstField)) {
+            log.debug("Skipping 'INTEGER' type definition line."); return null;
+        }
+        if (fields.size() < this.minExpectedFieldsForValidCdr) {
+            log.warn("Cisco CM 6.0 CDR line has insufficient fields ({}). Expected at least {}. Line: {}", fields.size(), minExpectedFieldsForValidCdr, cdrLine);
+            cdrData.setMarkedForQuarantine(true);
+            cdrData.setQuarantineReason("Insufficient fields. Found " + fields.size() + ", expected " + minExpectedFieldsForValidCdr);
+            cdrData.setQuarantineStep(QuarantineErrorType.PARSER_ERROR.name()); return cdrData;
+        }
+
+        // --- Start of field extraction ---
+        cdrData.setDateTimeOrigination(parseEpochToLocalDateTime(getFieldValue(fields, "dateTimeOrigination")));
+        LocalDateTime dateTimeConnect = parseEpochToLocalDateTime(getFieldValue(fields, "dateTimeConnect"));
+        LocalDateTime dateTimeDisconnect = parseEpochToLocalDateTime(getFieldValue(fields, "dateTimeDisconnect"));
+        cdrData.setDurationSeconds(parseIntField(getFieldValue(fields, "durationSeconds")));
+
+        int ringingTime = 0;
+        if (dateTimeConnect != null && cdrData.getDateTimeOrigination() != null) {
+            ringingTime = (int) java.time.Duration.between(cdrData.getDateTimeOrigination(), dateTimeConnect).getSeconds();
+        } else if (dateTimeDisconnect != null && cdrData.getDateTimeOrigination() != null) {
+            ringingTime = (int) java.time.Duration.between(cdrData.getDateTimeOrigination(), dateTimeDisconnect).getSeconds();
+            if (cdrData.getDurationSeconds() == null || cdrData.getDurationSeconds() > 0) cdrData.setDurationSeconds(0);
+        }
+        cdrData.setRingingTimeSeconds(Math.max(0, ringingTime));
+        if (cdrData.getDurationSeconds() == null) cdrData.setDurationSeconds(0);
+
+        // --- Apply _NN_VALIDA logic during extraction ---
+        String callingNumber = getFieldValue(fields, "callingPartyNumber");
+        String callingPartition = getFieldValue(fields, "callingPartyNumberPartition").toUpperCase();
+        if (callingPartition.isEmpty() && CdrUtil.isPossibleExtension(callingNumber, extensionLimits)) {
+            callingPartition = cdrConfigService.getNoPartitionPlaceholder();
+        }
+        cdrData.setCallingPartyNumber(callingNumber);
+        cdrData.setCallingPartyNumberPartition(callingPartition);
+
+        String finalCalledNumber = getFieldValue(fields, "finalCalledPartyNumber");
+        String finalCalledPartition = getFieldValue(fields, "finalCalledPartyNumberPartition").toUpperCase();
+        if (finalCalledPartition.isEmpty() && CdrUtil.isPossibleExtension(finalCalledNumber, extensionLimits)) {
+            finalCalledPartition = cdrConfigService.getNoPartitionPlaceholder();
+        }
+        cdrData.setFinalCalledPartyNumber(finalCalledNumber);
+        cdrData.setFinalCalledPartyNumberPartition(finalCalledPartition);
+
+        String lastRedirectNumber = getFieldValue(fields, "lastRedirectDn");
+        String lastRedirectPartition = getFieldValue(fields, "lastRedirectDnPartition").toUpperCase();
+        if (lastRedirectPartition.isEmpty() && CdrUtil.isPossibleExtension(lastRedirectNumber, extensionLimits)) {
+            lastRedirectPartition = cdrConfigService.getNoPartitionPlaceholder();
+        }
+        cdrData.setLastRedirectDn(lastRedirectNumber);
+        cdrData.setLastRedirectDnPartition(lastRedirectPartition);
+
+        // --- Continue with other fields ---
+        cdrData.setOriginalCalledPartyNumber(getFieldValue(fields, "originalCalledPartyNumber"));
+        cdrData.setOriginalCalledPartyNumberPartition(getFieldValue(fields, "originalCalledPartyNumberPartition").toUpperCase());
+        cdrData.setDestMobileDeviceName(getFieldValue(fields, "destMobileDeviceName").toUpperCase());
+        cdrData.setFinalMobileCalledPartyNumber(getFieldValue(fields, "finalMobileCalledPartyNumber"));
+
+        cdrData.setOriginalFinalCalledPartyNumber(cdrData.getFinalCalledPartyNumber());
+        cdrData.setOriginalFinalCalledPartyNumberPartition(cdrData.getFinalCalledPartyNumberPartition());
+        cdrData.setOriginalLastRedirectDn(cdrData.getLastRedirectDn());
+
+        cdrData.setAuthCodeDescription(getFieldValue(fields, "authCodeDescription"));
+        cdrData.setLastRedirectRedirectReason(parseIntField(getFieldValue(fields, "lastRedirectRedirectReason")));
+        cdrData.setOrigDeviceName(getFieldValue(fields, "origDeviceName"));
+        cdrData.setDestDeviceName(getFieldValue(fields, "destDeviceName"));
+        cdrData.setOrigVideoCodec(getFieldValue(fields, "origVideoCodec"));
+        cdrData.setOrigVideoBandwidth(parseIntField(getFieldValue(fields, "origVideoBandwidth")));
+        cdrData.setOrigVideoResolution(getFieldValue(fields, "origVideoResolution"));
+        cdrData.setDestVideoCodec(getFieldValue(fields, "destVideoCodec"));
+        cdrData.setDestVideoBandwidth(parseIntField(getFieldValue(fields, "destVideoBandwidth")));
+        cdrData.setDestVideoResolution(getFieldValue(fields, "destVideoResolution"));
+        cdrData.setJoinOnBehalfOf(parseIntField(getFieldValue(fields, "joinOnBehalfOf")));
+        cdrData.setDestCallTerminationOnBehalfOf(parseIntField(getFieldValue(fields, "destCallTerminationOnBehalfOf")));
+        cdrData.setDestConversationId(parseLongField(getFieldValue(fields, "destConversationId")));
+        cdrData.setGlobalCallIDCallId(parseLongField(getFieldValue(fields, "globalCallIDCallId")));
+
+        // ... (The rest of the evaluateFormat method remains the same) ...
+        log.debug("Initial parsed Cisco CM 6.0 fields: {}", cdrData);
+
+        boolean isConferenceByLastRedirectDn = isConferenceIdentifier(cdrData.getLastRedirectDn());
+
+        if (cdrData.getFinalCalledPartyNumber() == null || cdrData.getFinalCalledPartyNumber().isEmpty()) {
+            cdrData.setFinalCalledPartyNumber(cdrData.getOriginalCalledPartyNumber());
+            cdrData.setFinalCalledPartyNumberPartition(cdrData.getOriginalCalledPartyNumberPartition());
+        } else if (!Objects.equals(cdrData.getFinalCalledPartyNumber(), cdrData.getOriginalCalledPartyNumber()) &&
+                   cdrData.getOriginalCalledPartyNumber() != null && !cdrData.getOriginalCalledPartyNumber().isEmpty()) {
+            if (!isConferenceByLastRedirectDn) {
+                cdrData.setLastRedirectDn(cdrData.getOriginalCalledPartyNumber());
+                cdrData.setLastRedirectDnPartition(cdrData.getOriginalCalledPartyNumberPartition());
+            }
+        }
+
+        boolean isConferenceByFinalCalled = isConferenceIdentifier(cdrData.getFinalCalledPartyNumber());
+        boolean invertTrunksForConference = true;
+
+        if (isConferenceByFinalCalled) {
+            TransferCause confTransferCause = (cdrData.getJoinOnBehalfOf() != null && cdrData.getJoinOnBehalfOf() == 7) ?
+                    TransferCause.CONFERENCE_NOW : TransferCause.CONFERENCE;
+            setTransferCauseIfUnset(cdrData, confTransferCause);
+            cdrData.setConferenceIdentifierUsed(cdrData.getFinalCalledPartyNumber());
+
+            if (!isConferenceByLastRedirectDn) {
+                String tempDialNumber = cdrData.getFinalCalledPartyNumber();
+                String tempDialPartition = cdrData.getFinalCalledPartyNumberPartition();
+                cdrData.setFinalCalledPartyNumber(cdrData.getLastRedirectDn());
+                cdrData.setFinalCalledPartyNumberPartition(cdrData.getLastRedirectDnPartition());
+                cdrData.setLastRedirectDn(tempDialNumber);
+                cdrData.setLastRedirectDnPartition(tempDialPartition);
+
+                if (confTransferCause == TransferCause.CONFERENCE_NOW) {
+                    String originalLastRedirectDnValue = cdrData.getOriginalLastRedirectDn();
+                    if (originalLastRedirectDnValue != null && originalLastRedirectDnValue.toLowerCase().startsWith("c")) {
+                        cdrData.setLastRedirectDn(originalLastRedirectDnValue);
+                        cdrData.setConferenceIdentifierUsed(originalLastRedirectDnValue);
+                    } else if (cdrData.getDestConversationId() != null && cdrData.getDestConversationId() > 0) {
+                        cdrData.setLastRedirectDn("i" + cdrData.getDestConversationId());
+                        cdrData.setConferenceIdentifierUsed(cdrData.getLastRedirectDn());
+                    }
+                }
+            }
+            if (cdrData.getJoinOnBehalfOf() == null || cdrData.getJoinOnBehalfOf() != 7) {
+                CdrUtil.swapPartyInfo(cdrData);
+            }
+        } else {
+            if (isConferenceByLastRedirectDn) {
+                if (setTransferCauseIfUnset(cdrData, TransferCause.CONFERENCE_END)) {
+                    cdrData.setConferenceIdentifierUsed(cdrData.getLastRedirectDn());
+                    invertTrunksForConference = false;
+                }
+            }
+        }
+
+        if (isConferenceByFinalCalled) {
+            boolean isConferenceEffectivelyIncoming = (!isPartitionPresent(cdrData.getFinalCalledPartyNumberPartition())) &&
+                    (cdrData.getCallingPartyNumber() == null || cdrData.getCallingPartyNumber().isEmpty() ||
+                            !CdrUtil.isPossibleExtension(cdrData.getCallingPartyNumber(), extensionLimits));
+            if (isConferenceEffectivelyIncoming) {
+                cdrData.setCallDirection(CallDirection.INCOMING);
+            } else if (invertTrunksForConference && cdrData.getCallDirection() != CallDirection.INCOMING) {
+                 if (cdrData.getJoinOnBehalfOf() == null || cdrData.getJoinOnBehalfOf() != 7) { // PHP: if ($cdr_motivo_union != "7")
+                    CdrUtil.swapTrunks(cdrData);
+                 }
+            }
+        } else {
+            boolean isCallingPartyEffectivelyExternal = !isPartitionPresent(cdrData.getCallingPartyNumberPartition()) ||
+                    !CdrUtil.isPossibleExtension(cdrData.getCallingPartyNumber(), extensionLimits);
+            boolean isFinalCalledPartyInternalFormat = isPartitionPresent(cdrData.getFinalCalledPartyNumberPartition()) &&
+                    CdrUtil.isPossibleExtension(cdrData.getFinalCalledPartyNumber(), extensionLimits);
+            boolean isRedirectPartyInternalFormat = isPartitionPresent(cdrData.getLastRedirectDnPartition()) &&
+                    CdrUtil.isPossibleExtension(cdrData.getLastRedirectDn(), extensionLimits);
+
+            if (isCallingPartyEffectivelyExternal && (isFinalCalledPartyInternalFormat || isRedirectPartyInternalFormat)) {
+                cdrData.setCallDirection(CallDirection.INCOMING);
+                CdrUtil.swapPartyInfo(cdrData);
+                log.debug("Non-conference incoming detected. Swapped calling/called numbers. Calling: {}, Called: {}",
+                        cdrData.getCallingPartyNumber(), cdrData.getFinalCalledPartyNumber());
+            }
+        }
+
+        boolean isCallingPartyInternal = isPartitionPresent(cdrData.getCallingPartyNumberPartition()) &&
+                CdrUtil.isPossibleExtension(cdrData.getCallingPartyNumber(), extensionLimits);
+        boolean isFinalCalledPartyInternal = isPartitionPresent(cdrData.getFinalCalledPartyNumberPartition()) &&
+                CdrUtil.isPossibleExtension(cdrData.getFinalCalledPartyNumber(), extensionLimits);
+
+        if (isCallingPartyInternal && isFinalCalledPartyInternal) {
+            cdrData.setInternalCall(true);
+        } else {
+            cdrData.setInternalCall(false);
+        }
+
+        // Transfer logic
+        boolean numberChangedByRedirect = false;
+        if (cdrData.getLastRedirectDn() != null && !cdrData.getLastRedirectDn().isEmpty()) {
+            if (cdrData.getCallDirection() == CallDirection.OUTGOING && !Objects.equals(cdrData.getFinalCalledPartyNumber(), cdrData.getLastRedirectDn())) {
+                numberChangedByRedirect = true;
+            } else if (cdrData.getCallDirection() == CallDirection.INCOMING && !Objects.equals(cdrData.getCallingPartyNumber(), cdrData.getLastRedirectDn())) {
+                // For incoming, after swap, callingPartyNumber is our extension.
+                // If lastRedirectDn is different from our extension, it's a redirect.
+                numberChangedByRedirect = true;
+            }
+        }
+
+        if (numberChangedByRedirect) {
+            if (cdrData.getTransferCause() == TransferCause.NONE) {
+                Integer lastRedirectReason = cdrData.getLastRedirectRedirectReason();
+                if (lastRedirectReason != null && lastRedirectReason > 0 && lastRedirectReason <= 16) {
+                    cdrData.setTransferCause(TransferCause.NORMAL);
+                } else {
+                    TransferCause autoTransferCause = (cdrData.getDestCallTerminationOnBehalfOf() != null && cdrData.getDestCallTerminationOnBehalfOf() == 7) ?
+                            TransferCause.PRE_CONFERENCE_NOW : TransferCause.AUTO;
+                    cdrData.setTransferCause(autoTransferCause);
+                }
+            }
+        } else if (cdrData.getFinalMobileCalledPartyNumber() != null && !cdrData.getFinalMobileCalledPartyNumber().isEmpty()) {
+            boolean numberChangedByMobileRedirect = false;
+            if (cdrData.getCallDirection() == CallDirection.OUTGOING) {
+                if (!Objects.equals(cdrData.getFinalCalledPartyNumber(), cdrData.getFinalMobileCalledPartyNumber())) {
+                    numberChangedByMobileRedirect = true;
+                    cdrData.setFinalCalledPartyNumber(cdrData.getFinalMobileCalledPartyNumber());
+                    cdrData.setFinalCalledPartyNumberPartition(cdrData.getDestMobileDeviceName());
+                    if (cdrData.isInternalCall() && !CdrUtil.isPossibleExtension(cdrData.getFinalCalledPartyNumber(), extensionLimits)) {
+                        cdrData.setInternalCall(false);
+                    }
+                }
+            } else { // INCOMING
+                if (!Objects.equals(cdrData.getFinalCalledPartyNumber(), cdrData.getFinalMobileCalledPartyNumber())) {
+                    // For incoming, after swap, finalCalledPartyNumber is the external number.
+                    // If this external number is different from the mobile redirect, it means the call was redirected to mobile.
+                    // The party that *was* our extension (now in callingPartyNumber) is the one that set up the redirect.
+                    // The finalCalledPartyNumber should become the mobile number.
+                    numberChangedByMobileRedirect = true;
+                    cdrData.setFinalCalledPartyNumber(cdrData.getFinalMobileCalledPartyNumber());
+                    cdrData.setFinalCalledPartyNumberPartition(cdrData.getDestMobileDeviceName());
+                    cdrData.setInternalCall(false); // Call to mobile is not internal
+                }
+            }
+            if (numberChangedByMobileRedirect) {
+                setTransferCauseIfUnset(cdrData, TransferCause.AUTO);
+            }
+        }
+
+        if (isConferenceByFinalCalled &&
+                cdrData.getCallingPartyNumber() != null &&
+                Objects.equals(cdrData.getCallingPartyNumber(), cdrData.getFinalCalledPartyNumber())) {
+            log.info("Conference call where caller and callee are the same after all processing. Discarding CDR: {}", cdrLine);
+            return null;
+        }
+        cdrData.setEffectiveDestinationNumber(cdrData.getFinalCalledPartyNumber());
+        cdrData.setOriginalFinalCalledPartyNumber(cdrData.getFinalCalledPartyNumber());
+
+        log.debug("Final evaluated Cisco CM 6.0 CDR data: {}", cdrData);
+        return cdrData;
+    }
 
     @PostConstruct
     public void initDefaultHeaderMappings() {
@@ -133,238 +389,6 @@ public class CiscoCm60CdrProcessor implements CdrTypeProcessor {
         if (valueStr == null || valueStr.isEmpty()) return 0L;
         try { return Long.parseLong(valueStr); }
         catch (NumberFormatException e) { log.trace("Failed to parse long: {}", valueStr); return 0L; }
-    }
-
-    @Override
-    public CdrData evaluateFormat(String cdrLine, CommunicationLocation commLocation) {
-        log.debug("Evaluating Cisco CM 6.0 CDR line: {}", cdrLine);
-        if (currentHeaderPositions.isEmpty() || !currentHeaderPositions.containsKey("_max_mapped_header_index_")) {
-            log.error("Cisco CM 6.0 Headers not parsed. Cannot process line: {}", cdrLine);
-            CdrData errorData = new CdrData(); errorData.setRawCdrLine(cdrLine);
-            errorData.setMarkedForQuarantine(true); errorData.setQuarantineReason("Header not parsed prior to CDR line processing.");
-            errorData.setQuarantineStep(QuarantineErrorType.MISSING_HEADER.name()); return errorData;
-        }
-
-        List<String> fields = CdrUtil.parseCsvLine(cdrLine, CDR_SEPARATOR);
-        CdrData cdrData = new CdrData();
-        cdrData.setRawCdrLine(cdrLine);
-
-        String firstField = fields.isEmpty() ? "" : fields.get(0);
-        if (INTERNAL_CDR_RECORD_TYPE_HEADER_KEY.equalsIgnoreCase(firstField)) {
-            log.debug("Skipping header line found mid-stream."); return null;
-        }
-        if ("INTEGER".equalsIgnoreCase(firstField)) {
-            log.debug("Skipping 'INTEGER' type definition line."); return null;
-        }
-        if (fields.size() < this.minExpectedFieldsForValidCdr) {
-            log.warn("Cisco CM 6.0 CDR line has insufficient fields ({}). Expected at least {}. Line: {}", fields.size(), this.minExpectedFieldsForValidCdr, cdrLine);
-            cdrData.setMarkedForQuarantine(true);
-            cdrData.setQuarantineReason("Insufficient fields. Found " + fields.size() + ", expected " + minExpectedFieldsForValidCdr);
-            cdrData.setQuarantineStep(QuarantineErrorType.PARSER_ERROR.name()); return cdrData;
-        }
-
-        cdrData.setDateTimeOrigination(parseEpochToLocalDateTime(getFieldValue(fields, "dateTimeOrigination")));
-        LocalDateTime dateTimeConnect = parseEpochToLocalDateTime(getFieldValue(fields, "dateTimeConnect"));
-        LocalDateTime dateTimeDisconnect = parseEpochToLocalDateTime(getFieldValue(fields, "dateTimeDisconnect"));
-        cdrData.setDurationSeconds(parseIntField(getFieldValue(fields, "durationSeconds")));
-
-        int ringingTime = 0;
-        if (dateTimeConnect != null && cdrData.getDateTimeOrigination() != null) {
-            ringingTime = (int) java.time.Duration.between(cdrData.getDateTimeOrigination(), dateTimeConnect).getSeconds();
-        } else if (dateTimeDisconnect != null && cdrData.getDateTimeOrigination() != null) {
-            ringingTime = (int) java.time.Duration.between(cdrData.getDateTimeOrigination(), dateTimeDisconnect).getSeconds();
-            if (cdrData.getDurationSeconds() == null || cdrData.getDurationSeconds() > 0) cdrData.setDurationSeconds(0);
-        }
-        cdrData.setRingingTimeSeconds(Math.max(0, ringingTime));
-        if (cdrData.getDurationSeconds() == null) cdrData.setDurationSeconds(0);
-
-        cdrData.setCallingPartyNumber(getFieldValue(fields, "callingPartyNumber"));
-        cdrData.setCallingPartyNumberPartition(getFieldValue(fields, "callingPartyNumberPartition").toUpperCase());
-        cdrData.setFinalCalledPartyNumber(getFieldValue(fields, "finalCalledPartyNumber"));
-        cdrData.setFinalCalledPartyNumberPartition(getFieldValue(fields, "finalCalledPartyNumberPartition").toUpperCase());
-        cdrData.setOriginalCalledPartyNumber(getFieldValue(fields, "originalCalledPartyNumber"));
-        cdrData.setOriginalCalledPartyNumberPartition(getFieldValue(fields, "originalCalledPartyNumberPartition").toUpperCase());
-        cdrData.setLastRedirectDn(getFieldValue(fields, "lastRedirectDn"));
-        cdrData.setLastRedirectDnPartition(getFieldValue(fields, "lastRedirectDnPartition").toUpperCase());
-        cdrData.setDestMobileDeviceName(getFieldValue(fields, "destMobileDeviceName").toUpperCase());
-        cdrData.setFinalMobileCalledPartyNumber(getFieldValue(fields, "finalMobileCalledPartyNumber"));
-
-        cdrData.setOriginalFinalCalledPartyNumber(cdrData.getFinalCalledPartyNumber());
-        cdrData.setOriginalFinalCalledPartyNumberPartition(cdrData.getFinalCalledPartyNumberPartition());
-        cdrData.setOriginalLastRedirectDn(cdrData.getLastRedirectDn());
-
-        cdrData.setAuthCodeDescription(getFieldValue(fields, "authCodeDescription"));
-        cdrData.setLastRedirectRedirectReason(parseIntField(getFieldValue(fields, "lastRedirectRedirectReason")));
-        cdrData.setOrigDeviceName(getFieldValue(fields, "origDeviceName"));
-        cdrData.setDestDeviceName(getFieldValue(fields, "destDeviceName"));
-        cdrData.setOrigVideoCodec(getFieldValue(fields, "origVideoCodec"));
-        cdrData.setOrigVideoBandwidth(parseIntField(getFieldValue(fields, "origVideoBandwidth")));
-        cdrData.setOrigVideoResolution(getFieldValue(fields, "origVideoResolution"));
-        cdrData.setDestVideoCodec(getFieldValue(fields, "destVideoCodec"));
-        cdrData.setDestVideoBandwidth(parseIntField(getFieldValue(fields, "destVideoBandwidth")));
-        cdrData.setDestVideoResolution(getFieldValue(fields, "destVideoResolution"));
-        cdrData.setJoinOnBehalfOf(parseIntField(getFieldValue(fields, "joinOnBehalfOf")));
-        cdrData.setDestCallTerminationOnBehalfOf(parseIntField(getFieldValue(fields, "destCallTerminationOnBehalfOf")));
-        cdrData.setDestConversationId(parseLongField(getFieldValue(fields, "destConversationId")));
-        cdrData.setGlobalCallIDCallId(parseLongField(getFieldValue(fields, "globalCallIDCallId")));
-
-        log.debug("Initial parsed Cisco CM 6.0 fields: {}", cdrData);
-
-        boolean isConferenceByLastRedirectDn = isConferenceIdentifier(cdrData.getLastRedirectDn());
-
-        if (cdrData.getFinalCalledPartyNumber() == null || cdrData.getFinalCalledPartyNumber().isEmpty()) {
-            cdrData.setFinalCalledPartyNumber(cdrData.getOriginalCalledPartyNumber());
-            cdrData.setFinalCalledPartyNumberPartition(cdrData.getOriginalCalledPartyNumberPartition());
-        } else if (!Objects.equals(cdrData.getFinalCalledPartyNumber(), cdrData.getOriginalCalledPartyNumber()) &&
-                   cdrData.getOriginalCalledPartyNumber() != null && !cdrData.getOriginalCalledPartyNumber().isEmpty()) {
-            if (!isConferenceByLastRedirectDn) {
-                cdrData.setLastRedirectDn(cdrData.getOriginalCalledPartyNumber());
-                cdrData.setLastRedirectDnPartition(cdrData.getOriginalCalledPartyNumberPartition());
-            }
-        }
-
-        boolean isConferenceByFinalCalled = isConferenceIdentifier(cdrData.getFinalCalledPartyNumber());
-        boolean invertTrunksForConference = true;
-
-        if (isConferenceByFinalCalled) {
-            TransferCause confTransferCause = (cdrData.getJoinOnBehalfOf() != null && cdrData.getJoinOnBehalfOf() == 7) ?
-                    TransferCause.CONFERENCE_NOW : TransferCause.CONFERENCE;
-            setTransferCauseIfUnset(cdrData, confTransferCause);
-            cdrData.setConferenceIdentifierUsed(cdrData.getFinalCalledPartyNumber());
-
-            if (!isConferenceByLastRedirectDn) {
-                String tempDialNumber = cdrData.getFinalCalledPartyNumber();
-                String tempDialPartition = cdrData.getFinalCalledPartyNumberPartition();
-                cdrData.setFinalCalledPartyNumber(cdrData.getLastRedirectDn());
-                cdrData.setFinalCalledPartyNumberPartition(cdrData.getLastRedirectDnPartition());
-                cdrData.setLastRedirectDn(tempDialNumber);
-                cdrData.setLastRedirectDnPartition(tempDialPartition);
-
-                if (confTransferCause == TransferCause.CONFERENCE_NOW) {
-                    String originalLastRedirectDnValue = cdrData.getOriginalLastRedirectDn();
-                    if (originalLastRedirectDnValue != null && originalLastRedirectDnValue.toLowerCase().startsWith("c")) {
-                        cdrData.setLastRedirectDn(originalLastRedirectDnValue);
-                        cdrData.setConferenceIdentifierUsed(originalLastRedirectDnValue);
-                    } else if (cdrData.getDestConversationId() != null && cdrData.getDestConversationId() > 0) {
-                        cdrData.setLastRedirectDn("i" + cdrData.getDestConversationId());
-                        cdrData.setConferenceIdentifierUsed(cdrData.getLastRedirectDn());
-                    }
-                }
-            }
-            if (cdrData.getJoinOnBehalfOf() == null || cdrData.getJoinOnBehalfOf() != 7) {
-                CdrUtil.swapPartyInfo(cdrData);
-            }
-        } else {
-            if (isConferenceByLastRedirectDn) {
-                if (setTransferCauseIfUnset(cdrData, TransferCause.CONFERENCE_END)) {
-                    cdrData.setConferenceIdentifierUsed(cdrData.getLastRedirectDn());
-                    invertTrunksForConference = false;
-                }
-            }
-        }
-
-        ExtensionLimits limits = employeeLookupService.getExtensionLimits(commLocation);
-
-        if (isConferenceByFinalCalled) {
-            boolean isConferenceEffectivelyIncoming = (!isPartitionPresent(cdrData.getFinalCalledPartyNumberPartition())) &&
-                    (cdrData.getCallingPartyNumber() == null || cdrData.getCallingPartyNumber().isEmpty() ||
-                            !employeeLookupService.isPossibleExtension(cdrData.getCallingPartyNumber(), limits));
-            if (isConferenceEffectivelyIncoming) {
-                cdrData.setCallDirection(CallDirection.INCOMING);
-            } else if (invertTrunksForConference && cdrData.getCallDirection() != CallDirection.INCOMING) {
-                 if (cdrData.getJoinOnBehalfOf() == null || cdrData.getJoinOnBehalfOf() != 7) { // PHP: if ($cdr_motivo_union != "7")
-                    CdrUtil.swapTrunks(cdrData);
-                 }
-            }
-        } else {
-            boolean isCallingPartyEffectivelyExternal = !isPartitionPresent(cdrData.getCallingPartyNumberPartition()) ||
-                    !employeeLookupService.isPossibleExtension(cdrData.getCallingPartyNumber(), limits);
-            boolean isFinalCalledPartyInternalFormat = isPartitionPresent(cdrData.getFinalCalledPartyNumberPartition()) &&
-                    employeeLookupService.isPossibleExtension(cdrData.getFinalCalledPartyNumber(), limits);
-            boolean isRedirectPartyInternalFormat = isPartitionPresent(cdrData.getLastRedirectDnPartition()) &&
-                    employeeLookupService.isPossibleExtension(cdrData.getLastRedirectDn(), limits);
-
-            if (isCallingPartyEffectivelyExternal && (isFinalCalledPartyInternalFormat || isRedirectPartyInternalFormat)) {
-                cdrData.setCallDirection(CallDirection.INCOMING);
-                CdrUtil.swapPartyInfo(cdrData);
-                log.debug("Non-conference incoming detected. Swapped calling/called numbers. Calling: {}, Called: {}",
-                        cdrData.getCallingPartyNumber(), cdrData.getFinalCalledPartyNumber());
-            }
-        }
-
-        boolean isCallingPartyInternal = isPartitionPresent(cdrData.getCallingPartyNumberPartition()) &&
-                employeeLookupService.isPossibleExtension(cdrData.getCallingPartyNumber(), limits);
-        boolean isFinalCalledPartyInternal = isPartitionPresent(cdrData.getFinalCalledPartyNumberPartition()) &&
-                employeeLookupService.isPossibleExtension(cdrData.getFinalCalledPartyNumber(), limits);
-
-        if (isCallingPartyInternal && isFinalCalledPartyInternal) {
-            cdrData.setInternalCall(true);
-        } else {
-            cdrData.setInternalCall(false);
-        }
-
-        // Transfer logic
-        boolean numberChangedByRedirect = false;
-        if (cdrData.getLastRedirectDn() != null && !cdrData.getLastRedirectDn().isEmpty()) {
-            if (cdrData.getCallDirection() == CallDirection.OUTGOING && !Objects.equals(cdrData.getFinalCalledPartyNumber(), cdrData.getLastRedirectDn())) {
-                numberChangedByRedirect = true;
-            } else if (cdrData.getCallDirection() == CallDirection.INCOMING && !Objects.equals(cdrData.getCallingPartyNumber(), cdrData.getLastRedirectDn())) {
-                // For incoming, after swap, callingPartyNumber is our extension.
-                // If lastRedirectDn is different from our extension, it's a redirect.
-                numberChangedByRedirect = true;
-            }
-        }
-
-        if (numberChangedByRedirect) {
-            if (cdrData.getTransferCause() == TransferCause.NONE) {
-                Integer lastRedirectReason = cdrData.getLastRedirectRedirectReason();
-                if (lastRedirectReason != null && lastRedirectReason > 0 && lastRedirectReason <= 16) {
-                    cdrData.setTransferCause(TransferCause.NORMAL);
-                } else {
-                    TransferCause autoTransferCause = (cdrData.getDestCallTerminationOnBehalfOf() != null && cdrData.getDestCallTerminationOnBehalfOf() == 7) ?
-                            TransferCause.PRE_CONFERENCE_NOW : TransferCause.AUTO;
-                    cdrData.setTransferCause(autoTransferCause);
-                }
-            }
-        } else if (cdrData.getFinalMobileCalledPartyNumber() != null && !cdrData.getFinalMobileCalledPartyNumber().isEmpty()) {
-            boolean numberChangedByMobileRedirect = false;
-            if (cdrData.getCallDirection() == CallDirection.OUTGOING) {
-                if (!Objects.equals(cdrData.getFinalCalledPartyNumber(), cdrData.getFinalMobileCalledPartyNumber())) {
-                    numberChangedByMobileRedirect = true;
-                    cdrData.setFinalCalledPartyNumber(cdrData.getFinalMobileCalledPartyNumber());
-                    cdrData.setFinalCalledPartyNumberPartition(cdrData.getDestMobileDeviceName());
-                    if (cdrData.isInternalCall() && !employeeLookupService.isPossibleExtension(cdrData.getFinalCalledPartyNumber(), limits)) {
-                        cdrData.setInternalCall(false);
-                    }
-                }
-            } else { // INCOMING
-                if (!Objects.equals(cdrData.getFinalCalledPartyNumber(), cdrData.getFinalMobileCalledPartyNumber())) {
-                    // For incoming, after swap, finalCalledPartyNumber is the external number.
-                    // If this external number is different from the mobile redirect, it means the call was redirected to mobile.
-                    // The party that *was* our extension (now in callingPartyNumber) is the one that set up the redirect.
-                    // The finalCalledPartyNumber should become the mobile number.
-                    numberChangedByMobileRedirect = true;
-                    cdrData.setFinalCalledPartyNumber(cdrData.getFinalMobileCalledPartyNumber());
-                    cdrData.setFinalCalledPartyNumberPartition(cdrData.getDestMobileDeviceName());
-                    cdrData.setInternalCall(false); // Call to mobile is not internal
-                }
-            }
-            if (numberChangedByMobileRedirect) {
-                setTransferCauseIfUnset(cdrData, TransferCause.AUTO);
-            }
-        }
-
-        if (isConferenceByFinalCalled &&
-                cdrData.getCallingPartyNumber() != null &&
-                Objects.equals(cdrData.getCallingPartyNumber(), cdrData.getFinalCalledPartyNumber())) {
-            log.info("Conference call where caller and callee are the same after all processing. Discarding CDR: {}", cdrLine);
-            return null;
-        }
-        cdrData.setEffectiveDestinationNumber(cdrData.getFinalCalledPartyNumber());
-        cdrData.setOriginalFinalCalledPartyNumber(cdrData.getFinalCalledPartyNumber());
-
-        log.debug("Final evaluated Cisco CM 6.0 CDR data: {}", cdrData);
-        return cdrData;
     }
 
     private boolean isPartitionPresent(String partition) {

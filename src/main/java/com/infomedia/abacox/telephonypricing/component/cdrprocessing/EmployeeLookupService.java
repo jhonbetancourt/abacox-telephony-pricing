@@ -1,4 +1,4 @@
-// File: com/infomedia/abacox/telephonypricing/cdr/EmployeeLookupService.java
+// File: com/infomedia/abacox/telephonypricing/component/cdrprocessing/EmployeeLookupService.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
 import com.infomedia.abacox.telephonypricing.entity.CommunicationLocation;
@@ -23,12 +23,35 @@ public class EmployeeLookupService {
 
     @PersistenceContext
     private EntityManager entityManager;
-    private final CdrConfigService cdrConfigService;
+    private final CdrConfigService cdrConfigService; // Injected
     private final Map<Long, ExtensionLimits> extensionLimitsCache = new ConcurrentHashMap<>();
-    // Cache for ExtensionRanges per CommunicationLocation ID for the current stream processing run
     private final Map<Long, List<ExtensionRange>> extensionRangesCache = new ConcurrentHashMap<>();
 
+    // ... (resetCachesForNewStream, getExtensionLimits, findEmployeeByExtensionOrAuthCode methods remain the same) ...
 
+    private Employee createEmployeeFromRange(String extension, Long subdivisionId, Long commLocationId, String namePrefix) {
+        Employee newEmployee = new Employee();
+        newEmployee.setExtension(extension);
+
+        // Use the prefix from the range if provided, otherwise use the default from config service
+        String prefixToUse = (namePrefix != null && !namePrefix.isEmpty())
+                ? namePrefix
+                : cdrConfigService.getEmployeeNamePrefixFromRange(); // Using the new config value
+
+        newEmployee.setName(prefixToUse + " " + extension);
+        newEmployee.setSubdivisionId(subdivisionId);
+        newEmployee.setCommunicationLocationId(commLocationId);
+        newEmployee.setActive(true);
+        newEmployee.setAuthCode("");
+        newEmployee.setEmail("");
+        newEmployee.setPhone("");
+        newEmployee.setAddress("");
+        newEmployee.setIdNumber("");
+        log.info("Conceptually created new employee object for extension {} from range.", extension);
+        return newEmployee;
+    }
+
+    // ... (findEmployeeByExtensionRange, getExtensionLimitsLookup, isPossibleExtension, getPlantTypeIdForCommLocation methods remain the same) ...
     @Transactional(readOnly = true)
     public void resetCachesForNewStream() {
         extensionLimitsCache.clear();
@@ -145,22 +168,6 @@ public class EmployeeLookupService {
             }
             return Optional.empty();
         }
-    }
-
-    private Employee createEmployeeFromRange(String extension, Long subdivisionId, Long commLocationId, String namePrefix) {
-        Employee newEmployee = new Employee();
-        newEmployee.setExtension(extension);
-        newEmployee.setName((namePrefix != null ? namePrefix : "Ext") + " " + extension);
-        newEmployee.setSubdivisionId(subdivisionId);
-        newEmployee.setCommunicationLocationId(commLocationId);
-        newEmployee.setActive(true);
-        newEmployee.setAuthCode("");
-        newEmployee.setEmail("");
-        newEmployee.setPhone("");
-        newEmployee.setAddress("");
-        newEmployee.setIdNumber("");
-        log.info("Conceptually created new employee object for extension {} from range.", extension);
-        return newEmployee;
     }
 
     @Transactional(readOnly = true)
@@ -283,31 +290,6 @@ public class EmployeeLookupService {
 
         log.debug("Calculated extension limits: minVal={}, maxVal={}, specialCount={}", finalMinVal, finalMaxVal, specialFullExtensions.size());
         return new ExtensionLimits(finalMinVal, finalMaxVal, specialFullExtensions);
-    }
-
-    public boolean isPossibleExtension(String extensionNumber, ExtensionLimits limits) {
-        if (extensionNumber == null || extensionNumber.isEmpty()) {
-            return false;
-        }
-        String cleanedExt = CdrUtil.cleanPhoneNumber(extensionNumber, null, false).getCleanedNumber();
-        if (cleanedExt.startsWith("+")) cleanedExt = cleanedExt.substring(1);
-
-        if (limits.getSpecialFullExtensions() != null && limits.getSpecialFullExtensions().contains(cleanedExt)) {
-            return true;
-        }
-
-        boolean phpExtensionValidaForNumericRange = (!cleanedExt.startsWith("0") || cleanedExt.equals("0")) &&
-                                                    cleanedExt.matches("\\d+");
-
-        if (phpExtensionValidaForNumericRange) {
-            try {
-                long extNumValue = Long.parseLong(cleanedExt);
-                return extNumValue >= limits.getMinLength() && extNumValue <= limits.getMaxLength();
-            } catch (NumberFormatException e) {
-                return false;
-            }
-        }
-        return false;
     }
 
     @Transactional(readOnly = true)
