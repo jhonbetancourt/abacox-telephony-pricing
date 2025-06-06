@@ -14,7 +14,7 @@ import java.util.List;
 public class ExtensionLimits {
     // Final numeric values
     private int minLength = 100;
-    private int maxLength = CdrConfigService.ACUMTOTAL_MAX_EXTENSION_LENGTH_FOR_INTERNAL_CHECK;
+    private int maxLength = CdrConfigService.MAX_EXTENSION_LENGTH_FOR_INTERNAL_CHECK;
     private List<String> specialFullExtensions = Collections.emptyList();
 
     // Internal trackers for length calculation

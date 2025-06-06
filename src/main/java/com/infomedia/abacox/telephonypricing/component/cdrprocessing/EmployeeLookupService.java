@@ -14,7 +14,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @Service
@@ -161,7 +160,7 @@ public class EmployeeLookupService {
             return Collections.emptyMap();
         }
 
-        String maxAllowedLenStr = String.valueOf(CdrConfigService.ACUMTOTAL_MAX_EXTENSION_LENGTH_FOR_INTERNAL_CHECK);
+        String maxAllowedLenStr = String.valueOf(CdrConfigService.MAX_EXTENSION_LENGTH_FOR_INTERNAL_CHECK);
         int maxStandardExtLength = maxAllowedLenStr.length() - 1;
         if (maxStandardExtLength < 1) maxStandardExtLength = 1;
 

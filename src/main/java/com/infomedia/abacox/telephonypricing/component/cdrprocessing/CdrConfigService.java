@@ -19,7 +19,7 @@ public class CdrConfigService {
     private EntityManager entityManager;
 
     // --- Constants based on PHP defines ---
-    public static final int ACUMTOTAL_MAX_EXTENSION_LENGTH_FOR_INTERNAL_CHECK = 1000000;
+    public static final int MAX_EXTENSION_LENGTH_FOR_INTERNAL_CHECK = 1000000;
     public static final int CDR_PROCESSING_BATCH_SIZE = 500;
     public static final long DEFAULT_OPERATOR_ID_FOR_INTERNAL = 0L;
 
