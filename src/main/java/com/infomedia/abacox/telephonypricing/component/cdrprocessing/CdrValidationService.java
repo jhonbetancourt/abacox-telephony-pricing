@@ -1,4 +1,4 @@
-// File: com/infomedia/abacox/telephonypricing/cdr/CdrValidationService.java
+// File: com/infomedia/abacox/telephonypricing/component/cdrprocessing/CdrValidationService.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
 import lombok.extern.log4j.Log4j2;
@@ -26,7 +26,17 @@ public class CdrValidationService {
     public boolean validateInitialCdrData(CdrData cdrData) {
         log.debug("Validating initial CDR data: {}", cdrData.getCtlHash());
         List<String> errorMessages = new ArrayList<>();
-        List<String> warningMessages = new ArrayList<>(); // PHP's CRNPREV type
+        List<String> warningMessages = new ArrayList<>();
+
+        // ADJUSTMENT: Implement early-stage swap for blank calling party number, as seen in PHP's ValidarCampos_CDR -> InvertirLlamada
+        if ((cdrData.getCallingPartyNumber() == null || cdrData.getCallingPartyNumber().isEmpty()) &&
+            (cdrData.getFinalCalledPartyNumber() != null && !cdrData.getFinalCalledPartyNumber().isEmpty())) {
+            log.warn("CallingPartyNumber is blank but FinalCalledPartyNumber is not. Performing full swap and treating as INCOMING. CDR: {}", cdrData.getCtlHash());
+            CdrUtil.swapPartyInfo(cdrData);
+            CdrUtil.swapTrunks(cdrData);
+            cdrData.setCallDirection(CallDirection.INCOMING);
+            cdrData.setInternalCall(false); // Ensure it's not treated as internal after this swap
+        }
 
         if (cdrData.getDateTimeOrigination() == null) {
             errorMessages.add("Missing or invalid origination date/time (PHP: _ESPERABA_FECHA).");
@@ -45,26 +55,16 @@ public class CdrValidationService {
             errorMessages.add("Calling party number '" + cdrData.getCallingPartyNumber() + "' contains spaces (PHP: _ESPERABA_NUMERO).");
         }
 
-        if (cdrData.getFinalCalledPartyNumber() != null && cdrData.getFinalCalledPartyNumber().contains(" ")) {
-            errorMessages.add("Final called party number '" + cdrData.getFinalCalledPartyNumber() + "' contains spaces (PHP: _ESPERABA_NUMERO).");
-        }
-        // PHP: ValidarTelefono checks for non-numeric, #, *, +
         if (cdrData.getFinalCalledPartyNumber() != null && !cdrData.getFinalCalledPartyNumber().isEmpty() &&
             !cdrData.getFinalCalledPartyNumber().equalsIgnoreCase("ANONYMOUS") &&
             !cdrData.getFinalCalledPartyNumber().matches("^[0-9#*+]+$")) {
-            // PHP: Reporta error solo si hay espacios, de lo contrario lo reporta asi sea como "no relacionado"
-            // The PHP logic is a bit nuanced here. If it contains spaces, it's an error.
-            // If it contains other invalid chars but no spaces, it might still proceed.
-            // For Java, let's be stricter: if it's not empty, not ANONYMOUS, and contains invalid chars, it's an error.
             errorMessages.add("Final called party number '" + cdrData.getFinalCalledPartyNumber() + "' contains invalid characters (PHP: _ESPERABA_NUMERO).");
         }
-
 
         if (cdrData.getDurationSeconds() == null || cdrData.getDurationSeconds() < 0) {
             errorMessages.add("Invalid call duration: " + cdrData.getDurationSeconds() + " (PHP: _ESPERABA_NUMEROPOS).");
         } else {
             if (cdrData.getDurationSeconds() < appConfigService.getMinCallDurationForTariffing()) {
-                // PHP: This was a warning (CRNPREV) if $min_tiempo > 0
                 if (appConfigService.getMinCallDurationForTariffing() > 0) {
                      warningMessages.add("Call duration " + cdrData.getDurationSeconds() + "s is less than minimum " + appConfigService.getMinCallDurationForTariffing() + "s (PHP: _TIEMPONO Min).");
                 }
@@ -74,20 +74,15 @@ public class CdrValidationService {
             }
         }
 
-        // PHP: if (isset($info_cdr['cuarentena']) && is_string($info_cdr['cuarentena']) && $info_cdr['cuarentena'] != '')
-        // This is handled if the parser itself sets quarantine reason.
         if (cdrData.isMarkedForQuarantine() && cdrData.getQuarantineReason() != null &&
             cdrData.getQuarantineStep() != null && cdrData.getQuarantineStep().startsWith("evaluateFormat")) {
-            // If parser already marked it, ensure its reason is included if no other errors found yet.
             if (errorMessages.isEmpty()) {
                 errorMessages.add("Marked for quarantine by parser: " + cdrData.getQuarantineReason());
             }
         }
 
-
         if (!errorMessages.isEmpty()) {
             cdrData.setMarkedForQuarantine(true);
-            // If parser already set a reason, keep it, otherwise use combined errors.
             if (cdrData.getQuarantineReason() == null || !cdrData.getQuarantineReason().startsWith("Marked for quarantine by parser:")) {
                 cdrData.setQuarantineReason(String.join("; ", errorMessages));
             }
@@ -95,16 +90,16 @@ public class CdrValidationService {
                 cdrData.setQuarantineStep(QuarantineErrorType.INITIAL_VALIDATION_ERROR.name());
             }
             log.warn("CDR validation errors: {}. Quarantine set.", errorMessages);
-            return false; // Errors found
+            return false;
         } else if (!warningMessages.isEmpty()) {
             cdrData.setMarkedForQuarantine(true);
             cdrData.setQuarantineReason(String.join("; ", warningMessages));
             cdrData.setQuarantineStep(QuarantineErrorType.INITIAL_VALIDATION_WARNING.name());
             log.warn("CDR validation warnings (leading to quarantine): {}. Quarantine set.", warningMessages);
-            return true; // No hard errors, but warnings lead to quarantine
+            return true;
         }
 
         log.debug("CDR data passed initial validation without errors or quarantinable warnings.");
-        return true; // Valid
+        return true;
     }
 }

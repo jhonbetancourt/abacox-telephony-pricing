@@ -171,7 +171,7 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
                 CdrUtil.swapPartyInfo(cdrData);
             }
         } else {
-            if (isConferenceByLastRedirectDn) {
+            if (isConferenceIdentifier(cdrData.getLastRedirectDn())) {
                 if (setTransferCauseIfUnset(cdrData, TransferCause.CONFERENCE_END)) {
                     cdrData.setConferenceIdentifierUsed(cdrData.getLastRedirectDn());
                     invertTrunksForConference = false;
@@ -185,12 +185,15 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
                             !CdrUtil.isPossibleExtension(cdrData.getCallingPartyNumber(), extensionLimits));
             if (isConferenceEffectivelyIncoming) {
                 cdrData.setCallDirection(CallDirection.INCOMING);
-            } else if (invertTrunksForConference && cdrData.getCallDirection() != CallDirection.INCOMING) {
-                 if (cdrData.getJoinOnBehalfOf() == null || cdrData.getJoinOnBehalfOf() != 7) { // PHP: if ($cdr_motivo_union != "7")
+            }
+            // ADJUSTMENT: Conditional trunk swap for conferences
+            else if (invertTrunksForConference && cdrData.getCallDirection() != CallDirection.INCOMING) {
+                 if (cdrData.getJoinOnBehalfOf() == null || cdrData.getJoinOnBehalfOf() != 7) {
                     CdrUtil.swapTrunks(cdrData);
                  }
             }
         } else {
+            // ADJUSTMENT: Use partial swap for non-conference incoming detection
             boolean isCallingPartyEffectivelyExternal = !isPartitionPresent(cdrData.getCallingPartyNumberPartition()) ||
                     !CdrUtil.isPossibleExtension(cdrData.getCallingPartyNumber(), extensionLimits);
             boolean isFinalCalledPartyInternalFormat = isPartitionPresent(cdrData.getFinalCalledPartyNumberPartition()) &&
@@ -200,8 +203,7 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
 
             if (isCallingPartyEffectivelyExternal && (isFinalCalledPartyInternalFormat || isRedirectPartyInternalFormat)) {
                 cdrData.setCallDirection(CallDirection.INCOMING);
-                // *** CORRECTED LOGIC ***
-                // This is the non-conference incoming call scenario. Only swap numbers, not partitions.
+                // Use the new partial swap method here
                 CdrUtil.swapPartyNumbersOnly(cdrData);
                 log.debug("Non-conference incoming detected. Swapped calling/called numbers ONLY. Calling: {}, Called: {}",
                         cdrData.getCallingPartyNumber(), cdrData.getFinalCalledPartyNumber());
@@ -219,14 +221,11 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
             cdrData.setInternalCall(false);
         }
 
-        // Transfer logic
         boolean numberChangedByRedirect = false;
         if (cdrData.getLastRedirectDn() != null && !cdrData.getLastRedirectDn().isEmpty()) {
             if (cdrData.getCallDirection() == CallDirection.OUTGOING && !Objects.equals(cdrData.getFinalCalledPartyNumber(), cdrData.getLastRedirectDn())) {
                 numberChangedByRedirect = true;
             } else if (cdrData.getCallDirection() == CallDirection.INCOMING && !Objects.equals(cdrData.getCallingPartyNumber(), cdrData.getLastRedirectDn())) {
-                // For incoming, after swap, callingPartyNumber is our extension.
-                // If lastRedirectDn is different from our extension, it's a redirect.
                 numberChangedByRedirect = true;
             }
         }
@@ -253,16 +252,12 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
                         cdrData.setInternalCall(false);
                     }
                 }
-            } else { // INCOMING
+            } else {
                 if (!Objects.equals(cdrData.getFinalCalledPartyNumber(), cdrData.getFinalMobileCalledPartyNumber())) {
-                    // For incoming, after swap, finalCalledPartyNumber is the external number.
-                    // If this external number is different from the mobile redirect, it means the call was redirected to mobile.
-                    // The party that *was* our extension (now in callingPartyNumber) is the one that set up the redirect.
-                    // The finalCalledPartyNumber should become the mobile number.
                     numberChangedByMobileRedirect = true;
                     cdrData.setFinalCalledPartyNumber(cdrData.getFinalMobileCalledPartyNumber());
                     cdrData.setFinalCalledPartyNumberPartition(cdrData.getDestMobileDeviceName());
-                    cdrData.setInternalCall(false); // Call to mobile is not internal
+                    cdrData.setInternalCall(false);
                 }
             }
             if (numberChangedByMobileRedirect) {
@@ -283,6 +278,7 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
         return cdrData;
     }
 
+    // ... other methods in the class ...
     @PostConstruct
     public void initDefaultHeaderMappings() {
         conceptualToActualHeaderMap.put("callingPartyNumberPartition", "callingPartyNumberPartition".toLowerCase());

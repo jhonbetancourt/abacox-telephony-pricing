@@ -14,23 +14,19 @@ import lombok.extern.log4j.Log4j2;
 public class CdrUtil {
 
     public static List<String> parseCsvLine(String line, String separator) {
-        // PHP's csv_datos is more robust than a simple split, handling quoted fields.
-        // A proper CSV parsing library would be better, but for now, mimic simple split and clean.
-        // The provided PHP doesn't show a complex csv_datos, so simple split + clean is assumed.
-        if (line == null) return Arrays.asList(""); // Match PHP behavior of returning array with one empty string for null input
+        if (line == null) return Arrays.asList("");
         return Arrays.stream(line.split(Pattern.quote(separator)))
-                .map(CdrUtil::cleanCsvField) // PHP's CM_ValidarCab calls csv_limpiar_campos on each field
+                .map(CdrUtil::cleanCsvField)
                 .collect(Collectors.toList());
     }
 
     public static String cleanCsvField(String field) {
         if (field == null) return "";
         String cleaned = field.trim();
-        cleaned = cleaned.replace("\u0000", ""); // Remove NULL characters
+        cleaned = cleaned.replace("\u0000", "");
 
         if (cleaned.startsWith("\"") && cleaned.endsWith("\"") && cleaned.length() >= 2) {
             cleaned = cleaned.substring(1, cleaned.length() - 1);
-            // PHP doesn't seem to handle escaped quotes like "" -> " inside fields with this simple logic.
         }
         return cleaned;
     }
@@ -40,14 +36,12 @@ public class CdrUtil {
             log.trace("Received negative decimal for IP conversion: {}, returning as string.", dec);
             return String.valueOf(dec);
         }
-        // This is standard little-endian to dotted-quad if the decimal was stored little-endian.
         return String.format("%d.%d.%d.%d",
                 (dec & 0xFF),
                 (dec >> 8) & 0xFF,
                 (dec >> 16) & 0xFF,
                 (dec >> 24) & 0xFF);
     }
-
 
     public static CleanPhoneNumberResult cleanPhoneNumber(String number, List<String> pbxExitPrefixes, boolean modoSeguro) {
         if (number == null) {
@@ -60,7 +54,7 @@ public class CdrUtil {
         boolean pbxPrefixWasStripped = false;
 
         boolean pbxPrefixDefined = pbxExitPrefixes != null && !pbxExitPrefixes.isEmpty();
-        int phpMaxCaracterAExtraer = -1; // -1: no prefixes, 0: no match, >0: match
+        int phpMaxCaracterAExtraer = -1;
 
         if (pbxPrefixDefined) {
             String longestMatchingPrefix = "";
@@ -124,62 +118,50 @@ public class CdrUtil {
         return new CleanPhoneNumberResult(finalCleanedNumber, pbxPrefixWasStripped);
     }
 
-
-    /**
-     * Swaps all party information: numbers and partitions.
-     * Used for conference calls where the entire identity of caller/callee is inverted.
-     */
     public static void swapPartyInfo(CdrData cdrData) {
-        log.debug("Swapping full party info (numbers and partitions). Before: Calling='{}'({}), FinalCalled='{}'({})",
+        log.debug("Performing FULL swap of party info. Before: Calling='{}'({}), FinalCalled='{}'({})",
                 cdrData.getCallingPartyNumber(), cdrData.getCallingPartyNumberPartition(),
                 cdrData.getFinalCalledPartyNumber(), cdrData.getFinalCalledPartyNumberPartition());
 
-        // Swap numbers
         String tempExt = cdrData.getCallingPartyNumber();
         cdrData.setCallingPartyNumber(cdrData.getFinalCalledPartyNumber());
         cdrData.setFinalCalledPartyNumber(tempExt);
 
-        // Swap partitions
         String tempExtPart = cdrData.getCallingPartyNumberPartition();
         cdrData.setCallingPartyNumberPartition(cdrData.getFinalCalledPartyNumberPartition());
         cdrData.setFinalCalledPartyNumberPartition(tempExtPart);
 
-        // Align original fields for persistence
         cdrData.setOriginalFinalCalledPartyNumber(cdrData.getFinalCalledPartyNumber());
         cdrData.setOriginalFinalCalledPartyNumberPartition(cdrData.getFinalCalledPartyNumberPartition());
 
-        // Update the effective destination number to reflect the swap
         cdrData.setEffectiveDestinationNumber(cdrData.getFinalCalledPartyNumber());
 
-        log.debug("Swapped full party info. After: Calling='{}'({}), FinalCalled='{}'({})",
+        log.debug("FULL swap complete. After: Calling='{}'({}), FinalCalled='{}'({})",
                 cdrData.getCallingPartyNumber(), cdrData.getCallingPartyNumberPartition(),
                 cdrData.getFinalCalledPartyNumber(), cdrData.getFinalCalledPartyNumberPartition());
     }
 
     /**
-     * Swaps only the party numbers (calling and final called), leaving partitions untouched.
-     * This is used for non-conference incoming calls where the external number becomes the caller
-     * and our extension becomes the callee, but their original partitions (or lack thereof) are preserved.
+     * ADJUSTMENT: New method for partial swap.
+     * Performs a PARTIAL swap, exchanging only the calling and called numbers.
+     * Partitions and trunks are NOT affected. This is for the non-conference incoming detection case.
+     * @param cdrData The CdrData object to modify.
      */
     public static void swapPartyNumbersOnly(CdrData cdrData) {
-        log.debug("Swapping party numbers ONLY. Before: Calling='{}', FinalCalled='{}'",
+        log.debug("Performing PARTIAL swap of party numbers only. Before: Calling='{}', FinalCalled='{}'",
                 cdrData.getCallingPartyNumber(), cdrData.getFinalCalledPartyNumber());
 
-        // Swap numbers
         String tempExt = cdrData.getCallingPartyNumber();
         cdrData.setCallingPartyNumber(cdrData.getFinalCalledPartyNumber());
         cdrData.setFinalCalledPartyNumber(tempExt);
 
-        // Align original fields for persistence
         cdrData.setOriginalFinalCalledPartyNumber(cdrData.getFinalCalledPartyNumber());
 
-        // Update the effective destination number to reflect the swap
         cdrData.setEffectiveDestinationNumber(cdrData.getFinalCalledPartyNumber());
 
-        log.debug("Swapped party numbers ONLY. After: Calling='{}', FinalCalled='{}'",
+        log.debug("PARTIAL swap complete. After: Calling='{}', FinalCalled='{}'",
                 cdrData.getCallingPartyNumber(), cdrData.getFinalCalledPartyNumber());
     }
-
 
     public static void swapTrunks(CdrData cdrData) {
         log.debug("Swapping trunks. Before: Orig='{}', Dest='{}'", cdrData.getOrigDeviceName(), cdrData.getDestDeviceName());
@@ -190,7 +172,6 @@ public class CdrUtil {
     }
 
     public static String generateCtlHash(String cdrString, Long commLocationId) {
-        // PHP: $cdr5 = sha256($comubicacion_id.'@'.$cdr);
         String ctlHashContent = (commLocationId != null ? commLocationId.toString() : "0") + "@" + (cdrString != null ? cdrString : "");
         return sha256(ctlHashContent);
     }
@@ -210,7 +191,6 @@ public class CdrUtil {
             throw new RuntimeException("SHA-256 algorithm not found", e);
         }
     }
-
 
     public static boolean isPossibleExtension(String extensionNumber, ExtensionLimits limits) {
         if (limits == null || extensionNumber == null || extensionNumber.isEmpty()) {

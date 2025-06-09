@@ -16,9 +16,10 @@ import java.util.Optional;
 @Log4j2
 @RequiredArgsConstructor
 public class CallTypeAndDirectionService {
+
     private final IncomingCallProcessorService incomingCallProcessorService;
     private final OutgoingCallProcessorService outgoingCallProcessorService;
-    private final InternalCallProcessorService internalCallProcessorService; // Added
+    private final InternalCallProcessorService internalCallProcessorService;
     private final EmployeeLookupService employeeLookupService;
     private final PbxSpecialRuleLookupService pbxSpecialRuleLookupService;
 
@@ -30,25 +31,35 @@ public class CallTypeAndDirectionService {
     public void processCall(CdrData cdrData, LineProcessingContext processingContext) {
         log.debug("Processing call for CDR: {}", cdrData.getCtlHash());
 
+        // Store the initial direction determined by the parser
+        CallDirection initialDirection = cdrData.getCallDirection();
+
         // Initial determination of internal call (PHP: es_llamada_interna)
         if (!cdrData.isInternalCall()) {
-             checkIfPotentiallyInternal(cdrData, processingContext);
+            checkIfPotentiallyInternal(cdrData, processingContext);
         }
-        log.info("Initial call attributes - Direction: {}, Internal: {}", cdrData.getCallDirection(), cdrData.isInternalCall());
+        log.info("Initial call attributes - Direction: {}, Internal: {}", initialDirection, cdrData.isInternalCall());
 
         cdrData.setEffectiveDestinationNumber(cdrData.getFinalCalledPartyNumber());
 
-        // Delegate to the correct processor based on the final determination of the call type.
+        // An incoming call that is found to be internal must be processed as internal, not as incoming.
         if (cdrData.isInternalCall()) {
+            if (initialDirection == CallDirection.INCOMING) {
+                log.info("Re-classifying INCOMING call as INTERNAL for processing. CDR: {}", cdrData.getCtlHash());
+                // PHP's InvertirLlamada logic for this case:
+                CdrUtil.swapPartyInfo(cdrData);
+                CdrUtil.swapTrunks(cdrData);
+                cdrData.setCallDirection(CallDirection.OUTGOING); // It's now treated as an outgoing internal call
+            }
             internalCallProcessorService.processInternal(cdrData, processingContext, false);
-        } else if (cdrData.getCallDirection() == CallDirection.INCOMING) {
+        } else if (initialDirection == CallDirection.INCOMING) {
             incomingCallProcessorService.processIncoming(cdrData, processingContext);
         } else { // OUTGOING
             outgoingCallProcessorService.processOutgoing(cdrData, processingContext, false);
         }
 
         log.info("Finished processing call. Final Direction: {}, Internal: {}, TelephonyType: {}",
-                 cdrData.getCallDirection(), cdrData.isInternalCall(), cdrData.getTelephonyTypeId());
+                cdrData.getCallDirection(), cdrData.isInternalCall(), cdrData.getTelephonyTypeId());
     }
 
     /**
