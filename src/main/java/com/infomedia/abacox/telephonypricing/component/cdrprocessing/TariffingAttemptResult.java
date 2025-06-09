@@ -1,5 +1,4 @@
-// File: com/infomedia/abacox/telephonypricing/cdr/TariffingAttemptResult.java
-// (This seems fine as is, it's a data holder for tariffing attempts)
+// File: com/infomedia/abacox/telephonypricing/component/cdrprocessing/TariffingAttemptResult.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
 import lombok.Data;
@@ -10,4 +9,5 @@ public class TariffingAttemptResult {
     PrefixInfo bestPrefixInfo;
     String finalNumberUsedForDestLookup; // The number string after operator prefix stripping, used for findDestinationIndicator
     boolean wasNormalizedAttempt = false; // Flag to indicate if this result came from a normalization attempt
+    String matchedNumber;
 }

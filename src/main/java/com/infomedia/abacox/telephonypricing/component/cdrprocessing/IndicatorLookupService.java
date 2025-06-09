@@ -60,16 +60,21 @@ public class IndicatorLookupService {
         String finalNumberUsedForMatching = numberForProcessing;
 
         Long effectiveTelephonyTypeId = telephonyTypeId;
+        Long effectivePrefixId = prefixId;
+
         if (isLocalType(telephonyTypeId)) {
             String localNdc = findLocalNdcForIndicator(originIndicatorIdForBandContext);
             if (localNdc != null && !localNdc.isEmpty() && !finalNumberUsedForMatching.startsWith(localNdc)) {
                 finalNumberUsedForMatching = localNdc + finalNumberUsedForMatching;
                 effectiveTelephonyTypeId = TelephonyTypeEnum.NATIONAL.getValue();
+                effectivePrefixId = null;
+                log.debug("Local call type detected. Transformed number to '{}', search type to NATIONAL, and cleared prefixId for lookup.", finalNumberUsedForMatching);
             }
         }
 
         IndicatorConfig config = getIndicatorConfigForTelephonyType(effectiveTelephonyTypeId, originCountryId);
         if (config.maxNdcLength == 0 && !isLocalType(effectiveTelephonyTypeId) && !isInternationalOrSatellite(effectiveTelephonyTypeId)) {
+            log.warn("No indicator configuration (NDC lengths) found for non-local/non-international type {}. Cannot proceed with lookup.", effectiveTelephonyTypeId);
             return Optional.empty();
         }
 
@@ -91,6 +96,7 @@ public class IndicatorLookupService {
              }
         }
         if (ndcCandidates.isEmpty()) {
+             log.debug("No valid NDC candidates could be extracted from number '{}' for type {}.", finalNumberUsedForMatching, effectiveTelephonyTypeId);
              return Optional.empty();
         }
 
@@ -113,12 +119,12 @@ public class IndicatorLookupService {
              return Optional.empty();
         }
 
-        // This is the critical filter from the PHP logic.
-        if (prefixId != null) {
+        // This clause is now correctly bypassed when effectivePrefixId is nullified during transformation.
+        if (effectivePrefixId != null) {
             whereClauses.add("(i.operator_id = 0 OR i.operator_id = (SELECT p.operator_id FROM prefix p WHERE p.id = :prefixIdFunc AND p.active = true))");
         }
 
-        if (prefixHasAssociatedBands && prefixId != null) {
+        if (prefixHasAssociatedBands && effectivePrefixId != null) {
             queryBuilder.append("LEFT JOIN band b ON b.prefix_id = :prefixIdFunc AND b.active = true ");
             queryBuilder.append("LEFT JOIN band_indicator bi ON bi.band_id = b.id AND bi.indicator_id = i.id ");
             whereClauses.add("(b.origin_indicator_id = 0 OR b.origin_indicator_id = :originIndicatorIdForBandContext)");
@@ -143,10 +149,10 @@ public class IndicatorLookupService {
         if (!ndcIntCandidates.isEmpty()) {
             nativeQuery.setParameter("ndcCandidatesInt", ndcIntCandidates);
         }
-        if (prefixId != null) {
-            nativeQuery.setParameter("prefixIdFunc", prefixId);
+        if (effectivePrefixId != null) {
+            nativeQuery.setParameter("prefixIdFunc", effectivePrefixId);
         }
-        if (prefixHasAssociatedBands) {
+        if (prefixHasAssociatedBands && effectivePrefixId != null) {
             nativeQuery.setParameter("originIndicatorIdForBandContext", originIndicatorIdForBandContext);
         }
         if (!isInternationalOrSatellite(effectiveTelephonyTypeId)) {
@@ -181,7 +187,7 @@ public class IndicatorLookupService {
                     PaddedSeriesResult paddedApprox = padSeries(subscriberPartOfEffectiveNumber, seriesInitialInt.toString(), seriesFinalInt.toString());
                     String approxComparableInitial = dbNdcStr + paddedApprox.getPaddedInitial();
                     String approxComparableFinal = dbNdcStr + paddedApprox.getPaddedFinal();
-                    fillDestinationInfo(approximateMatch, row, dbNdcStr, finalNumberUsedForMatching, prefixId, true, seriesInitialInt, seriesFinalInt, approxComparableInitial, approxComparableFinal);
+                    fillDestinationInfo(approximateMatch, row, dbNdcStr, finalNumberUsedForMatching, effectivePrefixId, true, seriesInitialInt, seriesFinalInt, approxComparableInitial, approxComparableFinal);
                 }
                 continue;
             }
@@ -204,7 +210,7 @@ public class IndicatorLookupService {
             }
             if (numToCompareBI.compareTo(seriesInitialBI) >= 0 &&
                 numToCompareBI.compareTo(seriesFinalBI) <= 0) {
-                addMatch(validMatches, row, dbNdcStr, finalNumberUsedForMatching, prefixId, false, seriesInitialInt, seriesFinalInt, fullComparableSeriesInitial, fullComparableSeriesFinal);
+                addMatch(validMatches, row, dbNdcStr, finalNumberUsedForMatching, effectivePrefixId, false, seriesInitialInt, seriesFinalInt, fullComparableSeriesInitial, fullComparableSeriesFinal);
             }
         }
 
