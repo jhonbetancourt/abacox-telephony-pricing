@@ -1,4 +1,4 @@
-// File: com/infomedia/abacox/telephonypricing/cdr/OutgoingCallProcessorService.java
+// File: com/infomedia/abacox/telephonypricing/component/cdrprocessing/OutgoingCallProcessorService.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
 import com.infomedia.abacox.telephonypricing.entity.CommunicationLocation;
@@ -6,7 +6,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
 
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 
 @Service
 @Log4j2
@@ -14,7 +18,6 @@ import java.util.*;
 public class OutgoingCallProcessorService {
 
     private final SpecialServiceLookupService specialServiceLookupService;
-    private final InternalCallProcessorService internalCallProcessorService;
     private final PbxSpecialRuleLookupService pbxSpecialRuleLookupService;
     private final TariffCalculationService tariffCalculationService;
     private final PhoneNumberTransformationService phoneNumberTransformationService;
@@ -26,7 +29,6 @@ public class OutgoingCallProcessorService {
         CommunicationLocation commLocation = processingContext.getCommLocation();
         log.debug("Processing OUTGOING logic for CDR: {}. Recursive PBX applied: {}", cdrData.getCtlHash(), pbxSpecialRuleAppliedRecursively);
 
-        // PHP: $val_numero = _es_Saliente($info_cdr['dial_number']);
         TransformationResult transformedOutgoingCME = phoneNumberTransformationService.transformOutgoingNumberCME(
                 cdrData.getFinalCalledPartyNumber(), commLocation.getIndicator().getOriginCountryId()
         );
@@ -35,23 +37,21 @@ public class OutgoingCallProcessorService {
             cdrData.setOriginalDialNumberBeforeCMETransform(cdrData.getFinalCalledPartyNumber());
             cdrData.setFinalCalledPartyNumber(transformedOutgoingCME.getTransformedNumber());
         }
-        // For outgoing, effective destination is the final called party number after initial transformations
         cdrData.setEffectiveDestinationNumber(cdrData.getFinalCalledPartyNumber());
 
-        // PHP: if (!$pbx_especial) { if (!$esinterna) { $infovalor = procesaServespecial(...); } }
-        if (!pbxSpecialRuleAppliedRecursively && !cdrData.isInternalCall()) {
+        if (!pbxSpecialRuleAppliedRecursively) { // This check is now sufficient, no need for !isInternalCall
             List<String> pbxPrefixes = commLocation.getPbxPrefix() != null ? Arrays.asList(commLocation.getPbxPrefix().split(",")) : Collections.emptyList();
             String numToCheckSpecial = CdrUtil.cleanPhoneNumber(
                     cdrData.getEffectiveDestinationNumber(),
                     pbxPrefixes,
-                    true // modo_seguro = true for special number check
+                    true
             ).getCleanedNumber();
             if (numToCheckSpecial != null && !numToCheckSpecial.isEmpty()) {
                 log.debug("Checking for special service with number: {}", numToCheckSpecial);
                 Optional<SpecialServiceInfo> specialServiceInfoOpt =
                         specialServiceLookupService.findSpecialService(
                                 numToCheckSpecial,
-                                commLocation.getIndicatorId(), // For outgoing, indicatorId is not destination yet
+                                commLocation.getIndicatorId(),
                                 commLocation.getIndicator().getOriginCountryId()
                         );
                 if (specialServiceInfoOpt.isPresent()) {
@@ -61,8 +61,8 @@ public class OutgoingCallProcessorService {
                     cdrData.setTelephonyTypeName(ssi.description);
                     cdrData.setOperatorId(ssi.operatorId);
                     cdrData.setOperatorName(ssi.operatorName);
-                    cdrData.setIndicatorId(commLocation.getIndicatorId()); // Origin indicator for outgoing special
-                    cdrData.setEffectiveDestinationNumber(numToCheckSpecial); // Use the matched special number
+                    cdrData.setIndicatorId(commLocation.getIndicatorId());
+                    cdrData.setEffectiveDestinationNumber(numToCheckSpecial);
                     cdrData.setSpecialServiceTariff(ssi);
                     tariffCalculationService.calculateTariffsForSpecialService(cdrData);
                     return;
@@ -70,14 +70,6 @@ public class OutgoingCallProcessorService {
             }
         }
 
-        // PHP: if ($esinterna) { $infovalor = procesaInterna(...); }
-        if (cdrData.isInternalCall()) {
-            log.debug("Processing as internal call.");
-            internalCallProcessorService.processInternal(cdrData, processingContext, pbxSpecialRuleAppliedRecursively);
-            return;
-        }
-
-        // PHP: if (!$pbx_especial) { $telefono_eval = evaluarPBXEspecial(...); if ($telefono_eval !== '') { procesaSaliente(..., true); return; } }
         if (!pbxSpecialRuleAppliedRecursively) {
             Optional<String> pbxTransformedDest = pbxSpecialRuleLookupService.applyPbxSpecialRule(
                     cdrData.getEffectiveDestinationNumber(), commLocation.getDirectory(), PbxRuleDirection.OUTGOING.getValue()
@@ -87,15 +79,13 @@ public class OutgoingCallProcessorService {
                 log.info("Outgoing number '{}' transformed by PBX rule to '{}'. Reprocessing.", originalDest, pbxTransformedDest.get());
                 cdrData.setOriginalDialNumberBeforePbxOutgoing(originalDest);
                 cdrData.setFinalCalledPartyNumber(pbxTransformedDest.get());
-                cdrData.setEffectiveDestinationNumber(pbxTransformedDest.get()); // Update effective destination
+                cdrData.setEffectiveDestinationNumber(pbxTransformedDest.get());
                 cdrData.setPbxSpecialRuleAppliedInfo("PBX Outgoing Rule: " + originalDest + " -> " + pbxTransformedDest.get());
-                processOutgoing(cdrData, processingContext, true); // Recursive call
+                processOutgoing(cdrData, processingContext, true);
                 return;
             }
         }
 
-        // PHP: $infovalor = procesaSaliente_Complementar(...);
-        // This is the main tariffing for external outgoing calls
         log.debug("Proceeding to standard outgoing tariff calculation for destination: {}", cdrData.getEffectiveDestinationNumber());
         tariffCalculationService.calculateTariffsForOutgoing(cdrData, commLocation, processingContext.getCommLocationExtensionLimits());
         log.debug("Finished processing OUTGOING logic. CDR Data: {}", cdrData);

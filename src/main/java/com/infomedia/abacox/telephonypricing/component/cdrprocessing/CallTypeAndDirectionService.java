@@ -18,9 +18,9 @@ import java.util.Optional;
 public class CallTypeAndDirectionService {
     private final IncomingCallProcessorService incomingCallProcessorService;
     private final OutgoingCallProcessorService outgoingCallProcessorService;
+    private final InternalCallProcessorService internalCallProcessorService; // Added
     private final EmployeeLookupService employeeLookupService;
     private final PbxSpecialRuleLookupService pbxSpecialRuleLookupService;
-    private final TariffCalculationService tariffCalculationService; // Added
 
     /**
      * PHP equivalent: Orchestrates logic from CargarCDR's main loop after `evaluar_Formato`,
@@ -32,25 +32,22 @@ public class CallTypeAndDirectionService {
         ExtensionLimits extensionLimits = processingContext.getCommLocationExtensionLimits();
 
         // Initial determination of internal call (PHP: es_llamada_interna)
-        // The Cisco CM 6.0 parser already sets cdrData.isInternalCall() based on partitions.
-        // If it wasn't set by parser, or for other plant types, this logic would be more complex.
-        // For CM 6.0, we trust the parser's initial assessment.
-        // If further checks are needed (like PHP's es_llamada_interna for non-partition based plants):
-        if (!cdrData.isInternalCall()) { // If parser didn't mark it internal, do PHP-like checks
+        if (!cdrData.isInternalCall()) {
              checkIfPotentiallyInternal(cdrData, processingContext);
         }
         log.info("Initial call attributes - Direction: {}, Internal: {}", cdrData.getCallDirection(), cdrData.isInternalCall());
 
-        // Set effective destination number before processing logic.
-        // This will be refined within processIncomingLogic/processOutgoingLogic.
         cdrData.setEffectiveDestinationNumber(cdrData.getFinalCalledPartyNumber());
 
-        if (cdrData.getCallDirection() == CallDirection.INCOMING) {
+        // Delegate to the correct processor based on the final determination of the call type.
+        if (cdrData.isInternalCall()) {
+            internalCallProcessorService.processInternal(cdrData, processingContext, false);
+        } else if (cdrData.getCallDirection() == CallDirection.INCOMING) {
             incomingCallProcessorService.processIncoming(cdrData, processingContext);
-        } else { // OUTGOING or internal initially parsed as outgoing
-            // Pass extensionLimits to the outgoing processor's tariffing step
-            tariffCalculationService.calculateTariffsForOutgoing(cdrData, processingContext.getCommLocation(), extensionLimits);
+        } else { // OUTGOING
+            outgoingCallProcessorService.processOutgoing(cdrData, processingContext, false);
         }
+
         log.info("Finished processing call. Final Direction: {}, Internal: {}, TelephonyType: {}",
                  cdrData.getCallDirection(), cdrData.isInternalCall(), cdrData.getTelephonyTypeId());
     }
@@ -70,29 +67,26 @@ public class CallTypeAndDirectionService {
             String destinationForInternalCheck = CdrUtil.cleanPhoneNumber(cdrData.getFinalCalledPartyNumber(), null, false).getCleanedNumber();
             log.debug("Cleaned destination for internal check: {}", destinationForInternalCheck);
 
-            // PHP: $telefono_eval = evaluarPBXEspecial($link, $destino, $directorio, $cliente, 3); // internas
             Optional<String> pbxInternalTransformed = pbxSpecialRuleLookupService.applyPbxSpecialRule(
                     destinationForInternalCheck, commLocation.getDirectory(), PbxRuleDirection.INTERNAL.getValue()
             );
             if (pbxInternalTransformed.isPresent()) {
                 destinationForInternalCheck = pbxInternalTransformed.get();
-                cdrData.setInternalCheckPbxTransformedDest(destinationForInternalCheck); // Store for reference
+                cdrData.setInternalCheckPbxTransformedDest(destinationForInternalCheck);
                 log.debug("Destination transformed by PBX internal rule: {}", destinationForInternalCheck);
             }
 
-            // PHP: $esinterna = ($len_destino == 1 || ExtensionPosible($destino) || ExtensionEspecial($destino));
-            // PHP: if (!$esinterna && $no_inicia_cero && $es_numerico && $destino != '' ) { $retornar = Validar_RangoExt(...); $esinterna = $retornar['nuevo']; }
             if ((destinationForInternalCheck.length() == 1 && destinationForInternalCheck.matches("\\d")) ||
                     CdrUtil.isPossibleExtension(destinationForInternalCheck, limits)) {
                 cdrData.setInternalCall(true);
                 log.debug("Marked as internal call based on destination '{}' format/possibility.", destinationForInternalCheck);
             } else if (destinationForInternalCheck.matches("\\d+") &&
-                    (!destinationForInternalCheck.startsWith("0") || destinationForInternalCheck.equals("0")) && // PHP: ExtensionValida($destino, true)
+                    (!destinationForInternalCheck.startsWith("0") || destinationForInternalCheck.equals("0")) &&
                     !destinationForInternalCheck.isEmpty()) {
                 log.debug("Destination '{}' is numeric, not starting with 0 (or is '0'). Checking extension ranges.", destinationForInternalCheck);
                 Optional<Employee> employeeFromRange = employeeLookupService.findEmployeeByExtensionRange(
                         destinationForInternalCheck,
-                        null, lineProcessingContext.getExtensionRanges()); // Search globally for ranges if not tied to a specific commLocation context initially
+                        null, lineProcessingContext.getExtensionRanges());
                 if (employeeFromRange.isPresent()) {
                     cdrData.setInternalCall(true);
                     log.debug("Marked as internal call based on destination '{}' matching an extension range.", destinationForInternalCheck);
