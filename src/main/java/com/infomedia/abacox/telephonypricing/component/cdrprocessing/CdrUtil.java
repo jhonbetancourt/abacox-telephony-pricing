@@ -1,4 +1,4 @@
-// File: com/infomedia/abacox/telephonypricing/cdr/CdrUtil.java
+// File: com/infomedia/abacox/telephonypricing/component/cdrprocessing/CdrUtil.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
 import java.nio.charset.StandardCharsets;
@@ -40,22 +40,6 @@ public class CdrUtil {
             log.trace("Received negative decimal for IP conversion: {}, returning as string.", dec);
             return String.valueOf(dec);
         }
-        // Corrected order based on PHP's array_reverse and hexdec logic
-        // PHP: $hex =  sprintf("%08s", dechex($dec));
-        // PHP: $arr_dec = array_reverse( str_split($hex, 2) );
-        // PHP: $arr_dec[$key] = hexdec($val);
-        // Example: dec = 2886729729 -> hex = ABE00001 -> reverse split = [01, 00, E0, AB] -> dec = [1, 0, 224, 171] -> IP = 1.0.224.171
-        // This is different from the common network byte order conversion.
-        // The PHP logic implies the decimal IP is stored with octets in reverse order of significance for display.
-        // Let's re-verify the PHP logic:
-        // dec = 167772161 (for 10.0.0.1)
-        // dechex(167772161) = a000001
-        // sprintf("%08s", "a000001") = "0a000001"
-        // str_split("0a000001", 2) = ["0a", "00", "00", "01"]
-        // array_reverse = ["01", "00", "00", "0a"]
-        // hexdec("01")=1, hexdec("00")=0, hexdec("00")=0, hexdec("0a")=10
-        // implode = "1.0.0.10" -> This is correct for 10.0.0.1 if the input decimal was for 1.0.0.10
-        // So, the PHP logic is: (dec & 0xFF) . "." . ((dec >> 8) & 0xFF) . "." . ((dec >> 16) & 0xFF) . "." . ((dec >> 24) & 0xFF)
         // This is standard little-endian to dotted-quad if the decimal was stored little-endian.
         return String.format("%d.%d.%d.%d",
                 (dec & 0xFF),
@@ -64,8 +48,6 @@ public class CdrUtil {
                 (dec >> 24) & 0xFF);
     }
 
-
-    // ... inside CdrUtil.java
 
     public static CleanPhoneNumberResult cleanPhoneNumber(String number, List<String> pbxExitPrefixes, boolean modoSeguro) {
         if (number == null) {
@@ -143,12 +125,16 @@ public class CdrUtil {
     }
 
 
+    /**
+     * Swaps all party information: numbers and partitions.
+     * Used for conference calls where the entire identity of caller/callee is inverted.
+     */
     public static void swapPartyInfo(CdrData cdrData) {
-        log.debug("Swapping party info. Before: Calling='{}'({}), FinalCalled='{}'({})",
+        log.debug("Swapping full party info (numbers and partitions). Before: Calling='{}'({}), FinalCalled='{}'({})",
                 cdrData.getCallingPartyNumber(), cdrData.getCallingPartyNumberPartition(),
                 cdrData.getFinalCalledPartyNumber(), cdrData.getFinalCalledPartyNumberPartition());
 
-        // Swap primary numbers
+        // Swap numbers
         String tempExt = cdrData.getCallingPartyNumber();
         cdrData.setCallingPartyNumber(cdrData.getFinalCalledPartyNumber());
         cdrData.setFinalCalledPartyNumber(tempExt);
@@ -158,24 +144,42 @@ public class CdrUtil {
         cdrData.setCallingPartyNumberPartition(cdrData.getFinalCalledPartyNumberPartition());
         cdrData.setFinalCalledPartyNumberPartition(tempExtPart);
 
-        //Swap the "original" fields as well, as these are used for persistence.
-        cdrData.setOriginalCalledPartyNumber(cdrData.getCallingPartyNumber()); // The new "original" is the current calling number
-        // The concept of an "original calling number" doesn't exist in the CDR, so we don't have a value to swap back.
-        // The key is that `originalFinalCalledPartyNumber` must now reflect the new `finalCalledPartyNumber`.
+        // Align original fields for persistence
         cdrData.setOriginalFinalCalledPartyNumber(cdrData.getFinalCalledPartyNumber());
-
-        // Similar to above, we align the original partition with the new final partition.
         cdrData.setOriginalFinalCalledPartyNumberPartition(cdrData.getFinalCalledPartyNumberPartition());
-
 
         // Update the effective destination number to reflect the swap
         cdrData.setEffectiveDestinationNumber(cdrData.getFinalCalledPartyNumber());
 
-        log.debug("Swapped party info. After: Calling='{}'({}), FinalCalled='{}'({}), OriginalFinal='{}'({})",
+        log.debug("Swapped full party info. After: Calling='{}'({}), FinalCalled='{}'({})",
                 cdrData.getCallingPartyNumber(), cdrData.getCallingPartyNumberPartition(),
-                cdrData.getFinalCalledPartyNumber(), cdrData.getFinalCalledPartyNumberPartition(),
-                cdrData.getOriginalFinalCalledPartyNumber(), cdrData.getOriginalFinalCalledPartyNumberPartition());
+                cdrData.getFinalCalledPartyNumber(), cdrData.getFinalCalledPartyNumberPartition());
     }
+
+    /**
+     * Swaps only the party numbers (calling and final called), leaving partitions untouched.
+     * This is used for non-conference incoming calls where the external number becomes the caller
+     * and our extension becomes the callee, but their original partitions (or lack thereof) are preserved.
+     */
+    public static void swapPartyNumbersOnly(CdrData cdrData) {
+        log.debug("Swapping party numbers ONLY. Before: Calling='{}', FinalCalled='{}'",
+                cdrData.getCallingPartyNumber(), cdrData.getFinalCalledPartyNumber());
+
+        // Swap numbers
+        String tempExt = cdrData.getCallingPartyNumber();
+        cdrData.setCallingPartyNumber(cdrData.getFinalCalledPartyNumber());
+        cdrData.setFinalCalledPartyNumber(tempExt);
+
+        // Align original fields for persistence
+        cdrData.setOriginalFinalCalledPartyNumber(cdrData.getFinalCalledPartyNumber());
+
+        // Update the effective destination number to reflect the swap
+        cdrData.setEffectiveDestinationNumber(cdrData.getFinalCalledPartyNumber());
+
+        log.debug("Swapped party numbers ONLY. After: Calling='{}', FinalCalled='{}'",
+                cdrData.getCallingPartyNumber(), cdrData.getFinalCalledPartyNumber());
+    }
+
 
     public static void swapTrunks(CdrData cdrData) {
         log.debug("Swapping trunks. Before: Orig='{}', Dest='{}'", cdrData.getOrigDeviceName(), cdrData.getDestDeviceName());

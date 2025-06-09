@@ -200,8 +200,10 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
 
             if (isCallingPartyEffectivelyExternal && (isFinalCalledPartyInternalFormat || isRedirectPartyInternalFormat)) {
                 cdrData.setCallDirection(CallDirection.INCOMING);
-                CdrUtil.swapPartyInfo(cdrData);
-                log.debug("Non-conference incoming detected. Swapped calling/called numbers. Calling: {}, Called: {}",
+                // *** CORRECTED LOGIC ***
+                // This is the non-conference incoming call scenario. Only swap numbers, not partitions.
+                CdrUtil.swapPartyNumbersOnly(cdrData);
+                log.debug("Non-conference incoming detected. Swapped calling/called numbers ONLY. Calling: {}, Called: {}",
                         cdrData.getCallingPartyNumber(), cdrData.getFinalCalledPartyNumber());
             }
         }
