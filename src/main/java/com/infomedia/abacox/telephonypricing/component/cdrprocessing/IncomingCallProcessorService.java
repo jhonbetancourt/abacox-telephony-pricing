@@ -13,7 +13,6 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class IncomingCallProcessorService {
 
-    private final OutgoingCallProcessorService outgoingCallProcessorService;
     private final PbxSpecialRuleLookupService pbxSpecialRuleLookupService;
     private final PhoneNumberTransformationService phoneNumberTransformationService;
     private final CallOriginDeterminationService callOriginDeterminationService;
@@ -26,15 +25,6 @@ public class IncomingCallProcessorService {
     public void processIncoming(CdrData cdrData, LineProcessingContext processingContext) {
         CommunicationLocation commLocation = processingContext.getCommLocation();
         log.debug("Processing INCOMING logic for CDR: {}", cdrData.getCtlHash());
-
-        if (cdrData.isInternalCall()) {
-            log.debug("Incoming call marked as internal. Inverting and processing as outgoing.");
-            CdrUtil.swapPartyInfo(cdrData);
-            CdrUtil.swapTrunks(cdrData);
-            cdrData.setCallDirection(CallDirection.OUTGOING);
-            outgoingCallProcessorService.processOutgoing(cdrData, processingContext, false);
-            return;
-        }
 
         String externalCallerId = cdrData.getFinalCalledPartyNumber();
         String ourExtension = cdrData.getCallingPartyNumber();
