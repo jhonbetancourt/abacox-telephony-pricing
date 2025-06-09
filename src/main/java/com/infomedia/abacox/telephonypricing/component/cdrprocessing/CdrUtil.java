@@ -147,16 +147,34 @@ public class CdrUtil {
         log.debug("Swapping party info. Before: Calling='{}'({}), FinalCalled='{}'({})",
                 cdrData.getCallingPartyNumber(), cdrData.getCallingPartyNumberPartition(),
                 cdrData.getFinalCalledPartyNumber(), cdrData.getFinalCalledPartyNumberPartition());
+
+        // Swap primary numbers
         String tempExt = cdrData.getCallingPartyNumber();
-        String tempExtPart = cdrData.getCallingPartyNumberPartition();
         cdrData.setCallingPartyNumber(cdrData.getFinalCalledPartyNumber());
-        cdrData.setCallingPartyNumberPartition(cdrData.getFinalCalledPartyNumberPartition());
         cdrData.setFinalCalledPartyNumber(tempExt);
+
+        // Swap partitions
+        String tempExtPart = cdrData.getCallingPartyNumberPartition();
+        cdrData.setCallingPartyNumberPartition(cdrData.getFinalCalledPartyNumberPartition());
         cdrData.setFinalCalledPartyNumberPartition(tempExtPart);
-        cdrData.setEffectiveDestinationNumber(cdrData.getFinalCalledPartyNumber()); // Update effective dest
-        log.debug("Swapped party info. After: Calling='{}'({}), FinalCalled='{}'({})",
+
+        //Swap the "original" fields as well, as these are used for persistence.
+        cdrData.setOriginalCalledPartyNumber(cdrData.getCallingPartyNumber()); // The new "original" is the current calling number
+        // The concept of an "original calling number" doesn't exist in the CDR, so we don't have a value to swap back.
+        // The key is that `originalFinalCalledPartyNumber` must now reflect the new `finalCalledPartyNumber`.
+        cdrData.setOriginalFinalCalledPartyNumber(cdrData.getFinalCalledPartyNumber());
+
+        // Similar to above, we align the original partition with the new final partition.
+        cdrData.setOriginalFinalCalledPartyNumberPartition(cdrData.getFinalCalledPartyNumberPartition());
+
+
+        // Update the effective destination number to reflect the swap
+        cdrData.setEffectiveDestinationNumber(cdrData.getFinalCalledPartyNumber());
+
+        log.debug("Swapped party info. After: Calling='{}'({}), FinalCalled='{}'({}), OriginalFinal='{}'({})",
                 cdrData.getCallingPartyNumber(), cdrData.getCallingPartyNumberPartition(),
-                cdrData.getFinalCalledPartyNumber(), cdrData.getFinalCalledPartyNumberPartition());
+                cdrData.getFinalCalledPartyNumber(), cdrData.getFinalCalledPartyNumberPartition(),
+                cdrData.getOriginalFinalCalledPartyNumber(), cdrData.getOriginalFinalCalledPartyNumberPartition());
     }
 
     public static void swapTrunks(CdrData cdrData) {

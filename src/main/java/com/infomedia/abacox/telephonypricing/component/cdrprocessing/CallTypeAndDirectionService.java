@@ -29,7 +29,6 @@ public class CallTypeAndDirectionService {
      */
     public void processCall(CdrData cdrData, LineProcessingContext processingContext) {
         log.debug("Processing call for CDR: {}", cdrData.getCtlHash());
-        ExtensionLimits extensionLimits = processingContext.getCommLocationExtensionLimits();
 
         // Initial determination of internal call (PHP: es_llamada_interna)
         if (!cdrData.isInternalCall()) {

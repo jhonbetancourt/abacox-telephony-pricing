@@ -301,11 +301,17 @@ public class TariffCalculationService {
             log.warn("Could not determine destination or tariff for: {} (original number for tariffing: {}). Applying fallback logic.",
                     result.finalNumberUsedForDestLookup, result.finalNumberUsedForDestLookup);
 
-            Long attemptedTelephonyTypeId = TelephonyTypeEnum.LOCAL.getValue(); // Default if no prefix matched
+            Long attemptedTelephonyTypeId = null;
             int attemptedMinLength = 0;
+
             if (result.bestPrefixInfo != null) {
                 attemptedTelephonyTypeId = result.bestPrefixInfo.telephonyTypeId;
                 attemptedMinLength = result.bestPrefixInfo.telephonyTypeMinLength != null ? result.bestPrefixInfo.telephonyTypeMinLength : 0;
+            } else {
+                // This is the corrected logic. If no prefix was found, we don't default to LOCAL.
+                // We set the type to an error/unclassified state.
+                attemptedTelephonyTypeId = TelephonyTypeEnum.ERRORS.getValue();
+                log.debug("No matching prefix found. Setting attempted telephony type to ERROR state.");
             }
 
             int phoneLength = result.finalNumberUsedForDestLookup.length();
@@ -315,10 +321,10 @@ public class TariffCalculationService {
             boolean isError = (isLocalType && phoneLength > maxInternalLength && phoneLength < attemptedMinLength) ||
                               (!isLocalType && phoneLength < attemptedMinLength);
 
-            if (isError) {
-                log.error("Number '{}' has invalid length for attempted type {}. Marking as ERROR.", result.finalNumberUsedForDestLookup, attemptedTelephonyTypeId);
+            if (isError || attemptedTelephonyTypeId == null || attemptedTelephonyTypeId.equals(TelephonyTypeEnum.ERRORS.getValue())) {
+                log.error("Number '{}' has invalid length or no matching prefix type. Marking as ERROR.", result.finalNumberUsedForDestLookup);
                 cdrData.setTelephonyTypeId(TelephonyTypeEnum.ERRORS.getValue());
-                cdrData.setTelephonyTypeName("Invalid Number Length");
+                cdrData.setTelephonyTypeName("Invalid Number Length or No Matching Prefix");
             } else {
                 log.info("Number '{}' is valid for attempted type {} but no destination was found. Assigning type with zero cost.", result.finalNumberUsedForDestLookup, attemptedTelephonyTypeId);
                 cdrData.setTelephonyTypeId(attemptedTelephonyTypeId);
