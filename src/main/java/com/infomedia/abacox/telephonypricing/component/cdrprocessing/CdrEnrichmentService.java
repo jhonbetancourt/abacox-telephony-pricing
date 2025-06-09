@@ -1,4 +1,4 @@
-// File: com/infomedia/abacox/telephonypricing/cdr/CdrEnrichmentService.java
+// File: com/infomedia/abacox/telephonypricing/component/cdrprocessing/CdrEnrichmentService.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
 import com.infomedia.abacox.telephonypricing.entity.CommunicationLocation;

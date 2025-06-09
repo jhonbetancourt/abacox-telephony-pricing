@@ -97,7 +97,7 @@ public class OutgoingCallProcessorService {
         // PHP: $infovalor = procesaSaliente_Complementar(...);
         // This is the main tariffing for external outgoing calls
         log.debug("Proceeding to standard outgoing tariff calculation for destination: {}", cdrData.getEffectiveDestinationNumber());
-        tariffCalculationService.calculateTariffsForOutgoing(cdrData, commLocation);
+        tariffCalculationService.calculateTariffsForOutgoing(cdrData, commLocation, processingContext.getCommLocationExtensionLimits());
         log.debug("Finished processing OUTGOING logic. CDR Data: {}", cdrData);
     }
 }

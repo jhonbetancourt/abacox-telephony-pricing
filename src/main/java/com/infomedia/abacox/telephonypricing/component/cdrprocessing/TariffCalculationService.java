@@ -1,4 +1,4 @@
-// File: com/infomedia/abacox/telephonypricing/cdr/TariffCalculationService.java
+// File: com/infomedia/abacox/telephonypricing/component/cdrprocessing/TariffCalculationService.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
 import com.infomedia.abacox.telephonypricing.entity.CommunicationLocation;
@@ -31,7 +31,7 @@ public class TariffCalculationService {
     /**
      * PHP equivalent: procesaSaliente_Complementar and parts of evaluarDestino
      */
-    public void calculateTariffsForOutgoing(CdrData cdrData, CommunicationLocation commLocation) {
+    public void calculateTariffsForOutgoing(CdrData cdrData, CommunicationLocation commLocation, ExtensionLimits extensionLimits) {
         log.debug("Calculating tariffs for OUTGOING/EXTERNAL CDR: {}, CommLocation: {}", cdrData.getCtlHash(), commLocation.getDirectory());
 
         Optional<TrunkInfo> trunkInfoOpt = Optional.empty();
@@ -81,17 +81,17 @@ public class TariffCalculationService {
                 }
                 if (useNormalized) {
                     log.info("Using normalized tariffing result for trunk call. Original number: {}", numberForTariffing);
-                    applyTariffingResult(cdrData, attempt2, commLocation, Optional.empty());
+                    applyTariffingResult(cdrData, attempt2, commLocation, Optional.empty(), extensionLimits);
                     cdrData.setNormalizedTariffApplied(true);
                 } else {
-                    applyTariffingResult(cdrData, attempt1, commLocation, trunkInfoOpt);
+                    applyTariffingResult(cdrData, attempt1, commLocation, trunkInfoOpt, extensionLimits);
                 }
             } else {
                 log.warn("Normalization did not yield a valid result. Sticking with initial attempt.");
-                applyTariffingResult(cdrData, attempt1, commLocation, trunkInfoOpt);
+                applyTariffingResult(cdrData, attempt1, commLocation, trunkInfoOpt, extensionLimits);
             }
         } else {
-            applyTariffingResult(cdrData, attempt1, commLocation, trunkInfoOpt);
+            applyTariffingResult(cdrData, attempt1, commLocation, trunkInfoOpt, extensionLimits);
         }
         log.info("Final tariff calculation for OUTGOING/EXTERNAL CDR: {}. Billed Amount: {}, Price/Min: {}, Type: {}",
                  cdrData.getCtlHash(), cdrData.getBilledAmount(), cdrData.getPricePerMinute(), cdrData.getTelephonyTypeName());
@@ -233,7 +233,7 @@ public class TariffCalculationService {
         return result;
     }
 
-    private void applyTariffingResult(CdrData cdrData, TariffingAttemptResult result, CommunicationLocation commLocation, Optional<TrunkInfo> trunkInfoOpt) {
+    private void applyTariffingResult(CdrData cdrData, TariffingAttemptResult result, CommunicationLocation commLocation, Optional<TrunkInfo> trunkInfoOpt, ExtensionLimits extensionLimits) {
         if (result.bestDestInfo != null && result.bestPrefixInfo != null) {
             log.info("Applying tariffing result. Destination: {}, Prefix: {}", result.bestDestInfo.getDestinationDescription(), result.bestPrefixInfo.getPrefixCode());
             cdrData.setTelephonyTypeId(result.bestPrefixInfo.telephonyTypeId);
@@ -285,12 +285,34 @@ public class TariffCalculationService {
             applySpecialRatesAndRules(cdrData, commLocation, result.bestDestInfo, trunkInfoOpt.orElse(null));
             cdrData.setBilledAmount(calculateFinalBilledAmount(cdrData));
         } else {
-            log.warn("Could not determine destination or tariff for: {} (original number for tariffing: {}). Marking as ERROR.", result.finalNumberUsedForDestLookup, result.finalNumberUsedForDestLookup);
-            cdrData.setTelephonyTypeId(TelephonyTypeEnum.ERRORS.getValue());
-            cdrData.setTelephonyTypeName(telephonyTypeLookupService.getTelephonyTypeName(TelephonyTypeEnum.ERRORS.getValue()));
+            // --- START OF CORRECTED LOGIC ---
+            log.warn("Could not determine destination or tariff for: {} (original number for tariffing: {}). Applying fallback logic.",
+                    result.finalNumberUsedForDestLookup, result.finalNumberUsedForDestLookup);
+
+            Long attemptedTelephonyTypeId = TelephonyTypeEnum.LOCAL.getValue(); // Default if no prefix matched
+            int attemptedMinLength = 0;
+            if (result.bestPrefixInfo != null) {
+                attemptedTelephonyTypeId = result.bestPrefixInfo.telephonyTypeId;
+                attemptedMinLength = result.bestPrefixInfo.telephonyTypeMinLength != null ? result.bestPrefixInfo.telephonyTypeMinLength : 0;
+            }
+
+            int phoneLength = result.finalNumberUsedForDestLookup.length();
+            int maxInternalLength = String.valueOf(extensionLimits.getMaxLength()).length();
+            boolean isLocalType = telephonyTypeLookupService.isLocalType(attemptedTelephonyTypeId);
+
+            boolean isError = (isLocalType && phoneLength > maxInternalLength && phoneLength < attemptedMinLength) ||
+                              (!isLocalType && phoneLength < attemptedMinLength);
+
+            if (isError) {
+                log.error("Number '{}' has invalid length for attempted type {}. Marking as ERROR.", result.finalNumberUsedForDestLookup, attemptedTelephonyTypeId);
+                cdrData.setTelephonyTypeId(TelephonyTypeEnum.ERRORS.getValue());
+                cdrData.setTelephonyTypeName("Invalid Number Length");
+            }
+
             cdrData.setBilledAmount(BigDecimal.ZERO);
             cdrData.setPricePerMinute(BigDecimal.ZERO);
             cdrData.setInitialPricePerMinute(BigDecimal.ZERO);
+            // --- END OF CORRECTED LOGIC ---
         }
     }
 

@@ -1,4 +1,4 @@
-// File: com/infomedia/abacox/telephonypricing/cdr/CallTypeAndDirectionService.java
+// File: com/infomedia/abacox/telephonypricing/component/cdrprocessing/CallTypeAndDirectionService.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
 import com.infomedia.abacox.telephonypricing.entity.CommunicationLocation;
@@ -20,6 +20,7 @@ public class CallTypeAndDirectionService {
     private final OutgoingCallProcessorService outgoingCallProcessorService;
     private final EmployeeLookupService employeeLookupService;
     private final PbxSpecialRuleLookupService pbxSpecialRuleLookupService;
+    private final TariffCalculationService tariffCalculationService; // Added
 
     /**
      * PHP equivalent: Orchestrates logic from CargarCDR's main loop after `evaluar_Formato`,
@@ -47,7 +48,8 @@ public class CallTypeAndDirectionService {
         if (cdrData.getCallDirection() == CallDirection.INCOMING) {
             incomingCallProcessorService.processIncoming(cdrData, processingContext);
         } else { // OUTGOING or internal initially parsed as outgoing
-            outgoingCallProcessorService.processOutgoing(cdrData, processingContext, false);
+            // Pass extensionLimits to the outgoing processor's tariffing step
+            tariffCalculationService.calculateTariffsForOutgoing(cdrData, processingContext.getCommLocation(), extensionLimits);
         }
         log.info("Finished processing call. Final Direction: {}, Internal: {}, TelephonyType: {}",
                  cdrData.getCallDirection(), cdrData.isInternalCall(), cdrData.getTelephonyTypeId());

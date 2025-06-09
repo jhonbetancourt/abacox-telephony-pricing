@@ -92,7 +92,7 @@ public class IncomingCallProcessorService {
         cdrData.setEffectiveDestinationNumber(originInfo.getEffectiveNumber());
         cdrData.setFinalCalledPartyNumber(originInfo.getEffectiveNumber());
 
-        if (cdrData.getTelephonyTypeId() == null || cdrData.getTelephonyTypeId() == TelephonyTypeEnum.UNKNOWN.getValue()) {
+        if (cdrData.getTelephonyTypeId() == null || cdrData.getTelephonyTypeId().equals(TelephonyTypeEnum.ERRORS.getValue())) {
              log.warn("Incoming call origin determination resulted in UNKNOWN telephony type. Defaulting to LOCAL.");
              cdrData.setTelephonyTypeId(TelephonyTypeEnum.LOCAL.getValue());
              cdrData.setTelephonyTypeName(telephonyTypeLookupService.getTelephonyTypeName(TelephonyTypeEnum.LOCAL.getValue()) + " (Default Incoming)");

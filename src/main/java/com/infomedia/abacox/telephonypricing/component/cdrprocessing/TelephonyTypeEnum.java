@@ -2,7 +2,6 @@
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
 public enum TelephonyTypeEnum {
-    UNKNOWN(0L, "Unknown"), // Default or placeholder
     CELUFIJO(1L, "Celufijo"),
     CELLULAR(2L, "Celular"),
     LOCAL(3L, "Local"),
@@ -36,12 +35,12 @@ public enum TelephonyTypeEnum {
     public String getDefaultName() { return defaultName; }
 
     public static TelephonyTypeEnum fromId(Long id) {
-        if (id == null) return UNKNOWN;
+        if (id == null) return ERRORS;
         for (TelephonyTypeEnum type : values()) {
             if (type.value == id) {
                 return type;
             }
         }
-        return UNKNOWN;
+        return ERRORS;
     }
 }

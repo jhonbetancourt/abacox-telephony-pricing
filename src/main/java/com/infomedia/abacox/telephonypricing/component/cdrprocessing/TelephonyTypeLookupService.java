@@ -22,7 +22,7 @@ public class TelephonyTypeLookupService {
 
     @Transactional(readOnly = true)
     public String getTelephonyTypeName(Long telephonyTypeId) {
-        if (telephonyTypeId == null) return TelephonyTypeEnum.UNKNOWN.getDefaultName();
+        if (telephonyTypeId == null) return TelephonyTypeEnum.ERRORS.getDefaultName();
         try {
             return entityManager.createQuery("SELECT tt.name FROM TelephonyType tt WHERE tt.id = :id AND tt.active = true", String.class)
                     .setParameter("id", telephonyTypeId)
@@ -152,7 +152,7 @@ public class TelephonyTypeLookupService {
         }
     }
 
-    private boolean isLocalType(Long telephonyTypeId) {
+    public boolean isLocalType(Long telephonyTypeId) {
         return telephonyTypeId != null &&
                 (telephonyTypeId.equals(TelephonyTypeEnum.LOCAL.getValue()) ||
                         telephonyTypeId.equals(TelephonyTypeEnum.LOCAL_EXTENDED.getValue()));
