@@ -1,4 +1,3 @@
-// File: com/infomedia/abacox/telephonypricing/component/cdrprocessing/CallTypeAndDirectionService.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
 import com.infomedia.abacox.telephonypricing.entity.CommunicationLocation;
@@ -44,11 +43,10 @@ public class CallTypeAndDirectionService {
 
         // An incoming call that is found to be internal must be processed as internal, not as incoming.
         if (cdrData.isInternalCall()) {
+            // PHP: procesaEntrante -> info_interna -> InvertirLlamada
             if (initialDirection == CallDirection.INCOMING) {
                 log.info("Re-classifying INCOMING call as INTERNAL for processing. CDR: {}", cdrData.getCtlHash());
-                // PHP's InvertirLlamada logic for this case:
-                CdrUtil.swapPartyInfo(cdrData);
-                CdrUtil.swapTrunks(cdrData);
+                CdrUtil.swapFull(cdrData, true); // Full swap including trunks
                 cdrData.setCallDirection(CallDirection.OUTGOING); // It's now treated as an outgoing internal call
             }
             internalCallProcessorService.processInternal(cdrData, processingContext, false);

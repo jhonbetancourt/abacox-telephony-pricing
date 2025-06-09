@@ -1,4 +1,3 @@
-// File: com/infomedia/abacox/telephonypricing/cdr/InternalCallProcessorService.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
 import com.infomedia.abacox.telephonypricing.entity.CommunicationLocation;
@@ -73,28 +72,33 @@ public class InternalCallProcessorService {
             return;
         }
 
-        cdrData.setTelephonyTypeId(internalTypeInfo.getTelephonyTypeId());
-        cdrData.setTelephonyTypeName(internalTypeInfo.getTelephonyTypeName());
-        if (internalTypeInfo.getAdditionalInfo() != null && !internalTypeInfo.getAdditionalInfo().isEmpty()) {
-            cdrData.setTelephonyTypeName(cdrData.getTelephonyTypeName() + " " + internalTypeInfo.getAdditionalInfo());
-        }
-        cdrData.setIndicatorId(internalTypeInfo.getDestinationIndicatorId());
-
+        // *** ADJUSTMENT FOR MISSING LOGIC ***
+        // PHP: procesaInterna -> InvertirLlamada if origin not found but destination is.
         if (internalTypeInfo.isEffectivelyIncoming() && cdrData.getCallDirection() == CallDirection.OUTGOING) {
-            log.debug("Internal call determined to be effectively incoming. Inverting parties and trunks.");
-            CdrUtil.swapPartyInfo(cdrData);
-            CdrUtil.swapTrunks(cdrData);
+            log.info("Internal call determined to be effectively incoming. Inverting parties and trunks. CDR: {}", cdrData.getCtlHash());
+            CdrUtil.swapFull(cdrData, true); // Full swap including trunks
             cdrData.setCallDirection(CallDirection.INCOMING);
+            // After swap, the new "calling" party is the destination employee
             cdrData.setEmployee(internalTypeInfo.getDestinationEmployee());
             cdrData.setEmployeeId(internalTypeInfo.getDestinationEmployee() != null ? internalTypeInfo.getDestinationEmployee().getId() : null);
+            // The new "destination" is the origin employee
             cdrData.setDestinationEmployee(internalTypeInfo.getOriginEmployee());
             cdrData.setDestinationEmployeeId(internalTypeInfo.getOriginEmployee() != null ? internalTypeInfo.getOriginEmployee().getId() : null);
-            cdrData.setIndicatorId(internalTypeInfo.getOriginIndicatorId());
+            // The indicator should be that of the new origin (the original destination)
+            cdrData.setIndicatorId(internalTypeInfo.getDestinationIndicatorId());
         } else {
+            // Standard assignment if not inverted
             cdrData.setEmployee(internalTypeInfo.getOriginEmployee());
             cdrData.setEmployeeId(internalTypeInfo.getOriginEmployee() != null ? internalTypeInfo.getOriginEmployee().getId() : null);
             cdrData.setDestinationEmployee(internalTypeInfo.getDestinationEmployee());
             cdrData.setDestinationEmployeeId(internalTypeInfo.getDestinationEmployee() != null ? internalTypeInfo.getDestinationEmployee().getId() : null);
+            cdrData.setIndicatorId(internalTypeInfo.getDestinationIndicatorId());
+        }
+
+        cdrData.setTelephonyTypeId(internalTypeInfo.getTelephonyTypeId());
+        cdrData.setTelephonyTypeName(internalTypeInfo.getTelephonyTypeName());
+        if (internalTypeInfo.getAdditionalInfo() != null && !internalTypeInfo.getAdditionalInfo().isEmpty()) {
+            cdrData.setTelephonyTypeName(cdrData.getTelephonyTypeName() + " " + internalTypeInfo.getAdditionalInfo());
         }
 
         if (cdrData.getTelephonyTypeId() != null && commLocation.getIndicator() != null) {
@@ -219,10 +223,13 @@ public class InternalCallProcessorService {
              if (destCommLoc != null && destCommLoc.getIndicator() != null) result.setDestinationIndicatorId(destCommLoc.getIndicator().getId());
         }
 
+        // *** ADJUSTMENT FOR MISSING LOGIC ***
+        // PHP: if (!ExtensionEncontrada($info['funcionario_funid']) && ExtensionEncontrada($info['funcionario_fundes']) ... )
         if (originEmpOpt.isEmpty() && destEmpOpt.isPresent() &&
             cdrData.getCallDirection() == CallDirection.OUTGOING &&
             destCommLoc != null && Objects.equals(destCommLoc.getId(), currentCommLocation.getId())) {
             result.setEffectivelyIncoming(true);
+            // The indicator IDs are swapped here to reflect the new direction
             if (originCommLoc != null && originCommLoc.getIndicator() != null) result.setDestinationIndicatorId(originCommLoc.getIndicator().getId());
             if (destCommLoc != null && destCommLoc.getIndicator() != null) result.setOriginIndicatorId(destCommLoc.getIndicator().getId());
         }

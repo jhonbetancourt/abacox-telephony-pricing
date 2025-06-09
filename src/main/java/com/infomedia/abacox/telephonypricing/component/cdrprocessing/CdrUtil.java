@@ -1,4 +1,3 @@
-// File: com/infomedia/abacox/telephonypricing/component/cdrprocessing/CdrUtil.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
 import java.nio.charset.StandardCharsets;
@@ -118,23 +117,36 @@ public class CdrUtil {
         return new CleanPhoneNumberResult(finalCleanedNumber, pbxPrefixWasStripped);
     }
 
-    public static void swapPartyInfo(CdrData cdrData) {
-        log.debug("Performing FULL swap of party info. Before: Calling='{}'({}), FinalCalled='{}'({})",
-                cdrData.getCallingPartyNumber(), cdrData.getCallingPartyNumberPartition(),
+    /**
+     * Performs a complete swap of calling/called party information, including numbers, partitions,
+     * and optionally trunks. This replicates the full logic of PHP's `InvertirLlamada`.
+     *
+     * @param cdrData The CdrData object to modify.
+     * @param swapTrunks If true, swaps origDeviceName and destDeviceName.
+     */
+    public static void swapFull(CdrData cdrData, boolean swapTrunks) {
+        log.debug("Performing FULL swap. SwapTrunks: {}. Before: Calling='{}'({}), FinalCalled='{}'({})",
+                swapTrunks, cdrData.getCallingPartyNumber(), cdrData.getCallingPartyNumberPartition(),
                 cdrData.getFinalCalledPartyNumber(), cdrData.getFinalCalledPartyNumberPartition());
 
+        // Swap numbers
         String tempExt = cdrData.getCallingPartyNumber();
         cdrData.setCallingPartyNumber(cdrData.getFinalCalledPartyNumber());
         cdrData.setFinalCalledPartyNumber(tempExt);
 
+        // Swap partitions
         String tempExtPart = cdrData.getCallingPartyNumberPartition();
         cdrData.setCallingPartyNumberPartition(cdrData.getFinalCalledPartyNumberPartition());
         cdrData.setFinalCalledPartyNumberPartition(tempExtPart);
 
+        // Update "original" and "effective" fields to reflect the new state
         cdrData.setOriginalFinalCalledPartyNumber(cdrData.getFinalCalledPartyNumber());
         cdrData.setOriginalFinalCalledPartyNumberPartition(cdrData.getFinalCalledPartyNumberPartition());
-
         cdrData.setEffectiveDestinationNumber(cdrData.getFinalCalledPartyNumber());
+
+        if (swapTrunks) {
+            swapTrunks(cdrData);
+        }
 
         log.debug("FULL swap complete. After: Calling='{}'({}), FinalCalled='{}'({})",
                 cdrData.getCallingPartyNumber(), cdrData.getCallingPartyNumberPartition(),
@@ -142,7 +154,6 @@ public class CdrUtil {
     }
 
     /**
-     * ADJUSTMENT: New method for partial swap.
      * Performs a PARTIAL swap, exchanging only the calling and called numbers.
      * Partitions and trunks are NOT affected. This is for the non-conference incoming detection case.
      * @param cdrData The CdrData object to modify.
@@ -155,8 +166,8 @@ public class CdrUtil {
         cdrData.setCallingPartyNumber(cdrData.getFinalCalledPartyNumber());
         cdrData.setFinalCalledPartyNumber(tempExt);
 
+        // Update "original" and "effective" fields to reflect the new state
         cdrData.setOriginalFinalCalledPartyNumber(cdrData.getFinalCalledPartyNumber());
-
         cdrData.setEffectiveDestinationNumber(cdrData.getFinalCalledPartyNumber());
 
         log.debug("PARTIAL swap complete. After: Calling='{}', FinalCalled='{}'",

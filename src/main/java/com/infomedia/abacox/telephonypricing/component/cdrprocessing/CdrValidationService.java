@@ -1,4 +1,3 @@
-// File: com/infomedia/abacox/telephonypricing/component/cdrprocessing/CdrValidationService.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
 import lombok.extern.log4j.Log4j2;
@@ -28,12 +27,11 @@ public class CdrValidationService {
         List<String> errorMessages = new ArrayList<>();
         List<String> warningMessages = new ArrayList<>();
 
-        // ADJUSTMENT: Implement early-stage swap for blank calling party number, as seen in PHP's ValidarCampos_CDR -> InvertirLlamada
+        // PHP: if (trim($info_cdr['ext']) == '') { InvertirLlamada($info_cdr); ... }
         if ((cdrData.getCallingPartyNumber() == null || cdrData.getCallingPartyNumber().isEmpty()) &&
             (cdrData.getFinalCalledPartyNumber() != null && !cdrData.getFinalCalledPartyNumber().isEmpty())) {
             log.warn("CallingPartyNumber is blank but FinalCalledPartyNumber is not. Performing full swap and treating as INCOMING. CDR: {}", cdrData.getCtlHash());
-            CdrUtil.swapPartyInfo(cdrData);
-            CdrUtil.swapTrunks(cdrData);
+            CdrUtil.swapFull(cdrData, true); // Full swap including trunks
             cdrData.setCallDirection(CallDirection.INCOMING);
             cdrData.setInternalCall(false); // Ensure it's not treated as internal after this swap
         }

@@ -1,4 +1,3 @@
-// File: com/infomedia/abacox/telephonypricing/component/cdrprocessing/CiscoCm60CdrProcessor.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
 import com.infomedia.abacox.telephonypricing.entity.CommunicationLocation;
@@ -126,14 +125,17 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
 
         log.debug("Initial parsed Cisco CM 6.0 fields: {}", cdrData);
 
-        boolean isConferenceByLastRedirectDn = isConferenceIdentifier(cdrData.getLastRedirectDn());
+        // --- Start of Logic Block (PHP: CM_FormatoCDR after field extraction) ---
 
+        // Handle empty finalCalledPartyNumber
         if (cdrData.getFinalCalledPartyNumber() == null || cdrData.getFinalCalledPartyNumber().isEmpty()) {
             cdrData.setFinalCalledPartyNumber(cdrData.getOriginalCalledPartyNumber());
             cdrData.setFinalCalledPartyNumberPartition(cdrData.getOriginalCalledPartyNumberPartition());
-        } else if (!Objects.equals(cdrData.getFinalCalledPartyNumber(), cdrData.getOriginalCalledPartyNumber()) &&
-                   cdrData.getOriginalCalledPartyNumber() != null && !cdrData.getOriginalCalledPartyNumber().isEmpty()) {
-            if (!isConferenceByLastRedirectDn) {
+        }
+        // Handle case where finalCalled differs from originalCalled (potential redirect)
+        else if (!Objects.equals(cdrData.getFinalCalledPartyNumber(), cdrData.getOriginalCalledPartyNumber()) &&
+                cdrData.getOriginalCalledPartyNumber() != null && !cdrData.getOriginalCalledPartyNumber().isEmpty()) {
+            if (!isConferenceIdentifier(cdrData.getLastRedirectDn())) {
                 cdrData.setLastRedirectDn(cdrData.getOriginalCalledPartyNumber());
                 cdrData.setLastRedirectDnPartition(cdrData.getOriginalCalledPartyNumberPartition());
             }
@@ -148,37 +150,28 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
             setTransferCauseIfUnset(cdrData, confTransferCause);
             cdrData.setConferenceIdentifierUsed(cdrData.getFinalCalledPartyNumber());
 
-            if (!isConferenceByLastRedirectDn) {
-                String tempDialNumber = cdrData.getFinalCalledPartyNumber();
-                String tempDialPartition = cdrData.getFinalCalledPartyNumberPartition();
-                cdrData.setFinalCalledPartyNumber(cdrData.getLastRedirectDn());
-                cdrData.setFinalCalledPartyNumberPartition(cdrData.getLastRedirectDnPartition());
-                cdrData.setLastRedirectDn(tempDialNumber);
-                cdrData.setLastRedirectDnPartition(tempDialPartition);
-
-                if (confTransferCause == TransferCause.CONFERENCE_NOW) {
-                    String originalLastRedirectDnValue = cdrData.getOriginalLastRedirectDn();
-                    if (originalLastRedirectDnValue != null && originalLastRedirectDnValue.toLowerCase().startsWith("c")) {
-                        cdrData.setLastRedirectDn(originalLastRedirectDnValue);
-                        cdrData.setConferenceIdentifierUsed(originalLastRedirectDnValue);
-                    } else if (cdrData.getDestConversationId() != null && cdrData.getDestConversationId() > 0) {
-                        cdrData.setLastRedirectDn("i" + cdrData.getDestConversationId());
-                        cdrData.setConferenceIdentifierUsed(cdrData.getLastRedirectDn());
-                    }
-                }
-            }
+            // *** REFACTORED CONFERENCE LOGIC ***
+            // PHP: InvertirLlamada logic for conferences
             if (cdrData.getJoinOnBehalfOf() == null || cdrData.getJoinOnBehalfOf() != 7) {
-                CdrUtil.swapPartyInfo(cdrData);
+                // The initiator is in 'ext', the conference bridge is in 'dial_number'. Swap them.
+                CdrUtil.swapFull(cdrData, false); // Swap parties/partitions, but not trunks yet.
             }
+            // Now, the real destination is in 'lastRedirectDn'. Set it as the new finalCalledParty.
+            cdrData.setFinalCalledPartyNumber(cdrData.getLastRedirectDn());
+            cdrData.setFinalCalledPartyNumberPartition(cdrData.getLastRedirectDnPartition());
+            // The conference bridge ID is now stored in lastRedirectDn for reference.
+            cdrData.setLastRedirectDn(cdrData.getConferenceIdentifierUsed());
+
         } else {
             if (isConferenceIdentifier(cdrData.getLastRedirectDn())) {
                 if (setTransferCauseIfUnset(cdrData, TransferCause.CONFERENCE_END)) {
                     cdrData.setConferenceIdentifierUsed(cdrData.getLastRedirectDn());
-                    invertTrunksForConference = false;
+                    invertTrunksForConference = false; // PHP: Do not swap trunks for conference end leg
                 }
             }
         }
 
+        // Determine call direction after potential conference swaps
         if (isConferenceByFinalCalled) {
             boolean isConferenceEffectivelyIncoming = (!isPartitionPresent(cdrData.getFinalCalledPartyNumberPartition())) &&
                     (cdrData.getCallingPartyNumber() == null || cdrData.getCallingPartyNumber().isEmpty() ||
@@ -186,14 +179,14 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
             if (isConferenceEffectivelyIncoming) {
                 cdrData.setCallDirection(CallDirection.INCOMING);
             }
-            // ADJUSTMENT: Conditional trunk swap for conferences
+            // Conditionally swap trunks for outgoing conferences
             else if (invertTrunksForConference && cdrData.getCallDirection() != CallDirection.INCOMING) {
-                 if (cdrData.getJoinOnBehalfOf() == null || cdrData.getJoinOnBehalfOf() != 7) {
+                if (cdrData.getJoinOnBehalfOf() == null || cdrData.getJoinOnBehalfOf() != 7) {
                     CdrUtil.swapTrunks(cdrData);
-                 }
+                }
             }
         } else {
-            // ADJUSTMENT: Use partial swap for non-conference incoming detection
+            // Non-conference incoming detection
             boolean isCallingPartyEffectivelyExternal = !isPartitionPresent(cdrData.getCallingPartyNumberPartition()) ||
                     !CdrUtil.isPossibleExtension(cdrData.getCallingPartyNumber(), extensionLimits);
             boolean isFinalCalledPartyInternalFormat = isPartitionPresent(cdrData.getFinalCalledPartyNumberPartition()) &&
@@ -203,13 +196,14 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
 
             if (isCallingPartyEffectivelyExternal && (isFinalCalledPartyInternalFormat || isRedirectPartyInternalFormat)) {
                 cdrData.setCallDirection(CallDirection.INCOMING);
-                // Use the new partial swap method here
+                // PHP: _invertir($info_arr['dial_number'], $info_arr['ext']); (No trunk swap)
                 CdrUtil.swapPartyNumbersOnly(cdrData);
                 log.debug("Non-conference incoming detected. Swapped calling/called numbers ONLY. Calling: {}, Called: {}",
                         cdrData.getCallingPartyNumber(), cdrData.getFinalCalledPartyNumber());
             }
         }
 
+        // Determine if internal
         boolean isCallingPartyInternal = isPartitionPresent(cdrData.getCallingPartyNumberPartition()) &&
                 CdrUtil.isPossibleExtension(cdrData.getCallingPartyNumber(), extensionLimits);
         boolean isFinalCalledPartyInternal = isPartitionPresent(cdrData.getFinalCalledPartyNumberPartition()) &&
@@ -221,6 +215,7 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
             cdrData.setInternalCall(false);
         }
 
+        // Final transfer cause assignment
         boolean numberChangedByRedirect = false;
         if (cdrData.getLastRedirectDn() != null && !cdrData.getLastRedirectDn().isEmpty()) {
             if (cdrData.getCallDirection() == CallDirection.OUTGOING && !Objects.equals(cdrData.getFinalCalledPartyNumber(), cdrData.getLastRedirectDn())) {
