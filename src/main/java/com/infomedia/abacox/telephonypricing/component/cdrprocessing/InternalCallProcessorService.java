@@ -72,7 +72,6 @@ public class InternalCallProcessorService {
             return;
         }
 
-        // *** ADJUSTMENT FOR MISSING LOGIC ***
         // PHP: procesaInterna -> InvertirLlamada if origin not found but destination is.
         if (internalTypeInfo.isEffectivelyIncoming() && cdrData.getCallDirection() == CallDirection.OUTGOING) {
             log.info("Internal call determined to be effectively incoming. Inverting parties and trunks. CDR: {}", cdrData.getCtlHash());
@@ -223,7 +222,6 @@ public class InternalCallProcessorService {
              if (destCommLoc != null && destCommLoc.getIndicator() != null) result.setDestinationIndicatorId(destCommLoc.getIndicator().getId());
         }
 
-        // *** ADJUSTMENT FOR MISSING LOGIC ***
         // PHP: if (!ExtensionEncontrada($info['funcionario_funid']) && ExtensionEncontrada($info['funcionario_fundes']) ... )
         if (originEmpOpt.isEmpty() && destEmpOpt.isPresent() &&
             cdrData.getCallDirection() == CallDirection.OUTGOING &&
