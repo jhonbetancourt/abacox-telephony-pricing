@@ -1,6 +1,5 @@
 package com.infomedia.abacox.telephonypricing.service;
 
-import com.infomedia.abacox.telephonypricing.repository.EmployeeRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -12,11 +11,8 @@ import org.springframework.stereotype.Service;
 @Log4j2
 public class InitService {
 
-    private final EmployeeRepository employeeRepository;
 
     @EventListener(ApplicationReadyEvent.class)
     public void init() {
-       int m = employeeRepository.deactivateDuplicateActiveEmployees();
-       log.info("Deactivated {} duplicate active employees", m);
     }
 }

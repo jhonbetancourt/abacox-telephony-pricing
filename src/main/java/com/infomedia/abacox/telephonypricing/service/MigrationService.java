@@ -8,6 +8,7 @@ import com.infomedia.abacox.telephonypricing.component.migration.TableMigrationC
 import com.infomedia.abacox.telephonypricing.dto.migration.MigrationStart;
 import com.infomedia.abacox.telephonypricing.dto.migration.MigrationStatus;
 import com.infomedia.abacox.telephonypricing.exception.MigrationAlreadyInProgressException;
+import com.infomedia.abacox.telephonypricing.repository.EmployeeRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
@@ -31,6 +32,7 @@ import static java.util.Map.entry;
 public class MigrationService {
 
     private final DataMigrationExecutor dataMigrationExecutor;
+    private final EmployeeRepository employeeRepository;
     private final ExecutorService migrationExecutorService = Executors.newSingleThreadExecutor();
 
     // --- State Tracking ---
@@ -451,7 +453,7 @@ public class MigrationService {
                         entry("SUBDIRECCION_PERTENECE", "parentSubdivisionId"),
                         entry("SUBDIRECCION_NOMBRE", "name"),
                         entry("SUBDIRECCION_ACTIVO", "active"),
-                        entry("SUBDIRECCION_FCREACION", "createdDate"),
+                        entry("SUBDIREccion_FCREACION", "createdDate"),
                         entry("SUBDIRECCION_FMODIFICADO", "lastModifiedDate")
                 ))
                 .build());
@@ -565,6 +567,10 @@ public class MigrationService {
                 .processHistoricalActiveness(true) // Enable Pass 3
                 .sourceHistoricalControlIdColumn("FUNCIONARIO_HISTORICTL_ID")
                 .sourceValidFromDateColumn("FUNCIONARIO_HISTODESDE")
+                        .postMigrationSuccessAction(() -> {
+                            int n = employeeRepository.deactivateDuplicateActiveEmployees();
+                            log.info("Post-migration action: Deactivated {} duplicate active employees.", n);
+                        })
                 .build());
 
         configs.add(TableMigrationConfig.builder()
@@ -629,6 +635,24 @@ public class MigrationService {
                 ))
                 .build());
 
+        // ADDED: OfficeDetails (DATOSOFICINA) - Depends on Subdivision (L4) and Indicator (L2)
+        configs.add(TableMigrationConfig.builder()
+                .sourceTableName("DATOSOFICINA")
+                .targetEntityClassName("com.infomedia.abacox.telephonypricing.entity.OfficeDetails")
+                .sourceIdColumnName("DATOSOFICINA_ID")
+                .targetIdFieldName("id")
+                .columnMapping(Map.ofEntries(
+                        entry("DATOSOFICINA_ID", "id"),
+                        entry("DATOSOFICINA_SUBDIRECCION_ID", "subdivisionId"),
+                        entry("DATOSOFICINA_DIRECCION", "address"),
+                        entry("DATOSOFICINA_TELEFONO", "phone"),
+                        entry("DATOSOFICINA_INDICATIVO_ID", "indicatorId"),
+                        entry("DATOSOFICINA_ACTIVO", "active"),
+                        entry("DATOSOFICINA_FCREACION", "createdDate"),
+                        entry("DATOSOFICINA_FMODIFICADO", "lastModifiedDate")
+                ))
+                .build());
+
         // Level 6: Depend on Level 5 or lower
         configs.add(TableMigrationConfig.builder()
                 .sourceTableName("DIRECTORIO")
@@ -669,6 +693,22 @@ public class MigrationService {
                         entry("REGLATRONCAL_ACTIVO", "active"),
                         entry("REGLATRONCAL_FCREACION", "createdDate"),
                         entry("REGLATRONCAL_FMODIFICADO", "lastModifiedDate")
+                ))
+                .build());
+
+        // ADDED: SubdivisionManager (JEFESUBDIR) - Depends on Subdivision (L4) and Employee (L5)
+        configs.add(TableMigrationConfig.builder()
+                .sourceTableName("JEFESUBDIR")
+                .targetEntityClassName("com.infomedia.abacox.telephonypricing.entity.SubdivisionManager")
+                .sourceIdColumnName("JEFESUBDIR_ID")
+                .targetIdFieldName("id")
+                .columnMapping(Map.ofEntries(
+                        entry("JEFESUBDIR_ID", "id"),
+                        entry("JEFESUBDIR_SUBDIRECCION_ID", "subdivisionId"),
+                        entry("JEFESUBDIR_JEFE", "managerId"),
+                        entry("JEFESUBDIR_ACTIVO", "active"),
+                        entry("JEFESUBDIR_FCREACION", "createdDate"),
+                        entry("JEFESUBDIR_FMODIFICADO", "lastModifiedDate")
                 ))
                 .build());
 
