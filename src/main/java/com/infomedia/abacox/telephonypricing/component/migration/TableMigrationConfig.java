@@ -16,8 +16,8 @@ public class TableMigrationConfig {
     private String sourceTableName;
     private String targetEntityClassName;
     private String sourceIdColumnName;
-    private String targetIdFieldName; // Name of the @Id field in the target entity
-    private Map<String, String> columnMapping; // Map<SourceColumnName, TargetFieldName>
+    private String targetIdFieldName;
+    private Map<String, String> columnMapping;
 
     @Builder.Default
     private boolean selfReferencing = false;
@@ -27,11 +27,14 @@ public class TableMigrationConfig {
     @Builder.Default
     private boolean treatZeroIdAsNullForForeignKeys = true;
 
-    // --- New fields for Historical Activeness (Pass 3) ---
     @Builder.Default
-    private boolean processHistoricalActiveness = false; // Flag to enable Pass 3
-    private String sourceHistoricalControlIdColumn; // e.g., "FUNCIONARIO_HISTORICTL_ID"
-    private String sourceValidFromDateColumn;       // e.g., "FUNCIONARIO_HISTODESDE"
-    // targetHistoricalControlIdFieldName and targetValidFromDateFieldName are derived from columnMapping
-    // if processHistoricalActiveness is true.
+    private boolean processHistoricalActiveness = false;
+    private String sourceHistoricalControlIdColumn;
+    private String sourceValidFromDateColumn;
+
+    /**
+     * An optional action to run after this specific table has been migrated successfully.
+     * This will not be executed if the migration for this table fails.
+     */
+    private Runnable postMigrationSuccessAction;
 }

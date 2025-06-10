@@ -1,10 +1,11 @@
+// File: com/infomedia/abacox/telephonypricing/component/migration/DataMigrationExecutor.java
 package com.infomedia.abacox.telephonypricing.component.migration;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Component;
 
-import java.util.function.BiConsumer; // Import BiConsumer
+import java.util.function.BiConsumer;
 
 @Component
 @Log4j2
@@ -37,13 +38,25 @@ public class DataMigrationExecutor {
                 tableExecutor.executeTableMigration(tableConfig, request.getSourceDbConfig());
                 log.info("Successfully migrated table {}/{}: {}", currentTableIndex, totalTables, tableConfig.getSourceTableName());
 
+                if (tableConfig.getPostMigrationSuccessAction() != null) {
+                    log.info("Executing post-migration success action for table '{}'...", tableConfig.getSourceTableName());
+                    try {
+                        tableConfig.getPostMigrationSuccessAction().run();
+                        log.info("Successfully executed post-migration action for table '{}'.", tableConfig.getSourceTableName());
+                    } catch (Exception postActionEx) {
+                        // Log this as a severe warning, but DO NOT fail the entire migration.
+                        // The core data migration was successful. A failing post-action should not roll it back.
+                        log.error("!!! Post-migration action for table '{}' FAILED. The data migration for this table was successful, but the subsequent action threw an exception. Please investigate manually. !!!",
+                                  tableConfig.getSourceTableName(), postActionEx);
+                        // We do not set tableException here, as the main migration succeeded.
+                    }
+                }
+
             } catch (Exception e) {
                 // Log the specific table that failed
                 tableException = e; // Store exception to pass to callback
                 log.error("!!! CRITICAL ERROR migrating table {}/{}: {}. Stopping migration. !!!",
                         currentTableIndex, totalTables, tableConfig.getSourceTableName(), e.getMessage(), e);
-                // Re-throw AFTER reporting progress to stop the overall process
-                // throw new RuntimeException("Migration failed for table " + tableConfig.getSourceTableName(), e);
 
             } finally {
                 // Always report progress, passing null exception if successful
@@ -52,7 +65,6 @@ public class DataMigrationExecutor {
                          progressCallback.accept(tableConfig, tableException);
                      } catch (Exception cbEx) {
                          log.error("Error executing progress callback for table {}", tableConfig.getSourceTableName(), cbEx);
-                         // Decide if callback error should stop migration? Probably not.
                      }
                  }
             }

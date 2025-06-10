@@ -35,7 +35,7 @@ public class MigrationRowProcessor {
     @PersistenceContext
     private final EntityManager entityManager;
 
-    // ... (processSingleRowInsert and processSelfRefUpdateBatch remain the same) ...
+    // ... (processSingleRowInsert and processSelfRefUpdateBatch are unchanged) ...
     @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
     public boolean processSingleRowInsert(Map<String, Object> sourceRow,
                                           TableMigrationConfig tableConfig,
@@ -256,114 +256,87 @@ public class MigrationRowProcessor {
         }
         log.debug("Processing historical activeness for batch of size {} for table {}", batchData.size(), targetTableName);
 
+        // Group all rows in the current batch by their historical control ID.
+        // Since we fetched by complete groups, we know each group here is complete.
         Map<Object, List<Map<String, Object>>> groupedByHistoricalControlId = batchData.stream()
-                .filter(row -> {
-                    Object histCtlIdVal = row.get(sourceHistoricalControlIdColumn);
-                    if (histCtlIdVal == null) return false;
-                    if (histCtlIdVal instanceof Number) {
-                        return ((Number) histCtlIdVal).longValue() > 0;
-                    }
-                    if (histCtlIdVal instanceof String) {
-                        try {
-                            return Long.parseLong(((String) histCtlIdVal).trim()) > 0;
-                        } catch (NumberFormatException e) { return false; }
-                    }
-                    return false; // Should not happen if data types are consistent
-                })
+                .filter(row -> row.get(sourceHistoricalControlIdColumn) != null)
                 .collect(Collectors.groupingBy(row -> row.get(sourceHistoricalControlIdColumn)));
 
         List<HistoricalRecordUpdate> updatesToPerform = new ArrayList<>();
         LocalDateTime now = LocalDateTime.now();
 
+        // Process the historical chains
         for (Map.Entry<Object, List<Map<String, Object>>> entry : groupedByHistoricalControlId.entrySet()) {
+            Object histCtlId = entry.getKey();
             List<Map<String, Object>> historicalChain = entry.getValue();
 
-            // Sort by valid_from_date ascending to calculate fhasta
-            historicalChain.sort(Comparator.comparing(row -> {
+            // Correctly sort by date DESCENDING to find the most recent record first
+            historicalChain.sort(Comparator.comparing((Map<String, Object> row) -> {
                 Object dateVal = row.get(sourceValidFromDateColumn);
                 try {
                     LocalDateTime ldt = (LocalDateTime) MigrationUtils.convertToFieldType(dateVal, LocalDateTime.class, null);
-                    return ldt != null ? ldt : LocalDateTime.MIN; // Ensure non-null for comparison
+                    return ldt != null ? ldt : LocalDateTime.MIN;
                 } catch (Exception e) {
-                    log.warn("Unparseable date for sorting historical chain: {} for histCtlId {}. Error: {}. Using MIN_DATE for sorting.",
-                             dateVal, entry.getKey(), e.getMessage());
+                    log.warn("Unparseable date for sorting historical chain: {} for histCtlId {}. Error: {}. Using MIN_DATE.",
+                             dateVal, histCtlId, e.getMessage());
                     return LocalDateTime.MIN;
                 }
-            }));
+            }).reversed()); // <-- CRITICAL FIX: reversed() for DESC order
 
-            for (int i = 0; i < historicalChain.size(); i++) {
-                Map<String, Object> currentRow = historicalChain.get(i);
-                Object sourceId = currentRow.get(tableConfig.getSourceIdColumnName());
+            // The first record in the sorted list is the most recent one
+            Map<String, Object> mostRecentRecord = historicalChain.get(0);
+            LocalDateTime validFrom = null;
+            try {
+                Object validFromRaw = mostRecentRecord.get(sourceValidFromDateColumn);
+                validFrom = (LocalDateTime) MigrationUtils.convertToFieldType(validFromRaw, LocalDateTime.class, null);
+            } catch (Exception e) {
+                log.error("Could not convert validFrom date for most recent record of histCtlId {}: {}", histCtlId, e.getMessage());
+            }
+
+            // Determine if the conceptual employee is active
+            boolean isEmployeeActive = (validFrom != null && !validFrom.isAfter(now));
+            log.trace("Determined active status for histCtlId {}: {}. (Most recent date: {})", histCtlId, isEmployeeActive, validFrom);
+
+            // Create an update instruction for every record in this chain
+            for (Map<String, Object> recordInChain : historicalChain) {
+                Object sourceId = recordInChain.get(tableConfig.getSourceIdColumnName());
                 if (sourceId == null) continue;
-
-                Object targetId;
-                LocalDateTime validFrom;
                 try {
-                    targetId = MigrationUtils.convertToFieldType(sourceId, targetEntityClass, targetIdFieldName);
-                    Object validFromRaw = currentRow.get(sourceValidFromDateColumn);
-                    validFrom = (LocalDateTime) MigrationUtils.convertToFieldType(validFromRaw, LocalDateTime.class, null);
+                    Object targetId = MigrationUtils.convertToFieldType(sourceId, targetEntityClass, targetIdFieldName);
+                    updatesToPerform.add(new HistoricalRecordUpdate(targetId, isEmployeeActive));
                 } catch (Exception e) {
-                    log.error("Error converting types for historical processing (Source ID: {}): {}", sourceId, e.getMessage());
-                    continue;
+                    log.error("Could not convert source ID {} for historical update.", sourceId, e);
                 }
-
-                LocalDateTime calculatedFHasta;
-                if (i < historicalChain.size() - 1) {
-                    Map<String, Object> nextRow = historicalChain.get(i + 1);
-                    Object nextValidFromRaw = nextRow.get(sourceValidFromDateColumn);
-                    try {
-                        LocalDateTime nextValidFrom = (LocalDateTime) MigrationUtils.convertToFieldType(nextValidFromRaw, LocalDateTime.class, null);
-                        if (nextValidFrom != null) {
-                            calculatedFHasta = nextValidFrom.minusSeconds(1);
-                        } else {
-                            // If next validFrom is null, treat current as extending indefinitely for now,
-                            // but this implies data issue or it's the true last record.
-                            calculatedFHasta = LocalDateTime.of(9999,12,31,23,59,59);
-                            log.warn("Next validFrom date is null in historical chain for source ID {}. Assuming current record extends indefinitely.", sourceId);
-                        }
-                    } catch (Exception e) {
-                        log.error("Error converting next validFrom date for historical processing (Source ID: {}): {}", sourceId, e.getMessage());
-                        calculatedFHasta = LocalDateTime.of(9999,12,31,23,59,59);
-                    }
-                } else {
-                    calculatedFHasta = LocalDateTime.of(9999,12,31,23,59,59);
-                }
-
-                boolean isActive = (i == historicalChain.size() -1) &&
-                                   (validFrom != null && !validFrom.isAfter(now)) &&
-                                   (calculatedFHasta != null && !calculatedFHasta.isBefore(now));
-
-                updatesToPerform.add(new HistoricalRecordUpdate(targetId, isActive));
             }
         }
 
-        for (Map<String, Object> sourceRow : batchData) {
-            Object histCtlIdRaw = sourceRow.get(sourceHistoricalControlIdColumn);
-            long histCtlId = -1;
-            if (histCtlIdRaw instanceof Number) {
-                histCtlId = ((Number) histCtlIdRaw).longValue();
-            } else if (histCtlIdRaw instanceof String && !((String)histCtlIdRaw).trim().isEmpty()) {
-                try { histCtlId = Long.parseLong(((String)histCtlIdRaw).trim()); } catch (NumberFormatException ignored) {}
-            }
-
-            if (histCtlId <= 0) {
+        // Process standalone records (those not in a historical group)
+        batchData.stream()
+            .filter(row -> {
+                Object histCtlIdRaw = row.get(sourceHistoricalControlIdColumn);
+                if (histCtlIdRaw == null) return true;
+                if (histCtlIdRaw instanceof Number) return ((Number) histCtlIdRaw).longValue() <= 0;
+                if (histCtlIdRaw instanceof String) {
+                    try { return Long.parseLong(((String) histCtlIdRaw).trim()) <= 0; } catch (Exception e) { return true; }
+                }
+                return true;
+            })
+            .forEach(sourceRow -> {
                 Object sourceId = sourceRow.get(tableConfig.getSourceIdColumnName());
-                if (sourceId == null) continue;
-                Object targetId;
-                LocalDateTime validFrom;
+                if (sourceId == null) return;
                 try {
-                    targetId = MigrationUtils.convertToFieldType(sourceId, targetEntityClass, targetIdFieldName);
+                    Object targetId = MigrationUtils.convertToFieldType(sourceId, targetEntityClass, targetIdFieldName);
                     Object validFromRaw = sourceRow.get(sourceValidFromDateColumn);
-                    validFrom = (LocalDateTime) MigrationUtils.convertToFieldType(validFromRaw, LocalDateTime.class, null);
+                    LocalDateTime validFrom = (LocalDateTime) MigrationUtils.convertToFieldType(validFromRaw, LocalDateTime.class, null);
+                    boolean isActive = (validFrom != null && !validFrom.isAfter(now));
+                    updatesToPerform.add(new HistoricalRecordUpdate(targetId, isActive));
                 } catch (Exception e) {
-                    log.error("Error converting types for non-historical active processing (Source ID: {}): {}", sourceId, e.getMessage());
-                    continue;
+                    log.error("Error processing standalone record for active status (Source ID: {}): {}", sourceId, e.getMessage());
                 }
-                boolean isActive = (validFrom != null && !validFrom.isAfter(now));
-                updatesToPerform.add(new HistoricalRecordUpdate(targetId, isActive));
-            }
-        }
+            });
 
+
+        // Now, execute the batch update
         String updateActiveSql = "UPDATE \"" + targetTableName + "\" SET active = ? WHERE \"" + targetIdColumnName + "\" = ?";
         log.debug("Executing 'active' flag Update Batch ({} potential updates) using SQL: {}", updatesToPerform.size(), updateActiveSql);
 
@@ -384,15 +357,19 @@ public class MigrationRowProcessor {
                         updateStmt.addBatch();
                         currentStatementsInJdbcBatch++;
 
-                        if (currentStatementsInJdbcBatch >= updateBatchSize || updatesToPerform.indexOf(update) == updatesToPerform.size() - 1) {
-                            if (currentStatementsInJdbcBatch > 0) {
-                                log.trace("Executing intermediate 'active' update batch ({} statements)", currentStatementsInJdbcBatch);
-                                int[] batchResult = updateStmt.executeBatch();
-                                totalUpdatedInThisBatchCall[0] += Arrays.stream(batchResult).filter(i -> i >= 0 || i == Statement.SUCCESS_NO_INFO).count();
-                                updateStmt.clearBatch();
-                                currentStatementsInJdbcBatch = 0;
-                            }
+                        if (currentStatementsInJdbcBatch >= updateBatchSize) {
+                            log.trace("Executing intermediate 'active' update batch ({} statements)", currentStatementsInJdbcBatch);
+                            int[] batchResult = updateStmt.executeBatch();
+                            totalUpdatedInThisBatchCall[0] += Arrays.stream(batchResult).filter(i -> i >= 0 || i == Statement.SUCCESS_NO_INFO).count();
+                            updateStmt.clearBatch();
+                            currentStatementsInJdbcBatch = 0;
                         }
+                    }
+                    // Execute any remaining statements in the batch
+                    if (currentStatementsInJdbcBatch > 0) {
+                        log.trace("Executing final 'active' update batch ({} statements)", currentStatementsInJdbcBatch);
+                        int[] batchResult = updateStmt.executeBatch();
+                        totalUpdatedInThisBatchCall[0] += Arrays.stream(batchResult).filter(i -> i >= 0 || i == Statement.SUCCESS_NO_INFO).count();
                     }
                     log.debug("'active' flag update batch executed for table {}. Statements processed reported by driver: {}", targetTableName, totalUpdatedInThisBatchCall[0]);
                 } catch (SQLException e) {
@@ -415,6 +392,7 @@ public class MigrationRowProcessor {
         return totalUpdatedInThisBatchCall[0];
     }
 
+    // Helper DTO for clarity
     private static class HistoricalRecordUpdate {
         final Object targetId;
         final boolean isActive;

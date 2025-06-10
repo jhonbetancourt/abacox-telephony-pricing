@@ -1,3 +1,4 @@
+// File: com/infomedia/abacox/telephonypricing/component/migration/SourceDataFetcher.java
 package com.infomedia.abacox.telephonypricing.component.migration;
 
 import lombok.extern.log4j.Log4j2;
@@ -12,7 +13,7 @@ import java.util.stream.Collectors;
 @Log4j2
 public class SourceDataFetcher {
 
-    // Constants for database product names (adjust if your driver reports differently)
+    // ... (existing code and enums) ...
     private static final String SQL_SERVER_PRODUCT_NAME = "Microsoft SQL Server";
     private static final String POSTGRESQL_PRODUCT_NAME = "PostgreSQL";
     private static final String MYSQL_PRODUCT_NAME = "MySQL";
@@ -28,6 +29,42 @@ public class SourceDataFetcher {
         ORACLE_PRE12C    // ROWNUM
     }
 
+    /**
+     * Fetches full row data for a specific list of source IDs.
+     * This is used in multi-pass strategies where you first discover IDs and then fetch details.
+     */
+    public List<Map<String, Object>> fetchFullDataForIds(SourceDbConfig config, String tableName, Set<String> columnsToSelect, String sourceIdColumn, List<Object> ids) throws SQLException {
+        if (ids == null || ids.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<Map<String, Object>> results = new ArrayList<>();
+        String columnsSql = buildColumnsSql(columnsToSelect, PagingDialect.NONE); // Quoting doesn't matter here as much
+        String placeholders = String.join(",", Collections.nCopies(ids.size(), "?"));
+        String sql = String.format("SELECT %s FROM %s WHERE %s IN (%s)", columnsSql, tableName, sourceIdColumn, placeholders);
+
+        log.debug("Fetching full data for {} IDs from table {}", ids.size(), tableName);
+
+        try (Connection connection = DriverManager.getConnection(config.getUrl(), config.getUsername(), config.getPassword());
+             PreparedStatement ps = connection.prepareStatement(sql)) {
+
+            MigrationUtils.setPreparedStatementParameters(ps, ids);
+
+            try (ResultSet rs = ps.executeQuery()) {
+                ResultSetMetaData metaData = rs.getMetaData();
+                Map<String, Integer> columnIndexMap = buildColumnIndexMap(metaData);
+                while (rs.next()) {
+                    results.add(extractRow(rs, columnsToSelect, columnIndexMap, PagingDialect.NONE));
+                }
+            }
+        } catch (SQLException e) {
+            log.error("Failed to fetch full data for ID batch from table {}: {}", tableName, e.getMessage(), e);
+            throw e;
+        }
+        return results;
+    }
+
+    // ... (all other existing methods like fetchData, buildPagedQuery, etc.) ...
     /**
      * Fetches data from the source table in batches and processes each batch using the provided consumer.
      * Uses database-specific paging if possible, otherwise reads the full result set
@@ -242,24 +279,18 @@ public class SourceDataFetcher {
         }
     }
 
-    // --- Helper Methods ---
-
-    /** Builds the SELECT clause using dialect-specific quoting */
     private String buildColumnsSql(Set<String> columnsToSelect, PagingDialect dialect) {
          return columnsToSelect.stream()
                                .map(col -> quoteIdentifier(col, dialect))
                                .collect(Collectors.joining(", "));
     }
 
-    /** Builds the full SQL query, potentially with paging clauses. */
     private String buildPagedQuery(PagingDialect dialect, String tableName, String columnsSql,
                                    String orderByColumnRaw, String orderByColumnQuoted, int offset, int limit) {
 
         String safeTableName = quoteIdentifier(tableName, dialect);
 
-        // Ensure ORDER BY column is provided if paging is active
         if (dialect != PagingDialect.NONE && (orderByColumnRaw == null || orderByColumnRaw.trim().isEmpty())) {
-             // This should have been caught earlier, but double-check
              throw new IllegalStateException("ORDER BY column is required for paging dialect " + dialect + " but was not provided or resolved.");
         }
 
@@ -268,7 +299,6 @@ public class SourceDataFetcher {
                 return String.format("SELECT %s FROM %s ORDER BY %s OFFSET ? ROWS FETCH NEXT ? ROWS ONLY",
                                      columnsSql, safeTableName, orderByColumnQuoted);
             case SQL_SERVER_2005:
-                 // ROW_NUMBER() needs the column list without the rn alias for the outer select
                 return String.format("WITH NumberedRows AS (SELECT %s, ROW_NUMBER() OVER (ORDER BY %s) AS rn FROM %s) " +
                                      "SELECT %s FROM NumberedRows WHERE rn > ? AND rn <= ?",
                                      columnsSql, orderByColumnQuoted, safeTableName, columnsSql);
@@ -282,7 +312,6 @@ public class SourceDataFetcher {
                  return String.format("SELECT %s FROM %s ORDER BY %s OFFSET ? ROWS FETCH NEXT ? ROWS ONLY",
                                       columnsSql, safeTableName, orderByColumnQuoted);
             case ORACLE_PRE12C:
-                 // Select original columns (columnsSql) in the outermost query
                  return String.format("SELECT %s FROM ( SELECT inner_.*, ROWNUM rnum FROM ( SELECT %s FROM %s ORDER BY %s ) inner_ WHERE ROWNUM <= ? ) WHERE rnum > ?",
                                       columnsSql, columnsSql, safeTableName, orderByColumnQuoted);
             case NONE:
@@ -291,7 +320,6 @@ public class SourceDataFetcher {
         }
     }
 
-    /** Sets parameters for the PreparedStatement based on the dialect. */
     private void setPagingParameters(PreparedStatement ps, PagingDialect dialect, int offset, int limit) throws SQLException {
         switch (dialect) {
             case SQL_SERVER_2012: // OFFSET ?, FETCH ?
@@ -317,15 +345,10 @@ public class SourceDataFetcher {
                 break;
             case NONE:
             default:
-                // No parameters to set
                 break;
         }
     }
 
-    /**
-     * Quotes an identifier (table or column name) according to the database dialect.
-     * Handles schema-qualified names like "schema.table".
-     */
     private String quoteIdentifier(String identifier, PagingDialect dialect) {
         if (identifier == null || identifier.isEmpty()) {
             return identifier;
@@ -353,14 +376,12 @@ public class SourceDataFetcher {
                 break;
         }
 
-        // Avoid double-quoting if already quoted (basic check)
         if (identifier.startsWith(quoteCharStart) && identifier.endsWith(quoteCharEnd)) {
             return identifier;
         }
 
         if (identifier.contains(".")) {
             String[] parts = identifier.split("\\.", 2);
-            // Quote each part individually
             String part1 = parts[0].startsWith(quoteCharStart) ? parts[0] : quoteCharStart + parts[0] + quoteCharEnd;
             String part2 = parts[1].startsWith(quoteCharStart) ? parts[1] : quoteCharStart + parts[1] + quoteCharEnd;
             return part1 + "." + part2;
@@ -369,7 +390,6 @@ public class SourceDataFetcher {
         }
     }
 
-    /** Logs columns that were requested but not found in the source table. */
     private void logSkippedColumns(Set<String> requestedColumns, Set<String> columnsToSelect, String tableName) {
          Set<String> selectedUpper = columnsToSelect.stream().map(String::toUpperCase).collect(Collectors.toSet());
          requestedColumns.forEach(requestedCol -> {
@@ -379,7 +399,6 @@ public class SourceDataFetcher {
          });
     }
 
-    /** Validates the source ID column exists and returns its actual casing from the DB metadata. */
     private String validateAndGetActualIdColumn(Set<String> actualColumns, String requestedSourceIdColumn, String tableName) throws SQLException {
          final String requestedUpper = requestedSourceIdColumn.toUpperCase();
          Optional<String> actualIdColumnOpt = actualColumns.stream()
@@ -392,10 +411,9 @@ public class SourceDataFetcher {
          }
          String actualCol = actualIdColumnOpt.get();
          log.debug("Validated source ID column: requested='{}', actual='{}'", requestedSourceIdColumn, actualCol);
-         return actualCol; // Return the column name with the exact casing from the database
+         return actualCol;
     }
 
-    /** Builds a map for case-insensitive lookup of column index by column label. */
     private Map<String, Integer> buildColumnIndexMap(ResultSetMetaData metaData) throws SQLException {
         Map<String, Integer> columnIndexMap = new HashMap<>();
         int columnCount = metaData.getColumnCount();
@@ -404,34 +422,28 @@ public class SourceDataFetcher {
             if (label == null || label.isEmpty()) {
                 label = metaData.getColumnName(i);
             }
-            // Store uppercase for case-insensitive lookup, crucial for matching columnsToSelect
             columnIndexMap.put(label.toUpperCase(), i);
         }
         return columnIndexMap;
     }
 
-    /** Extracts data for one row from the ResultSet based on the selected columns. */
     private Map<String, Object> extractRow(ResultSet resultSet, Set<String> columnsToSelect,
                                            Map<String, Integer> columnIndexMap, PagingDialect dialect) throws SQLException {
         Map<String, Object> row = new HashMap<>();
         for (String selectedColumn : columnsToSelect) {
-            // Lookup index using uppercase version of the column name we intend to select
             Integer index = columnIndexMap.get(selectedColumn.toUpperCase());
             if (index != null) {
                  Object value = resultSet.getObject(index);
-                 value = convertSqlTypes(value, dialect); // Pass dialect if needed for conversion
-                 row.put(selectedColumn, value); // Use the original case from columnsToSelect for the key
+                 value = convertSqlTypes(value, dialect);
+                 row.put(selectedColumn, value);
             } else {
-                // This could happen if a column name/label differs unexpectedly (e.g., ROW_NUMBER alias if not handled)
                 log.warn("Column '{}' was expected in ResultSet based on selection but not found by label/name in metadata mapping. Skipping column for this row.", selectedColumn);
             }
         }
         return row;
     }
 
-    /** Converts specific java.sql types to more modern Java types. Can be extended for dialect specifics. */
     private Object convertSqlTypes(Object value, PagingDialect dialect) {
-         // Standard conversions first
          if (value instanceof java.sql.Timestamp) {
              return ((java.sql.Timestamp) value).toLocalDateTime();
          } else if (value instanceof java.sql.Date) {
@@ -439,15 +451,9 @@ public class SourceDataFetcher {
          } else if (value instanceof java.sql.Time) {
               return ((java.sql.Time) value).toLocalTime();
          }
-         // Add dialect-specific conversions if necessary by checking 'dialect'
-         // e.g., if (dialect == PagingDialect.ORACLE_12C && value instanceof oracle.sql.TIMESTAMPTZ) { ... }
          return value;
     }
 
-    /**
-     * Retrieves actual column names from metadata, handling schema patterns.
-     * Uses the provided DatabaseMetaData.
-     */
     private Set<String> getActualSourceColumns(Connection connection, DatabaseMetaData metaData, String tableName) throws SQLException {
         Set<String> columnNames = new HashSet<>();
         String catalog = null;
@@ -455,31 +461,24 @@ public class SourceDataFetcher {
         String actualTableName = tableName;
 
         try {
-            catalog = connection.getCatalog(); // Can be null or empty depending on DB/driver
+            catalog = connection.getCatalog();
         } catch (SQLException e) {
             log.warn("Could not retrieve catalog name: {}", e.getMessage());
         }
 
-        // Basic handling for schema-qualified table names (e.g., "dbo.Customers", "public.users")
         if (tableName.contains(".")) {
             String[] parts = tableName.split("\\.", 2);
-            // Avoid quoting here, use raw parts for metadata lookup
             schemaPattern = parts[0];
             actualTableName = parts[1];
             log.debug("Using explicit schema pattern '{}' and table name '{}'", schemaPattern, actualTableName);
         } else {
-            // If no schema provided, pass null to getColumns - driver/DB usually defaults correctly
-            // For Oracle, this might mean the user's default schema. For SQL Server, often 'dbo'. For PG, 'public'.
             log.debug("No schema specified for table '{}', using driver default schema pattern (null).", actualTableName);
-             // You could try fetching user's schema: schemaPattern = connection.getSchema();
-             // But null is generally safer for getColumns() to use defaults.
         }
 
-        // Use try-with-resources for the ResultSet from getColumns
-        try (ResultSet rs = metaData.getColumns(catalog, schemaPattern, actualTableName, null)) { // null for columnNamePattern means all columns
+        try (ResultSet rs = metaData.getColumns(catalog, schemaPattern, actualTableName, null)) {
             while (rs.next()) {
                 String columnName = rs.getString("COLUMN_NAME");
-                if (columnName != null) { // Defensive check
+                if (columnName != null) {
                      columnNames.add(columnName);
                 }
             }
@@ -487,11 +486,9 @@ public class SourceDataFetcher {
         } catch (SQLException e) {
             log.error("Could not retrieve column metadata for table '{}' (Catalog: {}, Schema: {}, Table: {}): {}",
                       tableName, catalog, schemaPattern, actualTableName, e.getMessage());
-            // Re-throwing is often safer as it indicates a fundamental issue
             throw e;
         }
 
-        // Optional: Fallback without schema if initial attempt with explicit schema failed
         if (columnNames.isEmpty() && schemaPattern != null) {
              log.warn("No columns found with schema pattern '{}' for table '{}'. Retrying without schema pattern (using default).", schemaPattern, actualTableName);
              try (ResultSet rs = metaData.getColumns(catalog, null, actualTableName, null)) {
@@ -504,7 +501,6 @@ public class SourceDataFetcher {
                  log.debug("Found columns for table '{}' (without explicit schema pattern): {}", tableName, columnNames);
              } catch (SQLException e) {
                  log.error("Retry without schema pattern failed for table '{}': {}", tableName, e.getMessage());
-                 // Don't throw here, just return the (still empty) set from the first attempt or log failure
              }
         }
 
