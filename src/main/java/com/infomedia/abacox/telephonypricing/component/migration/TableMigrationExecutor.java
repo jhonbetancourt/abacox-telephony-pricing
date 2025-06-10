@@ -40,6 +40,13 @@ public class TableMigrationExecutor {
         AtomicInteger failedUpdateBatchCountPass3 = new AtomicInteger(0);
 
         log.info("Executing migration for source table: {}", tableConfig.getSourceTableName());
+        if (tableConfig.getMaxEntriesToMigrate() != null && tableConfig.getMaxEntriesToMigrate() > 0) {
+            log.info("Migration will be limited to a maximum of {} entries.", tableConfig.getMaxEntriesToMigrate());
+        }
+        if (tableConfig.getOrderByClause() != null) {
+            log.info("Using custom order by clause: {}", tableConfig.getOrderByClause());
+        }
+
 
         Class<?> targetEntityClass;
         Field idField;
@@ -122,6 +129,8 @@ public class TableMigrationExecutor {
                     tableConfig.getSourceTableName(),
                     columnsToFetch,
                     tableConfig.getSourceIdColumnName(),
+                    tableConfig.getOrderByClause(),
+                    tableConfig.getMaxEntriesToMigrate(),
                     FETCH_BATCH_SIZE,
                     pass1BatchProcessor
             );
@@ -161,6 +170,8 @@ public class TableMigrationExecutor {
                          tableConfig.getSourceTableName(),
                          columnsToFetch,
                          tableConfig.getSourceIdColumnName(),
+                         tableConfig.getOrderByClause(),
+                         tableConfig.getMaxEntriesToMigrate(),
                          FETCH_BATCH_SIZE,
                          pass2BatchProcessor
                  );
@@ -225,7 +236,9 @@ public class TableMigrationExecutor {
                 }
             };
 
-            sourceDataFetcher.fetchData(sourceDbConfig, tableConfig.getSourceTableName(), idDiscoveryColumns, tableConfig.getSourceIdColumnName(), ID_FETCH_BATCH_SIZE, discoveryProcessor);
+            sourceDataFetcher.fetchData(sourceDbConfig, tableConfig.getSourceTableName(), idDiscoveryColumns,
+                    tableConfig.getSourceIdColumnName(), tableConfig.getOrderByClause(),
+                    tableConfig.getMaxEntriesToMigrate(), ID_FETCH_BATCH_SIZE, discoveryProcessor);
             log.info("Pass 3.B: Discovered {} historical groups and {} standalone records.", historicalGroups.size(), standaloneIds.size());
 
         } catch (Exception e) {

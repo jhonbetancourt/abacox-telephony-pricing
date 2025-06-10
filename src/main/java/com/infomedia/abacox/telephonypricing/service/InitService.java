@@ -11,7 +11,6 @@ import org.springframework.stereotype.Service;
 @Log4j2
 public class InitService {
 
-
     @EventListener(ApplicationReadyEvent.class)
     public void init() {
     }

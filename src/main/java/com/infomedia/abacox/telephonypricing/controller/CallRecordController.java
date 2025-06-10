@@ -1,11 +1,13 @@
 package com.infomedia.abacox.telephonypricing.controller;
 
 import com.infomedia.abacox.telephonypricing.component.export.excel.ParseUtils;
+import com.infomedia.abacox.telephonypricing.component.filtertools.SpecificationFilter;
 import com.infomedia.abacox.telephonypricing.component.modeltools.ModelConverter;
 import com.infomedia.abacox.telephonypricing.dto.callrecord.CallRecordDto;
+import com.infomedia.abacox.telephonypricing.dto.callrecord.CorporateReportEntry;
 import com.infomedia.abacox.telephonypricing.entity.CallRecord;
+import com.infomedia.abacox.telephonypricing.entity.view.CorporateReportView;
 import com.infomedia.abacox.telephonypricing.service.CallRecordService;
-import com.infomedia.abacox.telephonypricing.service.ConfigurationService;
 import com.turkraft.springfilter.boot.Filter;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -42,6 +44,15 @@ public class CallRecordController {
             , @RequestParam(required = false) String filter, @RequestParam(required = false) Integer page
             , @RequestParam(required = false) Integer size, @RequestParam(required = false) String sort) {
         return modelConverter.mapPage(callRecordService.find(spec, pageable), CallRecordDto.class);
+    }
+
+    @GetMapping(value = "corporateReport", produces = MediaType.APPLICATION_JSON_VALUE)
+    public Page<CorporateReportEntry> getCorporateReport(@Parameter(hidden = true) @Filter Specification<CorporateReportView> spec
+            , @Parameter(hidden = true) Pageable pageable
+            , @RequestParam(required = false) String filter, @RequestParam(required = false) Integer page
+            , @RequestParam(required = false) Integer size, @RequestParam(required = false) String sort) {
+
+        return modelConverter.mapPage(callRecordService.generateCorporateReport(spec, pageable), CorporateReportEntry.class);
     }
 
     @GetMapping(value = "/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)

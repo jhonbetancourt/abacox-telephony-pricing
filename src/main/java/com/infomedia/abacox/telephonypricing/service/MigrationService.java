@@ -735,7 +735,7 @@ public class MigrationService {
                 ))
                 .build());
         */
-/*
+
         // Level 8: ACUMTOTAL (CallRecord) - This is the final target, usually populated by CDR processing,
         // but if you are migrating existing ACUMTOTAL data:
         configs.add(TableMigrationConfig.builder()
@@ -767,16 +767,12 @@ public class MigrationService {
                         entry("ACUMTOTAL_CAUSA_TRANSFER", "transferCause"),
                         entry("ACUMTOTAL_CAUSA_ASIGNA", "assignmentCause"),
                         entry("ACUMTOTAL_FUNDESTINO_ID", "destinationEmployeeId"),
-                        entry("ACUMTOTAL_FILEINFO_ID", "fileInfoId"),
-                        // ACUMTOTAL_CTL is for the raw CDR line, map to cdrHash
-                        // entry("ACUMTOTAL_CTL", "cdrHash"), // This needs to be generated, not directly mapped
                         entry("ACUMTOTAL_FCREACION", "createdDate"),
                         entry("ACUMTOTAL_FMODIFICADO", "lastModifiedDate")
-                ))
-                // ACUMTOTAL doesn't have its own _ACTIVO field in the old system.
-                // Its "activeness" is implicit or handled by COMUBICACION_ID sign.
+                )).maxEntriesToMigrate(100000)
+                        .orderByClause("ACUMTOTAL_ID DESC")
                 .build());
-*/
+
 
         return configs;
     }

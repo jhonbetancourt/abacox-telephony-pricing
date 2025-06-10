@@ -105,7 +105,7 @@ public class CallRecordPersistenceService {
         callRecord.setBilledAmount(cdrData.getBilledAmount());
         callRecord.setPricePerMinute(cdrData.getPricePerMinute());
         callRecord.setInitialPrice(cdrData.getInitialPricePerMinute());
-        callRecord.setIncoming(cdrData.getCallDirection() == CallDirection.INCOMING);
+        callRecord.setIsIncoming(cdrData.getCallDirection() == CallDirection.INCOMING);
         callRecord.setTrunk(cdrData.getDestDeviceName() != null ? cdrData.getDestDeviceName().substring(0, Math.min(cdrData.getDestDeviceName().length(), 50)) : "");
         callRecord.setInitialTrunk(cdrData.getOrigDeviceName() != null ? cdrData.getOrigDeviceName().substring(0, Math.min(cdrData.getOrigDeviceName().length(), 50)) : "");
         callRecord.setEmployeeId(cdrData.getEmployeeId());

@@ -37,4 +37,18 @@ public class TableMigrationConfig {
      * This will not be executed if the migration for this table fails.
      */
     private Runnable postMigrationSuccessAction;
+
+    /**
+     * The column(s) to use for ordering the source data when fetching.
+     * Should include direction, e.g., "creation_date DESC" or "id ASC".
+     * If null, defaults to ordering by sourceIdColumnName ascending for stable paging.
+     * For migrating most recent entries first, this should be set to a date/timestamp column with DESC.
+     */
+    private String orderByClause;
+
+    /**
+     * The maximum number of entries to migrate for this table.
+     * If null or less than or equal to zero, all entries will be migrated.
+     */
+    private Integer maxEntriesToMigrate;
 }

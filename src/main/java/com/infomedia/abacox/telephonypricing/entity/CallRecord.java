@@ -200,7 +200,7 @@ public class CallRecord extends AuditedEntity {
      */
     @Column(name = "is_incoming", nullable = false)
     @ColumnDefault("false")
-    private boolean isIncoming;
+    private Boolean isIncoming;
 
     /**
      * Trunk line used for the call.

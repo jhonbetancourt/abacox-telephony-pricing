@@ -52,6 +52,4 @@ public class CallRecordDto extends AuditedDto {
     private Long destinationEmployeeId;
     private EmployeeDto destinationEmployee;
     private Long fileInfoId;
-    private Long centralizedId;
-    private String originIp;
 }
