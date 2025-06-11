@@ -25,8 +25,6 @@ public class CdrConfigService {
 
     // --- Default values for configurable parameters ---
     private static final String DEFAULT_TARGET_DATABASE_TIMEZONE_ID = "America/Bogota";
-    private static final List<String> DEFAULT_IGNORED_AUTH_CODE_DESCRIPTIONS =
-            Collections.unmodifiableList(Arrays.asList("Invalid Authorization Code", "Invalid Authorization Level"));
     private static final boolean DEFAULT_SPECIAL_VALUE_TARIFFING_ENABLED = true;
     private static final int DEFAULT_MIN_CALL_DURATION_FOR_TARIFFING = 0;
     private static final int DEFAULT_MAX_CALL_DURATION_MINUTES = 2880;
@@ -85,10 +83,6 @@ public class CdrConfigService {
             log.error("Invalid ZoneId configured: '{}'. Defaulting to UTC.", zoneIdStr, e);
             return ZoneId.of("UTC");
         }
-    }
-
-    public List<String> getIgnoredAuthCodeDescriptions() {
-        return DEFAULT_IGNORED_AUTH_CODE_DESCRIPTIONS;
     }
 
     public boolean isSpecialValueTariffingEnabled() {

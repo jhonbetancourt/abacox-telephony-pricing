@@ -1,10 +1,11 @@
 package com.infomedia.abacox.telephonypricing.controller;
 
 import com.infomedia.abacox.telephonypricing.component.export.excel.ParseUtils;
-import com.infomedia.abacox.telephonypricing.component.filtertools.SpecificationFilter;
 import com.infomedia.abacox.telephonypricing.component.modeltools.ModelConverter;
+import com.infomedia.abacox.telephonypricing.constants.DateTimePattern;
 import com.infomedia.abacox.telephonypricing.dto.callrecord.CallRecordDto;
-import com.infomedia.abacox.telephonypricing.dto.callrecord.CorporateReportEntry;
+import com.infomedia.abacox.telephonypricing.dto.callrecord.CorporateReportDto;
+import com.infomedia.abacox.telephonypricing.dto.callrecord.EmployeeActivityReportDto;
 import com.infomedia.abacox.telephonypricing.entity.CallRecord;
 import com.infomedia.abacox.telephonypricing.entity.view.CorporateReportView;
 import com.infomedia.abacox.telephonypricing.service.CallRecordService;
@@ -19,10 +20,13 @@ import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.time.LocalDateTime;
 
 @RequiredArgsConstructor
 @RestController
@@ -47,12 +51,20 @@ public class CallRecordController {
     }
 
     @GetMapping(value = "corporateReport", produces = MediaType.APPLICATION_JSON_VALUE)
-    public Page<CorporateReportEntry> getCorporateReport(@Parameter(hidden = true) @Filter Specification<CorporateReportView> spec
+    public Page<CorporateReportDto> getCorporateReport(@Parameter(hidden = true) @Filter Specification<CorporateReportView> spec
             , @Parameter(hidden = true) Pageable pageable
             , @RequestParam(required = false) String filter, @RequestParam(required = false) Integer page
             , @RequestParam(required = false) Integer size, @RequestParam(required = false) String sort) {
 
-        return modelConverter.mapPage(callRecordService.generateCorporateReport(spec, pageable), CorporateReportEntry.class);
+        return modelConverter.mapPage(callRecordService.generateCorporateReport(spec, pageable), CorporateReportDto.class);
+    }
+
+    @GetMapping(value = "employeeActivity", produces = MediaType.APPLICATION_JSON_VALUE)
+    public Page<EmployeeActivityReportDto> getEmployeeActivityReport(@Parameter(hidden = true) Pageable pageable
+            , @RequestParam(required = false) String employeeName, @RequestParam(required = false) String employeeExtension
+            , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate
+            , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate) {
+        return modelConverter.mapPage(callRecordService.generateEmployeeActivityReport(employeeName, employeeExtension, startDate, endDate, pageable), EmployeeActivityReportDto.class);
     }
 
     @GetMapping(value = "/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)

@@ -108,7 +108,7 @@ public class CdrEnrichmentService {
             boolean authCodeMatchedAndValid = authCodeProvided &&
                                       foundEmployee.getAuthCode() != null &&
                                       foundEmployee.getAuthCode()
-                                              .equalsIgnoreCase(searchAuthCodeForEmployee) && appConfigService.getIgnoredAuthCodeDescriptions().stream()
+                                              .equalsIgnoreCase(searchAuthCodeForEmployee) && processingContext.getIgnoredAuthCodes().stream()
                       .noneMatch(desc -> desc.equalsIgnoreCase(searchAuthCodeForEmployee));
 
             if (authCodeMatchedAndValid) {

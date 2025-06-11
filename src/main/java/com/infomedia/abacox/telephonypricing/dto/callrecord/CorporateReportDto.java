@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class CorporateReportEntry {
+public class CorporateReportDto {
 
     private Long callRecordId;
     private Long telephonyTypeId;
