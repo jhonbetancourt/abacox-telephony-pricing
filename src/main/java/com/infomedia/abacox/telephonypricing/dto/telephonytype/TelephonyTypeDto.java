@@ -2,14 +2,13 @@ package com.infomedia.abacox.telephonypricing.dto.telephonytype;
 
 import com.infomedia.abacox.telephonypricing.dto.callcategory.CallCategoryDto;
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivableDto;
-import com.infomedia.abacox.telephonypricing.dto.superclass.AuditedDto;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 
 /**
- * DTO for {@link com.infomedia.abacox.telephonypricing.entity.TelephonyType}
+ * DTO for {@link com.infomedia.abacox.telephonypricing.db.entity.TelephonyType}
  */
 @EqualsAndHashCode(callSuper = true)
 @Data

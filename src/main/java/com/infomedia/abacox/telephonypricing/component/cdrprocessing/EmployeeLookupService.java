@@ -1,9 +1,9 @@
 // File: com/infomedia/abacox/telephonypricing/component/cdrprocessing/EmployeeLookupService.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
-import com.infomedia.abacox.telephonypricing.entity.CommunicationLocation;
-import com.infomedia.abacox.telephonypricing.entity.Employee;
-import com.infomedia.abacox.telephonypricing.entity.ExtensionRange;
+import com.infomedia.abacox.telephonypricing.db.entity.CommunicationLocation;
+import com.infomedia.abacox.telephonypricing.db.entity.Employee;
+import com.infomedia.abacox.telephonypricing.db.entity.ExtensionRange;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.Query;

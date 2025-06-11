@@ -1,8 +1,8 @@
 // File: com/infomedia/abacox/telephonypricing/component/cdrprocessing/PhoneNumberTransformationService.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
-import com.infomedia.abacox.telephonypricing.entity.CommunicationLocation;
-import com.infomedia.abacox.telephonypricing.entity.Indicator;
+import com.infomedia.abacox.telephonypricing.db.entity.CommunicationLocation;
+import com.infomedia.abacox.telephonypricing.db.entity.Indicator;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.NoResultException;
 import jakarta.persistence.PersistenceContext;

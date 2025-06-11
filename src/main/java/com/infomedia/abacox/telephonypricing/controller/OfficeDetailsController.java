@@ -6,7 +6,7 @@ import com.infomedia.abacox.telephonypricing.dto.officedetails.OfficeDetailsDto;
 import com.infomedia.abacox.telephonypricing.dto.officedetails.CreateOfficeDetails;
 import com.infomedia.abacox.telephonypricing.dto.officedetails.UpdateOfficeDetails;
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivationDto;
-import com.infomedia.abacox.telephonypricing.entity.OfficeDetails;
+import com.infomedia.abacox.telephonypricing.db.entity.OfficeDetails;
 import com.infomedia.abacox.telephonypricing.service.OfficeDetailsService;
 import com.turkraft.springfilter.boot.Filter;
 import io.swagger.v3.oas.annotations.Parameter;

@@ -1,7 +1,7 @@
 // File: com/infomedia/abacox/telephonypricing/cdr/ICdrTypeProcessor.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
-import com.infomedia.abacox.telephonypricing.entity.CommunicationLocation;
+import com.infomedia.abacox.telephonypricing.db.entity.CommunicationLocation;
 
 import java.util.List;
 

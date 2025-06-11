@@ -1,8 +1,8 @@
 // File: com/infomedia/abacox/telephonypricing/cdr/CdrData.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
-import com.infomedia.abacox.telephonypricing.entity.Employee;
-import com.infomedia.abacox.telephonypricing.entity.FileInfo;
+import com.infomedia.abacox.telephonypricing.db.entity.Employee;
+import com.infomedia.abacox.telephonypricing.db.entity.FileInfo;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.ToString;

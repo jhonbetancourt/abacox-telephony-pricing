@@ -1,6 +1,6 @@
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
-import com.infomedia.abacox.telephonypricing.entity.PbxSpecialRule;
+import com.infomedia.abacox.telephonypricing.db.entity.PbxSpecialRule;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import lombok.extern.log4j.Log4j2;

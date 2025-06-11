@@ -6,7 +6,7 @@ import com.infomedia.abacox.telephonypricing.dto.subdivisionmanager.SubdivisionM
 import com.infomedia.abacox.telephonypricing.dto.subdivisionmanager.CreateSubdivisionManager;
 import com.infomedia.abacox.telephonypricing.dto.subdivisionmanager.UpdateSubdivisionManager;
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivationDto;
-import com.infomedia.abacox.telephonypricing.entity.SubdivisionManager;
+import com.infomedia.abacox.telephonypricing.db.entity.SubdivisionManager;
 import com.infomedia.abacox.telephonypricing.service.SubdivisionManagerService;
 import com.turkraft.springfilter.boot.Filter;
 import io.swagger.v3.oas.annotations.Parameter;

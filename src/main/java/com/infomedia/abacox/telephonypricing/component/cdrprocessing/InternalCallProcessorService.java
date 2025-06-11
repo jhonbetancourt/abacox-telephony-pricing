@@ -1,9 +1,9 @@
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
-import com.infomedia.abacox.telephonypricing.entity.CommunicationLocation;
-import com.infomedia.abacox.telephonypricing.entity.Employee;
-import com.infomedia.abacox.telephonypricing.entity.Indicator;
-import com.infomedia.abacox.telephonypricing.entity.Subdivision;
+import com.infomedia.abacox.telephonypricing.db.entity.CommunicationLocation;
+import com.infomedia.abacox.telephonypricing.db.entity.Employee;
+import com.infomedia.abacox.telephonypricing.db.entity.Indicator;
+import com.infomedia.abacox.telephonypricing.db.entity.Subdivision;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;

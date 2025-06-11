@@ -1,6 +1,6 @@
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
-import com.infomedia.abacox.telephonypricing.entity.Employee;
+import com.infomedia.abacox.telephonypricing.db.entity.Employee;
 import lombok.Data;
 
 @Data

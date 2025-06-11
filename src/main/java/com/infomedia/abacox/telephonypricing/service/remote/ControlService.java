@@ -24,4 +24,8 @@ public class ControlService {
             throw new RemoteServiceException("Error getting module info by prefix", e);
         }
     }
+
+    public String getUsersUrl() {
+        return getInfoByPrefix("users").getUrl();
+    }
 }

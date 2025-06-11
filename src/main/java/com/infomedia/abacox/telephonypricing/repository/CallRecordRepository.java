@@ -1,8 +1,7 @@
 package com.infomedia.abacox.telephonypricing.repository;
 
-import com.infomedia.abacox.telephonypricing.dto.callrecord.EmployeeActivityReportDto;
-import com.infomedia.abacox.telephonypricing.entity.CallRecord;
-import com.infomedia.abacox.telephonypricing.entity.projection.EmployeeActivityReportProjection;
+import com.infomedia.abacox.telephonypricing.db.entity.CallRecord;
+import com.infomedia.abacox.telephonypricing.db.projection.EmployeeActivityReportProjection;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;

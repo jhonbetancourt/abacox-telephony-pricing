@@ -174,7 +174,7 @@ public class MigrationService {
         // Level 0: No FK dependencies among these
         configs.add(TableMigrationConfig.builder()
                 .sourceTableName("MPORIGEN")
-                .targetEntityClassName("com.infomedia.abacox.telephonypricing.entity.OriginCountry")
+                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.OriginCountry")
                 .sourceIdColumnName("MPORIGEN_ID")
                 .targetIdFieldName("id")
                 .columnMapping(Map.ofEntries(
@@ -190,7 +190,7 @@ public class MigrationService {
 
         configs.add(TableMigrationConfig.builder()
                 .sourceTableName("CIUDADES")
-                .targetEntityClassName("com.infomedia.abacox.telephonypricing.entity.City")
+                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.City")
                 .sourceIdColumnName("CIUDADES_ID")
                 .targetIdFieldName("id")
                 .columnMapping(Map.ofEntries(
@@ -213,7 +213,7 @@ public class MigrationService {
 
         configs.add(TableMigrationConfig.builder()
                 .sourceTableName("tipoplanta")
-                .targetEntityClassName("com.infomedia.abacox.telephonypricing.entity.PlantType")
+                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.PlantType")
                 .sourceIdColumnName("TIPOPLANTA_ID")
                 .targetIdFieldName("id")
                 .columnMapping(Map.ofEntries(
@@ -227,7 +227,7 @@ public class MigrationService {
 
         configs.add(TableMigrationConfig.builder()
                 .sourceTableName("funcargo")
-                .targetEntityClassName("com.infomedia.abacox.telephonypricing.entity.JobPosition")
+                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.JobPosition")
                 .sourceIdColumnName("FUNCARGO_ID")
                 .targetIdFieldName("id")
                 .columnMapping(Map.ofEntries(
@@ -241,7 +241,7 @@ public class MigrationService {
 
         configs.add(TableMigrationConfig.builder()
                 .sourceTableName("CLASELLAMA")
-                .targetEntityClassName("com.infomedia.abacox.telephonypricing.entity.CallCategory")
+                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.CallCategory")
                 .sourceIdColumnName("CLASELLAMA_ID")
                 .targetIdFieldName("id")
                 .columnMapping(Map.ofEntries(
@@ -256,7 +256,7 @@ public class MigrationService {
         // Level 1: Depend on Level 0
         configs.add(TableMigrationConfig.builder()
                 .sourceTableName("OPERADOR")
-                .targetEntityClassName("com.infomedia.abacox.telephonypricing.entity.Operator")
+                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.Operator")
                 .sourceIdColumnName("OPERADOR_ID")
                 .targetIdFieldName("id")
                 .columnMapping(Map.ofEntries(
@@ -271,7 +271,7 @@ public class MigrationService {
 
         configs.add(TableMigrationConfig.builder()
                 .sourceTableName("TIPOTELE")
-                .targetEntityClassName("com.infomedia.abacox.telephonypricing.entity.TelephonyType")
+                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.TelephonyType")
                 .sourceIdColumnName("TIPOTELE_ID")
                 .targetIdFieldName("id")
                 .columnMapping(Map.ofEntries(
@@ -288,7 +288,7 @@ public class MigrationService {
         // Level 2: Depend on Level 1 or 0
         configs.add(TableMigrationConfig.builder()
                 .sourceTableName("INDICATIVO")
-                .targetEntityClassName("com.infomedia.abacox.telephonypricing.entity.Indicator")
+                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.Indicator")
                 .sourceIdColumnName("INDICATIVO_ID")
                 .targetIdFieldName("id")
                 .columnMapping(Map.ofEntries(
@@ -306,7 +306,7 @@ public class MigrationService {
 
         configs.add(TableMigrationConfig.builder()
                 .sourceTableName("PREFIJO")
-                .targetEntityClassName("com.infomedia.abacox.telephonypricing.entity.Prefix")
+                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.Prefix")
                 .sourceIdColumnName("PREFIJO_ID")
                 .targetIdFieldName("id")
                 .columnMapping(Map.ofEntries(
@@ -326,7 +326,7 @@ public class MigrationService {
 
         configs.add(TableMigrationConfig.builder()
                 .sourceTableName("TIPOTELECFG")
-                .targetEntityClassName("com.infomedia.abacox.telephonypricing.entity.TelephonyTypeConfig")
+                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.TelephonyTypeConfig")
                 .sourceIdColumnName("TIPOTELECFG_ID")
                 .targetIdFieldName("id")
                 .columnMapping(Map.ofEntries(
@@ -345,7 +345,7 @@ public class MigrationService {
         // Level 3: Depend on Level 2 or lower
         configs.add(TableMigrationConfig.builder()
                 .sourceTableName("BANDA")
-                .targetEntityClassName("com.infomedia.abacox.telephonypricing.entity.Band")
+                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.Band")
                 .sourceIdColumnName("BANDA_ID")
                 .targetIdFieldName("id")
                 .columnMapping(Map.ofEntries(
@@ -364,7 +364,7 @@ public class MigrationService {
 
         configs.add(TableMigrationConfig.builder()
                 .sourceTableName("EMPRESA")
-                .targetEntityClassName("com.infomedia.abacox.telephonypricing.entity.Company")
+                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.Company")
                 .sourceIdColumnName("EMPRESA_ID")
                 .targetIdFieldName("id")
                 .columnMapping(Map.ofEntries(
@@ -384,7 +384,7 @@ public class MigrationService {
 
         configs.add(TableMigrationConfig.builder()
                 .sourceTableName("COMUBICACION")
-                .targetEntityClassName("com.infomedia.abacox.telephonypricing.entity.CommunicationLocation")
+                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.CommunicationLocation")
                 .sourceIdColumnName("COMUBICACION_ID")
                 .targetIdFieldName("id")
                 .columnMapping(Map.ofEntries(
@@ -406,7 +406,7 @@ public class MigrationService {
 
         configs.add(TableMigrationConfig.builder()
                 .sourceTableName("SERIE")
-                .targetEntityClassName("com.infomedia.abacox.telephonypricing.entity.Series")
+                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.Series")
                 .sourceIdColumnName("SERIE_ID")
                 .targetIdFieldName("id")
                 .columnMapping(Map.ofEntries(
@@ -424,7 +424,7 @@ public class MigrationService {
 
         configs.add(TableMigrationConfig.builder()
                 .sourceTableName("servespecial")
-                .targetEntityClassName("com.infomedia.abacox.telephonypricing.entity.SpecialService")
+                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.SpecialService")
                 .sourceIdColumnName("SERVESPECIAL_ID")
                 .targetIdFieldName("id")
                 .columnMapping(Map.ofEntries(
@@ -445,7 +445,7 @@ public class MigrationService {
         // Level 4: Depend on Level 3 or lower (Self-referencing tables placed here)
         configs.add(TableMigrationConfig.builder()
                 .sourceTableName("SUBDIRECCION")
-                .targetEntityClassName("com.infomedia.abacox.telephonypricing.entity.Subdivision")
+                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.Subdivision")
                 .sourceIdColumnName("SUBDIRECCION_ID")
                 .targetIdFieldName("id")
                 .columnMapping(Map.ofEntries(
@@ -460,7 +460,7 @@ public class MigrationService {
 
         configs.add(TableMigrationConfig.builder()
                 .sourceTableName("CENTROCOSTOS")
-                .targetEntityClassName("com.infomedia.abacox.telephonypricing.entity.CostCenter")
+                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.CostCenter")
                 .sourceIdColumnName("CENTROCOSTOS_ID")
                 .targetIdFieldName("id")
                 .columnMapping(Map.ofEntries(
@@ -477,7 +477,7 @@ public class MigrationService {
 
         configs.add(TableMigrationConfig.builder()
                 .sourceTableName("BANDAINDICA")
-                .targetEntityClassName("com.infomedia.abacox.telephonypricing.entity.BandIndicator")
+                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.BandIndicator")
                 .sourceIdColumnName("BANDAINDICA_ID")
                 .targetIdFieldName("id")
                 .columnMapping(Map.ofEntries(
@@ -492,7 +492,7 @@ public class MigrationService {
 
         configs.add(TableMigrationConfig.builder()
                 .sourceTableName("valorespecial")
-                .targetEntityClassName("com.infomedia.abacox.telephonypricing.entity.SpecialRateValue")
+                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.SpecialRateValue")
                 .sourceIdColumnName("VALORESPECIAL_ID")
                 .targetIdFieldName("id")
                 .columnMapping(Map.ofEntries(
@@ -524,7 +524,7 @@ public class MigrationService {
 
         configs.add(TableMigrationConfig.builder()
                 .sourceTableName("celulink")
-                .targetEntityClassName("com.infomedia.abacox.telephonypricing.entity.Trunk")
+                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.Trunk")
                 .sourceIdColumnName("CELULINK_ID")
                 .targetIdFieldName("id")
                 .columnMapping(Map.ofEntries(
@@ -544,7 +544,7 @@ public class MigrationService {
         // Level 5: Depend on Level 4 or lower
         configs.add(TableMigrationConfig.builder()
                 .sourceTableName("FUNCIONARIO")
-                .targetEntityClassName("com.infomedia.abacox.telephonypricing.entity.Employee")
+                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.Employee")
                 .sourceIdColumnName("FUNCIONARIO_ID")
                 .targetIdFieldName("id")
                 .columnMapping(Map.ofEntries(
@@ -575,7 +575,7 @@ public class MigrationService {
 
         configs.add(TableMigrationConfig.builder()
                 .sourceTableName("rangoext")
-                .targetEntityClassName("com.infomedia.abacox.telephonypricing.entity.ExtensionRange")
+                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.ExtensionRange")
                 .sourceIdColumnName("RANGOEXT_ID")
                 .targetIdFieldName("id")
                 .columnMapping(Map.ofEntries(
@@ -596,7 +596,7 @@ public class MigrationService {
 
         configs.add(TableMigrationConfig.builder()
                 .sourceTableName("pbxespecial")
-                .targetEntityClassName("com.infomedia.abacox.telephonypricing.entity.PbxSpecialRule")
+                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.PbxSpecialRule")
                 .sourceIdColumnName("PBXESPECIAL_ID")
                 .targetIdFieldName("id")
                 .columnMapping(Map.ofEntries(
@@ -616,7 +616,7 @@ public class MigrationService {
 
         configs.add(TableMigrationConfig.builder()
                 .sourceTableName("tarifatroncal")
-                .targetEntityClassName("com.infomedia.abacox.telephonypricing.entity.TrunkRate")
+                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.TrunkRate")
                 .sourceIdColumnName("TARIFATRONCAL_ID")
                 .targetIdFieldName("id")
                 .columnMapping(Map.ofEntries(
@@ -638,7 +638,7 @@ public class MigrationService {
         // ADDED: OfficeDetails (DATOSOFICINA) - Depends on Subdivision (L4) and Indicator (L2)
         configs.add(TableMigrationConfig.builder()
                 .sourceTableName("DATOSOFICINA")
-                .targetEntityClassName("com.infomedia.abacox.telephonypricing.entity.OfficeDetails")
+                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.OfficeDetails")
                 .sourceIdColumnName("DATOSOFICINA_ID")
                 .targetIdFieldName("id")
                 .columnMapping(Map.ofEntries(
@@ -656,7 +656,7 @@ public class MigrationService {
         // Level 6: Depend on Level 5 or lower
         configs.add(TableMigrationConfig.builder()
                 .sourceTableName("DIRECTORIO")
-                .targetEntityClassName("com.infomedia.abacox.telephonypricing.entity.Contact")
+                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.Contact")
                 .sourceIdColumnName("DIRECTORIO_ID")
                 .targetIdFieldName("id")
                 .columnMapping(Map.ofEntries(
@@ -676,7 +676,7 @@ public class MigrationService {
 
         configs.add(TableMigrationConfig.builder()
                 .sourceTableName("reglatroncal")
-                .targetEntityClassName("com.infomedia.abacox.telephonypricing.entity.TrunkRule")
+                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.TrunkRule")
                 .sourceIdColumnName("REGLATRONCAL_ID")
                 .targetIdFieldName("id")
                 .columnMapping(Map.ofEntries(
@@ -699,7 +699,7 @@ public class MigrationService {
         // ADDED: SubdivisionManager (JEFESUBDIR) - Depends on Subdivision (L4) and Employee (L5)
         configs.add(TableMigrationConfig.builder()
                 .sourceTableName("JEFESUBDIR")
-                .targetEntityClassName("com.infomedia.abacox.telephonypricing.entity.SubdivisionManager")
+                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.SubdivisionManager")
                 .sourceIdColumnName("JEFESUBDIR_ID")
                 .targetIdFieldName("id")
                 .columnMapping(Map.ofEntries(
@@ -718,7 +718,7 @@ public class MigrationService {
         /*
         configs.add(TableMigrationConfig.builder()
                 .sourceTableName("fileinfo") // Assuming source table name
-                .targetEntityClassName("com.infomedia.abacox.telephonypricing.entity.FileInfo")
+                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.FileInfo")
                 .sourceIdColumnName("FILEINFO_ID")
                 .targetIdFieldName("id")
                 .columnMapping(Map.ofEntries(
@@ -740,7 +740,7 @@ public class MigrationService {
         // but if you are migrating existing ACUMTOTAL data:
         configs.add(TableMigrationConfig.builder()
                 .sourceTableName("ACUMTOTAL")
-                .targetEntityClassName("com.infomedia.abacox.telephonypricing.entity.CallRecord")
+                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.CallRecord")
                 .sourceIdColumnName("ACUMTOTAL_ID")
                 .targetIdFieldName("id")
                 .columnMapping(Map.ofEntries(

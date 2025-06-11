@@ -1,7 +1,7 @@
 package com.infomedia.abacox.telephonypricing.dto.callcategory;
 
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivableDto;
-import com.infomedia.abacox.telephonypricing.entity.CallCategory;
+import com.infomedia.abacox.telephonypricing.db.entity.CallCategory;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;

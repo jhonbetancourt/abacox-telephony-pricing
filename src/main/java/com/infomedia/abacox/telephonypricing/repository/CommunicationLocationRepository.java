@@ -1,6 +1,6 @@
 package com.infomedia.abacox.telephonypricing.repository;
 
-import com.infomedia.abacox.telephonypricing.entity.CommunicationLocation;
+import com.infomedia.abacox.telephonypricing.db.entity.CommunicationLocation;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 

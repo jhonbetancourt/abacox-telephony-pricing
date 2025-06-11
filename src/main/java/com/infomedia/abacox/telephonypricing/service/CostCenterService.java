@@ -3,7 +3,7 @@ package com.infomedia.abacox.telephonypricing.service;
 import com.infomedia.abacox.telephonypricing.component.export.excel.GenericExcelGenerator;
 import com.infomedia.abacox.telephonypricing.dto.costcenter.CreateCostCenter;
 import com.infomedia.abacox.telephonypricing.dto.costcenter.UpdateCostCenter;
-import com.infomedia.abacox.telephonypricing.entity.CostCenter;
+import com.infomedia.abacox.telephonypricing.db.entity.CostCenter;
 import com.infomedia.abacox.telephonypricing.repository.CostCenterRepository;
 import com.infomedia.abacox.telephonypricing.service.common.CrudService;
 import org.springframework.core.io.ByteArrayResource;

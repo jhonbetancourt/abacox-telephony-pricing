@@ -6,7 +6,7 @@ import com.infomedia.abacox.telephonypricing.dto.callcategory.CallCategoryDto;
 import com.infomedia.abacox.telephonypricing.dto.callcategory.CreateCallCategory;
 import com.infomedia.abacox.telephonypricing.dto.callcategory.UpdateCallCategory;
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivationDto;
-import com.infomedia.abacox.telephonypricing.entity.CallCategory;
+import com.infomedia.abacox.telephonypricing.db.entity.CallCategory;
 import com.infomedia.abacox.telephonypricing.service.CallCategoryService;
 import com.turkraft.springfilter.boot.Filter;
 import io.swagger.v3.oas.annotations.Parameter;

@@ -6,7 +6,7 @@ import com.infomedia.abacox.telephonypricing.dto.origincountry.OriginCountryDto;
 import com.infomedia.abacox.telephonypricing.dto.origincountry.CreateOriginCountry;
 import com.infomedia.abacox.telephonypricing.dto.origincountry.UpdateOriginCountry;
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivationDto;
-import com.infomedia.abacox.telephonypricing.entity.OriginCountry;
+import com.infomedia.abacox.telephonypricing.db.entity.OriginCountry;
 import com.infomedia.abacox.telephonypricing.service.OriginCountryService;
 import com.turkraft.springfilter.boot.Filter;
 import io.swagger.v3.oas.annotations.Parameter;

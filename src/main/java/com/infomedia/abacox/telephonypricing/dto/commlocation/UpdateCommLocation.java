@@ -12,7 +12,7 @@ import org.openapitools.jackson.nullable.JsonNullable;
 import java.time.LocalDateTime;
 
 /**
- * DTO for updating {@link com.infomedia.abacox.telephonypricing.entity.CommunicationLocation}
+ * DTO for updating {@link com.infomedia.abacox.telephonypricing.db.entity.CommunicationLocation}
  */
 @EqualsAndHashCode(callSuper = false)
 @Data

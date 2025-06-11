@@ -6,7 +6,7 @@ import com.infomedia.abacox.telephonypricing.dto.trunkrate.TrunkRateDto;
 import com.infomedia.abacox.telephonypricing.dto.trunkrate.CreateTrunkRate;
 import com.infomedia.abacox.telephonypricing.dto.trunkrate.UpdateTrunkRate;
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivationDto;
-import com.infomedia.abacox.telephonypricing.entity.TrunkRate;
+import com.infomedia.abacox.telephonypricing.db.entity.TrunkRate;
 import com.infomedia.abacox.telephonypricing.service.TrunkRateService;
 import com.turkraft.springfilter.boot.Filter;
 import io.swagger.v3.oas.annotations.Parameter;

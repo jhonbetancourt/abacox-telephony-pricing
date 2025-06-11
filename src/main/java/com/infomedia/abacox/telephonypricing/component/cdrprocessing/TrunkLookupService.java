@@ -1,8 +1,8 @@
 // File: com/infomedia/abacox/telephonypricing/cdr/TrunkLookupService.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
-import com.infomedia.abacox.telephonypricing.entity.Trunk;
-import com.infomedia.abacox.telephonypricing.entity.TrunkRate;
+import com.infomedia.abacox.telephonypricing.db.entity.Trunk;
+import com.infomedia.abacox.telephonypricing.db.entity.TrunkRate;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.NoResultException;
 import jakarta.persistence.PersistenceContext;

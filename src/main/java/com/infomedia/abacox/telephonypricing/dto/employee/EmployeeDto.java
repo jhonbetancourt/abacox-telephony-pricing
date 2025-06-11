@@ -11,7 +11,7 @@ import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 
 /**
- * DTO for {@link com.infomedia.abacox.telephonypricing.entity.Employee}
+ * DTO for {@link com.infomedia.abacox.telephonypricing.db.entity.Employee}
  */
 @EqualsAndHashCode(callSuper = true)
 @Data

@@ -3,7 +3,7 @@ package com.infomedia.abacox.telephonypricing.dto.commlocation;
 import com.infomedia.abacox.telephonypricing.dto.planttype.PlantTypeDto;
 import com.infomedia.abacox.telephonypricing.dto.indicator.IndicatorDto;
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivableDto;
-import com.infomedia.abacox.telephonypricing.entity.CommunicationLocation;
+import com.infomedia.abacox.telephonypricing.db.entity.CommunicationLocation;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;

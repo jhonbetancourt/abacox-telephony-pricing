@@ -6,7 +6,7 @@ import com.infomedia.abacox.telephonypricing.dto.employee.EmployeeDto;
 import com.infomedia.abacox.telephonypricing.dto.employee.CreateEmployee;
 import com.infomedia.abacox.telephonypricing.dto.employee.UpdateEmployee;
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivationDto;
-import com.infomedia.abacox.telephonypricing.entity.Employee;
+import com.infomedia.abacox.telephonypricing.db.entity.Employee;
 import com.infomedia.abacox.telephonypricing.service.EmployeeService;
 import com.turkraft.springfilter.boot.Filter;
 import io.swagger.v3.oas.annotations.Parameter;

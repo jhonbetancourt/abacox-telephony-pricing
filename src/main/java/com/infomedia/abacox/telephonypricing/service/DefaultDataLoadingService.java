@@ -1,7 +1,7 @@
 package com.infomedia.abacox.telephonypricing.service;
 
 import com.infomedia.abacox.telephonypricing.component.csv.CsvToDatabaseLoader;
-import com.infomedia.abacox.telephonypricing.entity.*;
+import com.infomedia.abacox.telephonypricing.db.entity.*;
 import com.infomedia.abacox.telephonypricing.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;

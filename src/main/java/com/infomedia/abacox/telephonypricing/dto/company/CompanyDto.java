@@ -8,7 +8,7 @@ import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 
 /**
- * DTO for {@link com.infomedia.abacox.telephonypricing.entity.Company}
+ * DTO for {@link com.infomedia.abacox.telephonypricing.db.entity.Company}
  */
 @EqualsAndHashCode(callSuper = true)
 @Data

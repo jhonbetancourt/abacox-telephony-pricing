@@ -6,7 +6,7 @@ import com.infomedia.abacox.telephonypricing.dto.indicator.IndicatorDto;
 import com.infomedia.abacox.telephonypricing.dto.indicator.CreateIndicator;
 import com.infomedia.abacox.telephonypricing.dto.indicator.UpdateIndicator;
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivationDto;
-import com.infomedia.abacox.telephonypricing.entity.Indicator;
+import com.infomedia.abacox.telephonypricing.db.entity.Indicator;
 import com.infomedia.abacox.telephonypricing.service.IndicatorService;
 import com.turkraft.springfilter.boot.Filter;
 import io.swagger.v3.oas.annotations.Parameter;

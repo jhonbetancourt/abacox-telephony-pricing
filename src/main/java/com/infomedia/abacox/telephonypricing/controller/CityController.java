@@ -6,7 +6,7 @@ import com.infomedia.abacox.telephonypricing.dto.city.CityDto;
 import com.infomedia.abacox.telephonypricing.dto.city.CreateCity;
 import com.infomedia.abacox.telephonypricing.dto.city.UpdateCity;
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivationDto;
-import com.infomedia.abacox.telephonypricing.entity.City;
+import com.infomedia.abacox.telephonypricing.db.entity.City;
 import com.infomedia.abacox.telephonypricing.service.CityService;
 import com.turkraft.springfilter.boot.Filter;
 import io.swagger.v3.oas.annotations.Parameter;

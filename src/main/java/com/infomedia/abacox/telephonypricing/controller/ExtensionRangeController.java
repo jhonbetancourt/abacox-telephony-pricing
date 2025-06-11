@@ -6,7 +6,7 @@ import com.infomedia.abacox.telephonypricing.dto.extensionrange.ExtensionRangeDt
 import com.infomedia.abacox.telephonypricing.dto.extensionrange.CreateExtensionRange;
 import com.infomedia.abacox.telephonypricing.dto.extensionrange.UpdateExtensionRange;
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivationDto;
-import com.infomedia.abacox.telephonypricing.entity.ExtensionRange;
+import com.infomedia.abacox.telephonypricing.db.entity.ExtensionRange;
 import com.infomedia.abacox.telephonypricing.service.ExtensionRangeService;
 import com.turkraft.springfilter.boot.Filter;
 import io.swagger.v3.oas.annotations.Parameter;

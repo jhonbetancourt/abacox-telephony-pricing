@@ -1,6 +1,5 @@
 package com.infomedia.abacox.telephonypricing.dto.series;
 
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
@@ -10,7 +9,7 @@ import lombok.NoArgsConstructor;
 import org.openapitools.jackson.nullable.JsonNullable;
 
 /**
- * DTO for updating {@link com.infomedia.abacox.telephonypricing.entity.Series}
+ * DTO for updating {@link com.infomedia.abacox.telephonypricing.db.entity.Series}
  */
 @EqualsAndHashCode(callSuper = false)
 @Data

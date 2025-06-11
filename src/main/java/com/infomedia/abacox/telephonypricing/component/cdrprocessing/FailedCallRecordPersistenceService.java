@@ -1,8 +1,8 @@
 // File: com/infomedia/abacox/telephonypricing/cdr/FailedCallRecordPersistenceService.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
-import com.infomedia.abacox.telephonypricing.entity.FailedCallRecord;
-import com.infomedia.abacox.telephonypricing.entity.FileInfo;
+import com.infomedia.abacox.telephonypricing.db.entity.FailedCallRecord;
+import com.infomedia.abacox.telephonypricing.db.entity.FileInfo;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.NoResultException;
 import jakarta.persistence.PersistenceContext;

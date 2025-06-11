@@ -1,8 +1,8 @@
 // File: com/infomedia/abacox/telephonypricing/component/cdrprocessing/CallRecordPersistenceService.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
-import com.infomedia.abacox.telephonypricing.entity.CallRecord;
-import com.infomedia.abacox.telephonypricing.entity.CommunicationLocation;
+import com.infomedia.abacox.telephonypricing.db.entity.CallRecord;
+import com.infomedia.abacox.telephonypricing.db.entity.CommunicationLocation;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.NoResultException;

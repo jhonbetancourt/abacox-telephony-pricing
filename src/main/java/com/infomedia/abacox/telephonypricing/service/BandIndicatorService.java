@@ -4,7 +4,7 @@ package com.infomedia.abacox.telephonypricing.service;
 import com.infomedia.abacox.telephonypricing.component.export.excel.GenericExcelGenerator;
 import com.infomedia.abacox.telephonypricing.dto.bandindicator.CreateBandIndicator;
 import com.infomedia.abacox.telephonypricing.dto.bandindicator.UpdateBandIndicator;
-import com.infomedia.abacox.telephonypricing.entity.BandIndicator;
+import com.infomedia.abacox.telephonypricing.db.entity.BandIndicator;
 import com.infomedia.abacox.telephonypricing.repository.BandIndicatorRepository;
 import com.infomedia.abacox.telephonypricing.service.common.CrudService;
 import org.springframework.core.io.ByteArrayResource;

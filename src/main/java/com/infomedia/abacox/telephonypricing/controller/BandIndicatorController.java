@@ -5,8 +5,7 @@ import com.infomedia.abacox.telephonypricing.component.modeltools.ModelConverter
 import com.infomedia.abacox.telephonypricing.dto.bandindicator.BandIndicatorDto;
 import com.infomedia.abacox.telephonypricing.dto.bandindicator.CreateBandIndicator;
 import com.infomedia.abacox.telephonypricing.dto.bandindicator.UpdateBandIndicator;
-import com.infomedia.abacox.telephonypricing.dto.superclass.ActivationDto;
-import com.infomedia.abacox.telephonypricing.entity.BandIndicator;
+import com.infomedia.abacox.telephonypricing.db.entity.BandIndicator;
 import com.infomedia.abacox.telephonypricing.service.BandIndicatorService;
 import com.turkraft.springfilter.boot.Filter;
 import io.swagger.v3.oas.annotations.Parameter;

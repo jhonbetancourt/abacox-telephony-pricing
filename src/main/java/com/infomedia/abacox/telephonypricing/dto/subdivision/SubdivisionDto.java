@@ -1,7 +1,7 @@
 package com.infomedia.abacox.telephonypricing.dto.subdivision;
 
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivableDto;
-import com.infomedia.abacox.telephonypricing.entity.Subdivision;
+import com.infomedia.abacox.telephonypricing.db.entity.Subdivision;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;

@@ -1,7 +1,7 @@
 package com.infomedia.abacox.telephonypricing.dto.city;
 
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivableDto;
-import com.infomedia.abacox.telephonypricing.entity.City;
+import com.infomedia.abacox.telephonypricing.db.entity.City;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;

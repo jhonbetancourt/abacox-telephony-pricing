@@ -9,7 +9,7 @@ import lombok.NoArgsConstructor;
 import org.openapitools.jackson.nullable.JsonNullable;
 
 /**
- * DTO for updating {@link com.infomedia.abacox.telephonypricing.entity.Company}
+ * DTO for updating {@link com.infomedia.abacox.telephonypricing.db.entity.Company}
  */
 @EqualsAndHashCode(callSuper = false)
 @Data

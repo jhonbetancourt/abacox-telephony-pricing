@@ -6,7 +6,7 @@ import com.infomedia.abacox.telephonypricing.dto.specialservice.SpecialServiceDt
 import com.infomedia.abacox.telephonypricing.dto.specialservice.CreateSpecialService;
 import com.infomedia.abacox.telephonypricing.dto.specialservice.UpdateSpecialService;
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivationDto;
-import com.infomedia.abacox.telephonypricing.entity.SpecialService;
+import com.infomedia.abacox.telephonypricing.db.entity.SpecialService;
 import com.infomedia.abacox.telephonypricing.service.SpecialServiceService;
 import com.turkraft.springfilter.boot.Filter;
 import io.swagger.v3.oas.annotations.Parameter;

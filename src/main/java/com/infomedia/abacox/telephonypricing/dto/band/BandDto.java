@@ -3,7 +3,7 @@ package com.infomedia.abacox.telephonypricing.dto.band;
 import com.infomedia.abacox.telephonypricing.dto.indicator.IndicatorDto;
 import com.infomedia.abacox.telephonypricing.dto.prefix.PrefixDto;
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivableDto;
-import com.infomedia.abacox.telephonypricing.entity.Band;
+import com.infomedia.abacox.telephonypricing.db.entity.Band;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;

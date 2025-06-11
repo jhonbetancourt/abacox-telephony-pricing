@@ -9,7 +9,7 @@ import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
 
 /**
- * DTO for {@link com.infomedia.abacox.telephonypricing.entity.TrunkRate}
+ * DTO for {@link com.infomedia.abacox.telephonypricing.db.entity.TrunkRate}
  */
 @EqualsAndHashCode(callSuper = false)
 @Data

@@ -3,7 +3,7 @@ package com.infomedia.abacox.telephonypricing.service;
 import com.infomedia.abacox.telephonypricing.component.export.excel.GenericExcelGenerator;
 import com.infomedia.abacox.telephonypricing.dto.subdivisionmanager.CreateSubdivisionManager;
 import com.infomedia.abacox.telephonypricing.dto.subdivisionmanager.UpdateSubdivisionManager;
-import com.infomedia.abacox.telephonypricing.entity.SubdivisionManager;
+import com.infomedia.abacox.telephonypricing.db.entity.SubdivisionManager;
 import com.infomedia.abacox.telephonypricing.repository.SubdivisionManagerRepository;
 import com.infomedia.abacox.telephonypricing.service.common.CrudService;
 import org.springframework.core.io.ByteArrayResource;

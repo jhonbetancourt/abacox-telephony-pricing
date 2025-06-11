@@ -6,7 +6,7 @@ import com.infomedia.abacox.telephonypricing.dto.specialratevalue.SpecialRateVal
 import com.infomedia.abacox.telephonypricing.dto.specialratevalue.CreateSpecialRateValue;
 import com.infomedia.abacox.telephonypricing.dto.specialratevalue.UpdateSpecialRateValue;
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivationDto;
-import com.infomedia.abacox.telephonypricing.entity.SpecialRateValue;
+import com.infomedia.abacox.telephonypricing.db.entity.SpecialRateValue;
 import com.infomedia.abacox.telephonypricing.service.SpecialRateValueService;
 import com.turkraft.springfilter.boot.Filter;
 import io.swagger.v3.oas.annotations.Parameter;

@@ -1,7 +1,7 @@
 // File: com/infomedia/abacox/telephonypricing/cdr/OperatorLookupService.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
-import com.infomedia.abacox.telephonypricing.entity.Operator;
+import com.infomedia.abacox.telephonypricing.db.entity.Operator;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.NoResultException;
 import jakarta.persistence.PersistenceContext;

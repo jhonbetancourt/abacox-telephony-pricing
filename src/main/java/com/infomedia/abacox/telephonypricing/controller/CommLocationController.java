@@ -6,7 +6,7 @@ import com.infomedia.abacox.telephonypricing.dto.commlocation.CommLocationDto;
 import com.infomedia.abacox.telephonypricing.dto.commlocation.CreateCommLocation;
 import com.infomedia.abacox.telephonypricing.dto.commlocation.UpdateCommLocation;
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivationDto;
-import com.infomedia.abacox.telephonypricing.entity.CommunicationLocation;
+import com.infomedia.abacox.telephonypricing.db.entity.CommunicationLocation;
 import com.infomedia.abacox.telephonypricing.service.CommLocationService;
 import com.turkraft.springfilter.boot.Filter;
 import io.swagger.v3.oas.annotations.Parameter;

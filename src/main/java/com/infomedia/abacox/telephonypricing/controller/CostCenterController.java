@@ -6,7 +6,7 @@ import com.infomedia.abacox.telephonypricing.dto.costcenter.CostCenterDto;
 import com.infomedia.abacox.telephonypricing.dto.costcenter.CreateCostCenter;
 import com.infomedia.abacox.telephonypricing.dto.costcenter.UpdateCostCenter;
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivationDto;
-import com.infomedia.abacox.telephonypricing.entity.CostCenter;
+import com.infomedia.abacox.telephonypricing.db.entity.CostCenter;
 import com.infomedia.abacox.telephonypricing.service.CostCenterService;
 import com.turkraft.springfilter.boot.Filter;
 import io.swagger.v3.oas.annotations.Parameter;

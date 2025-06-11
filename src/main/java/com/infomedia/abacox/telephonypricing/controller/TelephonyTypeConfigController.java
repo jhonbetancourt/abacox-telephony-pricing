@@ -6,7 +6,7 @@ import com.infomedia.abacox.telephonypricing.dto.telephonytypeconfig.TelephonyTy
 import com.infomedia.abacox.telephonypricing.dto.telephonytypeconfig.CreateTelephonyTypeConfig;
 import com.infomedia.abacox.telephonypricing.dto.telephonytypeconfig.UpdateTelephonyTypeConfig;
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivationDto;
-import com.infomedia.abacox.telephonypricing.entity.TelephonyTypeConfig;
+import com.infomedia.abacox.telephonypricing.db.entity.TelephonyTypeConfig;
 import com.infomedia.abacox.telephonypricing.service.TelephonyTypeConfigService;
 import com.turkraft.springfilter.boot.Filter;
 import io.swagger.v3.oas.annotations.Parameter;

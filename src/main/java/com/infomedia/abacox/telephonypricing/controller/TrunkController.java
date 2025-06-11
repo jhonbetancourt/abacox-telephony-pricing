@@ -6,7 +6,7 @@ import com.infomedia.abacox.telephonypricing.dto.trunk.TrunkDto;
 import com.infomedia.abacox.telephonypricing.dto.trunk.CreateTrunk;
 import com.infomedia.abacox.telephonypricing.dto.trunk.UpdateTrunk;
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivationDto;
-import com.infomedia.abacox.telephonypricing.entity.Trunk;
+import com.infomedia.abacox.telephonypricing.db.entity.Trunk;
 import com.infomedia.abacox.telephonypricing.service.TrunkService;
 import com.turkraft.springfilter.boot.Filter;
 import io.swagger.v3.oas.annotations.Parameter;

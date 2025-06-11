@@ -6,7 +6,7 @@ import com.infomedia.abacox.telephonypricing.dto.prefix.PrefixDto;
 import com.infomedia.abacox.telephonypricing.dto.prefix.CreatePrefix;
 import com.infomedia.abacox.telephonypricing.dto.prefix.UpdatePrefix;
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivationDto;
-import com.infomedia.abacox.telephonypricing.entity.Prefix;
+import com.infomedia.abacox.telephonypricing.db.entity.Prefix;
 import com.infomedia.abacox.telephonypricing.service.PrefixService;
 import com.turkraft.springfilter.boot.Filter;
 import io.swagger.v3.oas.annotations.Parameter;

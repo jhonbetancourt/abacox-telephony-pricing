@@ -11,7 +11,7 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 
 /**
- * DTO for creating {@link com.infomedia.abacox.telephonypricing.entity.CommunicationLocation}
+ * DTO for creating {@link com.infomedia.abacox.telephonypricing.db.entity.CommunicationLocation}
  */
 @EqualsAndHashCode(callSuper = false)
 @Data

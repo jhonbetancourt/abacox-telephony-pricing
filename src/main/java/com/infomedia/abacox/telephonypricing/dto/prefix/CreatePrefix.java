@@ -11,7 +11,7 @@ import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
 
 /**
- * DTO for {@link com.infomedia.abacox.telephonypricing.entity.Prefix}
+ * DTO for {@link com.infomedia.abacox.telephonypricing.db.entity.Prefix}
  */
 @EqualsAndHashCode(callSuper = false)
 @Data

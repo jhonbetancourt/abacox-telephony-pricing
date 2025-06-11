@@ -9,7 +9,7 @@ import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 
 /**
- * DTO for {@link com.infomedia.abacox.telephonypricing.entity.ExtensionRange}
+ * DTO for {@link com.infomedia.abacox.telephonypricing.db.entity.ExtensionRange}
  */
 @EqualsAndHashCode(callSuper = false)
 @Data

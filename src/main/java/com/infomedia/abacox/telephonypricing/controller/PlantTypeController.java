@@ -6,7 +6,7 @@ import com.infomedia.abacox.telephonypricing.dto.planttype.PlantTypeDto;
 import com.infomedia.abacox.telephonypricing.dto.planttype.CreatePlantType;
 import com.infomedia.abacox.telephonypricing.dto.planttype.UpdatePlantType;
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivationDto;
-import com.infomedia.abacox.telephonypricing.entity.PlantType;
+import com.infomedia.abacox.telephonypricing.db.entity.PlantType;
 import com.infomedia.abacox.telephonypricing.service.PlantTypeService;
 import com.turkraft.springfilter.boot.Filter;
 import io.swagger.v3.oas.annotations.Parameter;

@@ -15,7 +15,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
- * DTO for {@link com.infomedia.abacox.telephonypricing.entity.CallRecord}
+ * DTO for {@link com.infomedia.abacox.telephonypricing.db.entity.CallRecord}
  */
 @EqualsAndHashCode(callSuper = true)
 @Data

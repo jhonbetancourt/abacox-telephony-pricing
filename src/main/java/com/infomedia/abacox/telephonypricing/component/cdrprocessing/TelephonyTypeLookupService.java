@@ -1,8 +1,8 @@
 // File: com/infomedia/abacox/telephonypricing/cdr/TelephonyTypeLookupService.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
-import com.infomedia.abacox.telephonypricing.entity.Prefix;
-import com.infomedia.abacox.telephonypricing.entity.TelephonyTypeConfig;
+import com.infomedia.abacox.telephonypricing.db.entity.Prefix;
+import com.infomedia.abacox.telephonypricing.db.entity.TelephonyTypeConfig;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.NoResultException;
 import jakarta.persistence.PersistenceContext;

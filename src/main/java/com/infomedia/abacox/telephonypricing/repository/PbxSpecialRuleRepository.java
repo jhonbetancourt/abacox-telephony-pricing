@@ -1,6 +1,6 @@
 package com.infomedia.abacox.telephonypricing.repository;
 
-import com.infomedia.abacox.telephonypricing.entity.PbxSpecialRule;
+import com.infomedia.abacox.telephonypricing.db.entity.PbxSpecialRule;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 

@@ -1,9 +1,9 @@
 // File: com/infomedia/abacox/telephonypricing/cdr/PrefixLookupService.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
-import com.infomedia.abacox.telephonypricing.entity.CommunicationLocation;
-import com.infomedia.abacox.telephonypricing.entity.Prefix;
-import com.infomedia.abacox.telephonypricing.entity.TelephonyTypeConfig;
+import com.infomedia.abacox.telephonypricing.db.entity.CommunicationLocation;
+import com.infomedia.abacox.telephonypricing.db.entity.Prefix;
+import com.infomedia.abacox.telephonypricing.db.entity.TelephonyTypeConfig;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.Tuple;

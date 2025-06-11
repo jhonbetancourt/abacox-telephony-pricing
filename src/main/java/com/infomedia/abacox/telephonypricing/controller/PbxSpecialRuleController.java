@@ -6,7 +6,7 @@ import com.infomedia.abacox.telephonypricing.dto.pbxspecialrule.PbxSpecialRuleDt
 import com.infomedia.abacox.telephonypricing.dto.pbxspecialrule.CreatePbxSpecialRule;
 import com.infomedia.abacox.telephonypricing.dto.pbxspecialrule.UpdatePbxSpecialRule;
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivationDto;
-import com.infomedia.abacox.telephonypricing.entity.PbxSpecialRule;
+import com.infomedia.abacox.telephonypricing.db.entity.PbxSpecialRule;
 import com.infomedia.abacox.telephonypricing.service.PbxSpecialRuleService;
 import com.turkraft.springfilter.boot.Filter;
 import io.swagger.v3.oas.annotations.Parameter;

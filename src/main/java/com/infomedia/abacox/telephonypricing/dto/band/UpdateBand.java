@@ -12,7 +12,7 @@ import org.openapitools.jackson.nullable.JsonNullable;
 import java.math.BigDecimal;
 
 /**
- * DTO for updating {@link com.infomedia.abacox.telephonypricing.entity.Band}
+ * DTO for updating {@link com.infomedia.abacox.telephonypricing.db.entity.Band}
  */
 @EqualsAndHashCode(callSuper = false)
 @Data

@@ -1,6 +1,6 @@
 package com.infomedia.abacox.telephonypricing.service.common;
 
-import com.infomedia.abacox.telephonypricing.entity.superclass.ActivableEntity;
+import com.infomedia.abacox.telephonypricing.db.entity.superclass.ActivableEntity;
 import com.infomedia.abacox.telephonypricing.exception.ResourceDeletionException;
 import com.infomedia.abacox.telephonypricing.exception.ResourceDisabledException;
 import com.infomedia.abacox.telephonypricing.exception.ResourceNotFoundException;

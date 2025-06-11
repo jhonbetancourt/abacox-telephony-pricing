@@ -6,7 +6,7 @@ import com.infomedia.abacox.telephonypricing.dto.jobposition.JobPositionDto;
 import com.infomedia.abacox.telephonypricing.dto.jobposition.CreateJobPosition;
 import com.infomedia.abacox.telephonypricing.dto.jobposition.UpdateJobPosition;
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivationDto;
-import com.infomedia.abacox.telephonypricing.entity.JobPosition;
+import com.infomedia.abacox.telephonypricing.db.entity.JobPosition;
 import com.infomedia.abacox.telephonypricing.service.JobPositionService;
 import com.turkraft.springfilter.boot.Filter;
 import io.swagger.v3.oas.annotations.Parameter;

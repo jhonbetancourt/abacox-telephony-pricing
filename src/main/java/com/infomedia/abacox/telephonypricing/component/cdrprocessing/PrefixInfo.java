@@ -1,7 +1,7 @@
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
-import com.infomedia.abacox.telephonypricing.entity.Prefix;
-import com.infomedia.abacox.telephonypricing.entity.TelephonyTypeConfig;
+import com.infomedia.abacox.telephonypricing.db.entity.Prefix;
+import com.infomedia.abacox.telephonypricing.db.entity.TelephonyTypeConfig;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;

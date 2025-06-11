@@ -1,7 +1,7 @@
 package com.infomedia.abacox.telephonypricing.dto.origincountry;
 
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivableDto;
-import com.infomedia.abacox.telephonypricing.entity.OriginCountry;
+import com.infomedia.abacox.telephonypricing.db.entity.OriginCountry;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
