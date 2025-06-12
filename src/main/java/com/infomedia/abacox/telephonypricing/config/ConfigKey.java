@@ -16,7 +16,7 @@ public enum ConfigKey {
     // PUBLIC KEYS
     // --- General CDR Processing ---
     SERVICE_DATE_HOUR_OFFSET("-5", true),
-    SPECIAL_VALUE_TARIFFING_ENABLED("true", true),
+    SPECIAL_VALUE_TARIFFING("true", true),
     MIN_CALL_DURATION_FOR_TARIFFING("0", true), // in seconds
     MAX_CALL_DURATION_MINUTES("2880", true), // 48 hours
     MIN_ALLOWED_CAPTURE_DATE("2000-01-01", true),

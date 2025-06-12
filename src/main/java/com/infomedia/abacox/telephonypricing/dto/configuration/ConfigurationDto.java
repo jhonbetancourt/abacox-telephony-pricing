@@ -20,7 +20,7 @@ import java.util.Map;
 @NoArgsConstructor
 public class ConfigurationDto {
     private String serviceDateHourOffset;
-    private Boolean specialValueTariffingEnabled;
+    private Boolean specialValueTariffing;
     private Integer minCallDurationForTariffing;
     private Integer maxCallDurationMinutes;
     @JsonFormat(pattern = DateTimePattern.DATE)

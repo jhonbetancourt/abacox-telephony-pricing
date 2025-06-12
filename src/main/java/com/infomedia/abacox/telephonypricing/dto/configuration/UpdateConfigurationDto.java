@@ -3,6 +3,7 @@ package com.infomedia.abacox.telephonypricing.dto.configuration;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.infomedia.abacox.telephonypricing.constants.DateTimePattern;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
@@ -25,11 +26,14 @@ import java.time.ZoneId;
 public class UpdateConfigurationDto {
 
     @NotNull
+    @Min(-18)
+    @Max(18)
+    @Schema(description = "Offset in hours for the service date. Valid range is -18 to +18.")
     private JsonNullable<String> serviceDateHourOffset = JsonNullable.undefined();
 
     @NotNull
     @Schema(description = "Enable or disable special value tariffing")
-    private JsonNullable<Boolean> specialValueTariffingEnabled = JsonNullable.undefined();
+    private JsonNullable<Boolean> specialValueTariffing = JsonNullable.undefined();
 
     @NotNull
     @Min(0)
