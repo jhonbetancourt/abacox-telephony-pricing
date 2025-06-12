@@ -13,8 +13,8 @@ public class EmployeeActivityReportDto {
     private Long employeeId;
     private String employeeName;
     private String extension;
-    private String deviceModel;
-    private String deviceType;
+   // private String deviceModel;
+   // private String deviceType;
     private String costCenterWorkOrder;
     private String subdivisionName;
     private String officeLocation;

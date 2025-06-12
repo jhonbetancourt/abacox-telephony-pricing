@@ -33,7 +33,7 @@ public class ConfigController {
         return modelConverter.fromMap(configMap, ConfigurationDto.class);
     }
 
-    @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    @PatchMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public ConfigurationDto updateConfiguration(@Valid @RequestBody UpdateConfigurationDto newConfig) {
         Map<String, Object> newConfigMap = modelConverter.toMap(newConfig);
         configService.updatePublicConfiguration(newConfigMap);

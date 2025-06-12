@@ -28,8 +28,8 @@ public class UpdateConfigurationDto {
     @NotNull
     @Min(-18)
     @Max(18)
-    @Schema(description = "Offset in hours for the service date. Valid range is -18 to +18.")
-    private JsonNullable<String> serviceDateHourOffset = JsonNullable.undefined();
+    @Schema(description = "Offset in hours for the service date")
+    private JsonNullable<Integer> serviceDateHourOffset = JsonNullable.undefined();
 
     @NotNull
     @Schema(description = "Enable or disable special value tariffing")

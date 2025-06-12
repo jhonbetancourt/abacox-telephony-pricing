@@ -19,7 +19,7 @@ import java.util.Map;
 @AllArgsConstructor
 @NoArgsConstructor
 public class ConfigurationDto {
-    private String serviceDateHourOffset;
+    private Integer serviceDateHourOffset;
     private Boolean specialValueTariffing;
     private Integer minCallDurationForTariffing;
     private Integer maxCallDurationMinutes;
