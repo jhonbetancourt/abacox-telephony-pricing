@@ -1,4 +1,3 @@
-// File: com/infomedia/abacox/telephonypricing/component/cdrprocessing/TariffCalculationService.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
 import com.infomedia.abacox.telephonypricing.db.entity.CommunicationLocation;
@@ -27,6 +26,7 @@ public class TariffCalculationService {
     private final CdrConfigService appConfigService;
     private final TelephonyTypeLookupService telephonyTypeLookupService;
     private final OperatorLookupService operatorLookupService;
+    private final CdrConfigService cdrConfigService;
 
     /**
      * PHP equivalent: procesaSaliente_Complementar and parts of evaluarDestino
@@ -373,41 +373,46 @@ public class TariffCalculationService {
              cdrData.setInitialPriceIncludesVat(cdrData.isPriceIncludesVat());
         }
 
-        Optional<SpecialRateInfo> specialRateOpt =
-            specialRateValueLookupService.getApplicableSpecialRate(
-                cdrData.getDateTimeOrigination(),
-                commLocation.getIndicatorId(),
-                cdrData.getTelephonyTypeId(),
-                cdrData.getOperatorId(),
-                destinationInfo != null ? destinationInfo.getBandId() : null
-        );
+        if (cdrConfigService.isSpecialValueTariffingEnabled()) {
+            log.debug("Special value tariffing is enabled. Looking for applicable special rates.");
+            Optional<SpecialRateInfo> specialRateOpt =
+                specialRateValueLookupService.getApplicableSpecialRate(
+                    cdrData.getDateTimeOrigination(),
+                    commLocation.getIndicatorId(),
+                    cdrData.getTelephonyTypeId(),
+                    cdrData.getOperatorId(),
+                    destinationInfo != null ? destinationInfo.getBandId() : null
+            );
 
-        if (specialRateOpt.isPresent()) {
-            SpecialRateInfo sr = specialRateOpt.get();
-            log.info("Applying special rate: {}", sr);
-            // Store current price as initial *before* applying special rate, if not already different
-            if (Objects.equals(cdrData.getInitialPricePerMinute(), cdrData.getPricePerMinute()) &&
-                cdrData.isInitialPriceIncludesVat() == cdrData.isPriceIncludesVat()) {
-                cdrData.setInitialPricePerMinute(cdrData.getPricePerMinute());
-                cdrData.setInitialPriceIncludesVat(cdrData.isPriceIncludesVat());
+            if (specialRateOpt.isPresent()) {
+                SpecialRateInfo sr = specialRateOpt.get();
+                log.info("Applying special rate: {}", sr);
+                // Store current price as initial *before* applying special rate, if not already different
+                if (Objects.equals(cdrData.getInitialPricePerMinute(), cdrData.getPricePerMinute()) &&
+                    cdrData.isInitialPriceIncludesVat() == cdrData.isPriceIncludesVat()) {
+                    cdrData.setInitialPricePerMinute(cdrData.getPricePerMinute());
+                    cdrData.setInitialPriceIncludesVat(cdrData.isPriceIncludesVat());
+                }
+
+                if (sr.valueType == 0) { // Absolute value
+                    cdrData.setPricePerMinute(sr.rateValue);
+                    cdrData.setPriceIncludesVat(sr.includesVat);
+                } else { // Percentage discount
+                    BigDecimal currentRateNoVat = cdrData.isPriceIncludesVat() && cdrData.getVatRate() != null && cdrData.getVatRate().compareTo(BigDecimal.ZERO) > 0 ?
+                        cdrData.getPricePerMinute().divide(BigDecimal.ONE.add(cdrData.getVatRate().divide(BigDecimal.valueOf(100), 8, RoundingMode.HALF_UP)), 8, RoundingMode.HALF_UP) :
+                        cdrData.getPricePerMinute();
+
+                    BigDecimal discountPercentage = sr.rateValue;
+                    BigDecimal discountFactor = BigDecimal.ONE.subtract(discountPercentage.divide(BigDecimal.valueOf(100), 8, RoundingMode.HALF_UP));
+                    cdrData.setPricePerMinute(currentRateNoVat.multiply(discountFactor));
+                    cdrData.setPriceIncludesVat(false);
+                    cdrData.setSpecialRateDiscountPercentage(discountPercentage);
+                }
+                cdrData.setVatRate(sr.vatRate);
+                cdrData.setTelephonyTypeName(cdrData.getTelephonyTypeName() + " (Special Rate)");
             }
-
-            if (sr.valueType == 0) { // Absolute value
-                cdrData.setPricePerMinute(sr.rateValue);
-                cdrData.setPriceIncludesVat(sr.includesVat);
-            } else { // Percentage discount
-                BigDecimal currentRateNoVat = cdrData.isPriceIncludesVat() && cdrData.getVatRate() != null && cdrData.getVatRate().compareTo(BigDecimal.ZERO) > 0 ?
-                    cdrData.getPricePerMinute().divide(BigDecimal.ONE.add(cdrData.getVatRate().divide(BigDecimal.valueOf(100), 8, RoundingMode.HALF_UP)), 8, RoundingMode.HALF_UP) :
-                    cdrData.getPricePerMinute();
-
-                BigDecimal discountPercentage = sr.rateValue;
-                BigDecimal discountFactor = BigDecimal.ONE.subtract(discountPercentage.divide(BigDecimal.valueOf(100), 8, RoundingMode.HALF_UP));
-                cdrData.setPricePerMinute(currentRateNoVat.multiply(discountFactor));
-                cdrData.setPriceIncludesVat(false);
-                cdrData.setSpecialRateDiscountPercentage(discountPercentage);
-            }
-            cdrData.setVatRate(sr.vatRate);
-            cdrData.setTelephonyTypeName(cdrData.getTelephonyTypeName() + " (Special Rate)");
+        } else {
+            log.debug("Special value tariffing is disabled. Skipping special rate lookup.");
         }
 
         if (cdrData.getCallDirection() != CallDirection.INCOMING && cdrData.getDestDeviceName() != null && !cdrData.getDestDeviceName().isEmpty()) {

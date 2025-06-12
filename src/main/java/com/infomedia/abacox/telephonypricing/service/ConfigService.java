@@ -4,6 +4,7 @@ import com.infomedia.abacox.telephonypricing.config.ConfigKey;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -21,13 +22,24 @@ public class ConfigService {
         return configManagerService.getConfigurationByKeys(publicKeysAndDefaults);
     }
 
-    public Map<String, Object> updatePublicConfiguration(Map<String, Object> newConfig) {
+    public void updatePublicConfiguration(Map<String, Object> newConfig) {
         List<String> publicKeys = ConfigKey.getPublicKeys().stream().map(ConfigKey::getKey).toList();
+
         Map<String, String> filteredConfig = newConfig.entrySet().stream()
                 .filter(entry -> publicKeys.contains(entry.getKey()))
-                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().toString()));
+                .collect(
+                        // 1. Supplier: How to create the map
+                        HashMap::new,
+                        // 2. Accumulator: How to add an entry to the map
+                        (map, entry) -> map.put(
+                                entry.getKey(),
+                                entry.getValue() == null ? null : entry.getValue().toString()
+                        ),
+                        // 3. Combiner: How to merge two maps (for parallel streams)
+                        HashMap::putAll
+                );
+
         configManagerService.updateConfiguration(filteredConfig);
-        return getPublicConfiguration();
     }
 
     public void updateValue(ConfigKey configKey, String newValue) {

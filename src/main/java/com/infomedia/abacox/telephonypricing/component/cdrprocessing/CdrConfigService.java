@@ -8,6 +8,7 @@ import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
 
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 
 @Service
 @Log4j2
@@ -22,9 +23,10 @@ public class CdrConfigService {
     public static final long DEFAULT_OPERATOR_ID_FOR_INTERNAL = 0L;
 
     public ZoneId getTargetDatabaseZoneId() {
-        String zoneIdStr = configService.getValue(ConfigKey.TARGET_DATABASE_ZONE_ID);
+        String zoneIdStr = configService.getValue(ConfigKey.SERVICE_DATE_HOUR_OFFSET);
         try {
-            return ZoneId.of(zoneIdStr);
+            int offsetHours = Integer.parseInt(zoneIdStr);
+            return ZoneOffset.ofHours(offsetHours);
         } catch (Exception e) {
             log.error("Invalid ZoneId configured: '{}'. Defaulting to UTC.", zoneIdStr, e);
             return ZoneId.of("UTC");

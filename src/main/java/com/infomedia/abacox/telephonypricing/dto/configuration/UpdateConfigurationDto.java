@@ -25,8 +25,7 @@ import java.time.ZoneId;
 public class UpdateConfigurationDto {
 
     @NotNull
-    @Schema(description = "Timezone ID for the database, e.g., 'America/Bogota'")
-    private JsonNullable<String> targetDatabaseTimezone = JsonNullable.undefined();
+    private JsonNullable<String> serviceDateHourOffset = JsonNullable.undefined();
 
     @NotNull
     @Schema(description = "Enable or disable special value tariffing")

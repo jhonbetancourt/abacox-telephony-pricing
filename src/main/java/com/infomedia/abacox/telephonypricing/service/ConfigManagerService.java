@@ -22,14 +22,18 @@ import java.util.stream.Collectors;
  * - Read operations (getValue, findValue) are served directly from the cache.
  * - Write operations (setValue, updateConfiguration) update both the database and the cache to ensure consistency.
  *
- * The service also provides a thread-safe callback mechanism for components that need to react to configuration changes.
+ * This implementation uses a "Null Object Pattern" to store null values in the ConcurrentHashMap cache,
+ * which does not natively support nulls.
  */
 @Service
 @Log4j2
 public class ConfigManagerService extends CrudService<ConfigValue, Long, ConfigValueRepository> {
 
-    // Thread-safe cache for configuration values. Key: ConfigKey, Value: String
-    private final Map<String, String> configCache = new ConcurrentHashMap<>();
+    // A special, private object used to represent null values in the ConcurrentHashMap.
+    private static final Object NULL_PLACEHOLDER = new Object();
+
+    // Thread-safe cache. The value is Object to accommodate both Strings and the NULL_PLACEHOLDER.
+    private final Map<String, Object> configCache = new ConcurrentHashMap<>();
 
     // Thread-safe map for update callbacks. The list of callbacks is also thread-safe.
     private final Map<String, List<UpdateCallback>> updateCallbacks = new ConcurrentHashMap<>();
@@ -39,20 +43,40 @@ public class ConfigManagerService extends CrudService<ConfigValue, Long, ConfigV
     }
 
     /**
+     * Encodes a String value for storage in the cache. Converts null to the placeholder.
+     */
+    private Object encodeValue(String value) {
+        return value == null ? NULL_PLACEHOLDER : value;
+    }
+
+    /**
+     * Decodes an Object from the cache. Converts the placeholder back to null.
+     */
+    private String decodeValue(Object storedValue) {
+        return storedValue == NULL_PLACEHOLDER ? null : (String) storedValue;
+    }
+
+    /**
      * Loads all configuration values from the database into the cache on application startup.
      */
     @PostConstruct
     public void initializeCache() {
         log.info("Initializing configuration cache...");
-        Map<String, ConfigValue> dbValues = getRepository().findAll().stream()
-                .collect(Collectors.toMap(ConfigValue::getKey, Function.identity()));
-        configCache.putAll(dbValues.entrySet().stream()
-                .collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().getValue())));
+        // We cannot use putAll directly; we must encode each value.
+        getRepository().findAll().forEach(configValue -> {
+            configCache.put(configValue.getKey(), encodeValue(configValue.getValue()));
+        });
         log.info("Configuration cache initialized with {} entries.", configCache.size());
     }
 
     public String getValue(String configKey, String defaultValue) {
-        return configCache.getOrDefault(configKey, defaultValue);
+        Object storedValue = configCache.get(configKey);
+        // If the key doesn't exist in the cache, storedValue will be null.
+        if (storedValue == null) {
+            return defaultValue;
+        }
+        // If the key exists, decode its value (which might be null).
+        return decodeValue(storedValue);
     }
 
     @Transactional
@@ -61,7 +85,8 @@ public class ConfigManagerService extends CrudService<ConfigValue, Long, ConfigV
     }
 
     protected void setByKey(String configKey, String newValue) {
-        String oldValue = configCache.get(configKey);
+        // Decode the old value from the cache for comparison.
+        String oldValue = decodeValue(configCache.get(configKey));
 
         // Only proceed if the value has actually changed
         if (Objects.equals(oldValue, newValue)) {
@@ -75,59 +100,61 @@ public class ConfigManagerService extends CrudService<ConfigValue, Long, ConfigV
         configValue.setValue(newValue);
         getRepository().save(configValue);
 
-        // Update the cache (Write-through)
-        configCache.put(configKey, newValue);
+        // Update the cache (Write-through), encoding the new value.
+        configCache.put(configKey, encodeValue(newValue));
         log.info("Updated config key '{}' to new value.", configKey);
 
-        // Trigger callbacks asynchronously if the value changed
+        // Trigger callbacks with the original (decoded) new value.
         onUpdateValue(configKey, newValue);
     }
 
     public Map<String, Object> getConfiguration() {
-        return new HashMap<>(configCache);
+        // Decode all values before returning the map to the caller.
+        return configCache.entrySet().stream()
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        entry -> decodeValue(entry.getValue())
+                ));
     }
 
     public Map<String, Object> getConfigurationByKeys(List<String> keys) {
         return keys.stream()
                 .filter(configCache::containsKey)
-                .collect(Collectors.toMap(Function.identity(), configCache::get));
+                .collect(Collectors.toMap(
+                        Function.identity(),
+                        key -> decodeValue(configCache.get(key))
+                ));
     }
 
     public Map<String, Object> getConfigurationByKeys(Map<String, String> keysAndDefaults) {
         return keysAndDefaults.entrySet().stream()
                 .collect(Collectors.toMap(
                         Map.Entry::getKey,
-                        entry -> configCache.getOrDefault(entry.getKey(), entry.getValue())
+                        entry -> {
+                            Object storedValue = configCache.get(entry.getKey());
+                            // If key is not in cache, use the provided default.
+                            // Otherwise, decode the value from the cache.
+                            return storedValue == null ? entry.getValue() : decodeValue(storedValue);
+                        }
                 ));
     }
 
     @Transactional
     public void updateConfiguration(Map<String, String> configMap) {
+        // The map passed in can contain nulls, and setByKey handles them correctly.
         configMap.forEach(this::setByKey);
     }
 
-    // --- Callback Mechanism ---
+    // --- Callback Mechanism (No changes needed here) ---
 
     public interface UpdateCallback {
         <T> void onUpdate(T value);
     }
 
-    /**
-     * Registers a callback to be executed when a specific configuration value changes.
-     *
-     * @param configKey The key to monitor.
-     * @param callback  The callback to execute.
-     */
     public void registerUpdateCallback(String configKey, UpdateCallback callback) {
         updateCallbacks.computeIfAbsent(configKey, k -> new CopyOnWriteArrayList<>()).add(callback);
     }
 
-    /**
-     * Unregisters a previously registered callback.
-     *
-     * @param configKey The key the callback was registered for.
-     * @param callback  The callback to remove.
-     */
     public void unregisterUpdateCallback(String configKey, UpdateCallback callback) {
         List<UpdateCallback> callbacks = updateCallbacks.get(configKey);
         if (callbacks != null) {
@@ -141,6 +168,7 @@ public class ConfigManagerService extends CrudService<ConfigValue, Long, ConfigV
             callbacks.forEach(callback ->
                     new Thread(() -> {
                         try {
+                            // The callback receives the actual value (e.g., a null String), not the placeholder.
                             callback.onUpdate(value);
                         } catch (Exception e) {
                             log.error("Error executing update callback for key '{}'", configKey, e);

@@ -15,7 +15,7 @@ public enum ConfigKey {
 
     // PUBLIC KEYS
     // --- General CDR Processing ---
-    TARGET_DATABASE_ZONE_ID("America/Bogota", true),
+    SERVICE_DATE_HOUR_OFFSET("-5", true),
     SPECIAL_VALUE_TARIFFING_ENABLED("true", true),
     MIN_CALL_DURATION_FOR_TARIFFING("0", true), // in seconds
     MAX_CALL_DURATION_MINUTES("2880", true), // 48 hours
