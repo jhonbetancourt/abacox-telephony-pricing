@@ -22,7 +22,7 @@ public class CdrConfigService {
     // Original PHP: define('_IMDEX_MAXLINEAS', 500);
     public static final int CDR_PROCESSING_BATCH_SIZE = 500;
     // Original PHP: Hardcoded value 0 for internal operator lookups
-    public static final long DEFAULT_OPERATOR_ID_FOR_INTERNAL = 0L;
+    public static final Long DEFAULT_OPERATOR_ID_FOR_INTERNAL = null;
 
     public ZoneId getTargetDatabaseZoneId() {
         // This is a new concept for Java's timezone handling, no direct PHP equivalent.
