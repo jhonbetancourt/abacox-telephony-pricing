@@ -37,11 +37,16 @@ public class JobPositionService extends CrudService<JobPosition, Long, JobPositi
         return save(jobPosition);
     }
 
-    public ByteArrayResource exportExcel(Specification<JobPosition> specification, Pageable pageable, Map<String, String> alternativeHeaders, Set<String> excludeColumns) {
+    public ByteArrayResource exportExcel(Specification<JobPosition> specification, Pageable pageable, Map<String, String> alternativeHeaders
+            , Set<String> excludeColumns, Set<String> includeColumns, Map<String, Map<String, String>> valueReplacements) {
         Page<JobPosition> collection = find(specification, pageable);
         try {
-            InputStream inputStream = GenericExcelGenerator.generateExcelInputStream(collection.toList()
-                    , Set.of(), alternativeHeaders, excludeColumns);
+            GenericExcelGenerator.ExcelGeneratorBuilder<?> builder = GenericExcelGenerator.builder(collection.toList());
+            if (alternativeHeaders != null) builder.withAlternativeHeaderNames(alternativeHeaders);
+            if (excludeColumns != null) builder.withExcludedColumnNames(excludeColumns);
+            if (includeColumns != null) builder.withIncludedColumnNames(includeColumns);
+            if (valueReplacements != null) builder.withValueReplacements(valueReplacements);
+            InputStream inputStream = builder.generateAsInputStream();
             return new ByteArrayResource(inputStream.readAllBytes());
         } catch (IOException e) {
             throw new RuntimeException(e);

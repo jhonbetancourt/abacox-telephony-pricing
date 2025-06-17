@@ -47,11 +47,15 @@ public class BandService extends CrudService<Band, Long, BandRepository> {
         return save(band);
     }
 
-    public ByteArrayResource exportExcel(Specification<Band> specification, Pageable pageable, Map<String, String> alternativeHeaders, Set<String> excludeColumns) {
+    public ByteArrayResource exportExcel(Specification<Band> specification, Pageable pageable, Map<String, String> alternativeHeaders
+            , Set<String> excludeColumns, Set<String> includeColumns, Map<String, Map<String, String>> valueReplacements) {
         Page<Band> collection = find(specification, pageable);
         try {
-            InputStream inputStream = GenericExcelGenerator.generateExcelInputStream(collection.toList()
-                    , Set.of(), alternativeHeaders, excludeColumns);
+            InputStream inputStream = GenericExcelGenerator.builder(collection.toList())
+                    .withAlternativeHeaderNames(alternativeHeaders==null? Map.of() : alternativeHeaders)
+                    .withExcludedColumnNames(excludeColumns==null? Set.of() : excludeColumns)
+                    .withValueReplacements(valueReplacements==null? Map.of() : valueReplacements)
+                    .generateAsInputStream();
             return new ByteArrayResource(inputStream.readAllBytes());
         } catch (IOException e) {
             throw new RuntimeException(e);

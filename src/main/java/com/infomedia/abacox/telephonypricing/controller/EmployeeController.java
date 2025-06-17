@@ -1,6 +1,6 @@
 package com.infomedia.abacox.telephonypricing.controller;
 
-import com.infomedia.abacox.telephonypricing.component.export.excel.ParseUtils;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.infomedia.abacox.telephonypricing.component.modeltools.ModelConverter;
 import com.infomedia.abacox.telephonypricing.dto.employee.EmployeeDto;
 import com.infomedia.abacox.telephonypricing.dto.employee.CreateEmployee;
@@ -24,6 +24,11 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.Base64;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 @RequiredArgsConstructor
 @RestController
@@ -72,13 +77,24 @@ public class EmployeeController {
             , @RequestParam(required = false) String filter, @RequestParam(required = false) Integer page
             , @RequestParam(required = false) Integer size, @RequestParam(required = false) String sort
             , @RequestParam(required = false) String alternativeHeaders
-            , @RequestParam(required = false) String excludeColumns) {
+            , @RequestParam(required = false) String excludeColumns
+            , @RequestParam(required = false) String includeColumns
+            , @RequestParam(required = false) String valueReplacements) {
+
+        Map<String, String> alternativeHeadersMap = modelConverter.convert(alternativeHeaders==null?null:
+                new String(Base64.getDecoder().decode(alternativeHeaders)), new TypeReference<Map<String, String>>() {});
+        Set<String> excludeColumnsList = modelConverter.convert(excludeColumns==null?null:
+                new String(Base64.getDecoder().decode(excludeColumns)), new TypeReference<Set<String>>() {});
+        Set<String> includeColumnsList = modelConverter.convert(includeColumns==null?null:
+                new String(Base64.getDecoder().decode(includeColumns)), new TypeReference<Set<String>>() {});
+        Map<String, Map<String, String>> valueReplacementsMap = modelConverter.convert(valueReplacements==null?null:
+                new String(Base64.getDecoder().decode(valueReplacements)), new TypeReference<Map<String, Map<String, String>>>() {});
 
         ByteArrayResource resource = employeeService.exportExcel(spec, pageable
-                , ParseUtils.parseAlternativeHeaders(alternativeHeaders), ParseUtils.parseExcludeColumns(excludeColumns));
+                , alternativeHeadersMap, excludeColumnsList, includeColumnsList, valueReplacementsMap);
 
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment;filename=emoployees.xlsx")
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment;filename=employees.xlsx")
                 .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
                 .body(resource);
     }

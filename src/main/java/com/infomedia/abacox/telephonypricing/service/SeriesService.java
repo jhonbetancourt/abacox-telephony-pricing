@@ -46,11 +46,16 @@ public class SeriesService extends CrudService<Series, Long, SeriesRepository> {
         return save(series);
     }
 
-    public ByteArrayResource exportExcel(Specification<Series> specification, Pageable pageable, Map<String, String> alternativeHeaders, Set<String> excludeColumns) {
+    public ByteArrayResource exportExcel(Specification<Series> specification, Pageable pageable, Map<String, String> alternativeHeaders
+            , Set<String> excludeColumns, Set<String> includeColumns, Map<String, Map<String, String>> valueReplacements) {
         Page<Series> collection = find(specification, pageable);
         try {
-            InputStream inputStream = GenericExcelGenerator.generateExcelInputStream(collection.toList()
-                    , Set.of(), alternativeHeaders, excludeColumns);
+            GenericExcelGenerator.ExcelGeneratorBuilder<?> builder = GenericExcelGenerator.builder(collection.toList());
+            if (alternativeHeaders != null) builder.withAlternativeHeaderNames(alternativeHeaders);
+            if (excludeColumns != null) builder.withExcludedColumnNames(excludeColumns);
+            if (includeColumns != null) builder.withIncludedColumnNames(includeColumns);
+            if (valueReplacements != null) builder.withValueReplacements(valueReplacements);
+            InputStream inputStream = builder.generateAsInputStream();
             return new ByteArrayResource(inputStream.readAllBytes());
         } catch (IOException e) {
             throw new RuntimeException(e);
