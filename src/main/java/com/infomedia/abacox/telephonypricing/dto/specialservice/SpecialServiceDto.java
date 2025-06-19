@@ -3,7 +3,6 @@ package com.infomedia.abacox.telephonypricing.dto.specialservice;
 import com.infomedia.abacox.telephonypricing.dto.indicator.IndicatorDto; // Assuming this exists
 import com.infomedia.abacox.telephonypricing.dto.origincountry.OriginCountryDto; // Assuming this exists
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivableDto;
-import com.infomedia.abacox.telephonypricing.dto.superclass.AuditedDto; // Assuming this exists
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;

@@ -1,15 +1,10 @@
 package com.infomedia.abacox.telephonypricing.dto.configuration;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
-import com.infomedia.abacox.telephonypricing.config.ConfigKey;
 import com.infomedia.abacox.telephonypricing.constants.DateTimePattern;
 import lombok.*;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
-import java.util.HashMap;
-import java.util.Map;
 
 /**
  * DTO for reading the complete set of CDR processing configurations.
