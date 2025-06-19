@@ -1,13 +1,10 @@
 package com.infomedia.abacox.telephonypricing.controller;
 
-import com.fasterxml.jackson.core.type.TypeReference;
+import com.infomedia.abacox.telephonypricing.component.export.excel.ExcelGeneratorBuilder;
+import com.infomedia.abacox.telephonypricing.component.export.excel.ExportParamProcessor;
 import com.infomedia.abacox.telephonypricing.component.modeltools.ModelConverter;
-import com.infomedia.abacox.telephonypricing.constants.DateTimePattern;
 import com.infomedia.abacox.telephonypricing.dto.callrecord.CallRecordDto;
-import com.infomedia.abacox.telephonypricing.dto.callrecord.CorporateReportDto;
-import com.infomedia.abacox.telephonypricing.dto.callrecord.EmployeeActivityReportDto;
 import com.infomedia.abacox.telephonypricing.db.entity.CallRecord;
-import com.infomedia.abacox.telephonypricing.db.view.CorporateReportView;
 import com.infomedia.abacox.telephonypricing.service.CallRecordService;
 import com.turkraft.springfilter.boot.Filter;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -20,17 +17,11 @@ import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.Base64;
-import java.util.Map;
-import java.util.Set;
-
-import java.time.LocalDateTime;
 
 @RequiredArgsConstructor
 @RestController
@@ -44,6 +35,7 @@ public class CallRecordController {
 
     private final CallRecordService callRecordService;
     private final ModelConverter modelConverter;
+    private final ExportParamProcessor exportParamProcessor;
 
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
@@ -52,23 +44,6 @@ public class CallRecordController {
             , @RequestParam(required = false) String filter, @RequestParam(required = false) Integer page
             , @RequestParam(required = false) Integer size, @RequestParam(required = false) String sort) {
         return modelConverter.mapPage(callRecordService.find(spec, pageable), CallRecordDto.class);
-    }
-
-    @GetMapping(value = "corporateReport", produces = MediaType.APPLICATION_JSON_VALUE)
-    public Page<CorporateReportDto> getCorporateReport(@Parameter(hidden = true) @Filter Specification<CorporateReportView> spec
-            , @Parameter(hidden = true) Pageable pageable
-            , @RequestParam(required = false) String filter, @RequestParam(required = false) Integer page
-            , @RequestParam(required = false) Integer size, @RequestParam(required = false) String sort) {
-
-        return modelConverter.mapPage(callRecordService.generateCorporateReport(spec, pageable), CorporateReportDto.class);
-    }
-
-    @GetMapping(value = "employeeActivity", produces = MediaType.APPLICATION_JSON_VALUE)
-    public Page<EmployeeActivityReportDto> getEmployeeActivityReport(@Parameter(hidden = true) Pageable pageable
-            , @RequestParam(required = false) String employeeName, @RequestParam(required = false) String employeeExtension
-            , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate
-            , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate) {
-        return modelConverter.mapPage(callRecordService.generateEmployeeActivityReport(employeeName, employeeExtension, startDate, endDate, pageable), EmployeeActivityReportDto.class);
     }
 
     @GetMapping(value = "/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
@@ -80,19 +55,9 @@ public class CallRecordController {
             , @RequestParam(required = false) String excludeColumns
             , @RequestParam(required = false) String includeColumns
             , @RequestParam(required = false) String valueReplacements) {
-
-        Map<String, String> alternativeHeadersMap = modelConverter.convert(alternativeHeaders==null?null:
-                new String(Base64.getDecoder().decode(alternativeHeaders)), new TypeReference<Map<String, String>>() {});
-        Set<String> excludeColumnsList = modelConverter.convert(excludeColumns==null?null:
-                new String(Base64.getDecoder().decode(excludeColumns)), new TypeReference<Set<String>>() {});
-        Set<String> includeColumnsList = modelConverter.convert(includeColumns==null?null:
-                new String(Base64.getDecoder().decode(includeColumns)), new TypeReference<Set<String>>() {});
-        Map<String, Map<String, String>> valueReplacementsMap = modelConverter.convert(valueReplacements==null?null:
-                new String(Base64.getDecoder().decode(valueReplacements)), new TypeReference<Map<String, Map<String, String>>>() {});
-
-
-        ByteArrayResource resource = callRecordService.exportExcel(spec, pageable
-                , alternativeHeadersMap, excludeColumnsList, includeColumnsList, valueReplacementsMap);
+        ExcelGeneratorBuilder excelGeneratorBuilder = exportParamProcessor.base64ParamsToExcelGeneratorBuilder(
+                alternativeHeaders, excludeColumns, includeColumns, valueReplacements);
+        ByteArrayResource resource = callRecordService.exportExcel(spec, pageable, excelGeneratorBuilder);
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment;filename=call_records.xlsx")

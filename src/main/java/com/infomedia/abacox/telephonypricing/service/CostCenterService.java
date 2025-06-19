@@ -1,6 +1,6 @@
 package com.infomedia.abacox.telephonypricing.service;
 
-import com.infomedia.abacox.telephonypricing.component.export.excel.GenericExcelGenerator;
+import com.infomedia.abacox.telephonypricing.component.export.excel.ExcelGeneratorBuilder;
 import com.infomedia.abacox.telephonypricing.dto.costcenter.CreateCostCenter;
 import com.infomedia.abacox.telephonypricing.dto.costcenter.UpdateCostCenter;
 import com.infomedia.abacox.telephonypricing.db.entity.CostCenter;
@@ -43,16 +43,10 @@ public class CostCenterService extends CrudService<CostCenter,Long,CostCenterRep
         return save(costCenter);
     }
 
-    public ByteArrayResource exportExcel(Specification<CostCenter> specification, Pageable pageable, Map<String, String> alternativeHeaders
-            , Set<String> excludeColumns, Set<String> includeColumns, Map<String, Map<String, String>> valueReplacements) {
+    public ByteArrayResource exportExcel(Specification<CostCenter> specification, Pageable pageable, ExcelGeneratorBuilder builder) {
         Page<CostCenter> collection = find(specification, pageable);
-        try {
-            GenericExcelGenerator.ExcelGeneratorBuilder<?> builder = GenericExcelGenerator.builder(collection.toList());
-            if (alternativeHeaders != null) builder.withAlternativeHeaderNames(alternativeHeaders);
-            if (excludeColumns != null) builder.withExcludedColumnNames(excludeColumns);
-            if (includeColumns != null) builder.withIncludedColumnNames(includeColumns);
-            if (valueReplacements != null) builder.withValueReplacements(valueReplacements);
-            InputStream inputStream = builder.generateAsInputStream();
+       try {
+            InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
             return new ByteArrayResource(inputStream.readAllBytes());
         } catch (IOException e) {
             throw new RuntimeException(e);

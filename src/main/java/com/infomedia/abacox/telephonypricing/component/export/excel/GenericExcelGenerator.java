@@ -38,7 +38,8 @@ import java.util.stream.Collectors;
  * <p>
  * Example usage:
  * <pre>{@code
- * GenericExcelGenerator.builder(myProductList)
+ * GenericExcelGenerator.builder()
+ *      .withEntities(myProductList)
  *      .withIncludedFields("productName", "price", "active")
  *      .withValueReplacement("Active", "TRUE", "Yes") // Replace by formatted value
  *      .withValueReplacement("Active", "false", "No") // Replace by raw value
@@ -52,140 +53,20 @@ public class GenericExcelGenerator {
     private static final Pattern CAMEL_CASE_SNAKE_CASE_SPLIT_PATTERN =
             Pattern.compile("(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|_");
 
-    public static <T> ExcelGeneratorBuilder<T> builder(List<T> entities) {
-        return new ExcelGeneratorBuilder<>(entities);
+    /**
+     * Creates a new builder instance for configuring and generating an Excel file.
+     *
+     * @return a new {@link ExcelGeneratorBuilder} instance.
+     */
+    public static ExcelGeneratorBuilder builder() {
+        return new ExcelGeneratorBuilder();
     }
 
-    public static class ExcelGeneratorBuilder<T> {
-        private final List<T> entities;
-        private Set<String> excludedFields = new HashSet<>();
-        private Set<String> includedFields = null;
-        private Map<String, String> alternativeFieldPathNames = new HashMap<>();
-        private Map<String, String> alternativeHeaderNames = new HashMap<>();
-        private List<String> alternativeHeaders;
-        private Set<String> excludedColumnNames = new HashSet<>();
-        private Set<String> includedColumnNames = null;
-        private Map<String, Map<String, String>> valueReplacements = new HashMap<>();
-        private boolean streamingEnabled = false;
-        private String dateFormat = "yyyy-MM-dd";
-        private String dateTimeFormat = "yyyy-MM-dd HH:mm:ss";
-        private Consumer<CellStyle> headerStyleCustomizer;
-        private Consumer<CellStyle> dataStyleCustomizer;
-
-        private ExcelGeneratorBuilder(List<T> entities) {
-            this.entities = Objects.requireNonNull(entities, "Entity list cannot be null.");
-        }
-
-        public ExcelGeneratorBuilder<T> withExcludedFields(Set<String> excludedFields) {
-            this.excludedFields = Objects.requireNonNull(excludedFields);
-            return this;
-        }
-
-        public ExcelGeneratorBuilder<T> excludeField(String fieldToExclude) {
-            this.excludedFields.add(fieldToExclude);
-            return this;
-        }
-
-        public ExcelGeneratorBuilder<T> withIncludedFields(String... includedFields) {
-            this.includedFields = new HashSet<>(Arrays.asList(includedFields));
-            return this;
-        }
-
-        public ExcelGeneratorBuilder<T> withIncludedFields(Set<String> includedFields) {
-            this.includedFields = Objects.requireNonNull(includedFields);
-            return this;
-        }
-
-        public ExcelGeneratorBuilder<T> withAlternativeFieldNames(Map<String, String> alternativeFieldPathNames) {
-            this.alternativeFieldPathNames = Objects.requireNonNull(alternativeFieldPathNames);
-            return this;
-        }
-
-        public ExcelGeneratorBuilder<T> withAlternativeFieldName(String fieldPath, String newName) {
-            this.alternativeFieldPathNames.put(fieldPath, newName);
-            return this;
-        }
-
-        public ExcelGeneratorBuilder<T> withAlternativeHeaderNames(Map<String, String> alternativeHeaderNames) {
-            this.alternativeHeaderNames = Objects.requireNonNull(alternativeHeaderNames);
-            return this;
-        }
-
-        public ExcelGeneratorBuilder<T> withAlternativeHeaderName(String originalHeader, String newName) {
-            this.alternativeHeaderNames.put(originalHeader, newName);
-            return this;
-        }
-
-        public ExcelGeneratorBuilder<T> withAlternativeHeaders(List<String> alternativeHeaders) {
-            this.alternativeHeaders = alternativeHeaders;
-            return this;
-        }
-
-        public ExcelGeneratorBuilder<T> withExcludedColumnNames(Set<String> excludedColumnNames) {
-            this.excludedColumnNames = Objects.requireNonNull(excludedColumnNames);
-            return this;
-        }
-
-        public ExcelGeneratorBuilder<T> excludeColumnByName(String columnName) {
-            this.excludedColumnNames.add(columnName);
-            return this;
-        }
-
-        public ExcelGeneratorBuilder<T> withIncludedColumnNames(String... includedColumnNames) {
-            this.includedColumnNames = new HashSet<>(Arrays.asList(includedColumnNames));
-            return this;
-        }
-
-        public ExcelGeneratorBuilder<T> withIncludedColumnNames(Set<String> includedColumnNames) {
-            this.includedColumnNames = Objects.requireNonNull(includedColumnNames);
-            return this;
-        }
-
-        public ExcelGeneratorBuilder<T> withValueReplacements(Map<String, Map<String, String>> valueReplacements) {
-            this.valueReplacements = Objects.requireNonNull(valueReplacements);
-            return this;
-        }
-
-        public ExcelGeneratorBuilder<T> withValueReplacement(String columnName, String originalValue, String replacementValue) {
-            this.valueReplacements.computeIfAbsent(columnName, k -> new HashMap<>()).put(originalValue, replacementValue);
-            return this;
-        }
-
-        public ExcelGeneratorBuilder<T> enableStreaming() {
-            this.streamingEnabled = true;
-            return this;
-        }
-
-        public ExcelGeneratorBuilder<T> withDateFormat(String dateFormat) {
-            this.dateFormat = Objects.requireNonNull(dateFormat);
-            return this;
-        }
-
-        public ExcelGeneratorBuilder<T> withDateTimeFormat(String dateTimeFormat) {
-            this.dateTimeFormat = Objects.requireNonNull(dateTimeFormat);
-            return this;
-        }
-
-        public ExcelGeneratorBuilder<T> withHeaderStyle(Consumer<CellStyle> headerStyleCustomizer) {
-            this.headerStyleCustomizer = headerStyleCustomizer;
-            return this;
-        }
-
-        public ExcelGeneratorBuilder<T> withDataStyle(Consumer<CellStyle> dataStyleCustomizer) {
-            this.dataStyleCustomizer = dataStyleCustomizer;
-            return this;
-        }
-
-        public void generate(String filePath) throws IOException {
-            GenericExcelGenerator.generateExcel(this, filePath);
-        }
-
-        public InputStream generateAsInputStream() throws IOException {
-            return GenericExcelGenerator.generateExcelInputStream(this);
-        }
-    }
-
-    private static <T> InputStream generateExcelInputStream(ExcelGeneratorBuilder<T> builder) throws IOException {
+    /**
+     * Package-private method to generate the Excel file as an InputStream.
+     * Called by the {@link ExcelGeneratorBuilder}.
+     */
+    static InputStream generateExcelInputStream(ExcelGeneratorBuilder builder) throws IOException {
         if (builder.includedFields != null && !builder.excludedFields.isEmpty()) {
             throw new IllegalStateException("Cannot use both withIncludedFields (whitelist) and excludeField (blacklist). Please choose one method for field-level filtering.");
         }
@@ -202,7 +83,7 @@ public class GenericExcelGenerator {
             }
         }
 
-        GeneratorContext<T> context = new GeneratorContext<>(builder);
+        GeneratorContext context = new GeneratorContext(builder);
         Workbook workbook = context.isStreamingEnabled() ? new SXSSFWorkbook(100) : new XSSFWorkbook();
 
         try {
@@ -251,7 +132,18 @@ public class GenericExcelGenerator {
         }
     }
 
-    private static <T> void setFieldValue(Cell cell, T entity, FieldInfo fieldInfo, GeneratorContext<T> context) {
+    /**
+     * Package-private method to generate the Excel file and save it to a path.
+     * Called by the {@link ExcelGeneratorBuilder}.
+     */
+    static void generateExcel(ExcelGeneratorBuilder builder, String filePath) throws IOException {
+        try (InputStream in = generateExcelInputStream(builder);
+             OutputStream out = new FileOutputStream(filePath)) {
+            in.transferTo(out);
+        }
+    }
+
+    private static void setFieldValue(Cell cell, Object entity, FieldInfo fieldInfo, GeneratorContext context) {
         try {
             Object rawValue = getFieldValue(entity, fieldInfo.fieldPath);
 
@@ -314,18 +206,11 @@ public class GenericExcelGenerator {
         }
     }
 
-    private static <T> void generateExcel(ExcelGeneratorBuilder<T> builder, String filePath) throws IOException {
-        try (InputStream in = generateExcelInputStream(builder);
-             OutputStream out = new FileOutputStream(filePath)) {
-            in.transferTo(out);
-        }
-    }
-
-    private static class GeneratorContext<T> {
-        private final ExcelGeneratorBuilder<T> builder;
+    private static class GeneratorContext {
+        private final ExcelGeneratorBuilder builder;
         private final CellSetterContext cellSetterContext;
 
-        GeneratorContext(ExcelGeneratorBuilder<T> builder) {
+        GeneratorContext(ExcelGeneratorBuilder builder) {
             this.builder = builder;
             this.cellSetterContext = new CellSetterContext(
                     DateTimeFormatter.ofPattern(builder.dateFormat),
@@ -462,7 +347,7 @@ public class GenericExcelGenerator {
         return newPath;
     }
 
-    private static <T> void createHeaderRow(Workbook workbook, Sheet sheet, List<FieldInfo> fields, GeneratorContext<T> context) {
+    private static void createHeaderRow(Workbook workbook, Sheet sheet, List<FieldInfo> fields, GeneratorContext context) {
         Row headerRow = sheet.createRow(0);
         CellStyle headerStyle = createHeaderStyle(workbook, context.getHeaderStyleCustomizer());
         List<String> alternativeHeaders = context.getAlternativeHeaders();
@@ -493,10 +378,10 @@ public class GenericExcelGenerator {
         return headerStyle;
     }
 
-    private static <T> void createDataRows(Sheet sheet, List<T> entities, List<FieldInfo> fields, GeneratorContext<T> context) {
+    private static void createDataRows(Sheet sheet, List<?> entities, List<FieldInfo> fields, GeneratorContext context) {
         int rowNum = 1;
         CellStyle dataStyle = createDataStyle(sheet.getWorkbook(), context.getDataStyleCustomizer());
-        for (T entity : entities) {
+        for (Object entity : entities) {
             Row row = sheet.createRow(rowNum++);
             for (int i = 0; i < fields.size(); i++) {
                 Cell cell = row.createCell(i);

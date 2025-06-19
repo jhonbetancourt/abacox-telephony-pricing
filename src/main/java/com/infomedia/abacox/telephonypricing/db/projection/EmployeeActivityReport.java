@@ -7,7 +7,7 @@ import java.time.LocalDateTime;
  * Spring Data JPA will create a proxy instance of this interface, backed by the query results.
  * The getter method names MUST match the column aliases in the native query.
  */
-public interface EmployeeActivityReportProjection {
+public interface EmployeeActivityReport {
 
     Long getEmployeeId();
     String getEmployeeName();

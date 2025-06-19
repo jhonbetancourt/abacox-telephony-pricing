@@ -1,6 +1,7 @@
 package com.infomedia.abacox.telephonypricing.controller;
 
-import com.fasterxml.jackson.core.type.TypeReference;
+import com.infomedia.abacox.telephonypricing.component.export.excel.ExcelGeneratorBuilder;
+import com.infomedia.abacox.telephonypricing.component.export.excel.ExportParamProcessor;
 import com.infomedia.abacox.telephonypricing.component.modeltools.ModelConverter;
 import com.infomedia.abacox.telephonypricing.dto.costcenter.CostCenterDto;
 import com.infomedia.abacox.telephonypricing.dto.costcenter.CreateCostCenter;
@@ -41,6 +42,7 @@ public class CostCenterController {
 
     private final CostCenterService costCenterService;
     private final ModelConverter modelConverter;
+    private final ExportParamProcessor exportParamProcessor;
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public Page<CostCenterDto> find(@Parameter(hidden = true) @Filter Specification<CostCenter> spec
@@ -80,18 +82,11 @@ public class CostCenterController {
             , @RequestParam(required = false) String includeColumns
             , @RequestParam(required = false) String valueReplacements) {
 
-        Map<String, String> alternativeHeadersMap = modelConverter.convert(alternativeHeaders==null?null:
-                new String(Base64.getDecoder().decode(alternativeHeaders)), new TypeReference<Map<String, String>>() {});
-        Set<String> excludeColumnsList = modelConverter.convert(excludeColumns==null?null:
-                new String(Base64.getDecoder().decode(excludeColumns)), new TypeReference<Set<String>>() {});
-        Set<String> includeColumnsList = modelConverter.convert(includeColumns==null?null:
-                new String(Base64.getDecoder().decode(includeColumns)), new TypeReference<Set<String>>() {});
-        Map<String, Map<String, String>> valueReplacementsMap = modelConverter.convert(valueReplacements==null?null:
-                new String(Base64.getDecoder().decode(valueReplacements)), new TypeReference<Map<String, Map<String, String>>>() {});
+        ExcelGeneratorBuilder excelGeneratorBuilder = exportParamProcessor.base64ParamsToExcelGeneratorBuilder(
+                alternativeHeaders, excludeColumns, includeColumns, valueReplacements);
 
 
-        ByteArrayResource resource = costCenterService.exportExcel(spec, pageable
-                , alternativeHeadersMap, excludeColumnsList, includeColumnsList, valueReplacementsMap);
+        ByteArrayResource resource = costCenterService.exportExcel(spec, pageable, excelGeneratorBuilder);
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment;filename=cost_centers.xlsx")

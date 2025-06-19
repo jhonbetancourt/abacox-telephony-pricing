@@ -1,8 +1,9 @@
 package com.infomedia.abacox.telephonypricing.service;
 
-import com.infomedia.abacox.telephonypricing.component.export.excel.GenericExcelGenerator;
+import com.infomedia.abacox.telephonypricing.component.export.excel.ExcelGeneratorBuilder;
+import com.infomedia.abacox.telephonypricing.component.export.excel.ExcelGeneratorBuilder;
 import com.infomedia.abacox.telephonypricing.db.entity.CallRecord;
-import com.infomedia.abacox.telephonypricing.db.projection.EmployeeActivityReportProjection;
+import com.infomedia.abacox.telephonypricing.db.projection.EmployeeActivityReport;
 import com.infomedia.abacox.telephonypricing.db.view.CorporateReportView;
 import com.infomedia.abacox.telephonypricing.repository.CallRecordRepository;
 import com.infomedia.abacox.telephonypricing.repository.view.CorporateReportViewRepository;
@@ -23,35 +24,14 @@ import java.util.Set;
 @Service
 public class CallRecordService extends CrudService<CallRecord, Long, CallRecordRepository> {
 
-    private final CorporateReportViewRepository corporateReportViewRepository;
-
-
-    public CallRecordService(CallRecordRepository repository, CorporateReportViewRepository corporateReportViewRepository) {
+    public CallRecordService(CallRecordRepository repository) {
         super(repository);
-        this.corporateReportViewRepository = corporateReportViewRepository;
     }
 
-    @Transactional(readOnly = true)
-    public Page<CorporateReportView> generateCorporateReport(Specification<CorporateReportView> specification, Pageable pageable) {
-        return corporateReportViewRepository.findAll(specification, pageable);
-    }
-
-
-    @Transactional(readOnly = true)
-    public Page<EmployeeActivityReportProjection> generateEmployeeActivityReport(String employeeName, String employeeExtension, LocalDateTime startDate, LocalDateTime endDate, Pageable pageable) {
-        return getRepository().findEmployeeActivityReport(startDate, endDate, employeeName, employeeExtension, pageable);
-    }
-
-    public ByteArrayResource exportExcel(Specification<CallRecord> specification, Pageable pageable, Map<String, String> alternativeHeaders
-            , Set<String> excludeColumns, Set<String> includeColumns, Map<String, Map<String, String>> valueReplacements) {
+    public ByteArrayResource exportExcel(Specification<CallRecord> specification, Pageable pageable, ExcelGeneratorBuilder builder) {
         Page<CallRecord> collection = find(specification, pageable);
         try {
-            GenericExcelGenerator.ExcelGeneratorBuilder<?> builder = GenericExcelGenerator.builder(collection.toList());
-            if (alternativeHeaders != null) builder.withAlternativeHeaderNames(alternativeHeaders);
-            if (excludeColumns != null) builder.withExcludedColumnNames(excludeColumns);
-            if (includeColumns != null) builder.withIncludedColumnNames(includeColumns);
-            if (valueReplacements != null) builder.withValueReplacements(valueReplacements);
-            InputStream inputStream = builder.generateAsInputStream();
+            InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
             return new ByteArrayResource(inputStream.readAllBytes());
         } catch (IOException e) {
             throw new RuntimeException(e);

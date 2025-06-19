@@ -1,6 +1,6 @@
 package com.infomedia.abacox.telephonypricing.service;
 
-import com.infomedia.abacox.telephonypricing.component.export.excel.GenericExcelGenerator;
+import com.infomedia.abacox.telephonypricing.component.export.excel.ExcelGeneratorBuilder;
 import com.infomedia.abacox.telephonypricing.dto.band.CreateBand;
 import com.infomedia.abacox.telephonypricing.dto.band.UpdateBand;
 import com.infomedia.abacox.telephonypricing.db.entity.Band;
@@ -47,15 +47,10 @@ public class BandService extends CrudService<Band, Long, BandRepository> {
         return save(band);
     }
 
-    public ByteArrayResource exportExcel(Specification<Band> specification, Pageable pageable, Map<String, String> alternativeHeaders
-            , Set<String> excludeColumns, Set<String> includeColumns, Map<String, Map<String, String>> valueReplacements) {
+    public ByteArrayResource exportExcel(Specification<Band> specification, Pageable pageable, ExcelGeneratorBuilder builder) {
         Page<Band> collection = find(specification, pageable);
         try {
-            InputStream inputStream = GenericExcelGenerator.builder(collection.toList())
-                    .withAlternativeHeaderNames(alternativeHeaders==null? Map.of() : alternativeHeaders)
-                    .withExcludedColumnNames(excludeColumns==null? Set.of() : excludeColumns)
-                    .withValueReplacements(valueReplacements==null? Map.of() : valueReplacements)
-                    .generateAsInputStream();
+            InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
             return new ByteArrayResource(inputStream.readAllBytes());
         } catch (IOException e) {
             throw new RuntimeException(e);
