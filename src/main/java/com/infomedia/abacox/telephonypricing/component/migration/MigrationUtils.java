@@ -1,7 +1,6 @@
 package com.infomedia.abacox.telephonypricing.component.migration;
 
 import jakarta.persistence.*;
-import jakarta.persistence.Table;
 import lombok.extern.log4j.Log4j2;
 import org.apache.commons.beanutils.PropertyUtils;
 

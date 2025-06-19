@@ -5,7 +5,6 @@ import com.infomedia.abacox.telephonypricing.dto.generic.PageDto;
 import com.infomedia.abacox.telephonypricing.dto.role.RoleDto;
 import com.infomedia.abacox.telephonypricing.dto.user.UserDto;
 import com.infomedia.abacox.telephonypricing.service.AuthService;
-import com.infomedia.abacox.telephonypricing.service.ConfigManagerService;
 import com.infomedia.abacox.telephonypricing.service.common.RemoteService;
 import org.springframework.stereotype.Service;
 

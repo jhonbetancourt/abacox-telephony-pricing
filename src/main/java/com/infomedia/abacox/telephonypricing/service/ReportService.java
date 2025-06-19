@@ -1,10 +1,7 @@
 package com.infomedia.abacox.telephonypricing.service;
 
 import com.infomedia.abacox.telephonypricing.component.export.excel.ExcelGeneratorBuilder;
-import com.infomedia.abacox.telephonypricing.component.export.excel.ExcelGeneratorBuilder;
 import com.infomedia.abacox.telephonypricing.component.modeltools.ModelConverter;
-import com.infomedia.abacox.telephonypricing.db.projection.EmployeeActivityReport;
-import com.infomedia.abacox.telephonypricing.db.projection.EmployeeCallReport;
 import com.infomedia.abacox.telephonypricing.db.view.CorporateReportView;
 import com.infomedia.abacox.telephonypricing.dto.callrecord.CorporateReportDto;
 import com.infomedia.abacox.telephonypricing.dto.callrecord.EmployeeActivityReportDto;
@@ -22,8 +19,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.io.IOException;
 import java.io.InputStream;
 import java.time.LocalDateTime;
-import java.util.Map;
-import java.util.Set;
 
 @RequiredArgsConstructor
 @Service

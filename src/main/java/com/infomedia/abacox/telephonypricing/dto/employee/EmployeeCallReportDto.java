@@ -3,7 +3,7 @@ package com.infomedia.abacox.telephonypricing.dto.employee;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import lombok.Value;
+
 import java.math.BigDecimal;
 
 @Data
