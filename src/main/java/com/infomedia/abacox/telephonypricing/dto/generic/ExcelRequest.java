@@ -20,10 +20,10 @@ public class ExcelRequest {
     @Schema(description = "Alternative headers mapping (format: 'key':'value' or \"key\":\"value\")")
     private String alternativeHeaders;
 
-    @Schema(description = "Columns to exclude from the report (comma-separated, quoted values)")
+    @Schema(description = "Columns to exclude (comma-separated, quoted values)")
     private String excludeColumns;
 
-    @Schema(description = "Columns to include in the report (comma-separated, quoted values)")
+    @Schema(description = "Columns to include (comma-separated, quoted values)")
     private String includeColumns;
 
     @Schema(description = "Value replacements in format 'column'.'oldValue':'newValue'")
