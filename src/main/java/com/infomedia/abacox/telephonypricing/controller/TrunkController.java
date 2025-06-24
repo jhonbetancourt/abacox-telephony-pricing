@@ -1,7 +1,6 @@
 package com.infomedia.abacox.telephonypricing.controller;
 
 import com.infomedia.abacox.telephonypricing.component.export.excel.ExcelGeneratorBuilder;
-import com.infomedia.abacox.telephonypricing.component.export.excel.ExportParamProcessor;
 import com.infomedia.abacox.telephonypricing.component.modeltools.ModelConverter;
 import com.infomedia.abacox.telephonypricing.dto.trunk.TrunkDto;
 import com.infomedia.abacox.telephonypricing.dto.trunk.CreateTrunk;
@@ -10,7 +9,10 @@ import com.infomedia.abacox.telephonypricing.dto.superclass.ActivationDto;
 import com.infomedia.abacox.telephonypricing.db.entity.Trunk;
 import com.infomedia.abacox.telephonypricing.service.TrunkService;
 import com.turkraft.springfilter.boot.Filter;
+import com.infomedia.abacox.telephonypricing.dto.generic.ExcelRequest;
+import com.infomedia.abacox.telephonypricing.dto.generic.FilterRequest;
 import io.swagger.v3.oas.annotations.Parameter;
+import org.springdoc.core.annotations.ParameterObject;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -38,7 +40,6 @@ public class TrunkController {
 
     private final TrunkService trunkService;
     private final ModelConverter modelConverter;
-    private final ExportParamProcessor exportParamProcessor;
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public Page<TrunkDto> find(@Parameter(hidden = true) @Filter Specification<Trunk> spec
@@ -71,18 +72,11 @@ public class TrunkController {
     @GetMapping(value = "/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
     public ResponseEntity<Resource> exportExcel(@Parameter(hidden = true) @Filter Specification<Trunk> spec
             , @Parameter(hidden = true) Pageable pageable
-            , @RequestParam(required = false) String filter, @RequestParam(required = false) Integer page
-            , @RequestParam(required = false) Integer size, @RequestParam(required = false) String sort
-            , @RequestParam(required = false) String alternativeHeaders
-            , @RequestParam(required = false) String excludeColumns
-            , @RequestParam(required = false) String includeColumns
-            , @RequestParam(required = false) String valueReplacements) {
+            , @ParameterObject FilterRequest filterRequest
+            , @ParameterObject ExcelRequest excelRequest) {
 
-        ExcelGeneratorBuilder excelGeneratorBuilder = exportParamProcessor.base64ParamsToExcelGeneratorBuilder(
-                alternativeHeaders, excludeColumns, includeColumns, valueReplacements);
-
-
-        ByteArrayResource resource = trunkService.exportExcel(spec, pageable, excelGeneratorBuilder);
+        
+        ByteArrayResource resource = trunkService.exportExcel(spec, pageable, excelRequest.toExcelGeneratorBuilder());
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment;filename=trunks.xlsx")

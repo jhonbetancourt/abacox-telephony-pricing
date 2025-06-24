@@ -1,7 +1,6 @@
 package com.infomedia.abacox.telephonypricing.controller;
 
 import com.infomedia.abacox.telephonypricing.component.export.excel.ExcelGeneratorBuilder;
-import com.infomedia.abacox.telephonypricing.component.export.excel.ExportParamProcessor;
 import com.infomedia.abacox.telephonypricing.component.modeltools.ModelConverter;
 import com.infomedia.abacox.telephonypricing.dto.band.BandDto;
 import com.infomedia.abacox.telephonypricing.dto.band.CreateBand;
@@ -10,7 +9,11 @@ import com.infomedia.abacox.telephonypricing.dto.superclass.ActivationDto;
 import com.infomedia.abacox.telephonypricing.db.entity.Band;
 import com.infomedia.abacox.telephonypricing.service.BandService;
 import com.turkraft.springfilter.boot.Filter;
+import com.infomedia.abacox.telephonypricing.dto.generic.ExcelRequest;
+import com.infomedia.abacox.telephonypricing.dto.generic.FilterRequest;import com.infomedia.abacox.telephonypricing.dto.generic.ExcelRequest;
+import com.infomedia.abacox.telephonypricing.dto.generic.FilterRequest;
 import io.swagger.v3.oas.annotations.Parameter;
+import org.springdoc.core.annotations.ParameterObject;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -39,7 +42,6 @@ public class BandController {
 
     private final BandService bandService;
     private final ModelConverter modelConverter;
-    private final ExportParamProcessor exportParamProcessor;
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public Page<BandDto> find(@Parameter(hidden = true) @Filter Specification<Band> spec
@@ -72,17 +74,10 @@ public class BandController {
     @GetMapping(value = "/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
     public ResponseEntity<Resource> exportExcel(@Parameter(hidden = true) @Filter Specification<Band> spec
             , @Parameter(hidden = true) Pageable pageable
-            , @RequestParam(required = false) String filter, @RequestParam(required = false) Integer page
-            , @RequestParam(required = false) Integer size, @RequestParam(required = false) String sort
-            , @RequestParam(required = false) String alternativeHeaders
-            , @RequestParam(required = false) String excludeColumns
-            , @RequestParam(required = false) String includeColumns
-            , @RequestParam(required = false) String valueReplacements) {
+            , @ParameterObject FilterRequest filterRequest
+            , @ParameterObject ExcelRequest excelRequest) {
 
-        ExcelGeneratorBuilder excelGeneratorBuilder = exportParamProcessor.base64ParamsToExcelGeneratorBuilder(
-                alternativeHeaders, excludeColumns, includeColumns, valueReplacements);
-
-        ByteArrayResource resource = bandService.exportExcel(spec, pageable, excelGeneratorBuilder);
+                ByteArrayResource resource = bandService.exportExcel(spec, pageable, excelRequest.toExcelGeneratorBuilder());
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment;filename=bands.xlsx")

@@ -1,15 +1,16 @@
 package com.infomedia.abacox.telephonypricing.controller;
 
-import com.infomedia.abacox.telephonypricing.component.export.excel.ExcelGeneratorBuilder;
-import com.infomedia.abacox.telephonypricing.component.export.excel.ExportParamProcessor;
 import com.infomedia.abacox.telephonypricing.constants.DateTimePattern;
 import com.infomedia.abacox.telephonypricing.db.view.CorporateReportView;
 import com.infomedia.abacox.telephonypricing.dto.callrecord.CorporateReportDto;
 import com.infomedia.abacox.telephonypricing.dto.callrecord.EmployeeActivityReportDto;
 import com.infomedia.abacox.telephonypricing.dto.employee.EmployeeCallReportDto;
+import com.infomedia.abacox.telephonypricing.dto.generic.ExcelRequest;
+import com.infomedia.abacox.telephonypricing.dto.generic.FilterRequest;
 import com.infomedia.abacox.telephonypricing.service.ReportService;
 import com.turkraft.springfilter.boot.Filter;
 import io.swagger.v3.oas.annotations.Parameter;
+import org.springdoc.core.annotations.ParameterObject;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -41,31 +42,21 @@ import java.time.LocalDateTime;
 public class ReportController {
 
     private final ReportService reportService;
-    private final ExportParamProcessor exportParamProcessor;
 
     @GetMapping(value = "corporateReport", produces = MediaType.APPLICATION_JSON_VALUE)
-    public Page<CorporateReportDto> getCorporateReport(@Parameter(hidden = true) @Filter Specification<CorporateReportView> spec
-            , @Parameter(hidden = true) Pageable pageable
-            , @RequestParam(required = false) String filter, @RequestParam(required = false) Integer page
-            , @RequestParam(required = false) Integer size, @RequestParam(required = false) String sort) {
-
+    public Page<CorporateReportDto> getCorporateReport(@Parameter(hidden = true) Pageable pageable
+            , @Parameter(hidden = true) @Filter Specification<CorporateReportView> spec
+            , @ParameterObject FilterRequest filterRequest) {
         return reportService.generateCorporateReport(spec, pageable);
     }
 
     @GetMapping(value = "corporateReport/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
-    public ResponseEntity<Resource> exportExcelCorporateReport(@Parameter(hidden = true) @Filter Specification<CorporateReportView> spec
-            , @Parameter(hidden = true) Pageable pageable
-            , @RequestParam(required = false) String filter, @RequestParam(required = false) Integer page
-            , @RequestParam(required = false) Integer size, @RequestParam(required = false) String sort
-            , @RequestParam(required = false) String alternativeHeaders
-            , @RequestParam(required = false) String excludeColumns
-            , @RequestParam(required = false) String includeColumns
-            , @RequestParam(required = false) String valueReplacements) {
-
-        ExcelGeneratorBuilder excelGeneratorBuilder = exportParamProcessor.base64ParamsToExcelGeneratorBuilder(
-                alternativeHeaders, excludeColumns, includeColumns, valueReplacements);
-
-        ByteArrayResource resource = reportService.exportExcelCorporateReport(spec, pageable, excelGeneratorBuilder);
+    public ResponseEntity<Resource> exportExcelCorporateReport(@Parameter(hidden = true) Pageable pageable
+            , @Parameter(hidden = true) @Filter Specification<CorporateReportView> spec
+            , @ParameterObject FilterRequest filterRequest
+            , @ParameterObject ExcelRequest excelRequest) {
+        ByteArrayResource resource = reportService.exportExcelCorporateReport(spec
+                , pageable, excelRequest.toExcelGeneratorBuilder());
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=corporate_report.xlsx")
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
@@ -86,16 +77,10 @@ public class ReportController {
             , @RequestParam(required = false) String employeeName, @RequestParam(required = false) String employeeExtension
             , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate
             , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate
-            , @RequestParam(required = false) String alternativeHeaders
-            , @RequestParam(required = false) String excludeColumns
-            , @RequestParam(required = false) String includeColumns
-            , @RequestParam(required = false) String valueReplacements) {
-
-        ExcelGeneratorBuilder excelGeneratorBuilder = exportParamProcessor.base64ParamsToExcelGeneratorBuilder(
-                alternativeHeaders, excludeColumns, includeColumns, valueReplacements);
+            , @ParameterObject ExcelRequest excelRequest) {
 
         ByteArrayResource resource = reportService.exportExcelEmployeeActivityReport(employeeName
-                , employeeExtension, startDate, endDate, pageable, excelGeneratorBuilder);
+                , employeeExtension, startDate, endDate, pageable, excelRequest.toExcelGeneratorBuilder());
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=employee_activity_report.xlsx")
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
@@ -116,16 +101,10 @@ public class ReportController {
             , @RequestParam(required = false) String employeeName, @RequestParam(required = false) String employeeExtension
             , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate
             , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate
-            , @RequestParam(required = false) String alternativeHeaders
-            , @RequestParam(required = false) String excludeColumns
-            , @RequestParam(required = false) String includeColumns
-            , @RequestParam(required = false) String valueReplacements) {
-
-        ExcelGeneratorBuilder excelGeneratorBuilder = exportParamProcessor.base64ParamsToExcelGeneratorBuilder(
-                alternativeHeaders, excludeColumns, includeColumns, valueReplacements);
+            , @ParameterObject ExcelRequest excelRequest) {
 
         ByteArrayResource resource = reportService.exportExcelEmployeeCallReport(employeeName
-                , employeeExtension, startDate, endDate, pageable, excelGeneratorBuilder);
+                , employeeExtension, startDate, endDate, pageable, excelRequest.toExcelGeneratorBuilder());
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=employee_call_report.xlsx")
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)

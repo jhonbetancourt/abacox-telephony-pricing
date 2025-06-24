@@ -1,13 +1,16 @@
 package com.infomedia.abacox.telephonypricing.controller;
 
 import com.infomedia.abacox.telephonypricing.component.export.excel.ExcelGeneratorBuilder;
-import com.infomedia.abacox.telephonypricing.component.export.excel.ExportParamProcessor;
 import com.infomedia.abacox.telephonypricing.component.modeltools.ModelConverter;
 import com.infomedia.abacox.telephonypricing.dto.callrecord.CallRecordDto;
 import com.infomedia.abacox.telephonypricing.db.entity.CallRecord;
 import com.infomedia.abacox.telephonypricing.service.CallRecordService;
 import com.turkraft.springfilter.boot.Filter;
+import com.infomedia.abacox.telephonypricing.dto.generic.ExcelRequest;
+import com.infomedia.abacox.telephonypricing.dto.generic.FilterRequest;import com.infomedia.abacox.telephonypricing.dto.generic.ExcelRequest;
+import com.infomedia.abacox.telephonypricing.dto.generic.FilterRequest;
 import io.swagger.v3.oas.annotations.Parameter;
+import org.springdoc.core.annotations.ParameterObject;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -35,7 +38,6 @@ public class CallRecordController {
 
     private final CallRecordService callRecordService;
     private final ModelConverter modelConverter;
-    private final ExportParamProcessor exportParamProcessor;
 
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
@@ -49,15 +51,9 @@ public class CallRecordController {
     @GetMapping(value = "/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
     public ResponseEntity<Resource> exportExcel(@Parameter(hidden = true) @Filter Specification<CallRecord> spec
             , @Parameter(hidden = true) Pageable pageable
-            , @RequestParam(required = false) String filter, @RequestParam(required = false) Integer page
-            , @RequestParam(required = false) Integer size, @RequestParam(required = false) String sort
-            , @RequestParam(required = false) String alternativeHeaders
-            , @RequestParam(required = false) String excludeColumns
-            , @RequestParam(required = false) String includeColumns
-            , @RequestParam(required = false) String valueReplacements) {
-        ExcelGeneratorBuilder excelGeneratorBuilder = exportParamProcessor.base64ParamsToExcelGeneratorBuilder(
-                alternativeHeaders, excludeColumns, includeColumns, valueReplacements);
-        ByteArrayResource resource = callRecordService.exportExcel(spec, pageable, excelGeneratorBuilder);
+            , @ParameterObject FilterRequest filterRequest
+            , @ParameterObject ExcelRequest excelRequest) {
+        ByteArrayResource resource = callRecordService.exportExcel(spec, pageable, excelRequest.toExcelGeneratorBuilder());
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment;filename=call_records.xlsx")
