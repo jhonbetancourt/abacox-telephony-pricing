@@ -1,6 +1,6 @@
 // src/main/java/com/infomedia/abacox/telephonypricing/dto/callrecord/CorporativeReportEntry.java
 
-package com.infomedia.abacox.telephonypricing.dto.callrecord;
+package com.infomedia.abacox.telephonypricing.dto.report;
 
 import lombok.*;
 

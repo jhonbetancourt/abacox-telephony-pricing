@@ -2,6 +2,8 @@ package com.infomedia.abacox.telephonypricing.repository;
 
 import com.infomedia.abacox.telephonypricing.db.projection.EmployeeActivityReport;
 import com.infomedia.abacox.telephonypricing.db.projection.EmployeeCallReport;
+import com.infomedia.abacox.telephonypricing.db.projection.ProcessingFailureReport;
+import com.infomedia.abacox.telephonypricing.db.projection.UnassignedCallReport;
 import com.infomedia.abacox.telephonypricing.db.util.VirtualEntity;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -152,6 +154,135 @@ public interface ReportRepository extends JpaRepository<VirtualEntity, Long> {
             @Param("endDate") LocalDateTime endDate,
             @Param("employeeName") String employeeName,
             @Param("employeeExtension") String employeeExtension,
+            Pageable pageable
+    );
+
+
+    /**
+     * Generates a report summarizing call costs and usage for unassigned extensions.
+     * This report identifies calls from extensions that are not linked to an employee (employee_id = 0)
+     * or are flagged with a specific assignment cause (cause = 5). It's useful for tracking costs
+     * from common areas like conference rooms or identifying misconfigured extensions.
+     *
+     * The results are aggregated by extension, location, and plant type.
+     *
+     * @param startDate The start of the reporting period.
+     * @param endDate The end of the reporting period.
+     * @param extension Optional filter for the extension number.
+     * @param pageable  Pagination and sorting information. The original report sorts by totalCost desc,
+     *                  callCount desc, and lastCallDate desc.
+     * @return A paginated list of UnassignedCallReport projections.
+     */
+    @Query(
+            value = """
+            SELECT
+                cr.employee_extension as employeeExtension,
+                cr.employee_id as employeeId,
+                cr.assignment_cause as assignmentCause,
+                cl.directory as commLocationDirectory,
+                cl.id as commLocationId,
+                pt.name as plantTypeName,
+                SUM(cr.billed_amount) as totalCost,
+                SUM(cr.duration) as totalDuration,
+                COUNT(cr.id) as callCount,
+                MAX(cr.service_date) as lastCallDate
+            FROM
+                call_record cr
+                JOIN communication_location cl ON cr.comm_location_id = cl.id
+                JOIN plant_type pt ON cl.plant_type_id = pt.id
+            WHERE
+                cr.service_date BETWEEN :startDate AND :endDate
+                AND (cr.employee_id = 0 OR cr.assignment_cause = 5)
+                AND LENGTH(cr.employee_extension) BETWEEN 3 AND 5
+                AND cr.duration > 0
+                AND (:extension IS NULL OR cr.employee_extension ILIKE CONCAT('%', :extension, '%'))
+            GROUP BY
+                cr.employee_extension, cr.employee_id, cr.assignment_cause, cl.directory, cl.id, pt.name
+            """,
+            countQuery = """
+            SELECT COUNT(*) FROM (
+                SELECT 1
+                FROM
+                    call_record cr
+                    JOIN communication_location cl ON cr.comm_location_id = cl.id
+                    JOIN plant_type pt ON cl.plant_type_id = pt.id
+                WHERE
+                    cr.service_date BETWEEN :startDate AND :endDate
+                    AND (cr.employee_id = 0 OR cr.assignment_cause = 5)
+                    AND LENGTH(cr.employee_extension) BETWEEN 3 AND 5
+                    AND cr.duration > 0
+                    AND (:extension IS NULL OR cr.employee_extension ILIKE CONCAT('%', :extension, '%'))
+                GROUP BY
+                    cr.employee_extension, cr.employee_id, cr.assignment_cause, cl.directory, cl.id, pt.name
+            ) AS count_subquery
+            """,
+            nativeQuery = true
+    )
+    Page<UnassignedCallReport> getUnassignedCallReport(
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate,
+            @Param("extension") String extension,
+            Pageable pageable
+    );
+
+
+
+    /**
+     * Generates a diagnostic report of call processing failures, grouped by error type.
+     * <p>
+     * This report identifies the most frequent types of errors (e.g., PARSING_ERROR, ENRICHMENT_ERROR)
+     * by grouping failed records based on their error category and the trusted configuration of the CommunicationLocation where they originated.
+     * It is essential for diagnosing systemic issues with parsers or enrichment logic for a specific PlantType.
+     *
+     * @param startDate The start of the reporting period.
+     * @param endDate   The end of the reporting period.
+     * @param directory Optional filter for the communication location's directory name.
+     * @param errorType Optional filter for a specific error type.
+     * @param pageable  Pagination and sorting information. It's recommended to sort by `failureCount` descending.
+     * @return A paginated list of ProcessingFailureReport projections.
+     */
+    @Query(
+            value = """
+            SELECT
+                fr.error_type AS errorType,
+                cl.id AS commLocationId,
+                cl.directory AS commLocationDirectory,
+                pt.id AS plantTypeId,
+                pt.name AS plantTypeName,
+                COUNT(fr.id) AS failureCount
+            FROM
+                failed_call_record fr
+                JOIN communication_location cl ON fr.comm_location_id = cl.id
+                JOIN plant_type pt ON cl.plant_type_id = pt.id
+            WHERE
+                fr.created_date BETWEEN :startDate AND :endDate
+                AND (:directory IS NULL OR cl.directory ILIKE CONCAT('%', :directory, '%'))
+                AND (:errorType IS NULL OR fr.error_type ILIKE CONCAT('%', :errorType, '%'))
+            GROUP BY
+                fr.error_type, cl.id, cl.directory, pt.id, pt.name
+            """,
+            countQuery = """
+            SELECT COUNT(*) FROM (
+                SELECT 1
+                FROM
+                    failed_call_record fr
+                    JOIN communication_location cl ON fr.comm_location_id = cl.id
+                    JOIN plant_type pt ON cl.plant_type_id = pt.id
+                WHERE
+                    fr.created_date BETWEEN :startDate AND :endDate
+                    AND (:directory IS NULL OR cl.directory ILIKE CONCAT('%', :directory, '%'))
+                    AND (:errorType IS NULL OR fr.error_type ILIKE CONCAT('%', :errorType, '%'))
+                GROUP BY
+                    fr.error_type, cl.id, cl.directory, pt.id, pt.name
+            ) AS count_subquery
+            """,
+            nativeQuery = true
+    )
+    Page<ProcessingFailureReport> getProcessingFailureReport(
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate,
+            @Param("directory") String directory,
+            @Param("errorType") String errorType,
             Pageable pageable
     );
 }

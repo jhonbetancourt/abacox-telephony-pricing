@@ -2,9 +2,7 @@ package com.infomedia.abacox.telephonypricing.controller;
 
 import com.infomedia.abacox.telephonypricing.constants.DateTimePattern;
 import com.infomedia.abacox.telephonypricing.db.view.CorporateReportView;
-import com.infomedia.abacox.telephonypricing.dto.callrecord.CorporateReportDto;
-import com.infomedia.abacox.telephonypricing.dto.callrecord.EmployeeActivityReportDto;
-import com.infomedia.abacox.telephonypricing.dto.employee.EmployeeCallReportDto;
+import com.infomedia.abacox.telephonypricing.dto.report.*;
 import com.infomedia.abacox.telephonypricing.dto.generic.ExcelRequest;
 import com.infomedia.abacox.telephonypricing.dto.generic.FilterRequest;
 import com.infomedia.abacox.telephonypricing.service.ReportService;
@@ -107,6 +105,54 @@ public class ReportController {
                 , employeeExtension, startDate, endDate, pageable, excelRequest.toExcelGeneratorBuilder());
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=employee_call_report.xlsx")
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .body(resource);
+    }
+
+    @GetMapping(value = "unassignedCall", produces = MediaType.APPLICATION_JSON_VALUE)
+    public Page<UnassignedCallReportDto> getUnassignedCallReport(@Parameter(hidden = true) Pageable pageable
+            , @RequestParam(required = false) String extension
+            , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate
+            , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate) {
+        return reportService.generateUnassignedCallReport(extension, startDate, endDate, pageable);
+    }
+
+    @GetMapping(value = "unassignedCall/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
+    public ResponseEntity<Resource> exportExcelUnassignedCallReport(@Parameter(hidden = true) Pageable pageable
+            , @RequestParam(required = false) String extension
+            , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate
+            , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate
+            , @ParameterObject ExcelRequest excelRequest) {
+
+        ByteArrayResource resource = reportService.exportExcelUnassignedCallReport(extension, startDate, endDate
+                , pageable, excelRequest.toExcelGeneratorBuilder());
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=unassigned_call_report.xlsx")
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .body(resource);
+    }
+
+    @GetMapping(value = "processingFailure", produces = MediaType.APPLICATION_JSON_VALUE)
+    public Page<ProcessingFailureReportDto> getProcessingFailureReport(@Parameter(hidden = true) Pageable pageable
+            , @RequestParam(required = false) String directory
+            , @RequestParam(required = false) String errorType
+            , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate
+            , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate) {
+        return reportService.generateProcessingFailureReport(directory, errorType, startDate, endDate, pageable);
+    }
+
+    @GetMapping(value = "processingFailure/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
+    public ResponseEntity<Resource> exportExcelProcessingFailureReport(@Parameter(hidden = true) Pageable pageable
+            , @RequestParam(required = false) String directory
+            , @RequestParam(required = false) String errorType
+            , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate
+            , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate
+            , @ParameterObject ExcelRequest excelRequest) {
+
+        ByteArrayResource resource = reportService.exportExcelProcessingFailureReport(directory, errorType, startDate
+                , endDate, pageable, excelRequest.toExcelGeneratorBuilder());
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=processing_failure_report.xlsx")
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
                 .body(resource);
     }

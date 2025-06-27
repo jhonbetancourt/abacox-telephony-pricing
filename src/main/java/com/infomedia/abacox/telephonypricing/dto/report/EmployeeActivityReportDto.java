@@ -1,4 +1,4 @@
-package com.infomedia.abacox.telephonypricing.dto.callrecord;
+package com.infomedia.abacox.telephonypricing.dto.report;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
