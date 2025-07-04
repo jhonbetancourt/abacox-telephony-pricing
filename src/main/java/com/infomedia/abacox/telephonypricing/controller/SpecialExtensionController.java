@@ -34,7 +34,7 @@ import org.springframework.web.bind.annotation.*;
         @SecurityRequirement(name = "JWT_Token"),
         @SecurityRequirement(name = "Username")
 })
-@RequestMapping("/api/special-extension")
+@RequestMapping("/api/specialExtension")
 public class SpecialExtensionController {
 
     private final SpecialExtensionService specialExtensionService;
