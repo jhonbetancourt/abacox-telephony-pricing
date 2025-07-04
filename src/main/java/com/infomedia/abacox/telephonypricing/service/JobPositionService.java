@@ -4,7 +4,7 @@ import com.infomedia.abacox.telephonypricing.component.export.excel.ExcelGenerat
 import com.infomedia.abacox.telephonypricing.dto.jobposition.CreateJobPosition;
 import com.infomedia.abacox.telephonypricing.dto.jobposition.UpdateJobPosition;
 import com.infomedia.abacox.telephonypricing.db.entity.JobPosition;
-import com.infomedia.abacox.telephonypricing.repository.JobPositionRepository;
+import com.infomedia.abacox.telephonypricing.db.repository.JobPositionRepository;
 import com.infomedia.abacox.telephonypricing.service.common.CrudService;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.data.domain.Page;

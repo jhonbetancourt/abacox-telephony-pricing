@@ -2,7 +2,7 @@ package com.infomedia.abacox.telephonypricing.service;
 
 import com.infomedia.abacox.telephonypricing.component.export.excel.ExcelGeneratorBuilder;
 import com.infomedia.abacox.telephonypricing.db.entity.CallRecord;
-import com.infomedia.abacox.telephonypricing.repository.CallRecordRepository;
+import com.infomedia.abacox.telephonypricing.db.repository.CallRecordRepository;
 import com.infomedia.abacox.telephonypricing.service.common.CrudService;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.data.domain.Page;

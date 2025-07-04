@@ -8,7 +8,7 @@ import com.infomedia.abacox.telephonypricing.component.migration.TableMigrationC
 import com.infomedia.abacox.telephonypricing.dto.migration.MigrationStart;
 import com.infomedia.abacox.telephonypricing.dto.migration.MigrationStatus;
 import com.infomedia.abacox.telephonypricing.exception.MigrationAlreadyInProgressException;
-import com.infomedia.abacox.telephonypricing.repository.EmployeeRepository;
+import com.infomedia.abacox.telephonypricing.db.repository.EmployeeRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;

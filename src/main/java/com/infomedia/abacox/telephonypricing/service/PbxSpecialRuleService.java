@@ -4,7 +4,7 @@ import com.infomedia.abacox.telephonypricing.component.export.excel.ExcelGenerat
 import com.infomedia.abacox.telephonypricing.dto.pbxspecialrule.CreatePbxSpecialRule;
 import com.infomedia.abacox.telephonypricing.dto.pbxspecialrule.UpdatePbxSpecialRule;
 import com.infomedia.abacox.telephonypricing.db.entity.PbxSpecialRule;
-import com.infomedia.abacox.telephonypricing.repository.PbxSpecialRuleRepository;
+import com.infomedia.abacox.telephonypricing.db.repository.PbxSpecialRuleRepository;
 import com.infomedia.abacox.telephonypricing.service.common.CrudService;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.data.domain.Page;

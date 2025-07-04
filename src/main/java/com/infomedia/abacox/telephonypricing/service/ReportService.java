@@ -3,13 +3,9 @@ package com.infomedia.abacox.telephonypricing.service;
 import com.infomedia.abacox.telephonypricing.component.export.excel.ExcelGeneratorBuilder;
 import com.infomedia.abacox.telephonypricing.component.modeltools.ModelConverter;
 import com.infomedia.abacox.telephonypricing.db.view.CorporateReportView;
-import com.infomedia.abacox.telephonypricing.dto.report.CorporateReportDto;
-import com.infomedia.abacox.telephonypricing.dto.report.EmployeeActivityReportDto;
-import com.infomedia.abacox.telephonypricing.dto.report.EmployeeCallReportDto;
-import com.infomedia.abacox.telephonypricing.dto.report.ProcessingFailureReportDto;
-import com.infomedia.abacox.telephonypricing.dto.report.UnassignedCallReportDto;
-import com.infomedia.abacox.telephonypricing.repository.ReportRepository;
-import com.infomedia.abacox.telephonypricing.repository.view.CorporateReportViewRepository;
+import com.infomedia.abacox.telephonypricing.dto.report.*;
+import com.infomedia.abacox.telephonypricing.db.repository.ReportRepository;
+import com.infomedia.abacox.telephonypricing.db.repository.CorporateReportViewRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.data.domain.Page;
@@ -120,6 +116,26 @@ public class ReportService {
             , LocalDateTime startDate, LocalDateTime endDate, Pageable pageable, ExcelGeneratorBuilder builder) {
         Page<ProcessingFailureReportDto> collection = generateProcessingFailureReport(directory, errorType
                 , startDate, endDate, pageable);
+        try {
+            InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
+            return new ByteArrayResource(inputStream.readAllBytes());
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public Page<MissedCallEmployeeReportDto> generateMissedCallEmployeeReport(String employeeName, LocalDateTime startDate,
+                                                                              LocalDateTime endDate, Pageable pageable) {
+        return modelConverter.mapPage(reportRepository.getMissedCallEmployeeReport(startDate, endDate, employeeName, pageable),
+                MissedCallEmployeeReportDto.class);
+    }
+
+    @Transactional(readOnly = true)
+    public ByteArrayResource exportExcelMissedCallEmployeeReport(String employeeName, LocalDateTime startDate,
+                                                                 LocalDateTime endDate, Pageable pageable,
+                                                                 ExcelGeneratorBuilder builder) {
+        Page<MissedCallEmployeeReportDto> collection = generateMissedCallEmployeeReport(employeeName, startDate, endDate, pageable);
         try {
             InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
             return new ByteArrayResource(inputStream.readAllBytes());

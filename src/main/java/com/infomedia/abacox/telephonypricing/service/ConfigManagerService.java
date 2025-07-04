@@ -1,7 +1,7 @@
 package com.infomedia.abacox.telephonypricing.service;
 
 import com.infomedia.abacox.telephonypricing.db.entity.ConfigValue;
-import com.infomedia.abacox.telephonypricing.repository.ConfigValueRepository;
+import com.infomedia.abacox.telephonypricing.db.repository.ConfigValueRepository;
 import com.infomedia.abacox.telephonypricing.service.common.CrudService;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.log4j.Log4j2;

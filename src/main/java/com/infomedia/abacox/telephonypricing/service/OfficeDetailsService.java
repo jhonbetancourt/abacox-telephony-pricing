@@ -4,7 +4,7 @@ import com.infomedia.abacox.telephonypricing.component.export.excel.ExcelGenerat
 import com.infomedia.abacox.telephonypricing.dto.officedetails.CreateOfficeDetails;
 import com.infomedia.abacox.telephonypricing.dto.officedetails.UpdateOfficeDetails;
 import com.infomedia.abacox.telephonypricing.db.entity.OfficeDetails;
-import com.infomedia.abacox.telephonypricing.repository.OfficeDetailsRepository;
+import com.infomedia.abacox.telephonypricing.db.repository.OfficeDetailsRepository;
 import com.infomedia.abacox.telephonypricing.service.common.CrudService;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.data.domain.Page;
