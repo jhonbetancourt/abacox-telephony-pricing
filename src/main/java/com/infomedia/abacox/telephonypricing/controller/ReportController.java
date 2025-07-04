@@ -2,6 +2,7 @@ package com.infomedia.abacox.telephonypricing.controller;
 
 import com.infomedia.abacox.telephonypricing.constants.DateTimePattern;
 import com.infomedia.abacox.telephonypricing.db.view.CorporateReportView;
+import com.infomedia.abacox.telephonypricing.dto.generic.PageableRequest;
 import com.infomedia.abacox.telephonypricing.dto.report.*;
 import com.infomedia.abacox.telephonypricing.dto.generic.ExcelRequest;
 import com.infomedia.abacox.telephonypricing.dto.generic.FilterRequest;
@@ -63,6 +64,7 @@ public class ReportController {
 
     @GetMapping(value = "employeeActivity", produces = MediaType.APPLICATION_JSON_VALUE)
     public Page<EmployeeActivityReportDto> getEmployeeActivityReport(@Parameter(hidden = true) Pageable pageable
+            , @ParameterObject PageableRequest pageableRequest
             , @RequestParam(required = false) String employeeName, @RequestParam(required = false) String employeeExtension
             , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate
             , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate) {
@@ -75,6 +77,7 @@ public class ReportController {
             , @RequestParam(required = false) String employeeName, @RequestParam(required = false) String employeeExtension
             , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate
             , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate
+            , @ParameterObject PageableRequest pageableRequest
             , @ParameterObject ExcelRequest excelRequest) {
 
         ByteArrayResource resource = reportService.exportExcelEmployeeActivityReport(employeeName
@@ -87,6 +90,7 @@ public class ReportController {
 
     @GetMapping(value = "employeeCall", produces = MediaType.APPLICATION_JSON_VALUE)
     public Page<EmployeeCallReportDto> getEmployeeCallReport(@Parameter(hidden = true) Pageable pageable
+            , @ParameterObject PageableRequest pageableRequest
             , @RequestParam(required = false) String employeeName, @RequestParam(required = false) String employeeExtension
             , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate
             , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate) {
@@ -99,7 +103,8 @@ public class ReportController {
             , @RequestParam(required = false) String employeeName, @RequestParam(required = false) String employeeExtension
             , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate
             , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate
-            , @ParameterObject ExcelRequest excelRequest) {
+            , @ParameterObject ExcelRequest excelRequest
+            , @ParameterObject PageableRequest pageableRequest) {
 
         ByteArrayResource resource = reportService.exportExcelEmployeeCallReport(employeeName
                 , employeeExtension, startDate, endDate, pageable, excelRequest.toExcelGeneratorBuilder());
@@ -111,6 +116,7 @@ public class ReportController {
 
     @GetMapping(value = "unassignedCall", produces = MediaType.APPLICATION_JSON_VALUE)
     public Page<UnassignedCallReportDto> getUnassignedCallReport(@Parameter(hidden = true) Pageable pageable
+            , @ParameterObject PageableRequest pageableRequest
             , @RequestParam(required = false) String extension
             , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate
             , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate) {
@@ -122,7 +128,8 @@ public class ReportController {
             , @RequestParam(required = false) String extension
             , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate
             , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate
-            , @ParameterObject ExcelRequest excelRequest) {
+            , @ParameterObject ExcelRequest excelRequest
+            , @ParameterObject PageableRequest pageableRequest) {
 
         ByteArrayResource resource = reportService.exportExcelUnassignedCallReport(extension, startDate, endDate
                 , pageable, excelRequest.toExcelGeneratorBuilder());
@@ -134,6 +141,7 @@ public class ReportController {
 
     @GetMapping(value = "processingFailure", produces = MediaType.APPLICATION_JSON_VALUE)
     public Page<ProcessingFailureReportDto> getProcessingFailureReport(@Parameter(hidden = true) Pageable pageable
+            , @ParameterObject PageableRequest pageableRequest
             , @RequestParam(required = false) String directory
             , @RequestParam(required = false) String errorType
             , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate
@@ -147,7 +155,8 @@ public class ReportController {
             , @RequestParam(required = false) String errorType
             , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate
             , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate
-            , @ParameterObject ExcelRequest excelRequest) {
+            , @ParameterObject ExcelRequest excelRequest
+            , @ParameterObject PageableRequest pageableRequest) {
 
         ByteArrayResource resource = reportService.exportExcelProcessingFailureReport(directory, errorType, startDate
                 , endDate, pageable, excelRequest.toExcelGeneratorBuilder());
