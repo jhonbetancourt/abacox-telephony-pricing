@@ -21,7 +21,7 @@ public final class UnassignedCallReportQueries {
         JOIN plant_type pt ON cl.plant_type_id = pt.id
     WHERE
         cr.service_date BETWEEN :startDate AND :endDate
-        AND (cr.employee_id = 0 OR cr.assignment_cause = 5)
+        AND (cr.employee_id IS NULL OR cr.assignment_cause = 5)
         AND LENGTH(cr.employee_extension) BETWEEN 3 AND 5
         AND cr.duration > 0
         AND (:extension IS NULL OR cr.employee_extension ILIKE CONCAT('%', :extension, '%'))
@@ -38,7 +38,7 @@ public final class UnassignedCallReportQueries {
             JOIN plant_type pt ON cl.plant_type_id = pt.id
         WHERE
             cr.service_date BETWEEN :startDate AND :endDate
-            AND (cr.employee_id = 0 OR cr.assignment_cause = 5)
+            AND (cr.employee_id IS NULL OR cr.assignment_cause = 5)
             AND LENGTH(cr.employee_extension) BETWEEN 3 AND 5
             AND cr.duration > 0
             AND (:extension IS NULL OR cr.employee_extension ILIKE CONCAT('%', :extension, '%'))

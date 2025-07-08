@@ -15,7 +15,6 @@ public final class EmployeeCallReportQueries {
     WHERE
         e.active = true
         AND c.employee_id IS NOT NULL
-        AND c.billed_amount > 0
         AND c.service_date BETWEEN :startDate AND :endDate
         AND (:employeeName IS NULL OR e.name ILIKE CONCAT('%', :employeeName, '%'))
         AND (:employeeExtension IS NULL OR e.extension ILIKE CONCAT('%', :employeeExtension, '%'))
@@ -31,7 +30,6 @@ public final class EmployeeCallReportQueries {
         WHERE
             e.active = true
             AND c.employee_id IS NOT NULL
-            AND c.billed_amount > 0
             AND c.service_date BETWEEN :startDate AND :endDate
             AND (:employeeName IS NULL OR e.name ILIKE CONCAT('%', :employeeName, '%'))
             AND (:employeeExtension IS NULL OR e.extension ILIKE CONCAT('%', :employeeExtension, '%'))
