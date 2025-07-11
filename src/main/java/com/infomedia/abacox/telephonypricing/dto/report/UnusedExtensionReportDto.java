@@ -16,6 +16,7 @@
     private String costCenterWorkOrder;
     private String commLocationDirectory;
     private String indicatorDepartmentCountry;
+    private String indicatorCityName;
     @JsonFormat(pattern = DateTimePattern.DATE_TIME)
     private LocalDateTime lastCallDate;
  }

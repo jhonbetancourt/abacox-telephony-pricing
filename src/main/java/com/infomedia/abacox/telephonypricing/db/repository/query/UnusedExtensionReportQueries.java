@@ -31,6 +31,7 @@ public final class UnusedExtensionReportQueries {
             cc.work_order as costCenterWorkOrder,
             cl.directory as commLocationDirectory,
             i.department_country as indicatorDepartmentCountry,
+            i.city_name as indicatorCityName,
             (
                 SELECT MAX(all_calls.service_date)
                 FROM (

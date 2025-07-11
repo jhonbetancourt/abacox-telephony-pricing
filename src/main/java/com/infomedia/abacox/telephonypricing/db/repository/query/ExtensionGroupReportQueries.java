@@ -71,13 +71,14 @@ public final class ExtensionGroupReportQueries {
             e.extension as extension,
             s.name as subdivisionName,
             i.department_country as indicatorDepartmentCountry,
+            i.city_name as indicatorCityName,
             CAST(COALESCE(COUNT(c.id) FILTER (WHERE c.is_incoming = true), 0) AS INTEGER) as incomingCount,
             CAST(COALESCE(COUNT(c.id) FILTER (WHERE c.is_incoming = false), 0) AS INTEGER) as outgoingCount,
             CAST(COALESCE(COUNT(c.id) FILTER (WHERE c.is_incoming = false AND c.destination_phone = :voicemailNumber), 0) AS INTEGER) as voicemailCount,
             CAST(COALESCE(COUNT(c.id), 0) AS INTEGER) as total,
             CASE
-                WHEN SUM(COUNT(c.id)) OVER () = 0 THEN 0.0
-                ELSE (COUNT(c.id) * 100.0) / SUM(COUNT(c.id)) OVER ()
+                WHEN SUM(COUNT(c.id)) OVER () = 0 THEN 0.00
+                ELSE ROUND( (COUNT(c.id) * 100.0) / SUM(COUNT(c.id)) OVER (), 2)
             END as percent
         FROM
             employee e
@@ -86,14 +87,14 @@ public final class ExtensionGroupReportQueries {
             LEFT JOIN communication_location cl ON e.communication_location_id = cl.id
             LEFT JOIN indicator i ON cl.indicator_id = i.id
         WHERE
-            e.extension IN (:extensions)
+            e.extension IN (:extensions) AND e.active = true
         GROUP BY
-            e.id, s.name, i.department_country
+            e.id, s.name, i.department_country, i.city_name
         """;
 
     public static final String COUNT_QUERY = """
         SELECT COUNT(DISTINCT e.id)
         FROM employee e
-        WHERE e.extension IN (:extensions)
+        WHERE e.extension IN (:extensions) AND e.active = true
         """;
 }

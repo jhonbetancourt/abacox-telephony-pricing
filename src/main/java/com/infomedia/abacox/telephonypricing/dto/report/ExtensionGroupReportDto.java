@@ -10,6 +10,7 @@ package com.infomedia.abacox.telephonypricing.dto.report;
     private String extension;
     private String subdivisionName;
     private String indicatorDepartmentCountry;
+    private String indicatorCityName;
     private Integer incomingCount;
     private Integer outgoingCount;
     private Integer voicemailCount;

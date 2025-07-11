@@ -14,6 +14,7 @@ public interface ExtensionGroupReport {
     String getExtension();
     String getSubdivisionName();
     String getIndicatorDepartmentCountry();
+    String getIndicatorCityName();
     Integer getIncomingCount();
     Integer getOutgoingCount();
     Integer getVoicemailCount();

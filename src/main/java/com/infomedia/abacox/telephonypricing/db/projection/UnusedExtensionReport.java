@@ -16,5 +16,6 @@ public interface UnusedExtensionReport {
     String getCostCenterWorkOrder();
     String getCommLocationDirectory();
     String getIndicatorDepartmentCountry();
+    String getIndicatorCityName();
     LocalDateTime getLastCallDate(); // The last time this extension was ever used
 }
