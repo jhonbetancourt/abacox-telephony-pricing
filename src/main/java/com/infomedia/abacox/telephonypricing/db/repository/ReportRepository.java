@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 public interface ReportRepository extends JpaRepository<VirtualEntity, Long> {
 
@@ -73,6 +74,33 @@ public interface ReportRepository extends JpaRepository<VirtualEntity, Long> {
             @Param("startDate") LocalDateTime startDate,
             @Param("endDate") LocalDateTime endDate,
             @Param("employeeName") String employeeName,
+            Pageable pageable
+    );
+
+    @Query(
+            value = UnusedExtensionReportQueries.QUERY,
+            countQuery = UnusedExtensionReportQueries.COUNT_QUERY,
+            nativeQuery = true
+    )
+    Page<UnusedExtensionReport> getUnusedExtensionReport(
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate,
+            @Param("employeeName") String employeeName,
+            @Param("extension") String extension,
+            Pageable pageable
+    );
+
+    @Query(
+            value = ExtensionGroupReportQueries.QUERY,
+            countQuery = ExtensionGroupReportQueries.COUNT_QUERY,
+            nativeQuery = true
+    )
+    Page<ExtensionGroupReport> getExtensionGroupReport(
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate,
+            @Param("extensions") List<String> extensions,
+            @Param("operatorIds") List<Long> operatorIds,
+            @Param("voicemailNumber") String voicemailNumber,
             Pageable pageable
     );
 }

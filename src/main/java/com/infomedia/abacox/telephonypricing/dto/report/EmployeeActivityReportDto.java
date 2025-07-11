@@ -1,5 +1,7 @@
 package com.infomedia.abacox.telephonypricing.dto.report;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
+import com.infomedia.abacox.telephonypricing.constants.DateTimePattern;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -20,6 +22,8 @@ public class EmployeeActivityReportDto {
     private String officeLocation;
     private Long outgoingCallCount;
     private Long incomingCallCount;
+    @JsonFormat(pattern = DateTimePattern.DATE_TIME)
     private LocalDateTime lastIncomingCallDate;
+    @JsonFormat(pattern = DateTimePattern.DATE_TIME)
     private LocalDateTime lastOutgoingCallDate;
 }

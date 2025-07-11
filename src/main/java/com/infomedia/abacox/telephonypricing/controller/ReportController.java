@@ -29,6 +29,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @RequiredArgsConstructor
 @RestController
@@ -186,6 +187,62 @@ public class ReportController {
                 pageable, excelRequest.toExcelGeneratorBuilder());
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=missed_call_employee_report.xlsx")
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .body(resource);
+    }
+
+    @GetMapping(value = "unusedExtension", produces = MediaType.APPLICATION_JSON_VALUE)
+    public Page<UnusedExtensionReportDto> getUnusedExtensionReport(@Parameter(hidden = true) Pageable pageable,
+                                                                   @ParameterObject PageableRequest pageableRequest,
+                                                                   @RequestParam(required = false) String employeeName,
+                                                                   @RequestParam(required = false) String extension,
+                                                                   @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
+                                                                   @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate) {
+        return reportService.generateUnusedExtensionReport(employeeName, extension, startDate, endDate, pageable);
+    }
+
+    @GetMapping(value = "unusedExtension/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
+    public ResponseEntity<Resource> exportExcelUnusedExtensionReport(@Parameter(hidden = true) Pageable pageable,
+                                                                     @RequestParam(required = false) String employeeName,
+                                                                     @RequestParam(required = false) String extension,
+                                                                     @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
+                                                                     @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate,
+                                                                     @ParameterObject ExcelRequest excelRequest,
+                                                                     @ParameterObject PageableRequest pageableRequest) {
+
+        ByteArrayResource resource = reportService.exportExcelUnusedExtensionReport(employeeName, extension, startDate,
+                endDate, pageable, excelRequest.toExcelGeneratorBuilder());
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=unused_extension_report.xlsx")
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .body(resource);
+    }
+
+    @GetMapping(value = "extensionGroup", produces = MediaType.APPLICATION_JSON_VALUE)
+    public Page<ExtensionGroupReportDto> getExtensionGroupReport(@Parameter(hidden = true) Pageable pageable,
+                                                                 @ParameterObject PageableRequest pageableRequest,
+                                                                 @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
+                                                                 @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate,
+                                                                 @RequestParam(required = false) List<String> extensions,
+                                                                 @RequestParam(required = false) List<Long> operatorIds,
+                                                                 @RequestParam(required = false) String voicemailNumber) {
+        return reportService.generateExtensionGroupReport(startDate, endDate, extensions, operatorIds, voicemailNumber, pageable);
+    }
+
+    @GetMapping(value = "extensionGroup/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
+    public ResponseEntity<Resource> exportExcelExtensionGroupReport(@Parameter(hidden = true) Pageable pageable,
+                                                                    @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
+                                                                    @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate,
+                                                                    @RequestParam(required = false) List<String> extensions,
+                                                                    @RequestParam(required = false) List<Long> operatorIds,
+                                                                    @RequestParam(required = false) String voicemailNumber,
+                                                                    @ParameterObject ExcelRequest excelRequest,
+                                                                    @ParameterObject PageableRequest pageableRequest) {
+
+        ByteArrayResource resource = reportService.exportExcelExtensionGroupReport(startDate, endDate, extensions,
+                operatorIds, voicemailNumber, pageable, excelRequest.toExcelGeneratorBuilder());
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=extension_group_report.xlsx")
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
                 .body(resource);
     }

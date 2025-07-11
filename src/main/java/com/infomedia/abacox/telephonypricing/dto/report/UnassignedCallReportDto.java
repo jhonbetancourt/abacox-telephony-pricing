@@ -1,5 +1,7 @@
 package com.infomedia.abacox.telephonypricing.dto.report;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
+import com.infomedia.abacox.telephonypricing.constants.DateTimePattern;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -36,5 +38,6 @@ public class UnassignedCallReportDto {
 
     private Long callCount;
 
+    @JsonFormat(pattern = DateTimePattern.DATE_TIME)
     private LocalDateTime lastCallDate;
 }
