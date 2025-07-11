@@ -233,9 +233,9 @@ public class ReportController {
     public ResponseEntity<Resource> exportExcelExtensionGroupReport(@Parameter(hidden = true) Pageable pageable,
                                                                     @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
                                                                     @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate,
-                                                                    @RequestParam(required = false) List<String> extensions,
+                                                                    @RequestParam List<String> extensions,
                                                                     @RequestParam(required = false) List<Long> operatorIds,
-                                                                    @RequestParam(required = false) String voicemailNumber,
+                                                                    @RequestParam String voicemailNumber,
                                                                     @ParameterObject ExcelRequest excelRequest,
                                                                     @ParameterObject PageableRequest pageableRequest) {
 
