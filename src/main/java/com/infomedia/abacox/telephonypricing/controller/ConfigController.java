@@ -1,9 +1,9 @@
 package com.infomedia.abacox.telephonypricing.controller;
 
+import com.infomedia.abacox.telephonypricing.component.configmanager.ConfigService;
 import com.infomedia.abacox.telephonypricing.component.modeltools.ModelConverter;
 import com.infomedia.abacox.telephonypricing.dto.configuration.ConfigurationDto;
 import com.infomedia.abacox.telephonypricing.dto.configuration.UpdateConfigurationDto;
-import com.infomedia.abacox.telephonypricing.service.ConfigService;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;

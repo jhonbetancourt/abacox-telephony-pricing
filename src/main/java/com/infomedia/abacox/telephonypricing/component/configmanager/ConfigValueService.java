@@ -1,4 +1,4 @@
-package com.infomedia.abacox.telephonypricing.service;
+package com.infomedia.abacox.telephonypricing.component.configmanager;
 
 import com.infomedia.abacox.telephonypricing.db.entity.ConfigValue;
 import com.infomedia.abacox.telephonypricing.db.repository.ConfigValueRepository;
@@ -8,9 +8,12 @@ import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.*;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -27,7 +30,7 @@ import java.util.stream.Collectors;
  */
 @Service
 @Log4j2
-public class ConfigManagerService extends CrudService<ConfigValue, Long, ConfigValueRepository> {
+public class ConfigValueService extends CrudService<ConfigValue, Long, ConfigValueRepository> {
 
     // A special, private object used to represent null values in the ConcurrentHashMap.
     private static final Object NULL_PLACEHOLDER = new Object();
@@ -36,9 +39,9 @@ public class ConfigManagerService extends CrudService<ConfigValue, Long, ConfigV
     private final Map<String, Object> configCache = new ConcurrentHashMap<>();
 
     // Thread-safe map for update callbacks. The list of callbacks is also thread-safe.
-    private final Map<String, List<UpdateCallback>> updateCallbacks = new ConcurrentHashMap<>();
+    private final Map<String, List<Consumer<Value>>> updateCallbacks = new ConcurrentHashMap<>();
 
-    public ConfigManagerService(ConfigValueRepository repository) {
+    public ConfigValueService(ConfigValueRepository repository) {
         super(repository);
     }
 
@@ -69,14 +72,14 @@ public class ConfigManagerService extends CrudService<ConfigValue, Long, ConfigV
         log.info("Configuration cache initialized with {} entries.", configCache.size());
     }
 
-    public String getValue(String configKey, String defaultValue) {
+    public Value getValue(String configKey, String defaultValue) {
         Object storedValue = configCache.get(configKey);
         // If the key doesn't exist in the cache, storedValue will be null.
         if (storedValue == null) {
-            return defaultValue;
+            return new Value(configKey, defaultValue);
         }
         // If the key exists, decode its value (which might be null).
-        return decodeValue(storedValue);
+        return new Value(configKey, decodeValue(storedValue));
     }
 
     @Transactional
@@ -147,29 +150,25 @@ public class ConfigManagerService extends CrudService<ConfigValue, Long, ConfigV
 
     // --- Callback Mechanism (No changes needed here) ---
 
-    public interface UpdateCallback {
-        <T> void onUpdate(T value);
-    }
-
-    public void registerUpdateCallback(String configKey, UpdateCallback callback) {
+    public void registerUpdateCallback(String configKey, Consumer<Value> callback) {
         updateCallbacks.computeIfAbsent(configKey, k -> new CopyOnWriteArrayList<>()).add(callback);
     }
 
-    public void unregisterUpdateCallback(String configKey, UpdateCallback callback) {
-        List<UpdateCallback> callbacks = updateCallbacks.get(configKey);
+    public void unregisterUpdateCallback(String configKey, Consumer<Value> callback) {
+        List<Consumer<Value>> callbacks = updateCallbacks.get(configKey);
         if (callbacks != null) {
             callbacks.remove(callback);
         }
     }
 
-    private <T> void onUpdateValue(String configKey, T value) {
-        List<UpdateCallback> callbacks = updateCallbacks.get(configKey);
+    private void onUpdateValue(String configKey, String value) {
+        List<Consumer<Value>> callbacks = updateCallbacks.get(configKey);
         if (callbacks != null && !callbacks.isEmpty()) {
             callbacks.forEach(callback ->
                     new Thread(() -> {
                         try {
                             // The callback receives the actual value (e.g., a null String), not the placeholder.
-                            callback.onUpdate(value);
+                            callback.accept(new Value(configKey, value));
                         } catch (Exception e) {
                             log.error("Error executing update callback for key '{}'", configKey, e);
                         }

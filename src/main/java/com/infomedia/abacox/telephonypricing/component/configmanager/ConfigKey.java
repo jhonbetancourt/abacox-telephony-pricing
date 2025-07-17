@@ -1,4 +1,4 @@
-package com.infomedia.abacox.telephonypricing.config;
+package com.infomedia.abacox.telephonypricing.component.configmanager;
 
 import com.infomedia.abacox.telephonypricing.component.cdrprocessing.TelephonyTypeEnum;
 import lombok.Getter;
