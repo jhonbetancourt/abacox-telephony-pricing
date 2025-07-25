@@ -246,4 +246,52 @@ public class ReportController {
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
                 .body(resource);
     }
+
+    @GetMapping(value = "subdivisionUsage", produces = MediaType.APPLICATION_JSON_VALUE)
+    public Page<SubdivisionUsageReportDto> getSubdivisionUsageReport(@Parameter(hidden = true) Pageable pageable
+            , @ParameterObject PageableRequest pageableRequest
+            , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate
+            , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate
+            , @RequestParam List<Long> subdivisionIds) {
+        return reportService.generateSubdivisionUsageReport(startDate, endDate, subdivisionIds, pageable);
+    }
+
+    @GetMapping(value = "subdivisionUsage/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
+    public ResponseEntity<Resource> exportExcelSubdivisionUsageReport(@Parameter(hidden = true) Pageable pageable
+            , @ParameterObject PageableRequest pageableRequest
+            , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate
+            , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate
+            , @RequestParam List<Long> subdivisionIds
+            , @ParameterObject ExcelRequest excelRequest) {
+
+        ByteArrayResource resource = reportService.exportExcelSubdivisionUsageReport(startDate, endDate, subdivisionIds, pageable, excelRequest.toExcelGeneratorBuilder());
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=subdivision_usage_report.xlsx")
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .body(resource);
+    }
+
+    @GetMapping(value = "subdivisionUsageByType", produces = MediaType.APPLICATION_JSON_VALUE)
+    public Page<SubdivisionUsageByTypeReportDto> getSubdivisionUsageByTypeReport(@Parameter(hidden = true) Pageable pageable
+            , @ParameterObject PageableRequest pageableRequest
+            , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate
+            , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate
+            , @RequestParam List<Long> subdivisionIds) {
+        return reportService.generateSubdivisionUsageByTypeReport(startDate, endDate, subdivisionIds, pageable);
+    }
+
+    @GetMapping(value = "subdivisionUsageByType/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
+    public ResponseEntity<Resource> exportExcelSubdivisionUsageByTypeReport(@Parameter(hidden = true) Pageable pageable
+            , @ParameterObject PageableRequest pageableRequest
+            , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate
+            , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate
+            , @RequestParam List<Long> subdivisionIds
+            , @ParameterObject ExcelRequest excelRequest) {
+
+        ByteArrayResource resource = reportService.exportExcelSubdivisionUsageByTypeReport(startDate, endDate, subdivisionIds, pageable, excelRequest.toExcelGeneratorBuilder());
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=subdivision_usage_by_type_report.xlsx")
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .body(resource);
+    }
 }

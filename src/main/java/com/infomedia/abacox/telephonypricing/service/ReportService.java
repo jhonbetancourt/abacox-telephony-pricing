@@ -189,4 +189,42 @@ public class ReportService {
             throw new RuntimeException(e);
         }
     }
+
+    @Transactional(readOnly = true)
+    public Page<SubdivisionUsageReportDto> generateSubdivisionUsageReport(
+            LocalDateTime startDate, LocalDateTime endDate, List<Long> subdivisionIds, Pageable pageable) {
+        return modelConverter.mapPage(reportRepository.getSubdivisionUsageReport(startDate, endDate, subdivisionIds, pageable),
+                SubdivisionUsageReportDto.class);
+    }
+
+    @Transactional(readOnly = true)
+    public ByteArrayResource exportExcelSubdivisionUsageReport(
+            LocalDateTime startDate, LocalDateTime endDate, List<Long> subdivisionIds, Pageable pageable, ExcelGeneratorBuilder builder) {
+        Page<SubdivisionUsageReportDto> collection = generateSubdivisionUsageReport(startDate, endDate, subdivisionIds, pageable);
+        try {
+            InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
+            return new ByteArrayResource(inputStream.readAllBytes());
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public Page<SubdivisionUsageByTypeReportDto> generateSubdivisionUsageByTypeReport(
+            LocalDateTime startDate, LocalDateTime endDate, List<Long> subdivisionIds, Pageable pageable) {
+        return modelConverter.mapPage(reportRepository.getSubdivisionUsageByTypeReport(startDate, endDate, subdivisionIds, pageable),
+                SubdivisionUsageByTypeReportDto.class);
+    }
+
+    @Transactional(readOnly = true)
+    public ByteArrayResource exportExcelSubdivisionUsageByTypeReport(
+            LocalDateTime startDate, LocalDateTime endDate, List<Long> subdivisionIds, Pageable pageable, ExcelGeneratorBuilder builder) {
+        Page<SubdivisionUsageByTypeReportDto> collection = generateSubdivisionUsageByTypeReport(startDate, endDate, subdivisionIds, pageable);
+        try {
+            InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
+            return new ByteArrayResource(inputStream.readAllBytes());
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
 }

@@ -103,4 +103,28 @@ public interface ReportRepository extends JpaRepository<VirtualEntity, Long> {
             @Param("voicemailNumber") String voicemailNumber,
             Pageable pageable
     );
+
+    @Query(
+            value = SubdivisionUsageReportQueries.QUERY,
+            countQuery = SubdivisionUsageReportQueries.COUNT_QUERY,
+            nativeQuery = true
+    )
+    Page<SubdivisionUsageReport> getSubdivisionUsageReport(
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate,
+            @Param("subdivisionIds") List<Long> subdivisionIds,
+            Pageable pageable
+    );
+
+    @Query(
+            value = SubdivisionUsageByTypeReportQueries.QUERY,
+            countQuery = SubdivisionUsageByTypeReportQueries.COUNT_QUERY,
+            nativeQuery = true
+    )
+    Page<SubdivisionUsageByTypeReport> getSubdivisionUsageByTypeReport(
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate,
+            @Param("subdivisionIds") List<Long> subdivisionIds,
+            Pageable pageable
+    );
 }
