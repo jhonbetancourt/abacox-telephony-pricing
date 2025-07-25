@@ -19,8 +19,6 @@ public final class SubdivisionUsageByTypeReportQueries {
         subdivision s ON e.subdivision_id = s.id
     JOIN
         telephony_type tt ON cr.telephony_type_id = tt.id
-    -- The following joins are included to match the filtering logic of the original query,
-    -- which implicitly inner-joined these tables.
     JOIN
         call_category cc ON tt.call_category_id = cc.id
     JOIN
