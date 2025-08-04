@@ -294,4 +294,70 @@ public class ReportController {
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
                 .body(resource);
     }
+
+    @GetMapping(value = "telephonyTypeUsage", produces = MediaType.APPLICATION_JSON_VALUE)
+    public Page<TelephonyTypeUsageReportDto> getTelephonyTypeUsageReport(@Parameter(hidden = true) Pageable pageable
+            , @ParameterObject PageableRequest pageableRequest
+            , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate
+            , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate) {
+        return reportService.generateTelephonyTypeUsageReport(startDate, endDate, pageable);
+    }
+
+    @GetMapping(value = "telephonyTypeUsage/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
+    public ResponseEntity<Resource> exportExcelTelephonyTypeUsageReport(@Parameter(hidden = true) Pageable pageable
+            , @ParameterObject PageableRequest pageableRequest
+            , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate
+            , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate
+            , @ParameterObject ExcelRequest excelRequest) {
+
+        ByteArrayResource resource = reportService.exportExcelTelephonyTypeUsageReport(startDate, endDate, pageable, excelRequest.toExcelGeneratorBuilder());
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=telephony_type_usage_report.xlsx")
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .body(resource);
+    }
+
+    @GetMapping(value = "monthlyTelephonyTypeUsage", produces = MediaType.APPLICATION_JSON_VALUE)
+    public Page<MonthlyTelephonyTypeUsageReportDto> getMonthlyTelephonyTypeUsageReport(@Parameter(hidden = true) Pageable pageable
+            , @ParameterObject PageableRequest pageableRequest
+            , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate
+            , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate) {
+        return reportService.generateMonthlyTelephonyTypeUsageReport(startDate, endDate, pageable);
+    }
+
+    @GetMapping(value = "monthlyTelephonyTypeUsage/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
+    public ResponseEntity<Resource> exportExcelMonthlyTelephonyTypeUsageReport(@Parameter(hidden = true) Pageable pageable
+            , @ParameterObject PageableRequest pageableRequest
+            , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate
+            , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate
+            , @ParameterObject ExcelRequest excelRequest) {
+
+        ByteArrayResource resource = reportService.exportExcelMonthlyTelephonyTypeUsageReport(startDate, endDate, pageable, excelRequest.toExcelGeneratorBuilder());
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=monthly_telephony_type_usage_report.xlsx")
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .body(resource);
+    }
+
+    @GetMapping(value = "costCenterUsage", produces = MediaType.APPLICATION_JSON_VALUE)
+    public Page<CostCenterUsageReportDto> getCostCenterUsageReport(@Parameter(hidden = true) Pageable pageable
+            , @ParameterObject PageableRequest pageableRequest
+            , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate
+            , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate) {
+        return reportService.generateCostCenterUsageReport(startDate, endDate, pageable);
+    }
+
+    @GetMapping(value = "costCenterUsage/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
+    public ResponseEntity<Resource> exportExcelCostCenterUsageReport(@Parameter(hidden = true) Pageable pageable
+            , @ParameterObject PageableRequest pageableRequest
+            , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate
+            , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate
+            , @ParameterObject ExcelRequest excelRequest) {
+
+        ByteArrayResource resource = reportService.exportExcelCostCenterUsageReport(startDate, endDate, pageable, excelRequest.toExcelGeneratorBuilder());
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=cost_center_usage_report.xlsx")
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .body(resource);
+    }
 }

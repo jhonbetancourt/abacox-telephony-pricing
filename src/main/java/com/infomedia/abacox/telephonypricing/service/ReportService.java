@@ -227,4 +227,62 @@ public class ReportService {
             throw new RuntimeException(e);
         }
     }
+
+
+    @Transactional(readOnly = true)
+    public Page<TelephonyTypeUsageReportDto> generateTelephonyTypeUsageReport(
+            LocalDateTime startDate, LocalDateTime endDate, Pageable pageable) {
+        return modelConverter.mapPage(reportRepository.getTelephonyTypeUsageReport(startDate, endDate, pageable),
+                TelephonyTypeUsageReportDto.class);
+    }
+
+    @Transactional(readOnly = true)
+    public ByteArrayResource exportExcelTelephonyTypeUsageReport(
+            LocalDateTime startDate, LocalDateTime endDate, Pageable pageable, ExcelGeneratorBuilder builder) {
+        Page<TelephonyTypeUsageReportDto> collection = generateTelephonyTypeUsageReport(startDate, endDate, pageable);
+        try {
+            InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
+            return new ByteArrayResource(inputStream.readAllBytes());
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public Page<MonthlyTelephonyTypeUsageReportDto> generateMonthlyTelephonyTypeUsageReport(
+            LocalDateTime startDate, LocalDateTime endDate, Pageable pageable) {
+        return modelConverter.mapPage(reportRepository.getMonthlyTelephonyTypeUsageReport(startDate, endDate, pageable),
+                MonthlyTelephonyTypeUsageReportDto.class);
+    }
+
+    @Transactional(readOnly = true)
+    public ByteArrayResource exportExcelMonthlyTelephonyTypeUsageReport(
+            LocalDateTime startDate, LocalDateTime endDate, Pageable pageable, ExcelGeneratorBuilder builder) {
+        Page<MonthlyTelephonyTypeUsageReportDto> collection = generateMonthlyTelephonyTypeUsageReport(startDate, endDate, pageable);
+        try {
+            InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
+            return new ByteArrayResource(inputStream.readAllBytes());
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public Page<CostCenterUsageReportDto> generateCostCenterUsageReport(
+            LocalDateTime startDate, LocalDateTime endDate, Pageable pageable) {
+        return modelConverter.mapPage(reportRepository.getCostCenterUsageReport(startDate, endDate, pageable),
+                CostCenterUsageReportDto.class);
+    }
+
+    @Transactional(readOnly = true)
+    public ByteArrayResource exportExcelCostCenterUsageReport(
+            LocalDateTime startDate, LocalDateTime endDate, Pageable pageable, ExcelGeneratorBuilder builder) {
+        Page<CostCenterUsageReportDto> collection = generateCostCenterUsageReport(startDate, endDate, pageable);
+        try {
+            InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
+            return new ByteArrayResource(inputStream.readAllBytes());
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
 }
