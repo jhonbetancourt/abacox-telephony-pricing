@@ -285,4 +285,42 @@ public class ReportService {
             throw new RuntimeException(e);
         }
     }
+
+    @Transactional(readOnly = true)
+    public Page<EmployeeAuthCodeUsageReportDto> generateEmployeeAuthCodeUsageReport(
+            LocalDateTime startDate, LocalDateTime endDate, Pageable pageable) {
+        return modelConverter.mapPage(reportRepository.getEmployeeAuthCodeUsageReport(startDate, endDate, pageable),
+                EmployeeAuthCodeUsageReportDto.class);
+    }
+
+    @Transactional(readOnly = true)
+    public ByteArrayResource exportExcelEmployeeAuthCodeUsageReport(
+            LocalDateTime startDate, LocalDateTime endDate, Pageable pageable, ExcelGeneratorBuilder builder) {
+        Page<EmployeeAuthCodeUsageReportDto> collection = generateEmployeeAuthCodeUsageReport(startDate, endDate, pageable);
+        try {
+            InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
+            return new ByteArrayResource(inputStream.readAllBytes());
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public Page<MonthlySubdivisionUsageReportDto> generateMonthlySubdivisionUsageReport(
+            LocalDateTime startDate, LocalDateTime endDate, List<Long> subdivisionIds, Pageable pageable) {
+        return modelConverter.mapPage(reportRepository.getMonthlySubdivisionUsageReport(startDate, endDate, subdivisionIds, pageable),
+                MonthlySubdivisionUsageReportDto.class);
+    }
+
+    @Transactional(readOnly = true)
+    public ByteArrayResource exportExcelMonthlySubdivisionUsageReport(
+            LocalDateTime startDate, LocalDateTime endDate, List<Long> subdivisionIds, Pageable pageable, ExcelGeneratorBuilder builder) {
+        Page<MonthlySubdivisionUsageReportDto> collection = generateMonthlySubdivisionUsageReport(startDate, endDate, subdivisionIds, pageable);
+        try {
+            InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
+            return new ByteArrayResource(inputStream.readAllBytes());
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
 }
