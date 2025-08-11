@@ -34,7 +34,6 @@ public final class ExtensionGroupReportQueries {
      */
     public static final String QUERY = """
         WITH employee_calls AS (
-            -- Gather all calls related to the target employees in one place
             SELECT
                 cr.id,
                 cr.is_incoming,
@@ -43,7 +42,7 @@ public final class ExtensionGroupReportQueries {
             FROM
                 employee e
             JOIN
-                call_record cr ON cr.employee_id = e.id -- Outgoing calls
+                call_record cr ON cr.employee_id = e.id
             WHERE
                 e.extension IN (:extensions)
                 AND cr.service_date BETWEEN :startDate AND :endDate
@@ -59,7 +58,7 @@ public final class ExtensionGroupReportQueries {
             FROM
                 employee e
             JOIN
-                call_record cr ON cr.destination_phone = e.extension -- Incoming calls
+                call_record cr ON cr.destination_phone = e.extension
             WHERE
                 e.extension IN (:extensions)
                 AND cr.service_date BETWEEN :startDate AND :endDate

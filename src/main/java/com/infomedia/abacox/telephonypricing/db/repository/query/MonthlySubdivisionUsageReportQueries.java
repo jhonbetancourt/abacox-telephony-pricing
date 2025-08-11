@@ -21,9 +21,8 @@ public final class MonthlySubdivisionUsageReportQueries {
         employee e ON cr.employee_id = e.id
     JOIN
         subdivision s ON e.subdivision_id = s.id
-    LEFT JOIN -- Use LEFT JOIN to get parent name; handles top-level subdivisions
+    LEFT JOIN
         subdivision ps ON s.parent_subdivision_id = ps.id
-    -- Other joins from original query for integrity
     JOIN
         telephony_type tt ON cr.telephony_type_id = tt.id
     JOIN

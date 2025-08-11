@@ -383,8 +383,6 @@ public class ReportController {
                 .body(resource);
     }
 
-    // In class ReportController
-
     @GetMapping(value = "monthlySubdivisionUsage", produces = MediaType.APPLICATION_JSON_VALUE)
     public Page<MonthlySubdivisionUsageReportDto> getMonthlySubdivisionUsageReport(@Parameter(hidden = true) Pageable pageable
             , @ParameterObject PageableRequest pageableRequest
@@ -405,6 +403,28 @@ public class ReportController {
         ByteArrayResource resource = reportService.exportExcelMonthlySubdivisionUsageReport(startDate, endDate, subdivisionIds, pageable, excelRequest.toExcelGeneratorBuilder());
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=monthly_subdivision_usage_report.xlsx")
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .body(resource);
+    }
+
+    @GetMapping(value = "dialedNumberUsage", produces = MediaType.APPLICATION_JSON_VALUE)
+    public Page<DialedNumberUsageReportDto> getDialedNumberUsageReport(@Parameter(hidden = true) Pageable pageable
+            , @ParameterObject PageableRequest pageableRequest
+            , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate
+            , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate) {
+        return reportService.generateDialedNumberUsageReport(startDate, endDate, pageable);
+    }
+
+    @GetMapping(value = "dialedNumberUsage/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
+    public ResponseEntity<Resource> exportExcelDialedNumberUsageReport(@Parameter(hidden = true) Pageable pageable
+            , @ParameterObject PageableRequest pageableRequest
+            , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate
+            , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate
+            , @ParameterObject ExcelRequest excelRequest) {
+
+        ByteArrayResource resource = reportService.exportExcelDialedNumberUsageReport(startDate, endDate, pageable, excelRequest.toExcelGeneratorBuilder());
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=dialed_number_usage_report.xlsx")
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
                 .body(resource);
     }

@@ -183,4 +183,15 @@ public interface ReportRepository extends JpaRepository<VirtualEntity, Long> {
             @Param("subdivisionIds") List<Long> subdivisionIds,
             Pageable pageable
     );
+
+    @Query(
+            value = DialedNumberUsageReportQueries.QUERY,
+            countQuery = DialedNumberUsageReportQueries.COUNT_QUERY,
+            nativeQuery = true
+    )
+    Page<DialedNumberUsageReport> getDialedNumberUsageReport(
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate,
+            Pageable pageable
+    );
 }

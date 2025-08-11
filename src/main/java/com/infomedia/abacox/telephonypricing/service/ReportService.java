@@ -323,4 +323,23 @@ public class ReportService {
             throw new RuntimeException(e);
         }
     }
+
+    @Transactional(readOnly = true)
+    public Page<DialedNumberUsageReportDto> generateDialedNumberUsageReport(
+            LocalDateTime startDate, LocalDateTime endDate, Pageable pageable) {
+        return modelConverter.mapPage(reportRepository.getDialedNumberUsageReport(startDate, endDate, pageable),
+                DialedNumberUsageReportDto.class);
+    }
+
+    @Transactional(readOnly = true)
+    public ByteArrayResource exportExcelDialedNumberUsageReport(
+            LocalDateTime startDate, LocalDateTime endDate, Pageable pageable, ExcelGeneratorBuilder builder) {
+        Page<DialedNumberUsageReportDto> collection = generateDialedNumberUsageReport(startDate, endDate, pageable);
+        try {
+            InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
+            return new ByteArrayResource(inputStream.readAllBytes());
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
 }
