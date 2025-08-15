@@ -342,4 +342,25 @@ public class ReportService {
             throw new RuntimeException(e);
         }
     }
+
+    // In class ReportService
+
+    @Transactional(readOnly = true)
+    public Page<DestinationUsageReportDto> generateDestinationUsageReport(
+            LocalDateTime startDate, LocalDateTime endDate, Pageable pageable) {
+        return modelConverter.mapPage(reportRepository.getDestinationUsageReport(startDate, endDate, pageable),
+                DestinationUsageReportDto.class);
+    }
+
+    @Transactional(readOnly = true)
+    public ByteArrayResource exportExcelDestinationUsageReport(
+            LocalDateTime startDate, LocalDateTime endDate, Pageable pageable, ExcelGeneratorBuilder builder) {
+        Page<DestinationUsageReportDto> collection = generateDestinationUsageReport(startDate, endDate, pageable);
+        try {
+            InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
+            return new ByteArrayResource(inputStream.readAllBytes());
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
 }
