@@ -1,5 +1,3 @@
-// src/main/java/com/infomedia/abacox/telephonypricing/dto/callrecord/CorporativeReportEntry.java
-
 package com.infomedia.abacox.telephonypricing.dto.report;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
@@ -16,15 +14,17 @@ import java.time.LocalDateTime;
 public class CorporateReportDto {
 
     private Long callRecordId;
+    private String originPhone;
+    private String destinationPhone;
+    private String originLocation;
+    private String destinationLocation;
+    private String costCenter;
     private Long telephonyTypeId;
     private String telephonyTypeName;
     private Long employeeId;
     private String employeeName;
     private Long destinationEmployeeId;
     private String destinationEmployeeName;
-    private String employeeExtension;
-    private String dial;
-    private String destinationPhone;
     private Long operatorId;
     private String operatorName;
     @JsonFormat(pattern = DateTimePattern.DATE_TIME)
@@ -42,14 +42,10 @@ public class CorporateReportDto {
     private BigDecimal billedAmount;
     private BigDecimal pricePerMinute;
     private Integer transferCause;
-    private String originDepartmentCountry;
-    private String originCity;
-    private String destinationDepartmentCountry;
-    private String destinationCity;
     private Long originCountryId;
+    private String originCountryName;
     private Long subdivisionId;
-    private String costCenterName;
-    private String workOrder;
+    private String subdivisionName;
     private Boolean contactType;
     private String contactName;
     private Long contactEmployeeId;

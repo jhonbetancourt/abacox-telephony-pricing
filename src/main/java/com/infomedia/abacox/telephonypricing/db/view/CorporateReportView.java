@@ -11,25 +11,31 @@ import org.hibernate.annotations.Immutable;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
-/**
- * A read-only JPA entity that maps directly to the 'v_corporate_report' database view.
- * This entity is treated as immutable by Hibernate, which provides performance optimizations
- * as Hibernate will not perform dirty checking on these objects.
- */
 @Entity
-@Immutable // Key annotation for read-only entities/views
-@Table(name = "v_corporate_report") // Maps this entity to the database view
+@Immutable
+@Table(name = "v_corporate_report")
 @Getter
-@NoArgsConstructor // Required by JPA
+@NoArgsConstructor
 public class CorporateReportView {
 
-    /**
-     * The primary key of the view. This MUST map to a unique column in the view.
-     * In our case, it's the primary key of the underlying 'call_record' table.
-     */
     @Id
     @Column(name = "call_record_id")
     private Long callRecordId;
+
+    @Column(name = "origin_phone")
+    private String originPhone;
+
+    @Column(name = "destination_phone")
+    private String destinationPhone;
+
+    @Column(name = "origin_location")
+    private String originLocation;
+
+    @Column(name = "destination_location")
+    private String destinationLocation;
+
+    @Column(name = "cost_center")
+    private String costCenter;
 
     @Column(name = "telephony_type_id")
     private Long telephonyTypeId;
@@ -48,15 +54,6 @@ public class CorporateReportView {
 
     @Column(name = "destination_employee_name")
     private String destinationEmployeeName;
-
-    @Column(name = "employee_extension")
-    private String employeeExtension;
-
-    @Column(name = "dial")
-    private String dial;
-
-    @Column(name = "destination_phone")
-    private String destinationPhone;
 
     @Column(name = "operator_id")
     private Long operatorId;
@@ -106,29 +103,17 @@ public class CorporateReportView {
     @Column(name = "transfer_cause")
     private Integer transferCause;
 
-    @Column(name = "origin_country")
-    private String originCountry;
-
-    @Column(name = "origin_city")
-    private String originCity;
-
-    @Column(name = "destination_country")
-    private String destinationCountry;
-
-    @Column(name = "destination_city")
-    private String destinationCity;
-
     @Column(name = "origin_country_id")
     private Long originCountryId;
+
+    @Column(name = "origin_country_name")
+    private String originCountryName;
 
     @Column(name = "subdivision_id")
     private Long subdivisionId;
 
-    @Column(name = "cost_center_name")
-    private String costCenterName;
-
-    @Column(name = "work_order")
-    private String workOrder;
+    @Column(name = "subdivision_name")
+    private String subdivisionName;
 
     @Column(name = "contact_type")
     private Boolean contactType;
