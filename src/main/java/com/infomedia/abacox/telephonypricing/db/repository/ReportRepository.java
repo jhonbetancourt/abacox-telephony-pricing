@@ -205,4 +205,15 @@ public interface ReportRepository extends JpaRepository<VirtualEntity, Long> {
             @Param("endDate") LocalDateTime endDate,
             Pageable pageable
     );
+
+    @Query(
+            value = HighestConsumptionEmployeeReportQueries.QUERY,
+            countQuery = HighestConsumptionEmployeeReportQueries.COUNT_QUERY,
+            nativeQuery = true
+    )
+    Page<HighestConsumptionEmployeeReport> getHighestConsumptionEmployeeReport(
+            @Param("startDate") LocalDateTime startDate,
+            @Param("endDate") LocalDateTime endDate,
+            Pageable pageable
+    );
 }

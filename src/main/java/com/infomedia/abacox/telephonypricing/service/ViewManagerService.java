@@ -36,6 +36,7 @@ public class ViewManagerService {
         // This makes it easy to add more views in the future.
         List<String> requiredViews = List.of(
                 "v_corporate_report"
+                , "v_conference_calls_report"
        //         "v_employee_activity_report"
                 //, "v_another_report_view" // <-- Add future views here
                 //, "v_summary_view"

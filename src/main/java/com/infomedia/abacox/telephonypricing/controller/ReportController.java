@@ -1,6 +1,7 @@
 package com.infomedia.abacox.telephonypricing.controller;
 
 import com.infomedia.abacox.telephonypricing.constants.DateTimePattern;
+import com.infomedia.abacox.telephonypricing.db.view.ConferenceCallsReportView;
 import com.infomedia.abacox.telephonypricing.db.view.CorporateReportView;
 import com.infomedia.abacox.telephonypricing.dto.generic.PageableRequest;
 import com.infomedia.abacox.telephonypricing.dto.report.*;
@@ -447,6 +448,48 @@ public class ReportController {
         ByteArrayResource resource = reportService.exportExcelDestinationUsageReport(startDate, endDate, pageable, excelRequest.toExcelGeneratorBuilder());
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=destination_usage_report.xlsx")
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .body(resource);
+    }
+
+    @GetMapping(value = "highestConsumptionEmployee", produces = MediaType.APPLICATION_JSON_VALUE)
+    public Page<HighestConsumptionEmployeeReportDto> getHighestConsumptionEmployeeReport(@Parameter(hidden = true) Pageable pageable
+            , @ParameterObject PageableRequest pageableRequest
+            , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate
+            , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate) {
+        return reportService.generateHighestConsumptionEmployeeReport(startDate, endDate, pageable);
+    }
+
+    @GetMapping(value = "highestConsumptionEmployee/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
+    public ResponseEntity<Resource> exportExcelHighestConsumptionEmployeeReport(@Parameter(hidden = true) Pageable pageable
+            , @ParameterObject PageableRequest pageableRequest
+            , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate
+            , @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate
+            , @ParameterObject ExcelRequest excelRequest) {
+
+        ByteArrayResource resource = reportService.exportExcelHighestConsumptionEmployeeReport(startDate, endDate, pageable, excelRequest.toExcelGeneratorBuilder());
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=highest_consumption_employee_report.xlsx")
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .body(resource);
+    }
+
+    @GetMapping(value = "conferenceCalls", produces = MediaType.APPLICATION_JSON_VALUE)
+    public Page<ConferenceCallsReportDto> getConferenceCallReport(@Parameter(hidden = true) Pageable pageable
+            , @Parameter(hidden = true) @Filter Specification<ConferenceCallsReportView> spec
+            , @ParameterObject FilterRequest filterRequest) {
+        return reportService.generateConferenceCallsReport(spec, pageable);
+    }
+
+    @GetMapping(value = "conferenceCalls/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
+    public ResponseEntity<Resource> exportExcelConferenceCallReport(@Parameter(hidden = true) Pageable pageable
+            , @Parameter(hidden = true) @Filter Specification<ConferenceCallsReportView> spec
+            , @ParameterObject FilterRequest filterRequest
+            , @ParameterObject ExcelRequest excelRequest) {
+        ByteArrayResource resource = reportService.exportExcelConferenceCallsReport(spec
+                , pageable, excelRequest.toExcelGeneratorBuilder());
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=conference_calls.xlsx")
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
                 .body(resource);
     }

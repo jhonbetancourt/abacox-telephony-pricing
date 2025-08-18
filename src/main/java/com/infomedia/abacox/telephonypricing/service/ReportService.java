@@ -2,6 +2,8 @@ package com.infomedia.abacox.telephonypricing.service;
 
 import com.infomedia.abacox.telephonypricing.component.export.excel.ExcelGeneratorBuilder;
 import com.infomedia.abacox.telephonypricing.component.modeltools.ModelConverter;
+import com.infomedia.abacox.telephonypricing.db.repository.ConferenceCallsReportViewRepository;
+import com.infomedia.abacox.telephonypricing.db.view.ConferenceCallsReportView;
 import com.infomedia.abacox.telephonypricing.db.view.CorporateReportView;
 import com.infomedia.abacox.telephonypricing.dto.report.*;
 import com.infomedia.abacox.telephonypricing.db.repository.ReportRepository;
@@ -26,6 +28,7 @@ public class ReportService {
 
     private final ReportRepository reportRepository;
     private final CorporateReportViewRepository corporateReportViewRepository;
+    private final ConferenceCallsReportViewRepository conferenceCallsReportViewRepository;
     private final ModelConverter modelConverter;
 
 
@@ -356,6 +359,44 @@ public class ReportService {
     public ByteArrayResource exportExcelDestinationUsageReport(
             LocalDateTime startDate, LocalDateTime endDate, Pageable pageable, ExcelGeneratorBuilder builder) {
         Page<DestinationUsageReportDto> collection = generateDestinationUsageReport(startDate, endDate, pageable);
+        try {
+            InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
+            return new ByteArrayResource(inputStream.readAllBytes());
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public Page<HighestConsumptionEmployeeReportDto> generateHighestConsumptionEmployeeReport(
+            LocalDateTime startDate, LocalDateTime endDate, Pageable pageable) {
+        return modelConverter.mapPage(reportRepository.getHighestConsumptionEmployeeReport(startDate, endDate, pageable),
+                HighestConsumptionEmployeeReportDto.class);
+    }
+
+    @Transactional(readOnly = true)
+    public ByteArrayResource exportExcelHighestConsumptionEmployeeReport(
+            LocalDateTime startDate, LocalDateTime endDate, Pageable pageable, ExcelGeneratorBuilder builder) {
+        Page<HighestConsumptionEmployeeReportDto> collection = generateHighestConsumptionEmployeeReport(startDate, endDate, pageable);
+        try {
+            InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
+            return new ByteArrayResource(inputStream.readAllBytes());
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    // In class ReportService
+
+    @Transactional(readOnly = true)
+    public Page<ConferenceCallsReportDto> generateConferenceCallsReport(Specification<ConferenceCallsReportView> specification, Pageable pageable) {
+        return modelConverter.mapPage(conferenceCallsReportViewRepository.findAll(specification, pageable), ConferenceCallsReportDto.class);
+    }
+
+    @Transactional(readOnly = true)
+    public ByteArrayResource exportExcelConferenceCallsReport(Specification<ConferenceCallsReportView> specification
+            , Pageable pageable, ExcelGeneratorBuilder builder) {
+        Page<ConferenceCallsReportDto> collection = generateConferenceCallsReport(specification, pageable);
         try {
             InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
             return new ByteArrayResource(inputStream.readAllBytes());
