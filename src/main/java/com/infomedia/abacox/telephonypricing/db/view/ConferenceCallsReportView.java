@@ -47,6 +47,15 @@ public class ConferenceCallsReportView {
     @Column(name = "employee_id")
     private Long employeeId;
 
+    @Column(name = "employee_name")
+    private String employeeName;
+
+    @Column(name = "subdivision_id")
+    private Long subdivisionId;
+
+    @Column(name = "subdivision_name")
+    private String subdivisionName;
+
     @Column(name = "employee_auth_code")
     private String employeeAuthCode;
 

@@ -14,6 +14,9 @@ public class ConferenceCallsReportDto {
     private String dialedNumber;
     private BigDecimal billedAmount;
     private Long employeeId;
+    private String employeeName;
+    private Long subdivisionId;
+    private String subdivisionName;
     private String employeeAuthCode;
     private Long operatorId;
     private String operatorName;

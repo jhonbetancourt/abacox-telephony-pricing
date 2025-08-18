@@ -12,8 +12,11 @@ SELECT
     cr.transfer_cause,
     cr.employee_transfer AS transfer_key,
 
-    -- Employee Details
+    -- Employee and Subdivision Details
     cr.employee_id,
+    e1.name AS employee_name,          -- <<< NEW FIELD
+    e1.subdivision_id,                -- <<< NEW FIELD
+    s.name AS subdivision_name,       -- <<< NEW FIELD
 
     -- Operator Details
     cr.operator_id,
@@ -37,6 +40,8 @@ FROM
         INNER JOIN
     telephony_type tt ON tt.id = cr.telephony_type_id
 -- Left Joins for optional/enrichment data
+        LEFT JOIN
+    subdivision s ON s.id = e1.subdivision_id -- <<< NEW JOIN
         LEFT JOIN
     operator o ON o.id = cr.operator_id
         LEFT JOIN
