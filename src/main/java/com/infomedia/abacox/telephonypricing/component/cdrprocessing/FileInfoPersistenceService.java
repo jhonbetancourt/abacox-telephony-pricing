@@ -1,4 +1,3 @@
-// File: com/infomedia/abacox/telephonypricing/cdr/FileInfoPersistenceService.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
 import com.infomedia.abacox.telephonypricing.db.entity.FileInfo;
@@ -10,7 +9,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.time.LocalDateTime;
+import java.util.zip.Deflater;
+import java.util.zip.Inflater;
 
 @Service
 @Log4j2
@@ -20,36 +23,45 @@ public class FileInfoPersistenceService {
     private EntityManager entityManager;
 
     /**
-     * Creates a new FileInfo record or retrieves an existing one based on a checksum.
-     * This method should run in its own transaction or ensure the entity is flushed
-     * if part of a larger transaction, so its ID is available to subsequent separate transactions.
+     * Creates a new FileInfo record with compressed content, or retrieves an existing one based on a checksum of the content.
+     * This method is idempotent: processing the same file content will return the same FileInfo record.
+     * It runs in its own transaction to ensure the ID is available to subsequent operations.
      *
-     * For stream processing, parentId is typically the plantTypeId or commLocationId.
-     * Type is a descriptor like "ROUTED_STREAM" or "PRE_ROUTED_STREAM".
+     * @param filename The name of the file.
+     * @param parentId The ID of the parent entity (e.g., plantTypeId).
+     * @param type A descriptor for the file type (e.g., "ROUTED_STREAM").
+     * @param uncompressedContent The raw byte content of the file.
+     * @return The persisted or existing FileInfo entity.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW) // Ensures this commits independently
-    public FileInfo createOrGetFileInfo(String filename, Long parentId, String type) {
-        // For streams, size might not be easily available without consuming it.
-        // A simple approach is to use filename and parentId as a key.
-        // PHP's Archivo_Local_Info creates a hash based on path, size, modtime.
-        // For a stream, we use filename + parentId + current time to ensure a new record for each processing attempt of a stream.
-
-        String uniqueKey = filename + "|" + (parentId != null ? parentId : "null") + "|" + System.currentTimeMillis();
-        String checksum = CdrUtil.sha256(uniqueKey);
+    public FileInfo createOrGetFileInfo(String filename, Long parentId, String type, byte[] uncompressedContent) {
+        // Checksum is now based on the actual file content for idempotency.
+        String checksum = CdrUtil.sha256(uncompressedContent);
         log.debug("Attempting to create/get FileInfo. Filename: {}, ParentId: {}, Type: {}, Checksum: {}", filename, parentId, type, checksum);
-
 
         FileInfo fileInfo = findByChecksumInternal(checksum); // Internal call to avoid new transaction
         if (fileInfo == null) {
+            log.info("No existing FileInfo found for checksum. Creating a new record for file: {}", filename);
             fileInfo = new FileInfo();
             fileInfo.setFilename(filename.length() > 255 ? filename.substring(0, 255) : filename);
             fileInfo.setParentId(parentId != null ? parentId.intValue() : 0);
             fileInfo.setType(type.length() > 64 ? type.substring(0, 64) : type);
             fileInfo.setDate(LocalDateTime.now()); // Processing time
             fileInfo.setChecksum(checksum);
-            fileInfo.setSize(0); // Size unknown for stream without full read
+            fileInfo.setSize(uncompressedContent.length); // Set the actual file size
             fileInfo.setReferenceId(0);
             fileInfo.setDirectory(""); // Not applicable for stream
+
+            try {
+                fileInfo.setFileContent(compress(uncompressedContent));
+                log.debug("Successfully compressed content for file: {}. Original size: {}, Compressed size: {}",
+                        filename, uncompressedContent.length, fileInfo.getFileContent().length);
+            } catch (IOException e) {
+                log.error("Failed to compress file content for {}. Archiving will be skipped.", filename, e);
+                // Depending on requirements, you might throw a runtime exception to fail the transaction.
+                // For now, we'll allow the metadata record to be created without the content.
+                fileInfo.setFileContent(null);
+            }
 
             entityManager.persist(fileInfo);
             entityManager.flush(); // Ensure it's written to DB and ID is generated before transaction ends
@@ -58,6 +70,24 @@ public class FileInfoPersistenceService {
             log.info("Found existing FileInfo record with ID: {} for checksum: {}", fileInfo.getId(), checksum);
         }
         return fileInfo;
+    }
+
+    /**
+     * Compresses a byte array using the ZIP/DEFLATE algorithm.
+     */
+    private byte[] compress(byte[] data) throws IOException {
+        Deflater deflater = new Deflater();
+        deflater.setInput(data);
+        deflater.finish();
+
+        try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream(data.length)) {
+            byte[] buffer = new byte[1024];
+            while (!deflater.finished()) {
+                int count = deflater.deflate(buffer);
+                outputStream.write(buffer, 0, count);
+            }
+            return outputStream.toByteArray();
+        }
     }
 
     // Non-transactional internal method for lookup, to be called by the @Transactional createOrGetFileInfo
@@ -71,9 +101,9 @@ public class FileInfoPersistenceService {
         }
     }
 
-    // Kept for other potential uses, but createOrGetFileInfo is primary for streams
+    // Kept for other potential uses
     @Transactional(readOnly = true)
-    public FileInfo findById(Integer fileInfoId) {
+    public FileInfo findById(Long fileInfoId) {
         if (fileInfoId == null) return null;
         return entityManager.find(FileInfo.class, fileInfoId);
     }

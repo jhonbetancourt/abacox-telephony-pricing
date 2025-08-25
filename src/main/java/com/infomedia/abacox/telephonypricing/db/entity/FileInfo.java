@@ -97,4 +97,12 @@ public class FileInfo {
     @Column(name = "type", length = 64, nullable = false)
     @ColumnDefault("")
     private String type;
+
+    /**
+     * The ZIP-compressed content of the file.
+     * Stored as a Large Object (LOB) in the database.
+     */
+    @Lob
+    @Column(name = "file_content")
+    private byte[] fileContent;
 }

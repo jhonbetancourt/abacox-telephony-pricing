@@ -203,6 +203,46 @@ public class CdrUtil {
         }
     }
 
+    /**
+     * Calculates the SHA-256 hash of a given byte array.
+     * This is the primary method for generating a checksum from file content.
+     *
+     * @param input The byte array to hash. Can be null.
+     * @return The lowercase hexadecimal representation of the SHA-256 hash,
+     *         or an empty string if the input is null.
+     */
+    public static String sha256(byte[] input) {
+        if (input == null) {
+            return "";
+        }
+
+        try {
+            // Get an instance of the SHA-256 message digest algorithm
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+
+            // Perform the hash computation
+            byte[] hash = digest.digest(input);
+
+            // Convert the byte array into a hexadecimal string
+            // Using StringBuilder for efficient string concatenation in a loop
+            StringBuilder hexString = new StringBuilder(2 * hash.length);
+            for (byte b : hash) {
+                // String.format ensures each byte is represented by two hex characters,
+                // with a leading zero if necessary (e.g., "0f" instead of "f").
+                hexString.append(String.format("%02x", b));
+            }
+
+            return hexString.toString();
+
+        } catch (NoSuchAlgorithmException e) {
+            // This should never happen in a standard Java environment,
+            // as "SHA-256" is a required algorithm.
+            // We wrap it in a RuntimeException to avoid cluttering calling code
+            // with a checked exception that is virtually impossible to trigger.
+            throw new RuntimeException("SHA-256 algorithm not found", e);
+        }
+    }
+
     public static boolean isPossibleExtension(String extensionNumber, ExtensionLimits limits) {
         if (limits == null || extensionNumber == null || extensionNumber.isEmpty()) {
             return false;

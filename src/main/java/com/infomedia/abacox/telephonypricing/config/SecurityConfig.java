@@ -62,7 +62,8 @@ public class SecurityConfig {
                 , "/swagger-ui.html"
                 , "/error"
                 , "/api/module/*"
-                , "/websocket/module"};
+                , "/websocket/module"
+                , "/api/cdr/*"};
     }
 
     public boolean isPublicPath(String path) {

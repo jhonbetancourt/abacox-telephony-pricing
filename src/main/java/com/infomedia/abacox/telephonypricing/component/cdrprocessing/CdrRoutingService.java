@@ -7,10 +7,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -38,8 +35,8 @@ public class CdrRoutingService {
 
     /**
      * Orchestrates the processing of a CDR stream. This method is NOT transactional.
-     * It reads the stream, groups lines into batches, and delegates the processing of each
-     * batch to a separate, transactional service method.
+     * It reads the entire stream into memory to archive it, then processes it in batches.
+     * Each batch is delegated to a separate, transactional service method.
      *
      * @param filename    Name of the CDR file/stream.
      * @param inputStream The CDR data stream.
@@ -51,9 +48,26 @@ public class CdrRoutingService {
         CdrProcessor initialParser = getProcessorForPlantType(plantTypeId);
         log.debug("Using initial parser: {}", initialParser.getClass().getSimpleName());
 
-        FileInfo fileInfo = fileInfoPersistenceService.createOrGetFileInfo(filename, plantTypeId, "ROUTED_STREAM");
+        byte[] streamBytes;
+        try {
+            // Buffer the entire stream to get its content for archiving and reprocessing.
+            // This is a trade-off for the feature of storing the file content.
+            streamBytes = inputStream.readAllBytes();
+            log.debug("Read {} bytes from input stream for file: {}", streamBytes.length, filename);
+        } catch (IOException e) {
+            log.error("Failed to read input stream for file: {}. Aborting processing.", filename, e);
+            CdrData streamErrorData = new CdrData();
+            streamErrorData.setRawCdrLine("STREAM_READ_ERROR_ROUTING: " + filename);
+            failedCallRecordPersistenceService.quarantineRecord(streamErrorData, QuarantineErrorType.IO_EXCEPTION,
+                "Failed to read input stream " + filename, "RouteStreamInit_Read", null);
+            return;
+        }
+
+        // Create the FileInfo record, now including the compressed file content for archival.
+        FileInfo fileInfo = fileInfoPersistenceService.createOrGetFileInfo(filename, plantTypeId, "ROUTED_STREAM", streamBytes);
         Map<Long, ExtensionLimits> extensionLimits = employeeLookupService.getExtensionLimits();
         Map<Long, List<ExtensionRange>> extensionRanges = employeeLookupService.getExtensionRanges();
+
         if (fileInfo == null || fileInfo.getId() == null) {
             log.error("Failed to create or get FileInfo for stream: {}. Aborting processing.", filename);
             CdrData streamErrorData = new CdrData();
@@ -71,7 +85,8 @@ public class CdrRoutingService {
 
         List<LineProcessingContext> batch = new ArrayList<>(CdrConfigService.CDR_PROCESSING_BATCH_SIZE);
 
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))) {
+        // Use the buffered byte array to create a new stream for processing.
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(new ByteArrayInputStream(streamBytes), StandardCharsets.UTF_8))) {
             String line;
             while ((line = reader.readLine()) != null) {
                 lineCount++;
@@ -156,10 +171,11 @@ public class CdrRoutingService {
                     filename, lineCount, totalProcessedCount, unroutableCdrCount);
 
         } catch (IOException e) {
-            log.error("Error reading CDR stream for routing: {}", filename, e);
-            CdrData tempData = new CdrData(); tempData.setRawCdrLine("STREAM_ROUTING_READ_ERROR"); tempData.setFileInfo(fileInfo);
+            // This exception is now highly unlikely since we are reading from an in-memory byte array.
+            log.error("Critical error reading from in-memory CDR stream for routing: {}", filename, e);
+            CdrData tempData = new CdrData(); tempData.setRawCdrLine("STREAM_ROUTING_IN_MEMORY_READ_ERROR"); tempData.setFileInfo(fileInfo);
             failedCallRecordPersistenceService.quarantineRecord(tempData,
-                    QuarantineErrorType.IO_EXCEPTION, e.getMessage(), "RouteStream_IOException", null);
+                    QuarantineErrorType.IO_EXCEPTION, e.getMessage(), "RouteStream_InMemory_IOException", null);
         }
     }
 }
