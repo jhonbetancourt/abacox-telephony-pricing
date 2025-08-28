@@ -105,4 +105,16 @@ public class FileInfo {
     @Lob
     @Column(name = "file_content")
     private byte[] fileContent;
+
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "processing_status", nullable = false, length = 20)
+    private ProcessingStatus processingStatus = ProcessingStatus.PENDING;
+
+    public enum ProcessingStatus {
+        PENDING,
+        IN_PROGRESS,
+        COMPLETED,
+        FAILED
+    }
 }

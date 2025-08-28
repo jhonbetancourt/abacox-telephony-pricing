@@ -2,23 +2,19 @@ package com.infomedia.abacox.telephonypricing.controller;
 
 import com.infomedia.abacox.telephonypricing.component.cdrprocessing.CdrProcessingExecutor;
 import com.infomedia.abacox.telephonypricing.component.cdrprocessing.CiscoCm60CdrProcessor;
+import com.infomedia.abacox.telephonypricing.component.cdrprocessing.FileInfoPersistenceService;
 import com.infomedia.abacox.telephonypricing.dto.generic.MessageResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import lombok.Data;
-import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -31,23 +27,72 @@ import java.util.zip.ZipInputStream;
 public class CdrTestController {
 
     private final CdrProcessingExecutor cdrProcessingExecutor;
+    private final FileInfoPersistenceService fileInfoPersistenceService;
 
     @PostMapping(value = "/process", consumes = MediaType.MULTIPART_FORM_DATA_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
-    @Operation(summary = "Process a CDR file or ZIP archive",
-            description = "Submits a CDR file (or a ZIP archive of CDR files) for asynchronous processing. The system will automatically detect if the file is a ZIP archive.")
+    @Operation(summary = "Queue a CDR file or ZIP archive for processing",
+            description = "Submits a CDR file (or a ZIP archive of CDR files). The file is saved and queued for reliable, asynchronous processing.")
     public MessageResponse processCdr(@Parameter(description = "The CDR file or ZIP archive to upload") @RequestParam("file") MultipartFile file) {
-        log.info("Received file for processing: {}", file.getOriginalFilename());
+        log.info("Received file for queueing: {}", file.getOriginalFilename());
 
         String contentType = file.getContentType();
         String originalFilename = file.getOriginalFilename();
 
+        int filesQueued = 0;
         if ("application/zip".equals(contentType) || (originalFilename != null && originalFilename.toLowerCase().endsWith(".zip"))) {
-            processZipFile(file);
+            filesQueued = queueZipFile(file);
         } else {
-            processSingleFile(file);
+            filesQueued = queueSingleFile(file);
         }
 
-        return new MessageResponse("CDR processing started successfully.");
+        return new MessageResponse(String.format("%d file(s) queued for processing successfully.", filesQueued));
+    }
+
+    private int queueSingleFile(MultipartFile file) {
+        log.info("Queueing single file: {}", file.getOriginalFilename());
+        try {
+            fileInfoPersistenceService.createOrGetFileInfo(
+                    file.getOriginalFilename(),
+                    CiscoCm60CdrProcessor.PLANT_TYPE_IDENTIFIER,
+                    "ROUTED_STREAM",
+                    file.getBytes()
+            );
+            return 1;
+        } catch (IOException e) {
+            log.error("Error reading bytes for single file: {}", file.getOriginalFilename(), e);
+            throw new RuntimeException("Failed to queue single file: " + file.getOriginalFilename(), e);
+        }
+    }
+
+    private int queueZipFile(MultipartFile zipFile) {
+        log.info("Queueing files from ZIP archive: {}", zipFile.getOriginalFilename());
+        int fileCount = 0;
+        try (ZipInputStream zis = new ZipInputStream(zipFile.getInputStream())) {
+            ZipEntry zipEntry;
+            while ((zipEntry = zis.getNextEntry()) != null) {
+                if (!zipEntry.isDirectory()) {
+                    log.info("Queueing file from ZIP: {}", zipEntry.getName());
+                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                    byte[] buffer = new byte[4096];
+                    int len;
+                    while ((len = zis.read(buffer)) > 0) {
+                        baos.write(buffer, 0, len);
+                    }
+                    fileInfoPersistenceService.createOrGetFileInfo(
+                            zipEntry.getName(),
+                            CiscoCm60CdrProcessor.PLANT_TYPE_IDENTIFIER,
+                            "ROUTED_STREAM",
+                            baos.toByteArray()
+                    );
+                    fileCount++;
+                }
+                zis.closeEntry();
+            }
+        } catch (IOException e) {
+            log.error("Error processing ZIP file: {}", zipFile.getOriginalFilename(), e);
+            throw new RuntimeException("Failed to queue ZIP file: " + zipFile.getOriginalFilename(), e);
+        }
+        return fileCount;
     }
 
     @PostMapping("/reprocess/files")
@@ -91,47 +136,5 @@ public class CdrTestController {
             cdrProcessingExecutor.submitFailedCallRecordReprocessing(failedCallRecordId);
         }
         return new MessageResponse(String.format("Reprocessing task submitted for %d failed call record(s).", failedCallRecordIds.size()));
-    }
-
-    private void processSingleFile(MultipartFile file) {
-        log.info("Processing as a single file: {}", file.getOriginalFilename());
-        try {
-            cdrProcessingExecutor.submitCdrStreamProcessing(
-                    file.getOriginalFilename(),
-                    file.getInputStream(),
-                    CiscoCm60CdrProcessor.PLANT_TYPE_IDENTIFIER
-            );
-        } catch (IOException e) {
-            log.error("Error getting input stream for single file: {}", file.getOriginalFilename(), e);
-            throw new RuntimeException("Failed to process single file: " + file.getOriginalFilename(), e);
-        }
-    }
-
-    private void processZipFile(MultipartFile zipFile) {
-        log.info("Processing as a ZIP archive: {}", zipFile.getOriginalFilename());
-        try (ZipInputStream zis = new ZipInputStream(zipFile.getInputStream())) {
-            ZipEntry zipEntry;
-            while ((zipEntry = zis.getNextEntry()) != null) {
-                if (!zipEntry.isDirectory()) {
-                    log.info("Submitting file from ZIP archive: {}", zipEntry.getName());
-                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                    byte[] buffer = new byte[4096];
-                    int len;
-                    while ((len = zis.read(buffer)) > 0) {
-                        baos.write(buffer, 0, len);
-                    }
-                    InputStream entryInputStream = new ByteArrayInputStream(baos.toByteArray());
-                    cdrProcessingExecutor.submitCdrStreamProcessing(
-                            zipEntry.getName(),
-                            entryInputStream,
-                            CiscoCm60CdrProcessor.PLANT_TYPE_IDENTIFIER
-                    );
-                }
-                zis.closeEntry();
-            }
-        } catch (IOException e) {
-            log.error("Error processing ZIP file: {}", zipFile.getOriginalFilename(), e);
-            throw new RuntimeException("Failed to process ZIP file: " + zipFile.getOriginalFilename(), e);
-        }
     }
 }
