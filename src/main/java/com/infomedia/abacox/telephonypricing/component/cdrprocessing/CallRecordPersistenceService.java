@@ -1,3 +1,4 @@
+// File: com/infomedia/abacox/telephonypricing/component/cdrprocessing/CallRecordPersistenceService.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
 import com.infomedia.abacox.telephonypricing.db.entity.CallRecord;
@@ -38,13 +39,9 @@ public class CallRecordPersistenceService {
 
         CallRecord existingRecord = findByCtlHash(cdrHash);
         if (existingRecord != null) {
-            log.debug("Duplicate CDR detected based on hash {}. Original ID: {}. Quarantining.",
+            log.debug("Duplicate CDR detected based on hash {}. Original ID: {}. Ignoring.",
                     cdrHash, existingRecord.getId());
-            failedCallRecordPersistenceService.quarantineRecord(cdrData,
-                    QuarantineErrorType.DUPLICATE_RECORD,
-                    "Duplicate record based on hash. Original ID: " + existingRecord.getId(),
-                    "saveOrUpdateCallRecord_DuplicateCheck",
-                    existingRecord.getId());
+            // As per request, do not quarantine, just ignore.
             return existingRecord;
         }
 
@@ -76,6 +73,16 @@ public class CallRecordPersistenceService {
         } catch (NoResultException e) {
             return null;
         }
+    }
+
+    @Transactional
+    public int deleteByFileInfoId(Long fileInfoId) {
+        if (fileInfoId == null) return 0;
+        int deletedCount = entityManager.createQuery("DELETE FROM CallRecord cr WHERE cr.fileInfoId = :fileInfoId")
+                .setParameter("fileInfoId", fileInfoId)
+                .executeUpdate();
+        log.debug("Deleted {} CallRecord(s) for FileInfo ID: {}", deletedCount, fileInfoId);
+        return deletedCount;
     }
 
 

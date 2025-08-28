@@ -1,5 +1,8 @@
+// File: com/infomedia/abacox/telephonypricing/component/cdrprocessing/CdrUtil.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -7,6 +10,9 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.zip.DataFormatException;
+import java.util.zip.Deflater;
+import java.util.zip.Inflater;
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
@@ -266,5 +272,46 @@ public class CdrUtil {
             }
         }
         return false;
+    }
+
+    /**
+     * Decompresses a byte array using the ZIP/INFLATE algorithm.
+     * @param compressedData The byte array compressed with Deflater.
+     * @return The original, uncompressed byte array.
+     * @throws IOException if an I/O error occurs.
+     * @throws DataFormatException if the compressed data format is invalid.
+     */
+    public static byte[] decompress(byte[] compressedData) throws IOException, DataFormatException {
+        Inflater inflater = new Inflater();
+        inflater.setInput(compressedData);
+
+        try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream(compressedData.length)) {
+            byte[] buffer = new byte[1024];
+            while (!inflater.finished()) {
+                int count = inflater.inflate(buffer);
+                outputStream.write(buffer, 0, count);
+            }
+            return outputStream.toByteArray();
+        } finally {
+            inflater.end();
+        }
+    }
+
+    /**
+     * Compresses a byte array using the ZIP/DEFLATE algorithm.
+     */
+    public static byte[] compress(byte[] data) throws IOException {
+        Deflater deflater = new Deflater();
+        deflater.setInput(data);
+        deflater.finish();
+
+        try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream(data.length)) {
+            byte[] buffer = new byte[1024];
+            while (!deflater.finished()) {
+                int count = deflater.deflate(buffer);
+                outputStream.write(buffer, 0, count);
+            }
+            return outputStream.toByteArray();
+        }
     }
 }

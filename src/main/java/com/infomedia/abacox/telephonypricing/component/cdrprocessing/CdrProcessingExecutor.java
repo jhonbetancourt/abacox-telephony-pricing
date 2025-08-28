@@ -17,33 +17,63 @@ import java.util.concurrent.TimeUnit;
 @RequiredArgsConstructor
 public class CdrProcessingExecutor {
 
-    // Single-threaded executor to ensure sequential processing
     private final ExecutorService sequentialExecutor = Executors.newSingleThreadExecutor();
     private final CdrRoutingService cdrRoutingService;
+    private final CdrProcessorService cdrProcessorService; // Added for direct access
     private final FailedCallRecordPersistenceService failedCallRecordPersistenceService;
 
-    /**
-     * Submits the CDR stream processing task to a sequential executor.
-     * This method returns immediately, and the processing happens asynchronously
-     * in a single-threaded queue.
-     *
-     * @param filename       Name of the CDR file/stream.
-     * @param inputStream    The CDR data stream.
-     * @param plantTypeId    The ID of the plant type for initial parsing.
-     * @return A Future representing the pending completion of the task.
-     */
     public Future<?> submitCdrStreamProcessing(String filename, InputStream inputStream, Long plantTypeId) {
-        log.debug("Submitting CDR stream processing task for file: {}, PlantTypeID: {}", filename, plantTypeId);
+        return submitCdrStreamProcessing(filename, inputStream, plantTypeId, false);
+    }
+
+    public Future<?> submitCdrStreamProcessing(String filename, InputStream inputStream, Long plantTypeId, boolean forceProcess) {
+        log.debug("Submitting CDR stream processing task for file: {}, PlantTypeID: {}, Force: {}", filename, plantTypeId, forceProcess);
         return sequentialExecutor.submit(() -> {
             try {
-                cdrRoutingService.routeAndProcessCdrStreamInternal(filename, inputStream, plantTypeId);
+                cdrRoutingService.routeAndProcessCdrStreamInternal(filename, inputStream, plantTypeId, forceProcess);
             } catch (Exception e) {
                 log.debug("Uncaught exception during sequential execution of routeAndProcessCdrStream for file: {}", filename, e);
-                // Basic error handling for the task itself
                 CdrData streamErrorData = new CdrData();
                 streamErrorData.setRawCdrLine("STREAM_PROCESSING_FATAL_ERROR: " + filename);
                 failedCallRecordPersistenceService.quarantineRecord(streamErrorData, QuarantineErrorType.UNHANDLED_EXCEPTION,
                         "Fatal error in sequential executor task: " + e.getMessage(), "SequentialExecutorTask", null);
+            }
+        });
+    }
+
+    public Future<?> submitFileReprocessing(Long fileInfoId) {
+        return submitFileReprocessing(fileInfoId, true); // Default to cleaning up
+    }
+
+    public Future<?> submitFileReprocessing(Long fileInfoId, boolean cleanupExistingRecords) {
+        log.debug("Submitting file reprocessing task for FileInfo ID: {}, Cleanup: {}", fileInfoId, cleanupExistingRecords);
+        return sequentialExecutor.submit(() -> {
+            try {
+                cdrRoutingService.reprocessFile(fileInfoId, cleanupExistingRecords);
+            } catch (Exception e) {
+                log.debug("Uncaught exception during sequential execution of reprocessFile for FileInfo ID: {}", fileInfoId, e);
+            }
+        });
+    }
+
+    public Future<?> submitCallRecordReprocessing(Long callRecordId) {
+        log.debug("Submitting CallRecord reprocessing task for ID: {}", callRecordId);
+        return sequentialExecutor.submit(() -> {
+            try {
+                cdrProcessorService.reprocessCallRecord(callRecordId);
+            } catch (Exception e) {
+                log.debug("Uncaught exception during sequential execution of reprocessCallRecord for ID: {}", callRecordId, e);
+            }
+        });
+    }
+
+    public Future<?> submitFailedCallRecordReprocessing(Long failedCallRecordId) {
+        log.debug("Submitting FailedCallRecord reprocessing task for ID: {}", failedCallRecordId);
+        return sequentialExecutor.submit(() -> {
+            try {
+                cdrProcessorService.reprocessFailedCallRecord(failedCallRecordId);
+            } catch (Exception e) {
+                log.debug("Uncaught exception during sequential execution of reprocessFailedCallRecord for ID: {}", failedCallRecordId, e);
             }
         });
     }

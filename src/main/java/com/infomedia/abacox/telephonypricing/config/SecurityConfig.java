@@ -63,7 +63,7 @@ public class SecurityConfig {
                 , "/error"
                 , "/api/module/*"
                 , "/websocket/module"
-                , "/api/cdr/*"};
+                , "/api/cdr/process"};
     }
 
     public boolean isPublicPath(String path) {

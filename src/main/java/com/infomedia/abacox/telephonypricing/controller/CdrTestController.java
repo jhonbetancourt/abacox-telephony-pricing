@@ -3,9 +3,12 @@ package com.infomedia.abacox.telephonypricing.controller;
 import com.infomedia.abacox.telephonypricing.component.cdrprocessing.CdrProcessingExecutor;
 import com.infomedia.abacox.telephonypricing.component.cdrprocessing.CiscoCm60CdrProcessor;
 import com.infomedia.abacox.telephonypricing.dto.generic.MessageResponse;
-import io.swagger.v3.oas.annotations.security.SecurityRequirement;
-import io.swagger.v3.oas.annotations.security.SecurityRequirements;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.http.MediaType;
@@ -16,16 +19,13 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 @RequiredArgsConstructor
 @RestController
 @Tag(name = "CdrTestController", description = "CDR Test Controller")
-/*@SecurityRequirements({
-        @SecurityRequirement(name = "JWT_Token"),
-        @SecurityRequirement(name = "Username")
-})*/
 @Log4j2
 @RequestMapping("/api/cdr")
 public class CdrTestController {
@@ -33,13 +33,14 @@ public class CdrTestController {
     private final CdrProcessingExecutor cdrProcessingExecutor;
 
     @PostMapping(value = "/process", consumes = MediaType.MULTIPART_FORM_DATA_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
-    public MessageResponse processCdr(@RequestParam("file") MultipartFile file) {
+    @Operation(summary = "Process a CDR file or ZIP archive",
+            description = "Submits a CDR file (or a ZIP archive of CDR files) for asynchronous processing. The system will automatically detect if the file is a ZIP archive.")
+    public MessageResponse processCdr(@Parameter(description = "The CDR file or ZIP archive to upload") @RequestParam("file") MultipartFile file) {
         log.info("Received file for processing: {}", file.getOriginalFilename());
 
         String contentType = file.getContentType();
         String originalFilename = file.getOriginalFilename();
 
-        // Check if the file is a ZIP archive by content type or file extension
         if ("application/zip".equals(contentType) || (originalFilename != null && originalFilename.toLowerCase().endsWith(".zip"))) {
             processZipFile(file);
         } else {
@@ -49,11 +50,49 @@ public class CdrTestController {
         return new MessageResponse("CDR processing started successfully.");
     }
 
-    /**
-     * Processes a single, non-archived CDR file.
-     *
-     * @param file The MultipartFile to process.
-     */
+    @PostMapping("/reprocess/files")
+    @Operation(summary = "Reprocess one or more previously processed files",
+            description = "Submits a task to reprocess files based on their FileInfo IDs.")
+    public MessageResponse reprocessFiles(@RequestBody List<Long> fileInfoIds) {
+        if (fileInfoIds == null || fileInfoIds.isEmpty()) {
+            return new MessageResponse("No FileInfo IDs provided for reprocessing.");
+        }
+        log.info("Received request to reprocess FileInfo IDs: {}", fileInfoIds);
+
+        for (Long fileInfoId : fileInfoIds) {
+            cdrProcessingExecutor.submitFileReprocessing(fileInfoId);
+        }
+        return new MessageResponse(String.format("Reprocessing task submitted for %d file(s).", fileInfoIds.size()));
+    }
+
+    @PostMapping("/reprocess/callRecords")
+    @Operation(summary = "Reprocess one or more existing call records",
+            description = "Submits a task to reprocess individual call records based on their IDs.")
+    public MessageResponse reprocessCallRecords(@RequestBody List<Long> callRecordIds) {
+        if (callRecordIds == null || callRecordIds.isEmpty()) {
+            return new MessageResponse("No CallRecord IDs provided for reprocessing.");
+        }
+        log.info("Received request to reprocess CallRecord IDs: {}", callRecordIds);
+        for (Long callRecordId : callRecordIds) {
+            cdrProcessingExecutor.submitCallRecordReprocessing(callRecordId);
+        }
+        return new MessageResponse(String.format("Reprocessing task submitted for %d call record(s).", callRecordIds.size()));
+    }
+
+    @PostMapping("/reprocess/failedCallRecords")
+    @Operation(summary = "Reprocess one or more failed/quarantined call records",
+            description = "Submits a task to reprocess individual failed call records based on their IDs.")
+    public MessageResponse reprocessFailedCallRecords(@RequestBody List<Long> failedCallRecordIds) {
+        if (failedCallRecordIds == null || failedCallRecordIds.isEmpty()) {
+            return new MessageResponse("No FailedCallRecord IDs provided for reprocessing.");
+        }
+        log.info("Received request to reprocess FailedCallRecord IDs: {}", failedCallRecordIds);
+        for (Long failedCallRecordId : failedCallRecordIds) {
+            cdrProcessingExecutor.submitFailedCallRecordReprocessing(failedCallRecordId);
+        }
+        return new MessageResponse(String.format("Reprocessing task submitted for %d failed call record(s).", failedCallRecordIds.size()));
+    }
+
     private void processSingleFile(MultipartFile file) {
         log.info("Processing as a single file: {}", file.getOriginalFilename());
         try {
@@ -68,40 +107,26 @@ public class CdrTestController {
         }
     }
 
-    /**
-     * Extracts and processes each file within a ZIP archive.
-     *
-     * @param zipFile The MultipartFile representing the ZIP archive.
-     */
     private void processZipFile(MultipartFile zipFile) {
         log.info("Processing as a ZIP archive: {}", zipFile.getOriginalFilename());
         try (ZipInputStream zis = new ZipInputStream(zipFile.getInputStream())) {
             ZipEntry zipEntry;
             while ((zipEntry = zis.getNextEntry()) != null) {
-                // Skip directories
                 if (!zipEntry.isDirectory()) {
                     log.info("Submitting file from ZIP archive: {}", zipEntry.getName());
-
-                    // We must read the entry into a byte array because the downstream
-                    // processor will close the stream. If we passed the ZipInputStream directly,
-                    // it would be closed after the first file, preventing further iteration.
                     ByteArrayOutputStream baos = new ByteArrayOutputStream();
                     byte[] buffer = new byte[4096];
                     int len;
                     while ((len = zis.read(buffer)) > 0) {
                         baos.write(buffer, 0, len);
                     }
-
-                    // Create a new, independent input stream for the processor
                     InputStream entryInputStream = new ByteArrayInputStream(baos.toByteArray());
-
                     cdrProcessingExecutor.submitCdrStreamProcessing(
                             zipEntry.getName(),
                             entryInputStream,
                             CiscoCm60CdrProcessor.PLANT_TYPE_IDENTIFIER
                     );
                 }
-                // Close the current entry to move to the next one
                 zis.closeEntry();
             }
         } catch (IOException e) {

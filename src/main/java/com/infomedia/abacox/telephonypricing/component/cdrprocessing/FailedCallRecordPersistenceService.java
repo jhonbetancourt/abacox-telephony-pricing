@@ -89,6 +89,16 @@ public class FailedCallRecordPersistenceService {
         }
     }
 
+    @Transactional
+    public int deleteByFileInfoId(Long fileInfoId) {
+        if (fileInfoId == null) return 0;
+        int deletedCount = entityManager.createQuery("DELETE FROM FailedCallRecord fr WHERE fr.fileInfoId = :fileInfoId")
+                .setParameter("fileInfoId", fileInfoId)
+                .executeUpdate();
+        log.debug("Deleted {} FailedCallRecord(s) for FileInfo ID: {}", deletedCount, fileInfoId);
+        return deletedCount;
+    }
+
     // Overloaded method from previous implementation, adapted to use CdrData
     public void saveFailedRecord(String cdrLine, FileInfo fileInfo, Long commLocationId,
                                  String errorTypeString, String errorMessage, String processingStep,
