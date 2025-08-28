@@ -1,4 +1,3 @@
-// Create new file: com/infomedia/abacox/telephonypricing/component/cdrprocessing/CdrFileProcessorWorker.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
 import com.infomedia.abacox.telephonypricing.db.entity.FileInfo;
@@ -27,9 +26,7 @@ public class CdrFileProcessorWorker {
         fileToProcessOpt.ifPresent(fileInfo -> {
             log.info("Worker picked up file for processing: ID={}, Name={}", fileInfo.getId(), fileInfo.getFilename());
             try {
-                // This is a synchronous call within the scheduled task.
-                // The existing reprocessFile logic is perfect for this.
-                cdrRoutingService.reprocessFile(fileInfo.getId(), true);
+                cdrRoutingService.processFileInfo(fileInfo.getId());
                 fileInfoPersistenceService.updateStatus(fileInfo.getId(), FileInfo.ProcessingStatus.COMPLETED, null);
                 log.info("Successfully processed file ID: {}", fileInfo.getId());
             } catch (Exception e) {

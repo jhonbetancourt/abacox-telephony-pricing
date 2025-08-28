@@ -182,11 +182,36 @@ public class CdrRoutingService {
         log.info("Cleanup complete for FileInfo ID {}: Deleted {} CallRecords and {} FailedCallRecords.", fileInfoId, deletedCallRecords, deletedFailedRecords);
     }
 
-    public void reprocessFile(Long fileInfoId) {
-        reprocessFile(fileInfoId, true); // Default to cleaning up existing records
+    public void processFileInfo(Long fileInfoId) {
+        log.info("Starting reprocessing for FileInfo ID: {}, Cleanup: {}", fileInfoId);
+        FileInfo fileInfo = fileInfoPersistenceService.findById(fileInfoId);
+
+        if (fileInfo == null) {
+            log.info("Outcome for FileInfo ID {}: REPROCESS_FAILED. Reason: FileInfo record not found.", fileInfoId);
+            return;
+        }
+
+        if (fileInfo.getFileContent() == null || fileInfo.getFileContent().length == 0) {
+            log.info("Outcome for FileInfo ID {}: REPROCESS_FAILED. Reason: No file content is archived for this record.", fileInfoId);
+            return;
+        }
+
+        try {
+            byte[] decompressedContent = CdrUtil.decompress(fileInfo.getFileContent());
+            InputStream inputStream = new ByteArrayInputStream(decompressedContent);
+
+            routeAndProcessCdrStreamInternal(fileInfo.getFilename(), inputStream, fileInfo.getParentId().longValue(), false);
+
+        } catch (IOException | DataFormatException e) {
+            log.info("Outcome for FileInfo ID {}: REPROCESS_FAILED. Reason: Failed to decompress file content.", fileInfoId, e);
+        }
     }
 
-    public void reprocessFile(Long fileInfoId, boolean cleanupExistingRecords) {
+    public void reprocessFileInfo(Long fileInfoId) {
+        reprocessFileInfo(fileInfoId, false); // Default to cleaning up existing records
+    }
+
+    public void reprocessFileInfo(Long fileInfoId, boolean cleanupExistingRecords) {
         log.info("Starting reprocessing for FileInfo ID: {}, Cleanup: {}", fileInfoId, cleanupExistingRecords);
         FileInfo fileInfo = fileInfoPersistenceService.findById(fileInfoId);
 

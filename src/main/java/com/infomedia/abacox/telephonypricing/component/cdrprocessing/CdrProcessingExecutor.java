@@ -49,7 +49,7 @@ public class CdrProcessingExecutor {
         log.debug("Submitting file reprocessing task for FileInfo ID: {}, Cleanup: {}", fileInfoId, cleanupExistingRecords);
         return sequentialExecutor.submit(() -> {
             try {
-                cdrRoutingService.reprocessFile(fileInfoId, cleanupExistingRecords);
+                cdrRoutingService.reprocessFileInfo(fileInfoId, cleanupExistingRecords);
             } catch (Exception e) {
                 log.debug("Uncaught exception during sequential execution of reprocessFile for FileInfo ID: {}", fileInfoId, e);
             }
