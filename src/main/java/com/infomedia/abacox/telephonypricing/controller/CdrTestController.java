@@ -6,6 +6,8 @@ import com.infomedia.abacox.telephonypricing.component.cdrprocessing.FileInfoPer
 import com.infomedia.abacox.telephonypricing.dto.generic.MessageResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
@@ -22,6 +24,10 @@ import java.util.zip.ZipInputStream;
 @RequiredArgsConstructor
 @RestController
 @Tag(name = "CdrTestController", description = "CDR Test Controller")
+@SecurityRequirements({
+        @SecurityRequirement(name = "JWT_Token"),
+        @SecurityRequirement(name = "Username")
+})
 @Log4j2
 @RequestMapping("/api/cdr")
 public class CdrTestController {

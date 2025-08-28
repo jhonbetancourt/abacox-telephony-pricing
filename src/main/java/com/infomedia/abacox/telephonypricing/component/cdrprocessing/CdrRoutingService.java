@@ -183,7 +183,7 @@ public class CdrRoutingService {
     }
 
     public void processFileInfo(Long fileInfoId) {
-        log.info("Starting reprocessing for FileInfo ID: {}, Cleanup: {}", fileInfoId);
+        log.info("Starting reprocessing for FileInfo ID: {}", fileInfoId);
         FileInfo fileInfo = fileInfoPersistenceService.findById(fileInfoId);
 
         if (fileInfo == null) {
