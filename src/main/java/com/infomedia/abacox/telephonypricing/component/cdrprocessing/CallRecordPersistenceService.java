@@ -1,4 +1,3 @@
-// File: com/infomedia/abacox/telephonypricing/component/cdrprocessing/CallRecordPersistenceService.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
 import com.infomedia.abacox.telephonypricing.db.entity.CallRecord;
@@ -80,7 +79,7 @@ public class CallRecordPersistenceService {
     }
 
 
-    private void mapCdrDataToCallRecord(CdrData cdrData, CallRecord callRecord, CommunicationLocation commLocation, String cdrHash) {
+    public void mapCdrDataToCallRecord(CdrData cdrData, CallRecord callRecord, CommunicationLocation commLocation, String cdrHash) {
 
         callRecord.setDial(cdrData.getEffectiveDestinationNumber() != null ? cdrData.getEffectiveDestinationNumber().substring(0, Math.min(cdrData.getEffectiveDestinationNumber().length(), 50)) : "");
         callRecord.setDestinationPhone(cdrData.getOriginalFinalCalledPartyNumber() != null ? cdrData.getOriginalFinalCalledPartyNumber().substring(0, Math.min(cdrData.getOriginalFinalCalledPartyNumber().length(), 50)) : "");

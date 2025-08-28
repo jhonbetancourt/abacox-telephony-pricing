@@ -1,4 +1,3 @@
-// File: com/infomedia/abacox/telephonypricing/repository/EmployeeRepository.java
 package com.infomedia.abacox.telephonypricing.db.repository;
 
 import com.infomedia.abacox.telephonypricing.db.entity.Employee;
@@ -11,9 +10,13 @@ import org.springframework.transaction.annotation.Transactional;
 public interface EmployeeRepository extends JpaRepository<Employee, Long>, JpaSpecificationExecutor<Employee> {
 
     /**
-     * Deactivates duplicate active employees for each extension, leaving only the one with the highest ID active.
-     * This method identifies all extensions that have more than one active employee, and for each of those extensions,
-     * it sets the 'active' flag to false for all employees except for the one with the maximum ID.
+     * Deactivates duplicate active employees for each extension, leaving only one active.
+     * This method identifies all extensions that have more than one active employee. For each of these groups,
+     * it selects one employee to remain active based on the following criteria:
+     * 1.  An employee with a "valid" name (not null, not an empty string, and not 'libre' case-insensitively) is preferred.
+     * 2.  If multiple employees have valid names, the one with the highest ID is chosen.
+     * 3.  If all employees in the group have "invalid" names, the one with the highest ID is chosen.
+     * All other employees in the group are deactivated by setting their 'active' flag to false.
      *
      * This is a data integrity and cleanup operation.
      *
@@ -23,18 +26,22 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, JpaSp
     @Transactional
     @Query(value = """
         WITH DuplicatesToDeactivate AS (
-            -- Step 1: Identify all active employees who are part of a duplicate extension group.
-            -- We use a window function to rank employees within each extension group by their ID.
             SELECT
                 id,
-                -- Rank employees within each extension group, highest ID gets rank 1.
-                ROW_NUMBER() OVER (PARTITION BY extension ORDER BY id DESC) as rn
+                ROW_NUMBER() OVER (
+                    PARTITION BY extension
+                    ORDER BY
+                        CASE
+                            WHEN name IS NULL OR name = '' OR LOWER(name) = 'libre' THEN 1
+                            ELSE 0
+                        END ASC,
+                        id DESC
+                ) as rn
             FROM
                 employee
             WHERE
                 active = true
                 AND extension IN (
-                    -- Subquery to find only those extensions with more than one active employee.
                     SELECT
                         extension
                     FROM
@@ -47,13 +54,11 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, JpaSp
                         COUNT(id) > 1
                 )
         )
-        -- Step 2: Update the 'active' flag to false for all identified duplicates
-        -- except for the one with the highest ID (which has rn = 1).
         UPDATE
             employee
         SET
             active = false,
-            last_modified_date = NOW() -- Also update the audit timestamp
+            last_modified_date = NOW()
         WHERE
             id IN (
                 SELECT
@@ -61,7 +66,7 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, JpaSp
                 FROM
                     DuplicatesToDeactivate
                 WHERE
-                    rn > 1 -- Deactivate all but the highest-ranked one
+                    rn > 1
             )
         """, nativeQuery = true)
     int deactivateDuplicateActiveEmployees();
