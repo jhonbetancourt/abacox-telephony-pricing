@@ -24,10 +24,10 @@ public class CdrEnrichmentService {
     public CdrData enrichCdr(CdrData cdrData, LineProcessingContext processingContext) {
         CommunicationLocation commLocation = processingContext.getCommLocation();
         if (cdrData == null || cdrData.isMarkedForQuarantine()) {
-            log.warn("CDR is null or already marked for quarantine. Skipping enrichment. CDR: {}", cdrData != null ? cdrData.getCtlHash() : "NULL");
+            log.debug("CDR is null or already marked for quarantine. Skipping enrichment. CDR: {}", cdrData != null ? cdrData.getCtlHash() : "NULL");
             return cdrData;
         }
-        log.info("Starting enrichment for CDR: {}", cdrData.getCtlHash());
+        log.debug("Starting enrichment for CDR: {}", cdrData.getCtlHash());
         cdrData.setCommLocationId(commLocation.getId());
 
         try {
@@ -38,7 +38,7 @@ public class CdrEnrichmentService {
                 (QuarantineErrorType.INTERNAL_SELF_CALL.name().equals(cdrData.getQuarantineStep()) ||
                  (cdrData.getQuarantineStep() != null && cdrData.getQuarantineStep().contains("IgnorePolicy"))
                 )) {
-                log.warn("CDR quarantined during call type processing (Self-call/Ignore Policy). Skipping further enrichment. Hash: {}", cdrData.getCtlHash());
+                log.debug("CDR quarantined during call type processing (Self-call/Ignore Policy). Skipping further enrichment. Hash: {}", cdrData.getCtlHash());
                 return cdrData;
             }
 
@@ -50,7 +50,7 @@ public class CdrEnrichmentService {
                 if (cdrData.getTelephonyTypeId() != null &&
                     cdrData.getTelephonyTypeId() > 0 &&
                     cdrData.getTelephonyTypeId() != TelephonyTypeEnum.ERRORS.getValue()) {
-                    log.info("Call duration {}s <= min. Setting type to NO_CONSUMPTION after all processing.", cdrData.getDurationSeconds());
+                    log.debug("Call duration {}s <= min. Setting type to NO_CONSUMPTION after all processing.", cdrData.getDurationSeconds());
                     cdrData.setTelephonyTypeId(TelephonyTypeEnum.NO_CONSUMPTION.getValue());
                     cdrData.setTelephonyTypeName(telephonyTypeLookupService.getTelephonyTypeName(TelephonyTypeEnum.NO_CONSUMPTION.getValue()));
                     cdrData.setBilledAmount(BigDecimal.ZERO); // Ensure billed amount is zero
@@ -63,12 +63,12 @@ public class CdrEnrichmentService {
             finalizeTransferInformation(cdrData);
 
         } catch (Exception e) {
-            log.error("Unhandled exception during CDR enrichment for line: {}", cdrData.getCtlHash(), e);
+            log.debug("Unhandled exception during CDR enrichment for line: {}", cdrData.getCtlHash(), e);
             cdrData.setMarkedForQuarantine(true);
             cdrData.setQuarantineReason("Enrichment failed: " + e.getMessage());
             cdrData.setQuarantineStep(QuarantineErrorType.ENRICHMENT_ERROR.name());
         }
-        log.info("Finished enrichment for CDR: {}. Billed Amount: {}, Type: {}", cdrData.getCtlHash(), cdrData.getBilledAmount(), cdrData.getTelephonyTypeName());
+        log.debug("Finished enrichment for CDR: {}. Billed Amount: {}, Type: {}", cdrData.getCtlHash(), cdrData.getBilledAmount(), cdrData.getTelephonyTypeName());
         return cdrData;
     }
 
@@ -102,7 +102,7 @@ public class CdrEnrichmentService {
         if (foundEmployee != null) {
             cdrData.setEmployeeId(foundEmployee.getId());
             cdrData.setEmployee(foundEmployee);
-            log.info("Found employee: ID={}, Ext={}", foundEmployee.getId(), foundEmployee.getExtension());
+            log.debug("Found employee: ID={}, Ext={}", foundEmployee.getId(), foundEmployee.getExtension());
 
             boolean authCodeProvided = searchAuthCodeForEmployee != null && !searchAuthCodeForEmployee.isEmpty();
             boolean authCodeMatchedAndValid = authCodeProvided &&
@@ -126,7 +126,7 @@ public class CdrEnrichmentService {
 
         } else {
              cdrData.setAssignmentCause(AssignmentCause.NOT_ASSIGNED);
-             log.warn("Employee not found for Ext: {}, AuthCode: {}", searchExtForEmployee, searchAuthCodeForEmployee);
+             log.debug("Employee not found for Ext: {}, AuthCode: {}", searchExtForEmployee, searchAuthCodeForEmployee);
         }
 
         // PHP: if (!ExtensionEncontrada($arreglo_fun) && !$es_interna && isset($info['funcionario_redir']) && $info['funcionario_redir']['comid'] == $COMUBICACION_ID)
@@ -144,7 +144,7 @@ public class CdrEnrichmentService {
                 cdrData.setEmployeeId(redirEmployee.getId());
                 cdrData.setEmployee(redirEmployee);
                 cdrData.setAssignmentCause(AssignmentCause.TRANSFER);
-                log.info("Assigned call to redirecting employee (due to transfer): ID={}, Ext={}", redirEmployee.getId(), redirEmployee.getExtension());
+                log.debug("Assigned call to redirecting employee (due to transfer): ID={}, Ext={}", redirEmployee.getId(), redirEmployee.getExtension());
             }
         }
     }

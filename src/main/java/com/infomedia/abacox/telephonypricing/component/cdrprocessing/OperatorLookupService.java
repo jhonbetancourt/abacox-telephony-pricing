@@ -31,7 +31,7 @@ public class OperatorLookupService {
             }
             return Optional.empty();
         } catch (Exception e) {
-            log.warn("Could not find operator for ID: {}", operatorId, e);
+            log.debug("Could not find operator for ID: {}", operatorId, e);
             return Optional.empty();
         }
     }
@@ -91,7 +91,7 @@ public class OperatorLookupService {
             Operator operator = entityManager.find(Operator.class, operatorId);
             return operator != null ? operator.getName() : "OperatorID:" + operatorId;
         } catch (Exception e) {
-            log.warn("Could not find operator name for ID: {}", operatorId, e);
+            log.debug("Could not find operator name for ID: {}", operatorId, e);
             return "OperatorID:" + operatorId;
         }
     }

@@ -43,7 +43,7 @@ public class EmployeeLookupService {
         newEmployee.setPhone("");
         newEmployee.setAddress("");
         newEmployee.setIdNumber("");
-        log.info("Conceptually created new employee object for extension {} from range.", extension);
+        log.debug("Conceptually created new employee object for extension {} from range.", extension);
         return newEmployee;
     }
 
@@ -124,7 +124,7 @@ public class EmployeeLookupService {
                 if (conceptualEmployeeOpt.isPresent()) {
                     Employee conceptualEmployee = conceptualEmployeeOpt.get();
                     if (conceptualEmployee.getId() == null && cdrConfigService.createEmployeesAutomaticallyFromRange()) {
-                        log.info("Persisting new employee for extension {} from range, CommLocation ID: {}",
+                        log.debug("Persisting new employee for extension {} from range, CommLocation ID: {}",
                                 conceptualEmployee.getExtension(), conceptualEmployee.getCommunicationLocationId());
                         entityManager.persist(conceptualEmployee);
                         return Optional.of(conceptualEmployee);
@@ -146,7 +146,7 @@ public class EmployeeLookupService {
      */
     @Transactional(readOnly = true)
     public Map<Long, ExtensionLimits> getExtensionLimits() {
-        log.info("Fetching all extension limits for all active Communication Locations using bulk operations.");
+        log.debug("Fetching all extension limits for all active Communication Locations using bulk operations.");
 
         // 1. Initialize a result map with default limits for all active locations.
         // This ensures every location has an entry, even if it has no employees or ranges.
@@ -156,7 +156,7 @@ public class EmployeeLookupService {
                 .collect(Collectors.toMap(CommunicationLocation::getId, id -> new ExtensionLimits()));
 
         if (allCommLocations.isEmpty()) {
-            log.warn("No active Communication Locations found to fetch extension limits for.");
+            log.debug("No active Communication Locations found to fetch extension limits for.");
             return Collections.emptyMap();
         }
 
@@ -237,7 +237,7 @@ public class EmployeeLookupService {
 
         // 5. Finalize the numeric min/max values from the collected lengths
         resultMap.values().forEach(ExtensionLimits::calculateFinalMinMaxValues);
-        log.info("Finished fetching and calculating all extension limits. Found limits for {} locations.", resultMap.size());
+        log.debug("Finished fetching and calculating all extension limits. Found limits for {} locations.", resultMap.size());
 
         return resultMap;
     }

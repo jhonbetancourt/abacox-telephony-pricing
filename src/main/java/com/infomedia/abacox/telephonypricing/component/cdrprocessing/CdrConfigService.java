@@ -32,7 +32,7 @@ public class CdrConfigService {
             int offsetHours = Integer.parseInt(zoneIdStr);
             return ZoneOffset.ofHours(offsetHours);
         } catch (Exception e) {
-            log.error("Invalid ZoneId configured: '{}'. Defaulting to UTC.", zoneIdStr, e);
+            log.debug("Invalid ZoneId configured: '{}'. Defaulting to UTC.", zoneIdStr, e);
             return ZoneId.of("UTC");
         }
     }
@@ -77,7 +77,7 @@ public class CdrConfigService {
             long val = Long.parseLong(valStr);
             return val > 0 ? val : null;
         } catch (NumberFormatException e) {
-            log.warn("NFE for DEFAULT_TELEPHONY_TYPE_FOR_UNRESOLVED_INTERNAL, using default {}", ConfigKey.DEFAULT_UNRESOLVED_INTERNAL_CALL_TYPE_ID.getDefaultValue());
+            log.debug("NFE for DEFAULT_TELEPHONY_TYPE_FOR_UNRESOLVED_INTERNAL, using default {}", ConfigKey.DEFAULT_UNRESOLVED_INTERNAL_CALL_TYPE_ID.getDefaultValue());
             return Long.parseLong(ConfigKey.DEFAULT_UNRESOLVED_INTERNAL_CALL_TYPE_ID.getDefaultValue());
         }
     }
@@ -130,7 +130,7 @@ public class CdrConfigService {
             long val = Long.parseLong(valStr);
             return val > 0 ? val : null;
         } catch (NumberFormatException e) {
-            log.warn("NFE for DEFAULT_INTERNAL_CALL_TYPE_ID, using default {}", ConfigKey.DEFAULT_INTERNAL_CALL_TYPE_ID.getDefaultValue());
+            log.debug("NFE for DEFAULT_INTERNAL_CALL_TYPE_ID, using default {}", ConfigKey.DEFAULT_INTERNAL_CALL_TYPE_ID.getDefaultValue());
             return Long.parseLong(ConfigKey.DEFAULT_INTERNAL_CALL_TYPE_ID.getDefaultValue());
         }
     }

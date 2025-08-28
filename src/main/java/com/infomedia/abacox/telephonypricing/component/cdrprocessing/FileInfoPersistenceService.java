@@ -41,7 +41,7 @@ public class FileInfoPersistenceService {
 
         FileInfo fileInfo = findByChecksumInternal(checksum); // Internal call to avoid new transaction
         if (fileInfo == null) {
-            log.info("No existing FileInfo found for checksum. Creating a new record for file: {}", filename);
+            log.debug("No existing FileInfo found for checksum. Creating a new record for file: {}", filename);
             fileInfo = new FileInfo();
             fileInfo.setFilename(filename.length() > 255 ? filename.substring(0, 255) : filename);
             fileInfo.setParentId(parentId != null ? parentId.intValue() : 0);
@@ -57,7 +57,7 @@ public class FileInfoPersistenceService {
                 log.debug("Successfully compressed content for file: {}. Original size: {}, Compressed size: {}",
                         filename, uncompressedContent.length, fileInfo.getFileContent().length);
             } catch (IOException e) {
-                log.error("Failed to compress file content for {}. Archiving will be skipped.", filename, e);
+                log.debug("Failed to compress file content for {}. Archiving will be skipped.", filename, e);
                 // Depending on requirements, you might throw a runtime exception to fail the transaction.
                 // For now, we'll allow the metadata record to be created without the content.
                 fileInfo.setFileContent(null);
@@ -65,9 +65,9 @@ public class FileInfoPersistenceService {
 
             entityManager.persist(fileInfo);
             entityManager.flush(); // Ensure it's written to DB and ID is generated before transaction ends
-            log.info("Created and flushed new FileInfo record with ID: {} for file: {}", fileInfo.getId(), filename);
+            log.debug("Created and flushed new FileInfo record with ID: {} for file: {}", fileInfo.getId(), filename);
         } else {
-            log.info("Found existing FileInfo record with ID: {} for checksum: {}", fileInfo.getId(), checksum);
+            log.debug("Found existing FileInfo record with ID: {} for checksum: {}", fileInfo.getId(), checksum);
         }
         return fileInfo;
     }

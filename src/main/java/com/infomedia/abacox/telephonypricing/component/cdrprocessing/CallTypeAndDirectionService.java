@@ -34,7 +34,7 @@ public class CallTypeAndDirectionService {
         if (!cdrData.isInternalCall()) {
             checkIfPotentiallyInternal(cdrData, processingContext);
         }
-        log.info("Initial call attributes - Direction: {}, Internal: {}", initialDirection, cdrData.isInternalCall());
+        log.debug("Initial call attributes - Direction: {}, Internal: {}", initialDirection, cdrData.isInternalCall());
 
         cdrData.setEffectiveDestinationNumber(cdrData.getFinalCalledPartyNumber());
 
@@ -42,7 +42,7 @@ public class CallTypeAndDirectionService {
         if (cdrData.isInternalCall()) {
             // PHP: procesaEntrante -> info_interna -> InvertirLlamada
             if (initialDirection == CallDirection.INCOMING) {
-                log.info("Re-classifying INCOMING call as INTERNAL for processing. CDR: {}", cdrData.getCtlHash());
+                log.debug("Re-classifying INCOMING call as INTERNAL for processing. CDR: {}", cdrData.getCtlHash());
                 CdrUtil.swapFull(cdrData, true); // Full swap including trunks
                 cdrData.setCallDirection(CallDirection.OUTGOING); // It's now treated as an outgoing internal call
             }
@@ -53,7 +53,7 @@ public class CallTypeAndDirectionService {
             outgoingCallProcessorService.processOutgoing(cdrData, processingContext, false);
         }
 
-        log.info("Finished processing call. Final Direction: {}, Internal: {}, TelephonyType: {}",
+        log.debug("Finished processing call. Final Direction: {}, Internal: {}, TelephonyType: {}",
                 cdrData.getCallDirection(), cdrData.isInternalCall(), cdrData.getTelephonyTypeId());
     }
 

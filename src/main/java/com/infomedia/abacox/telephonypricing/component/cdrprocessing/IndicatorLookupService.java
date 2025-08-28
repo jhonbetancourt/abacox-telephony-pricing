@@ -74,7 +74,7 @@ public class IndicatorLookupService {
 
         IndicatorConfig config = getIndicatorConfigForTelephonyType(effectiveTelephonyTypeId, originCountryId);
         if (config.maxNdcLength == 0 && !isLocalType(effectiveTelephonyTypeId) && !isInternationalOrSatellite(effectiveTelephonyTypeId)) {
-            log.warn("No indicator configuration (NDC lengths) found for non-local/non-international type {}. Cannot proceed with lookup.", effectiveTelephonyTypeId);
+            log.debug("No indicator configuration (NDC lengths) found for non-local/non-international type {}. Cannot proceed with lookup.", effectiveTelephonyTypeId);
             return Optional.empty();
         }
 

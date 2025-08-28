@@ -37,7 +37,7 @@ public class CallOriginDeterminationService {
         result.setOperatorId(null);
 
         if (processedExternalCallerId == null || processedExternalCallerId.isEmpty()) {
-            log.warn("External caller ID is empty, cannot determine origin accurately.");
+            log.debug("External caller ID is empty, cannot determine origin accurately.");
             return result;
         }
 
@@ -152,7 +152,7 @@ public class CallOriginDeterminationService {
                 }
             }
         }
-        log.warn("No definitive origin found for incoming call '{}'. Returning defaults.", processedExternalCallerId);
+        log.debug("No definitive origin found for incoming call '{}'. Returning defaults.", processedExternalCallerId);
         return result;
     }
 

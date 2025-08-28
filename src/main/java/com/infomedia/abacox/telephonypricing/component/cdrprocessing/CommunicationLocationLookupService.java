@@ -69,7 +69,7 @@ public class CommunicationLocationLookupService {
         if (callingPartyNumber != null && !callingPartyNumber.isEmpty()) {
             commLocationOpt = findCommLocationByExtension(plantTypeId, callingPartyNumber, callingPartyNumberPartition, callDateTime);
             if (commLocationOpt.isPresent()) {
-                log.info("Routed by CallingParty: {} -> CommLocation ID: {}", callingPartyNumber, commLocationOpt.get().getId());
+                log.debug("Routed by CallingParty: {} -> CommLocation ID: {}", callingPartyNumber, commLocationOpt.get().getId());
                 return commLocationOpt;
             }
         }
@@ -78,7 +78,7 @@ public class CommunicationLocationLookupService {
         if (finalCalledPartyNumber != null && !finalCalledPartyNumber.isEmpty()) {
             commLocationOpt = findCommLocationByExtension(plantTypeId, finalCalledPartyNumber, finalCalledPartyNumberPartition, callDateTime);
             if (commLocationOpt.isPresent()) {
-                log.info("Routed by FinalCalledParty: {} -> CommLocation ID: {}", finalCalledPartyNumber, commLocationOpt.get().getId());
+                log.debug("Routed by FinalCalledParty: {} -> CommLocation ID: {}", finalCalledPartyNumber, commLocationOpt.get().getId());
                 return commLocationOpt;
             }
         }
@@ -87,7 +87,7 @@ public class CommunicationLocationLookupService {
         if (lastRedirectDn != null && !lastRedirectDn.isEmpty()) {
             commLocationOpt = findCommLocationByExtension(plantTypeId, lastRedirectDn, lastRedirectDnPartition, callDateTime);
             if (commLocationOpt.isPresent()) {
-                log.info("Routed by LastRedirectDN: {} -> CommLocation ID: {}", lastRedirectDn, commLocationOpt.get().getId());
+                log.debug("Routed by LastRedirectDN: {} -> CommLocation ID: {}", lastRedirectDn, commLocationOpt.get().getId());
                 return commLocationOpt;
             }
         }
@@ -96,13 +96,13 @@ public class CommunicationLocationLookupService {
         // This mimics PHP's behavior where if a client has only one plant, CDRs might default to it.
         List<CommunicationLocation> activeCommLocationsForPlantType = findActiveCommLocationsByPlantType(plantTypeId);
         if (activeCommLocationsForPlantType.size() == 1) {
-            log.info("No specific extension match. Defaulting to the single active CommLocation ID: {} for PlantType: {}",
+            log.debug("No specific extension match. Defaulting to the single active CommLocation ID: {} for PlantType: {}",
                     activeCommLocationsForPlantType.get(0).getId(), plantTypeId);
             return Optional.of(activeCommLocationsForPlantType.get(0));
         } else if (activeCommLocationsForPlantType.isEmpty()) {
-            log.warn("No active CommunicationLocation found for PlantType ID: {}", plantTypeId);
+            log.debug("No active CommunicationLocation found for PlantType ID: {}", plantTypeId);
         } else {
-            log.warn("Multiple ({}) active CommunicationLocations found for PlantType ID: {} and no specific extension match. Cannot uniquely determine CommLocation.",
+            log.debug("Multiple ({}) active CommunicationLocations found for PlantType ID: {} and no specific extension match. Cannot uniquely determine CommLocation.",
                     activeCommLocationsForPlantType.size(), plantTypeId);
         }
 

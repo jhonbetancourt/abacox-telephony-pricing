@@ -25,10 +25,10 @@ public class FailedCallRecordPersistenceService {
                                              QuarantineErrorType errorType, String errorMessage, String processingStep,
                                              Long originalCallRecordId) {
         if (cdrData == null) {
-            log.error("Cannot quarantine null CdrData.");
+            log.debug("Cannot quarantine null CdrData.");
             return null;
         }
-        log.warn("Quarantining CDR. Type: {}, Step: {}, Message: {}, Hash: {}",
+        log.debug("Quarantining CDR. Type: {}, Step: {}, Message: {}, Hash: {}",
                 errorType, processingStep, errorMessage, cdrData.getCtlHash());
 
         String cdrStringToStore = cdrData.getRawCdrLine();
@@ -40,7 +40,7 @@ public class FailedCallRecordPersistenceService {
         FailedCallRecord recordToSave;
 
         if (existingRecord != null) {
-            log.info("Updating existing quarantine record ID: {} for hash: {}", existingRecord.getId(), ctlHash);
+            log.debug("Updating existing quarantine record ID: {} for hash: {}", existingRecord.getId(), ctlHash);
             recordToSave = existingRecord;
             // Update fields that might change on a re-quarantine
             recordToSave.setErrorType(errorType.name());
@@ -52,7 +52,7 @@ public class FailedCallRecordPersistenceService {
             }
             // fileInfoId and commLocationId typically don't change for the same raw CDR
         } else {
-            log.info("Creating new quarantine record for hash: {}", ctlHash);
+            log.debug("Creating new quarantine record for hash: {}", ctlHash);
             recordToSave = new FailedCallRecord();
             recordToSave.setCtlHash(ctlHash);
             recordToSave.setCdrString(cdrStringToStore); // Store raw CDR
@@ -70,10 +70,10 @@ public class FailedCallRecordPersistenceService {
 
         try {
             entityManager.persist(recordToSave); // Persist will also handle update if entity is managed
-            log.info("Successfully {} quarantine record ID: {}", (existingRecord != null ? "updated" : "saved"), recordToSave.getId());
+            log.debug("Successfully {} quarantine record ID: {}", (existingRecord != null ? "updated" : "saved"), recordToSave.getId());
             return recordToSave;
         } catch (Exception e) {
-            log.error("CRITICAL: Could not save/update quarantine record. Hash: {}, Error: {}", ctlHash, e.getMessage(), e);
+            log.debug("CRITICAL: Could not save/update quarantine record. Hash: {}, Error: {}", ctlHash, e.getMessage(), e);
             return null; // Or throw a runtime exception to rollback transaction if this is critical
         }
     }
@@ -103,7 +103,7 @@ public class FailedCallRecordPersistenceService {
         try {
             qet = QuarantineErrorType.valueOf(errorTypeString);
         } catch (IllegalArgumentException e) {
-            log.warn("Unknown errorType string '{}' received for quarantining. Mapping to UNHANDLED_EXCEPTION.", errorTypeString);
+            log.debug("Unknown errorType string '{}' received for quarantining. Mapping to UNHANDLED_EXCEPTION.", errorTypeString);
             qet = QuarantineErrorType.UNHANDLED_EXCEPTION;
             errorMessage = "Original Error Type: " + errorTypeString + "; Original Message: " + errorMessage;
         }

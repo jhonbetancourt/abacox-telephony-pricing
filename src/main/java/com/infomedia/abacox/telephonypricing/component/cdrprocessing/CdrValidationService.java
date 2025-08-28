@@ -30,7 +30,7 @@ public class CdrValidationService {
         // PHP: if (trim($info_cdr['ext']) == '') { InvertirLlamada($info_cdr); ... }
         if ((cdrData.getCallingPartyNumber() == null || cdrData.getCallingPartyNumber().isEmpty()) &&
             (cdrData.getFinalCalledPartyNumber() != null && !cdrData.getFinalCalledPartyNumber().isEmpty())) {
-            log.warn("CallingPartyNumber is blank but FinalCalledPartyNumber is not. Performing full swap and treating as INCOMING. CDR: {}", cdrData.getCtlHash());
+            log.debug("CallingPartyNumber is blank but FinalCalledPartyNumber is not. Performing full swap and treating as INCOMING. CDR: {}", cdrData.getCtlHash());
             CdrUtil.swapFull(cdrData, true); // Full swap including trunks
             cdrData.setCallDirection(CallDirection.INCOMING);
             cdrData.setInternalCall(false); // Ensure it's not treated as internal after this swap
@@ -87,13 +87,13 @@ public class CdrValidationService {
             if (cdrData.getQuarantineStep() == null || !cdrData.getQuarantineStep().startsWith("evaluateFormat")) {
                 cdrData.setQuarantineStep(QuarantineErrorType.INITIAL_VALIDATION_ERROR.name());
             }
-            log.warn("CDR validation errors: {}. Quarantine set.", errorMessages);
+            log.debug("CDR validation errors: {}. Quarantine set.", errorMessages);
             return false;
         } else if (!warningMessages.isEmpty()) {
             cdrData.setMarkedForQuarantine(true);
             cdrData.setQuarantineReason(String.join("; ", warningMessages));
             cdrData.setQuarantineStep(QuarantineErrorType.INITIAL_VALIDATION_WARNING.name());
-            log.warn("CDR validation warnings (leading to quarantine): {}. Quarantine set.", warningMessages);
+            log.debug("CDR validation warnings (leading to quarantine): {}. Quarantine set.", warningMessages);
             return true;
         }
 

@@ -56,7 +56,7 @@ public class TariffCalculationService {
         TariffingAttemptResult attempt1 = attemptTariffing(initialNumberForPrefixLookup, commLocation, trunkInfoOpt, false);
 
         if (trunkInfoOpt.isPresent() && isTariffResultInvalidOrAssumed(attempt1) && !cdrData.isNormalizedTariffApplied()) {
-            log.warn("Trunk call tariffing attempt 1 resulted in invalid/assumed. Attempting normalization for: {}", numberForTariffing);
+            log.debug("Trunk call tariffing attempt 1 resulted in invalid/assumed. Attempting normalization for: {}", numberForTariffing);
 
             List<String> pbxPrefixesForNormalization = pbxPrefixes;
             if (trunkInfoOpt.get().noPbxPrefix != null && trunkInfoOpt.get().noPbxPrefix) {
@@ -80,20 +80,20 @@ public class TariffCalculationService {
                     }
                 }
                 if (useNormalized) {
-                    log.info("Using normalized tariffing result for trunk call. Original number: {}", numberForTariffing);
+                    log.debug("Using normalized tariffing result for trunk call. Original number: {}", numberForTariffing);
                     applyTariffingResult(cdrData, attempt2, commLocation, Optional.empty(), extensionLimits);
                     cdrData.setNormalizedTariffApplied(true);
                 } else {
                     applyTariffingResult(cdrData, attempt1, commLocation, trunkInfoOpt, extensionLimits);
                 }
             } else {
-                log.warn("Normalization did not yield a valid result. Sticking with initial attempt.");
+                log.debug("Normalization did not yield a valid result. Sticking with initial attempt.");
                 applyTariffingResult(cdrData, attempt1, commLocation, trunkInfoOpt, extensionLimits);
             }
         } else {
             applyTariffingResult(cdrData, attempt1, commLocation, trunkInfoOpt, extensionLimits);
         }
-        log.info("Final tariff calculation for OUTGOING/EXTERNAL CDR: {}. Billed Amount: {}, Price/Min: {}, Type: {}",
+        log.debug("Final tariff calculation for OUTGOING/EXTERNAL CDR: {}. Billed Amount: {}, Price/Min: {}, Type: {}",
                  cdrData.getCtlHash(), cdrData.getBilledAmount(), cdrData.getPricePerMinute(), cdrData.getTelephonyTypeName());
     }
 
@@ -110,7 +110,7 @@ public class TariffCalculationService {
         applySpecialRatesAndRules(cdrData, commLocation, null, null); // No destInfo/trunkInfo for incoming source tariffing
 
         cdrData.setBilledAmount(calculateFinalBilledAmount(cdrData));
-        log.info("Final tariff for INCOMING CDR: {}. Billed Amount: {}, Price/Min: {}, Type: {}",
+        log.debug("Final tariff for INCOMING CDR: {}. Billed Amount: {}, Price/Min: {}, Type: {}",
                  cdrData.getCtlHash(), cdrData.getBilledAmount(), cdrData.getPricePerMinute(), cdrData.getTelephonyTypeName());
     }
 
@@ -130,7 +130,7 @@ public class TariffCalculationService {
         // For now, assume internal tariffs are final.
 
         cdrData.setBilledAmount(calculateFinalBilledAmount(cdrData));
-        log.info("Final tariff for INTERNAL CDR: {}. Billed Amount: {}, Price/Min: {}, Type: {}",
+        log.debug("Final tariff for INTERNAL CDR: {}. Billed Amount: {}, Price/Min: {}, Type: {}",
                  cdrData.getCtlHash(), cdrData.getBilledAmount(), cdrData.getPricePerMinute(), cdrData.getTelephonyTypeName());
     }
 
@@ -144,10 +144,10 @@ public class TariffCalculationService {
             cdrData.setInitialPriceIncludesVat(ssi.vatIncluded);
             cdrData.setVatRate(ssi.vatRate != null ? ssi.vatRate : BigDecimal.ZERO);
             cdrData.setBilledAmount(calculateFinalBilledAmount(cdrData));
-            log.info("Final tariff for SPECIAL SERVICE CDR: {}. Billed Amount: {}, Price/Min: {}, Type: {}",
+            log.debug("Final tariff for SPECIAL SERVICE CDR: {}. Billed Amount: {}, Price/Min: {}, Type: {}",
                      cdrData.getCtlHash(), cdrData.getBilledAmount(), cdrData.getPricePerMinute(), cdrData.getTelephonyTypeName());
         } else {
-            log.warn("TelephonyType is SPECIAL_SERVICES but no SpecialServiceInfo found for CDR: {}. Setting tariff to 0.", cdrData.getCtlHash());
+            log.debug("TelephonyType is SPECIAL_SERVICES but no SpecialServiceInfo found for CDR: {}. Setting tariff to 0.", cdrData.getCtlHash());
             cdrData.setBilledAmount(BigDecimal.ZERO);
             cdrData.setPricePerMinute(BigDecimal.ZERO);
             cdrData.setInitialPricePerMinute(BigDecimal.ZERO);
@@ -244,7 +244,7 @@ public class TariffCalculationService {
 
     private void applyTariffingResult(CdrData cdrData, TariffingAttemptResult result, CommunicationLocation commLocation, Optional<TrunkInfo> trunkInfoOpt, ExtensionLimits extensionLimits) {
         if (result.bestDestInfo != null && result.bestPrefixInfo != null) {
-            log.info("Applying tariffing result. Destination: {}, Prefix: {}", result.bestDestInfo.getDestinationDescription(), result.bestPrefixInfo.getPrefixCode());
+            log.debug("Applying tariffing result. Destination: {}, Prefix: {}", result.bestDestInfo.getDestinationDescription(), result.bestPrefixInfo.getPrefixCode());
 
             cdrData.setEffectiveDestinationNumber(result.getMatchedNumber());
             log.debug("CDR effective destination number updated to matched/truncated value: {}", cdrData.getEffectiveDestinationNumber());
@@ -298,7 +298,7 @@ public class TariffCalculationService {
             applySpecialRatesAndRules(cdrData, commLocation, result.bestDestInfo, trunkInfoOpt.orElse(null));
             cdrData.setBilledAmount(calculateFinalBilledAmount(cdrData));
         } else {
-            log.warn("Could not determine destination or tariff for: {} (original number for tariffing: {}). Applying fallback logic.",
+            log.debug("Could not determine destination or tariff for: {} (original number for tariffing: {}). Applying fallback logic.",
                     result.finalNumberUsedForDestLookup, result.finalNumberUsedForDestLookup);
 
             Long attemptedTelephonyTypeId = null;
@@ -322,11 +322,11 @@ public class TariffCalculationService {
                               (!isLocalType && phoneLength < attemptedMinLength);
 
             if (isError || attemptedTelephonyTypeId == null || attemptedTelephonyTypeId.equals(TelephonyTypeEnum.ERRORS.getValue())) {
-                log.error("Number '{}' has invalid length or no matching prefix type. Marking as ERROR.", result.finalNumberUsedForDestLookup);
+                log.debug("Number '{}' has invalid length or no matching prefix type. Marking as ERROR.", result.finalNumberUsedForDestLookup);
                 cdrData.setTelephonyTypeId(TelephonyTypeEnum.ERRORS.getValue());
                 cdrData.setTelephonyTypeName("Invalid Number Length or No Matching Prefix");
             } else {
-                log.info("Number '{}' is valid for attempted type {} but no destination was found. Assigning type with zero cost.", result.finalNumberUsedForDestLookup, attemptedTelephonyTypeId);
+                log.debug("Number '{}' is valid for attempted type {} but no destination was found. Assigning type with zero cost.", result.finalNumberUsedForDestLookup, attemptedTelephonyTypeId);
                 cdrData.setTelephonyTypeId(attemptedTelephonyTypeId);
                 cdrData.setTelephonyTypeName(telephonyTypeLookupService.getTelephonyTypeName(attemptedTelephonyTypeId) + " (Unclassified - No Destination Match)");
             }
@@ -386,7 +386,7 @@ public class TariffCalculationService {
 
             if (specialRateOpt.isPresent()) {
                 SpecialRateInfo sr = specialRateOpt.get();
-                log.info("Applying special rate: {}", sr);
+                log.debug("Applying special rate: {}", sr);
                 // Store current price as initial *before* applying special rate, if not already different
                 if (Objects.equals(cdrData.getInitialPricePerMinute(), cdrData.getPricePerMinute()) &&
                     cdrData.isInitialPriceIncludesVat() == cdrData.isPriceIncludesVat()) {
@@ -425,7 +425,7 @@ public class TariffCalculationService {
                 );
             if (ruleInfoOpt.isPresent()) {
                 AppliedTrunkRuleInfo rule = ruleInfoOpt.get();
-                log.info("Applying trunk rule: {}", rule);
+                log.debug("Applying trunk rule: {}", rule);
                 // Store current price as initial *before* applying rule, if not already different
                 if (Objects.equals(cdrData.getInitialPricePerMinute(), cdrData.getPricePerMinute()) &&
                     cdrData.isInitialPriceIncludesVat() == cdrData.isPriceIncludesVat()) {

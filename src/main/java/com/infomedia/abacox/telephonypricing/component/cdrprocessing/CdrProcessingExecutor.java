@@ -33,12 +33,12 @@ public class CdrProcessingExecutor {
      * @return A Future representing the pending completion of the task.
      */
     public Future<?> submitCdrStreamProcessing(String filename, InputStream inputStream, Long plantTypeId) {
-        log.info("Submitting CDR stream processing task for file: {}, PlantTypeID: {}", filename, plantTypeId);
+        log.debug("Submitting CDR stream processing task for file: {}, PlantTypeID: {}", filename, plantTypeId);
         return sequentialExecutor.submit(() -> {
             try {
                 cdrRoutingService.routeAndProcessCdrStreamInternal(filename, inputStream, plantTypeId);
             } catch (Exception e) {
-                log.error("Uncaught exception during sequential execution of routeAndProcessCdrStream for file: {}", filename, e);
+                log.debug("Uncaught exception during sequential execution of routeAndProcessCdrStream for file: {}", filename, e);
                 // Basic error handling for the task itself
                 CdrData streamErrorData = new CdrData();
                 streamErrorData.setRawCdrLine("STREAM_PROCESSING_FATAL_ERROR: " + filename);
@@ -50,19 +50,19 @@ public class CdrProcessingExecutor {
 
     @PreDestroy
     public void shutdownExecutor() {
-        log.info("Shutting down CDR Routing sequential executor...");
+        log.debug("Shutting down CDR Routing sequential executor...");
         sequentialExecutor.shutdown();
         try {
             if (!sequentialExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
-                log.warn("CDR Routing executor did not terminate in the specified time.");
+                log.debug("CDR Routing executor did not terminate in the specified time.");
                 List<Runnable> droppedTasks = sequentialExecutor.shutdownNow();
-                log.warn("CDR Routing executor was forcefully shut down. {} tasks were dropped.", droppedTasks.size());
+                log.debug("CDR Routing executor was forcefully shut down. {} tasks were dropped.", droppedTasks.size());
             }
         } catch (InterruptedException e) {
-            log.error("CDR Routing executor shutdown interrupted.", e);
+            log.debug("CDR Routing executor shutdown interrupted.", e);
             sequentialExecutor.shutdownNow();
             Thread.currentThread().interrupt();
         }
-        log.info("CDR Routing sequential executor shut down.");
+        log.debug("CDR Routing sequential executor shut down.");
     }
 }

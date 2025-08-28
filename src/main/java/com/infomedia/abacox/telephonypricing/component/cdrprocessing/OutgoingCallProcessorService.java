@@ -56,7 +56,7 @@ public class OutgoingCallProcessorService {
                         );
                 if (specialServiceInfoOpt.isPresent()) {
                     SpecialServiceInfo ssi = specialServiceInfoOpt.get();
-                    log.info("Call to special service '{}' identified.", ssi.description);
+                    log.debug("Call to special service '{}' identified.", ssi.description);
                     cdrData.setTelephonyTypeId(TelephonyTypeEnum.SPECIAL_SERVICES.getValue());
                     cdrData.setTelephonyTypeName(ssi.description);
                     cdrData.setOperatorId(ssi.operatorId);
@@ -76,7 +76,7 @@ public class OutgoingCallProcessorService {
             );
             if (pbxTransformedDest.isPresent() && !Objects.equals(pbxTransformedDest.get(), cdrData.getEffectiveDestinationNumber())) {
                 String originalDest = cdrData.getEffectiveDestinationNumber();
-                log.info("Outgoing number '{}' transformed by PBX rule to '{}'. Reprocessing.", originalDest, pbxTransformedDest.get());
+                log.debug("Outgoing number '{}' transformed by PBX rule to '{}'. Reprocessing.", originalDest, pbxTransformedDest.get());
                 cdrData.setOriginalDialNumberBeforePbxOutgoing(originalDest);
                 cdrData.setFinalCalledPartyNumber(pbxTransformedDest.get());
                 cdrData.setEffectiveDestinationNumber(pbxTransformedDest.get());

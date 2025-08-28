@@ -56,7 +56,7 @@ public class TelephonyTypeLookupService {
             int bandsCount = tuple.get("bands_count", Number.class).intValue();
             return new PrefixInfo(p, cfg, bandsCount);
         } catch (NoResultException e) {
-            log.warn("No prefix definition found for LOCAL_EXTENDED type in country {}", originCountryId);
+            log.debug("No prefix definition found for LOCAL_EXTENDED type in country {}", originCountryId);
             return null;
         }
     }
@@ -74,7 +74,7 @@ public class TelephonyTypeLookupService {
             Tuple result = (Tuple) query.getSingleResult();
             return new OperatorInfo(result.get("id", Number.class).longValue(), result.get("name", String.class));
         } catch (NoResultException e) {
-            log.warn("No internal operator found for telephony type {} and country {}", telephonyTypeId, originCountryId);
+            log.debug("No internal operator found for telephony type {} and country {}", telephonyTypeId, originCountryId);
             return new OperatorInfo(CdrConfigService.DEFAULT_OPERATOR_ID_FOR_INTERNAL, "UnknownInternalOperator");
         }
     }
@@ -93,7 +93,7 @@ public class TelephonyTypeLookupService {
             Object result = query.getSingleResult();
             return result != null ? (BigDecimal) result : BigDecimal.ZERO;
         } catch (NoResultException e) {
-            log.warn("No VAT rate found for prefix with type {}, operator {}, country {}", telephonyTypeId, operatorId, originCountryId);
+            log.debug("No VAT rate found for prefix with type {}, operator {}, country {}", telephonyTypeId, operatorId, originCountryId);
             return BigDecimal.ZERO;
         }
     }
@@ -147,7 +147,7 @@ public class TelephonyTypeLookupService {
             return new TariffValue(baseValue, vatIncluded, vatValue);
 
         } catch (NoResultException e) {
-            log.warn("No prefix found for ID: {}", prefixId);
+            log.debug("No prefix found for ID: {}", prefixId);
             return new TariffValue(BigDecimal.ZERO, false, BigDecimal.ZERO);
         }
     }
@@ -178,7 +178,7 @@ public class TelephonyTypeLookupService {
                 result.get("vat_value", BigDecimal.class)
             );
         } catch (NoResultException e) {
-            log.warn("No internal tariff found for type {} and country {}", internalTelephonyTypeId, originCountryId);
+            log.debug("No internal tariff found for type {} and country {}", internalTelephonyTypeId, originCountryId);
             return new TariffValue(BigDecimal.ZERO, false, BigDecimal.ZERO);
         }
     }

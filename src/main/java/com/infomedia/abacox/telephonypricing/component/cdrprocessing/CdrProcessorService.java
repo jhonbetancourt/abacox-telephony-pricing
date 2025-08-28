@@ -35,7 +35,7 @@ public class CdrProcessorService {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void processCdrBatch(List<LineProcessingContext> batch) {
-        log.info("Starting transactional processing for a batch of {} records.", batch.size());
+        log.debug("Starting transactional processing for a batch of {} records.", batch.size());
         for (LineProcessingContext context : batch) {
             // The original processSingleCdrLine logic is now called here for each item in the batch.
             processSingleCdrLine(context);
@@ -45,7 +45,7 @@ public class CdrProcessorService {
         log.debug("Flushing and clearing EntityManager after processing batch.");
         entityManager.flush();
         entityManager.clear();
-        log.info("Completed transactional processing for batch of {} records.", batch.size());
+        log.debug("Completed transactional processing for batch of {} records.", batch.size());
     }
 
     /**
@@ -56,16 +56,15 @@ public class CdrProcessorService {
         CommunicationLocation targetCommLocation = lineProcessingContext.getCommLocation();
         String cdrLine = lineProcessingContext.getCdrLine();
         Long fileInfoId = lineProcessingContext.getFileInfoId();
-        CdrData cdrData = null;
-        FileInfo currentFileInfo = null;
+        CdrData cdrData = null;        FileInfo currentFileInfo = null;
         CdrProcessor processor = lineProcessingContext.getCdrProcessor();
-        log.trace("Processing single CDR line for CommLocation {}: {}, FileInfo ID: {}", targetCommLocation.getId(), cdrLine, fileInfoId);
+        log.info("Processing single CDR line for CommLocation {}: {}, FileInfo ID: {}", targetCommLocation.getId(), cdrLine, fileInfoId);
         try {
             if (fileInfoId != null) {
                 // Find the FileInfo within the current transaction's persistence context
                 currentFileInfo = entityManager.find(FileInfo.class, fileInfoId.intValue());
                 if (currentFileInfo == null) {
-                    log.error("FileInfo not found for ID: {} within batch transaction. This indicates a problem.", fileInfoId);
+                    log.debug("FileInfo not found for ID: {} within batch transaction. This indicates a problem.", fileInfoId);
                     CdrData tempData = new CdrData();
                     tempData.setRawCdrLine(cdrLine);
                     tempData.setCommLocationId(targetCommLocation.getId());
@@ -97,7 +96,7 @@ public class CdrProcessorService {
             cdrData = cdrEnrichmentService.enrichCdr(cdrData, lineProcessingContext);
 
             if (cdrData.isMarkedForQuarantine()) {
-                log.warn("CDR marked for quarantine after enrichment. Reason: {}, Step: {}", cdrData.getQuarantineReason(), cdrData.getQuarantineStep());
+                log.debug("CDR marked for quarantine after enrichment. Reason: {}, Step: {}", cdrData.getQuarantineReason(), cdrData.getQuarantineStep());
                  QuarantineErrorType errorType = cdrData.getQuarantineStep() != null && !cdrData.getQuarantineStep().isEmpty() ?
                                                 QuarantineErrorType.valueOf(cdrData.getQuarantineStep()) :
                                                 QuarantineErrorType.ENRICHMENT_ERROR;
@@ -107,7 +106,7 @@ public class CdrProcessorService {
                 callRecordPersistenceService.saveOrUpdateCallRecord(cdrData, targetCommLocation);
             }
         } catch (Exception e) {
-            log.error("Unhandled exception processing CDR line within batch: {} for CommLocation: {}", cdrLine, targetCommLocation.getId(), e);
+            log.debug("Unhandled exception processing CDR line within batch: {} for CommLocation: {}", cdrLine, targetCommLocation.getId(), e);
             String step = (cdrData != null && cdrData.getQuarantineStep() != null) ? cdrData.getQuarantineStep() : "UNKNOWN_SINGLE_LINE_PROCESSING_STEP";
             if (cdrData == null) {
                 cdrData = new CdrData();

@@ -33,7 +33,7 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
     public CdrData evaluateFormat(String cdrLine, CommunicationLocation commLocation, ExtensionLimits extensionLimits) {
         log.debug("Evaluating Cisco CM 6.0 CDR line: {}", cdrLine);
         if (currentHeaderPositions.isEmpty() || !currentHeaderPositions.containsKey("_max_mapped_header_index_")) {
-            log.error("Cisco CM 6.0 Headers not parsed. Cannot process line: {}", cdrLine);
+            log.debug("Cisco CM 6.0 Headers not parsed. Cannot process line: {}", cdrLine);
             CdrData errorData = new CdrData(); errorData.setRawCdrLine(cdrLine);
             errorData.setMarkedForQuarantine(true); errorData.setQuarantineReason("Header not parsed prior to CDR line processing.");
             errorData.setQuarantineStep(QuarantineErrorType.MISSING_HEADER.name()); return errorData;
@@ -51,7 +51,7 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
             log.debug("Skipping 'INTEGER' type definition line."); return null;
         }
         if (fields.size() < this.minExpectedFieldsForValidCdr) {
-            log.warn("Cisco CM 6.0 CDR line has insufficient fields ({}). Expected at least {}. Line: {}", fields.size(), minExpectedFieldsForValidCdr, cdrLine);
+            log.debug("Cisco CM 6.0 CDR line has insufficient fields ({}). Expected at least {}. Line: {}", fields.size(), minExpectedFieldsForValidCdr, cdrLine);
             cdrData.setMarkedForQuarantine(true);
             cdrData.setQuarantineReason("Insufficient fields. Found " + fields.size() + ", expected " + minExpectedFieldsForValidCdr);
             cdrData.setQuarantineStep(QuarantineErrorType.PARSER_ERROR.name()); return cdrData;
@@ -263,7 +263,7 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
         if (isConferenceByFinalCalled &&
                 cdrData.getCallingPartyNumber() != null &&
                 Objects.equals(cdrData.getCallingPartyNumber(), cdrData.getFinalCalledPartyNumber())) {
-            log.info("Conference call where caller and callee are the same after all processing. Discarding CDR: {}", cdrLine);
+            log.debug("Conference call where caller and callee are the same after all processing. Discarding CDR: {}", cdrLine);
             return null;
         }
         cdrData.setEffectiveDestinationNumber(cdrData.getFinalCalledPartyNumber());
@@ -346,7 +346,7 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
                     }
                     return rawValue;
                 } catch (NumberFormatException e) {
-                    log.warn("Failed to parse IP address from decimal: {} for header {}", rawValue, actualHeaderName);
+                    log.debug("Failed to parse IP address from decimal: {} for header {}", rawValue, actualHeaderName);
                     return rawValue;
                 }
             }
@@ -361,7 +361,7 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
             long epochSeconds = Long.parseLong(epochSecondsStr);
             return epochSeconds > 0 ? DateTimeUtil.epochSecondsToLocalDateTime(epochSeconds) : null;
         } catch (NumberFormatException e) {
-            log.warn("Failed to parse epoch seconds: {}", epochSecondsStr, e);
+            log.debug("Failed to parse epoch seconds: {}", epochSecondsStr, e);
             return null;
         }
     }

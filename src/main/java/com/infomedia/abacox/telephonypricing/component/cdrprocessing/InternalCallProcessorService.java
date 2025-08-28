@@ -50,7 +50,7 @@ public class InternalCallProcessorService {
 
         if (cdrData.getCallingPartyNumber() != null && !cdrData.getCallingPartyNumber().trim().isEmpty() &&
                 Objects.equals(cdrData.getCallingPartyNumber().trim(), cleanedDestination.trim())) {
-            log.warn("Internal call to self (Origin: {}, Destination: {}). Marking for quarantine.", cdrData.getCallingPartyNumber(), cleanedDestination);
+            log.debug("Internal call to self (Origin: {}, Destination: {}). Marking for quarantine.", cdrData.getCallingPartyNumber(), cleanedDestination);
             cdrData.setTelephonyTypeId(TelephonyTypeEnum.ERRORS.getValue());
             cdrData.setTelephonyTypeName("Internal Self-Call (Ignored)");
             cdrData.setMarkedForQuarantine(true);
@@ -63,7 +63,7 @@ public class InternalCallProcessorService {
         log.debug("Determined specific internal call type info: {}", internalTypeInfo);
 
         if (internalTypeInfo.isIgnoreCall()) {
-            log.warn("Internal call marked to be ignored. Reason: {}", internalTypeInfo.getAdditionalInfo());
+            log.debug("Internal call marked to be ignored. Reason: {}", internalTypeInfo.getAdditionalInfo());
             cdrData.setTelephonyTypeId(TelephonyTypeEnum.ERRORS.getValue());
             cdrData.setTelephonyTypeName("Internal Call Ignored (Policy: " + internalTypeInfo.getAdditionalInfo() + ")");
             cdrData.setMarkedForQuarantine(true);
@@ -74,7 +74,7 @@ public class InternalCallProcessorService {
 
         // PHP: procesaInterna -> InvertirLlamada if origin not found but destination is.
         if (internalTypeInfo.isEffectivelyIncoming() && cdrData.getCallDirection() == CallDirection.OUTGOING) {
-            log.info("Internal call determined to be effectively incoming. Inverting parties and trunks. CDR: {}", cdrData.getCtlHash());
+            log.debug("Internal call determined to be effectively incoming. Inverting parties and trunks. CDR: {}", cdrData.getCtlHash());
             CdrUtil.swapFull(cdrData, true); // Full swap including trunks
             cdrData.setCallDirection(CallDirection.INCOMING);
             // After swap, the new "calling" party is the destination employee

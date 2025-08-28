@@ -29,7 +29,7 @@ public class CallRecordPersistenceService {
     @Transactional
     public CallRecord saveOrUpdateCallRecord(CdrData cdrData, CommunicationLocation commLocation) {
         if (cdrData.isMarkedForQuarantine()) {
-            log.warn("CDR marked for quarantine, not saving to CallRecord: {}", cdrData.getCtlHash());
+            log.debug("CDR marked for quarantine, not saving to CallRecord: {}", cdrData.getCtlHash());
             return null;
         }
 
@@ -39,7 +39,7 @@ public class CallRecordPersistenceService {
 
         CallRecord existingRecord = findByCtlHash(cdrHash);
         if (existingRecord != null) {
-            log.warn("Duplicate CDR detected based on hash {}. Original ID: {}. Quarantining.",
+            log.debug("Duplicate CDR detected based on hash {}. Original ID: {}. Quarantining.",
                     cdrHash, existingRecord.getId());
             failedCallRecordPersistenceService.quarantineRecord(cdrData,
                     QuarantineErrorType.DUPLICATE_RECORD,
@@ -55,10 +55,10 @@ public class CallRecordPersistenceService {
         try {
             log.debug("Persisting CallRecord: {}", callRecord);
             entityManager.persist(callRecord);
-            log.info("Saved new CallRecord with ID: {} for CDR line: {}", callRecord.getId(), cdrData.getCtlHash());
+            log.debug("Saved new CallRecord with ID: {} for CDR line: {}", callRecord.getId(), cdrData.getCtlHash());
             return callRecord;
         } catch (Exception e) {
-            log.error("Database error while saving CallRecord for CDR: {}. Error: {}", cdrData.getCtlHash(), e.getMessage(), e);
+            log.debug("Database error while saving CallRecord for CDR: {}. Error: {}", cdrData.getCtlHash(), e.getMessage(), e);
             failedCallRecordPersistenceService.quarantineRecord(cdrData,
                     QuarantineErrorType.DB_INSERT_FAILED,
                     "Database error: " + e.getMessage(),

@@ -43,7 +43,7 @@ public class CdrRoutingService {
      * @param plantTypeId The ID of the plant type for initial parsing.
      */
     protected void routeAndProcessCdrStreamInternal(String filename, InputStream inputStream, Long plantTypeId) {
-        log.info("Starting CDR stream routing and processing for file: {}, PlantTypeID: {}", filename, plantTypeId);
+        log.debug("Starting CDR stream routing and processing for file: {}, PlantTypeID: {}", filename, plantTypeId);
 
         CdrProcessor initialParser = getProcessorForPlantType(plantTypeId);
         log.debug("Using initial parser: {}", initialParser.getClass().getSimpleName());
@@ -55,7 +55,7 @@ public class CdrRoutingService {
             streamBytes = inputStream.readAllBytes();
             log.debug("Read {} bytes from input stream for file: {}", streamBytes.length, filename);
         } catch (IOException e) {
-            log.error("Failed to read input stream for file: {}. Aborting processing.", filename, e);
+            log.debug("Failed to read input stream for file: {}. Aborting processing.", filename, e);
             CdrData streamErrorData = new CdrData();
             streamErrorData.setRawCdrLine("STREAM_READ_ERROR_ROUTING: " + filename);
             failedCallRecordPersistenceService.quarantineRecord(streamErrorData, QuarantineErrorType.IO_EXCEPTION,
@@ -69,7 +69,7 @@ public class CdrRoutingService {
         Map<Long, List<ExtensionRange>> extensionRanges = employeeLookupService.getExtensionRanges();
 
         if (fileInfo == null || fileInfo.getId() == null) {
-            log.error("Failed to create or get FileInfo for stream: {}. Aborting processing.", filename);
+            log.debug("Failed to create or get FileInfo for stream: {}. Aborting processing.", filename);
             CdrData streamErrorData = new CdrData();
             streamErrorData.setRawCdrLine("STREAM_FILEINFO_ERROR_ROUTING: " + filename);
             failedCallRecordPersistenceService.quarantineRecord(streamErrorData, QuarantineErrorType.IO_EXCEPTION,
@@ -98,12 +98,12 @@ public class CdrRoutingService {
                 if (!headerProcessedByInitialParser && initialParser.isHeaderLine(trimmedLine)) {
                     initialParser.parseHeader(trimmedLine);
                     headerProcessedByInitialParser = true;
-                    log.info("Processed header line using initial parser {} for stream: {}", initialParser.getClass().getSimpleName(), filename);
+                    log.debug("Processed header line using initial parser {} for stream: {}", initialParser.getClass().getSimpleName(), filename);
                     continue;
                 }
 
                 if (!headerProcessedByInitialParser) {
-                    log.warn("Skipping line {} as header has not been processed by initial parser: {}", lineCount, trimmedLine);
+                    log.debug("Skipping line {} as header has not been processed by initial parser: {}", lineCount, trimmedLine);
                     CdrData tempData = new CdrData(); tempData.setRawCdrLine(trimmedLine); tempData.setFileInfo(fileInfo);
                     failedCallRecordPersistenceService.quarantineRecord(tempData,
                             QuarantineErrorType.MISSING_HEADER, "CDR data encountered before header (routing stage)", "RouteStream_HeaderCheck", null);
@@ -145,7 +145,7 @@ public class CdrRoutingService {
                             .build();
                     batch.add(lineProcessingContext);
                 } else {
-                    log.warn("Could not determine target CommunicationLocation for line {}: {}", lineCount, trimmedLine);
+                    log.debug("Could not determine target CommunicationLocation for line {}: {}", lineCount, trimmedLine);
                     preliminaryCdrData.setCommLocationId(null);
                     failedCallRecordPersistenceService.quarantineRecord(preliminaryCdrData,
                             QuarantineErrorType.PENDING_ASSOCIATION, "Could not route CDR to a CommunicationLocation", "CdrRoutingService_Unroutable", null);
@@ -153,7 +153,7 @@ public class CdrRoutingService {
                 }
 
                 if (batch.size() >= CdrConfigService.CDR_PROCESSING_BATCH_SIZE) {
-                    log.info("Processing a batch of {} CDRs...", batch.size());
+                    log.debug("Processing a batch of {} CDRs...", batch.size());
                     cdrProcessorService.processCdrBatch(batch);
                     totalProcessedCount += batch.size();
                     batch.clear();
@@ -161,18 +161,18 @@ public class CdrRoutingService {
             }
 
             if (!batch.isEmpty()) {
-                log.info("Processing the final batch of {} CDRs...", batch.size());
+                log.debug("Processing the final batch of {} CDRs...", batch.size());
                 cdrProcessorService.processCdrBatch(batch);
                 totalProcessedCount += batch.size();
                 batch.clear();
             }
 
-            log.info("Finished routing and processing stream: {}. Total lines read: {}, Processed CDRs: {}, Unroutable CDRs: {}",
+            log.debug("Finished routing and processing stream: {}. Total lines read: {}, Processed CDRs: {}, Unroutable CDRs: {}",
                     filename, lineCount, totalProcessedCount, unroutableCdrCount);
 
         } catch (IOException e) {
             // This exception is now highly unlikely since we are reading from an in-memory byte array.
-            log.error("Critical error reading from in-memory CDR stream for routing: {}", filename, e);
+            log.debug("Critical error reading from in-memory CDR stream for routing: {}", filename, e);
             CdrData tempData = new CdrData(); tempData.setRawCdrLine("STREAM_ROUTING_IN_MEMORY_READ_ERROR"); tempData.setFileInfo(fileInfo);
             failedCallRecordPersistenceService.quarantineRecord(tempData,
                     QuarantineErrorType.IO_EXCEPTION, e.getMessage(), "RouteStream_InMemory_IOException", null);

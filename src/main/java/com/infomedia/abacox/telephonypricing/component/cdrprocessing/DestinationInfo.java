@@ -39,7 +39,7 @@ public class DestinationInfo {
             // Use BigInteger for safety with potentially long phone numbers
             // Ensure strings are purely numeric before BigInteger conversion
             if (!comparableInitialValue.matches("\\d*") || !comparableFinalValue.matches("\\d*")) {
-                log.warn("Non-numeric comparableInitialValue ('{}') or comparableFinalValue ('{}') for range size calculation.", comparableInitialValue, comparableFinalValue);
+                log.debug("Non-numeric comparableInitialValue ('{}') or comparableFinalValue ('{}') for range size calculation.", comparableInitialValue, comparableFinalValue);
                 // Handle cases where NDC might be non-numeric (e.g. negative for approximate)
                 // or padding resulted in non-numeric, though it shouldn't.
                 // If they are not numeric, a simple length comparison or default max might be better.
@@ -56,10 +56,10 @@ public class DestinationInfo {
             BigInteger finalVal = new BigInteger(comparableFinalValue);
             return finalVal.subtract(initial).longValueExact();
         } catch (NumberFormatException e) {
-            log.error("NumberFormatException during getPaddedSeriesRangeSize for initial='{}', final='{}'. Returning MAX_VALUE.", comparableInitialValue, comparableFinalValue, e);
+            log.debug("NumberFormatException during getPaddedSeriesRangeSize for initial='{}', final='{}'. Returning MAX_VALUE.", comparableInitialValue, comparableFinalValue, e);
             return Long.MAX_VALUE;
         } catch (ArithmeticException e) {
-            log.error("ArithmeticException (likely longValueExact overflow) during getPaddedSeriesRangeSize for initial='{}', final='{}'. Returning MAX_VALUE.", comparableInitialValue, comparableFinalValue, e);
+            log.debug("ArithmeticException (likely longValueExact overflow) during getPaddedSeriesRangeSize for initial='{}', final='{}'. Returning MAX_VALUE.", comparableInitialValue, comparableFinalValue, e);
             return Long.MAX_VALUE;
         }
     }

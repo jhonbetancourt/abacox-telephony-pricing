@@ -47,7 +47,7 @@ public class DateTimeUtil {
             long epochSeconds = Long.parseLong(cmeDateTimeString);
             return epochSecondsToLocalDateTime(epochSeconds);
         } catch (NumberFormatException nfe) {
-            log.warn("Could not parse CME date-time string: {}", cmeDateTimeString);
+            log.debug("Could not parse CME date-time string: {}", cmeDateTimeString);
         }
         return null;
     }
@@ -64,7 +64,7 @@ public class DateTimeUtil {
                     long epochSeconds = Long.parseLong(dateTimeStr);
                     return epochSecondsToLocalDateTime(epochSeconds);
                 } catch (NumberFormatException e3) {
-                    log.warn("Failed to parse date-time string: {}", dateTimeStr);
+                    log.debug("Failed to parse date-time string: {}", dateTimeStr);
                     return null;
                 }
             }

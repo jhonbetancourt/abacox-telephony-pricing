@@ -176,7 +176,7 @@ public class PhoneNumberTransformationService {
                         nativeQuery.setParameter("ndcPartInt", Integer.parseInt(ndcPart));
                         nativeQuery.setParameter("subscriberNum", Integer.parseInt(subscriberPart));
                     } catch (NumberFormatException e) {
-                        log.warn("NDC part {} or Subscriber part {} is not a number for _esCelular_fijo logic", ndcPart, subscriberPart);
+                        log.debug("NDC part {} or Subscriber part {} is not a number for _esCelular_fijo logic", ndcPart, subscriberPart);
                         return new TransformationResult(originalPhoneNumber, false, null);
                     }
 
@@ -213,7 +213,7 @@ public class PhoneNumberTransformationService {
                         // PHP: $numero = substr($numero, 2); $g_numero = $numero = '09'.$numero;
                         transformedNumber = "09" + phoneNumber.substring(2); // Default to "09" + XNNNNNNN
                         newTelephonyTypeId = TelephonyTypeEnum.NATIONAL.getValue();
-                        log.warn("No series match for '60...' number. Defaulting to national: '{}', type hint: NATIONAL", transformedNumber);
+                        log.debug("No series match for '60...' number. Defaulting to national: '{}', type hint: NATIONAL", transformedNumber);
                     }
                 }
             }
