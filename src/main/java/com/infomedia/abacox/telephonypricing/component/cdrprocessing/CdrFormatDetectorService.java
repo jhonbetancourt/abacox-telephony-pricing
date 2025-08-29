@@ -19,7 +19,7 @@ import java.util.Optional;
 public class CdrFormatDetectorService {
 
     private final List<CdrProcessor> processors;
-    private static final int PROBE_LINE_COUNT = 10; // Read the first 10 lines to find a header
+    private static final int PROBE_LINE_COUNT = 5; // Read the first lines to find a header
 
     /**
      * Detects the plant type ID by probing the initial content of a file.
