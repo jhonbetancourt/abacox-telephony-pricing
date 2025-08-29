@@ -412,4 +412,18 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
     public List<String> getIgnoredAuthCodeDescriptions() {
         return IGNORED_AUTH_CODES;
     }
+
+
+    @Override
+    public boolean probe(List<String> initialLines) {
+        if (initialLines == null || initialLines.isEmpty()) {
+            return false;
+        }
+        for (String line : initialLines) {
+            if (isHeaderLine(line)) {
+                return true; // Found the header, this is our file type.
+            }
+        }
+        return false;
+    }
 }

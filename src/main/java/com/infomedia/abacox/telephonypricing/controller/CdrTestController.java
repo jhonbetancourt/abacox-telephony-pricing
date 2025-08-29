@@ -1,7 +1,7 @@
 package com.infomedia.abacox.telephonypricing.controller;
 
+import com.infomedia.abacox.telephonypricing.component.cdrprocessing.CdrFormatDetectorService;
 import com.infomedia.abacox.telephonypricing.component.cdrprocessing.CdrProcessingExecutor;
-import com.infomedia.abacox.telephonypricing.component.cdrprocessing.CiscoCm60CdrProcessor;
 import com.infomedia.abacox.telephonypricing.component.cdrprocessing.FileInfoPersistenceService;
 import com.infomedia.abacox.telephonypricing.dto.generic.MessageResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.ValidationException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.http.MediaType;
@@ -24,20 +25,18 @@ import java.util.zip.ZipInputStream;
 @RequiredArgsConstructor
 @RestController
 @Tag(name = "CdrTestController", description = "CDR Test Controller")
-@SecurityRequirements({
-        @SecurityRequirement(name = "JWT_Token"),
-        @SecurityRequirement(name = "Username")
-})
+@SecurityRequirements({@SecurityRequirement(name = "JWT_Token"), @SecurityRequirement(name = "Username")})
 @Log4j2
 @RequestMapping("/api/cdr")
 public class CdrTestController {
 
     private final CdrProcessingExecutor cdrProcessingExecutor;
     private final FileInfoPersistenceService fileInfoPersistenceService;
+    private final CdrFormatDetectorService cdrFormatDetectorService; // NEW
 
     @PostMapping(value = "/process", consumes = MediaType.MULTIPART_FORM_DATA_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     @Operation(summary = "Queue a CDR file or ZIP archive for processing",
-            description = "Submits a CDR file (or a ZIP archive of CDR files). The file is saved and queued for reliable, asynchronous processing.")
+            description = "Submits a CDR file (or a ZIP archive of CDR files). The file format is automatically detected. The file is saved and queued for reliable, asynchronous processing.")
     public MessageResponse processCdr(@Parameter(description = "The CDR file or ZIP archive to upload") @RequestParam("file") MultipartFile file) {
         log.info("Received file for queueing: {}", file.getOriginalFilename());
 
@@ -57,11 +56,15 @@ public class CdrTestController {
     private int queueSingleFile(MultipartFile file) {
         log.info("Queueing single file: {}", file.getOriginalFilename());
         try {
+            byte[] fileBytes = file.getBytes();
+            Long plantTypeId = cdrFormatDetectorService.detectPlantType(fileBytes)
+                    .orElseThrow(() -> new ValidationException("Could not recognize CDR format for file: " + file.getOriginalFilename()));
+
             fileInfoPersistenceService.createOrGetFileInfo(
                     file.getOriginalFilename(),
-                    CiscoCm60CdrProcessor.PLANT_TYPE_IDENTIFIER,
+                    plantTypeId, // MODIFIED
                     "ROUTED_STREAM",
-                    file.getBytes()
+                    fileBytes
             );
             return 1;
         } catch (IOException e) {
@@ -77,18 +80,25 @@ public class CdrTestController {
             ZipEntry zipEntry;
             while ((zipEntry = zis.getNextEntry()) != null) {
                 if (!zipEntry.isDirectory()) {
-                    log.info("Queueing file from ZIP: {}", zipEntry.getName());
+                    String entryName = zipEntry.getName();
+                    log.info("Queueing file from ZIP: {}", entryName);
                     ByteArrayOutputStream baos = new ByteArrayOutputStream();
                     byte[] buffer = new byte[4096];
                     int len;
                     while ((len = zis.read(buffer)) > 0) {
                         baos.write(buffer, 0, len);
                     }
+                    byte[] fileBytes = baos.toByteArray();
+
+                    // Detect plant type for each file in the zip
+                    Long plantTypeId = cdrFormatDetectorService.detectPlantType(fileBytes)
+                            .orElseThrow(() -> new ValidationException("Could not recognize CDR format for file '" + entryName + "' within ZIP archive."));
+
                     fileInfoPersistenceService.createOrGetFileInfo(
-                            zipEntry.getName(),
-                            CiscoCm60CdrProcessor.PLANT_TYPE_IDENTIFIER,
+                            entryName,
+                            plantTypeId, // MODIFIED
                             "ROUTED_STREAM",
-                            baos.toByteArray()
+                            fileBytes
                     );
                     fileCount++;
                 }
@@ -101,6 +111,7 @@ public class CdrTestController {
         return fileCount;
     }
 
+    // ... (rest of the controller methods for reprocessing remain the same)
     @PostMapping("/reprocess/files")
     @Operation(summary = "Reprocess one or more previously processed files",
             description = "Submits a task to reprocess files based on their FileInfo IDs.")
