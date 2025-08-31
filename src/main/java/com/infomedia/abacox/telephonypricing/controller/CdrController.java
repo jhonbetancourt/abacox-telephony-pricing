@@ -3,6 +3,8 @@ package com.infomedia.abacox.telephonypricing.controller;
 import com.infomedia.abacox.telephonypricing.component.cdrprocessing.CdrFormatDetectorService;
 import com.infomedia.abacox.telephonypricing.component.cdrprocessing.CdrProcessingExecutor;
 import com.infomedia.abacox.telephonypricing.component.cdrprocessing.FileInfoPersistenceService;
+import com.infomedia.abacox.telephonypricing.component.configmanager.ConfigKey;
+import com.infomedia.abacox.telephonypricing.component.configmanager.ConfigService;
 import com.infomedia.abacox.telephonypricing.dto.generic.MessageResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -12,9 +14,13 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.ValidationException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -24,20 +30,27 @@ import java.util.zip.ZipInputStream;
 
 @RequiredArgsConstructor
 @RestController
-@Tag(name = "CdrTestController", description = "CDR Test Controller")
+@Tag(name = "CdrController", description = "CDR Controller")
 @SecurityRequirements({@SecurityRequirement(name = "JWT_Token"), @SecurityRequirement(name = "Username")})
 @Log4j2
 @RequestMapping("/api/cdr")
-public class CdrTestController {
+public class CdrController {
 
     private final CdrProcessingExecutor cdrProcessingExecutor;
     private final FileInfoPersistenceService fileInfoPersistenceService;
-    private final CdrFormatDetectorService cdrFormatDetectorService; // NEW
+    private final CdrFormatDetectorService cdrFormatDetectorService;
+    private final ConfigService configService;
 
     @PostMapping(value = "/process", consumes = MediaType.MULTIPART_FORM_DATA_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     @Operation(summary = "Queue a CDR file or ZIP archive for processing",
             description = "Submits a CDR file (or a ZIP archive of CDR files). The file format is automatically detected. The file is saved and queued for reliable, asynchronous processing.")
-    public MessageResponse processCdr(@Parameter(description = "The CDR file or ZIP archive to upload") @RequestParam("file") MultipartFile file) {
+    public MessageResponse processCdr(@Parameter(description = "The CDR file or ZIP archive to upload") @RequestParam("file") MultipartFile file
+            , @RequestHeader (value = "X-API-KEY") String apiKey) {
+
+        if(!apiKey.equals(configService.getValue(ConfigKey.CDR_UPLOAD_API_KEY).asString())) {
+            throw new SecurityException("Invalid API Key");
+        }
+
         log.info("Received file for queueing: {}", file.getOriginalFilename());
 
         String contentType = file.getContentType();
@@ -153,5 +166,25 @@ public class CdrTestController {
             cdrProcessingExecutor.submitFailedCallRecordReprocessing(failedCallRecordId);
         }
         return new MessageResponse(String.format("Reprocessing task submitted for %d failed call record(s).", failedCallRecordIds.size()));
+    }
+
+    @GetMapping("/download/{fileInfoId}")
+    @Operation(summary = "Download the original CDR file",
+            description = "Retrieves the original, unprocessed CDR file content based on its FileInfo ID.")
+    public ResponseEntity<byte[]> downloadCdrFile(@PathVariable Long fileInfoId) {
+        log.info("Request to download original file for FileInfo ID: {}", fileInfoId);
+
+        return fileInfoPersistenceService.getOriginalFileData(fileInfoId)
+                .map(fileData -> {
+                    HttpHeaders headers = new HttpHeaders();
+                    headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
+                    headers.setContentDispositionFormData("attachment", fileData.filename());
+                    headers.setContentLength(fileData.content().length);
+
+                    log.info("Serving file '{}' ({} bytes) for download.", fileData.filename(), fileData.content().length);
+                    return new ResponseEntity<>(fileData.content(), headers, HttpStatus.OK);
+                })
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "File not found or content is unavailable for FileInfo ID: " + fileInfoId));
     }
 }

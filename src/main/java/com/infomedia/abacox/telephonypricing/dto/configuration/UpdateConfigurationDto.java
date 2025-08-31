@@ -92,4 +92,8 @@ public class UpdateConfigurationDto {
     @NotNull
     @Schema(description = "Placeholder text for when no partition is assigned.")
     private JsonNullable<String> noPartitionPlaceholder = JsonNullable.undefined();
+
+    @NotNull
+    @Schema(description = "API key required for uploading CDRs via the API.")
+    private JsonNullable<String> cdrUploadApiKey = JsonNullable.undefined();
 }

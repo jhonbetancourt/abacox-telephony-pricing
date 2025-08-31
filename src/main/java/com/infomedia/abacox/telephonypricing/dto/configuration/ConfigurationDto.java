@@ -31,5 +31,6 @@ public class ConfigurationDto {
     private String prefixText;
     private String employeeNamePrefixFromRange;
     private String noPartitionPlaceholder;
+    private String cdrUploadApiKey;
 }
 

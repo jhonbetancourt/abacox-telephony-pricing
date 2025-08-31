@@ -16,6 +16,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.Optional;
+import java.util.zip.DataFormatException;
 import java.util.zip.Deflater;
 import java.util.zip.Inflater;
 
@@ -145,5 +146,23 @@ public class FileInfoPersistenceService {
             log.info("Reset {} files from IN_PROGRESS to PENDING status on startup.", updatedCount);
         }
         return updatedCount;
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<FileInfoData> getOriginalFileData(Long fileInfoId) {
+        FileInfo fileInfo = findById(fileInfoId);
+        if (fileInfo == null || fileInfo.getFileContent() == null || fileInfo.getFileContent().length == 0) {
+            log.warn("Could not find FileInfo or its content for ID: {}", fileInfoId);
+            return Optional.empty();
+        }
+
+        try {
+            byte[] decompressedContent = CdrUtil.decompress(fileInfo.getFileContent());
+            log.debug("Successfully decompressed content for FileInfo ID: {}", fileInfoId);
+            return Optional.of(new FileInfoData(fileInfo.getFilename(), decompressedContent));
+        } catch (IOException | DataFormatException e) {
+            log.error("Failed to decompress content for FileInfo ID: {}", fileInfoId, e);
+            return Optional.empty();
+        }
     }
 }

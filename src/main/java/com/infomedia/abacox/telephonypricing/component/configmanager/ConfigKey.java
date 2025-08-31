@@ -32,7 +32,8 @@ public enum ConfigKey {
     ORIGIN_TEXT("(ORIGEN)", true),
     PREFIX_TEXT("(PREFIJO)", true),
     EMPLOYEE_NAME_PREFIX_FROM_RANGE("Funcionario", true),
-    NO_PARTITION_PLACEHOLDER("NN-VALIDA", true);
+    NO_PARTITION_PLACEHOLDER("NN-VALIDA", true),
+    CDR_UPLOAD_API_KEY("024dc8fe-1d0d-41b2-8f96-dcf3ad9e4141", true);
 
     private final String defaultValue;
     private final boolean isPublic;
