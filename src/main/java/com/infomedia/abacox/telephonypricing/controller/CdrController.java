@@ -67,7 +67,7 @@ public class CdrController {
         return new MessageResponse(String.format("%d file(s) queued for processing successfully.", filesQueued));
     }
 
-    @PostMapping(value = "/process-sync", consumes = MediaType.MULTIPART_FORM_DATA_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    @PostMapping(value = "/processSingle", consumes = MediaType.MULTIPART_FORM_DATA_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     @Operation(summary = "Process a single CDR file synchronously",
             description = "Submits a single CDR file for immediate, synchronous processing. The result summary is returned in the response. Fails if the file has been processed before.")
     public ResponseEntity<CdrProcessingResultDto> processCdrSync(@Parameter(description = "The single CDR file to process") @RequestParam("file") MultipartFile file) {
