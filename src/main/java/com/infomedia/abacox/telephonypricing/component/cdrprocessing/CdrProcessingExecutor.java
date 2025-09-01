@@ -42,7 +42,7 @@ public class CdrProcessingExecutor {
     }
 
     public Future<?> submitFileReprocessing(Long fileInfoId) {
-        return submitFileReprocessing(fileInfoId, true); // Default to cleaning up
+        return submitFileReprocessing(fileInfoId, false);
     }
 
     public Future<?> submitFileReprocessing(Long fileInfoId, boolean cleanupExistingRecords) {

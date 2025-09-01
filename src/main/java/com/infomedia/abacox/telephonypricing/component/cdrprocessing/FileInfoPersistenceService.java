@@ -63,8 +63,6 @@ public class FileInfoPersistenceService {
             fileInfo.setDate(LocalDateTime.now()); // Processing time
             fileInfo.setChecksum(checksum);
             fileInfo.setSize(uncompressedContent.length);
-            fileInfo.setReferenceId(0);
-            fileInfo.setDirectory("");
 
             try {
                 fileInfo.setFileContent(CdrUtil.compress(uncompressedContent));

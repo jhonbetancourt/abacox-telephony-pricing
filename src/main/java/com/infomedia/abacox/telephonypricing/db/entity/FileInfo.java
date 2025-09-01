@@ -75,22 +75,6 @@ public class FileInfo {
     private String checksum;
 
     /**
-     * Reference ID, possibly linking to another entity.
-     * Original field: FILEINFO_REF_ID
-     */
-    @Column(name = "reference_id", nullable = false)
-    @ColumnDefault("0")
-    private Integer referenceId;
-
-    /**
-     * Directory where the file is stored.
-     * Original field: FILEINFO_DIRECTORIO
-     */
-    @Column(name = "directory", length = 80, nullable = false)
-    @ColumnDefault("")
-    private String directory;
-
-    /**
      * Type or MIME type of the file.
      * Original field: FILEINFO_TIPO
      */
