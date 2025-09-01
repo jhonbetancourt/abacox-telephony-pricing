@@ -126,16 +126,6 @@ public class FileInfoPersistenceService {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void updateStatus(Long fileInfoId, FileInfo.ProcessingStatus status, String failureReason) {
-        FileInfo fileInfo = findById(fileInfoId);
-        if (fileInfo != null) {
-            fileInfo.setProcessingStatus(status);
-            // You could add a 'processing_details' column to store the failureReason
-            entityManager.merge(fileInfo);
-        }
-    }
-
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public int resetInProgressToPending() {
         int updatedCount = entityManager.createQuery(
                         "UPDATE FileInfo fi SET fi.processingStatus = :pendingStatus WHERE fi.processingStatus = :inProgressStatus")
@@ -163,6 +153,20 @@ public class FileInfoPersistenceService {
         } catch (IOException | DataFormatException e) {
             log.error("Failed to decompress content for FileInfo ID: {}", fileInfoId, e);
             return Optional.empty();
+        }
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void updateStatus(Long fileInfoId, FileInfo.ProcessingStatus status) {
+        FileInfo fileInfo = findById(fileInfoId);
+        if (fileInfo != null) {
+            fileInfo.setProcessingStatus(status);
+            // You could add a 'processing_details' column to store the details
+            // For now, we just log it.
+            log.debug("Updating status for FileInfo ID {} to {}", fileInfoId, status);
+            entityManager.merge(fileInfo);
+        } else {
+            log.warn("Attempted to update status for a non-existent FileInfo ID: {}", fileInfoId);
         }
     }
 }

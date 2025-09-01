@@ -47,22 +47,15 @@ public class CdrProcessorService {
     }
 
     /**
-     * Processes a batch of CDR lines within a single, new transaction.
-     * This method is designed to be called by a non-transactional orchestrator.
-     * After processing the batch, it flushes changes and clears the persistence context
-     * to manage memory efficiently.
-     *
-     * @param batch A list of CdrLineContext objects to be processed.
+     * Processes a batch of CDR lines within a single, new transaction for ASYNC operations.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void processCdrBatch(List<LineProcessingContext> batch) {
         log.debug("Starting transactional processing for a batch of {} records.", batch.size());
         for (LineProcessingContext context : batch) {
-            // The original processSingleCdrLine logic is now called here for each item in the batch.
-            processSingleCdrLine(context);
+            // This method now calls the refactored private helper
+            processSingleCdrLineInternal(context);
         }
-        // After processing all items in the batch, flush and clear the persistence context.
-        // This is the key to efficiency and preventing memory leaks.
         log.debug("Flushing and clearing EntityManager after processing batch.");
         entityManager.flush();
         entityManager.clear();
@@ -70,45 +63,39 @@ public class CdrProcessorService {
     }
 
     /**
-     * This is now a private helper method containing the logic to process one line.
-     * It is called by the public transactional `processCdrBatch` method.
+     * Processes a single CDR line within the CALLER'S transaction for SYNC operations.
+     * It returns the outcome for result aggregation.
+     *
+     * @param lineProcessingContext The context for the line to be processed.
+     * @return The outcome of the processing (SUCCESS, QUARANTINED, SKIPPED).
      */
-    private void processSingleCdrLine(LineProcessingContext lineProcessingContext) {
+    public ProcessingOutcome processSingleCdrLineSync(LineProcessingContext lineProcessingContext) {
+        // This method is not transactional itself; it joins the caller's transaction.
+        return processSingleCdrLineInternal(lineProcessingContext);
+    }
+
+    /**
+     * Private helper containing the core logic to process one line.
+     * It is called by both the async batch processor and the sync single-line processor.
+     */
+    private ProcessingOutcome processSingleCdrLineInternal(LineProcessingContext lineProcessingContext) {
         String cdrLine = lineProcessingContext.getCdrLine();
         CommunicationLocation targetCommLocation = lineProcessingContext.getCommLocation();
-        Long fileInfoId = lineProcessingContext.getFileInfoId();
 
         log.info("Processing CDR line for CommLocation {}: {}", targetCommLocation.getId(), cdrLine);
 
-        String outcomeStatus = "UNKNOWN";
-        String outcomeDetails = "";
         CdrData cdrData = null;
 
         try {
-            FileInfo currentFileInfo = null;
-            if (fileInfoId != null) {
-                currentFileInfo = entityManager.find(FileInfo.class, fileInfoId.intValue());
-                if (currentFileInfo == null) {
-                    outcomeStatus = "QUARANTINED";
-                    outcomeDetails = "Critical: FileInfo missing in transaction for ID: " + fileInfoId;
-                    CdrData tempData = new CdrData();
-                    tempData.setRawCdrLine(cdrLine);
-                    tempData.setCommLocationId(targetCommLocation.getId());
-                    failedCallRecordPersistenceService.quarantineRecord(tempData,
-                            QuarantineErrorType.UNHANDLED_EXCEPTION, outcomeDetails,
-                            "ProcessSingleLine_FileInfoMissing", null);
-                    return;
-                }
-            }
+            // FileInfo is already managed by the calling service, so we just use it.
+            FileInfo currentFileInfo = lineProcessingContext.getFileInfo();
 
             CdrProcessor processor = lineProcessingContext.getCdrProcessor();
             cdrData = processor.evaluateFormat(cdrLine, targetCommLocation, lineProcessingContext.getCommLocationExtensionLimits());
 
             if (cdrData == null) {
                 log.trace("Processor returned null for line, skipping: {}", cdrLine);
-                outcomeStatus = "SKIPPED";
-                outcomeDetails = "Parser returned null (e.g., header, comment)";
-                return;
+                return ProcessingOutcome.SKIPPED;
             }
 
             cdrData.setFileInfo(currentFileInfo);
@@ -121,9 +108,8 @@ public class CdrProcessorService {
                         QuarantineErrorType.INITIAL_VALIDATION_ERROR;
                 failedCallRecordPersistenceService.quarantineRecord(cdrData, errorType,
                         cdrData.getQuarantineReason(), cdrData.getQuarantineStep(), null);
-                outcomeStatus = "QUARANTINED";
-                outcomeDetails = String.format("Validation failed. Reason: %s", cdrData.getQuarantineReason());
-                return;
+                log.info("Outcome for CDR line -> Status: QUARANTINED, Details: Validation failed. Reason: {}", cdrData.getQuarantineReason());
+                return ProcessingOutcome.QUARANTINED;
             }
 
             cdrData = cdrEnrichmentService.enrichCdr(cdrData, lineProcessingContext);
@@ -134,23 +120,20 @@ public class CdrProcessorService {
                         QuarantineErrorType.ENRICHMENT_ERROR;
                 failedCallRecordPersistenceService.quarantineRecord(cdrData, errorType,
                         cdrData.getQuarantineReason(), cdrData.getQuarantineStep(), null);
-                outcomeStatus = "QUARANTINED";
-                outcomeDetails = String.format("Enrichment failed. Reason: %s", cdrData.getQuarantineReason());
+                log.info("Outcome for CDR line -> Status: QUARANTINED, Details: Enrichment failed. Reason: {}", cdrData.getQuarantineReason());
+                return ProcessingOutcome.QUARANTINED;
             } else {
                 CallRecord savedRecord = callRecordPersistenceService.saveOrUpdateCallRecord(cdrData, targetCommLocation);
                 if (savedRecord != null) {
-                    outcomeStatus = "SUCCESS";
-                    outcomeDetails = String.format("CallRecord ID: %d", savedRecord.getId());
+                    log.info("Outcome for CDR line -> Status: SUCCESS, Details: CallRecord ID: {}", savedRecord.getId());
+                    return ProcessingOutcome.SUCCESS;
                 } else {
-                    outcomeStatus = "QUARANTINED";
-                    outcomeDetails = String.format("Persistence failed. Reason: %s", cdrData.getQuarantineReason());
+                    log.info("Outcome for CDR line -> Status: QUARANTINED, Details: Persistence failed. Reason: {}", cdrData.getQuarantineReason());
+                    return ProcessingOutcome.QUARANTINED;
                 }
             }
         } catch (Exception e) {
-            log.debug("Unhandled exception processing CDR line within batch: {} for CommLocation: {}", cdrLine, targetCommLocation.getId(), e);
-            outcomeStatus = "QUARANTINED";
-            outcomeDetails = "Unhandled Exception: " + e.getMessage();
-
+            log.error("Unhandled exception processing CDR line: {} for CommLocation: {}", cdrLine, targetCommLocation.getId(), e);
             String step = (cdrData != null && cdrData.getQuarantineStep() != null) ? cdrData.getQuarantineStep() : "UNKNOWN_SINGLE_LINE_PROCESSING_STEP";
             if (cdrData == null) {
                 cdrData = new CdrData();
@@ -163,8 +146,8 @@ public class CdrProcessorService {
 
             failedCallRecordPersistenceService.quarantineRecord(cdrData,
                     QuarantineErrorType.UNHANDLED_EXCEPTION, e.getMessage(), step, null);
-        } finally {
-            log.info("Outcome for CDR line -> Status: {}, Details: {}", outcomeStatus, outcomeDetails);
+            log.info("Outcome for CDR line -> Status: QUARANTINED, Details: Unhandled Exception: {}", e.getMessage());
+            return ProcessingOutcome.QUARANTINED;
         }
     }
 
@@ -341,4 +324,6 @@ public class CdrProcessorService {
             }
         }
     }
+
+
 }

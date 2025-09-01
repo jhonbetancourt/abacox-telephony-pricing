@@ -3,6 +3,7 @@ package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 import com.infomedia.abacox.telephonypricing.db.entity.CommunicationLocation;
 import com.infomedia.abacox.telephonypricing.db.entity.ExtensionRange;
 import com.infomedia.abacox.telephonypricing.db.entity.FileInfo;
+import jakarta.validation.ValidationException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
@@ -29,6 +30,7 @@ public class CdrRoutingService {
     private final CallRecordPersistenceService callRecordPersistenceService;
     private final List<CdrProcessor> cdrProcessors;
     private final EmployeeLookupService employeeLookupService;
+    private final CdrFormatDetectorService cdrFormatDetectorService;
 
     private CdrProcessor getProcessorForPlantType(Long plantTypeId) {
         return cdrProcessors.stream()
@@ -239,5 +241,127 @@ public class CdrRoutingService {
         } catch (IOException | DataFormatException e) {
             log.info("Outcome for FileInfo ID {}: REPROCESS_FAILED. Reason: Failed to decompress file content.", fileInfoId, e);
         }
+    }
+
+    /**
+     * Processes a single CDR file stream synchronously within a single transaction.
+     *
+     * @param filename    The name of the file.
+     * @param inputStream The content of the file.
+     * @return A DTO summarizing the processing results.
+     */
+    @Transactional // This annotation makes the entire method a single transaction.
+    public CdrProcessingResultDto routeAndProcessCdrStreamSync(String filename, InputStream inputStream) {
+        log.info("Starting SYNCHRONOUS CDR stream processing for file: {}", filename);
+
+        byte[] streamBytes;
+        try {
+            streamBytes = inputStream.readAllBytes();
+        } catch (IOException e) {
+            log.error("Failed to read input stream for sync processing of file: {}", filename, e);
+            throw new UncheckedIOException(e);
+        }
+
+        Long plantTypeId = cdrFormatDetectorService.detectPlantType(streamBytes)
+                .orElseThrow(() -> new ValidationException("Could not recognize CDR format for file: " + filename));
+
+        // Create FileInfo, but fail if it already exists.
+        FileInfoPersistenceService.FileInfoCreationResult fileInfoResult = fileInfoPersistenceService.createOrGetFileInfo(filename, plantTypeId, "SYNC_STREAM", streamBytes);
+        if (!fileInfoResult.isNew()) {
+            throw new ValidationException("File with the same content has already been processed. FileInfo ID: " + fileInfoResult.getFileInfo().getId());
+        }
+        FileInfo fileInfo = fileInfoResult.getFileInfo();
+
+        // CORRECTED: Use the service to update the status to IN_PROGRESS
+        fileInfoPersistenceService.updateStatus(fileInfo.getId(), FileInfo.ProcessingStatus.IN_PROGRESS);
+
+        CdrProcessingResultDto.CdrProcessingResultDtoBuilder resultBuilder = CdrProcessingResultDto.builder().fileInfoId(fileInfo.getId());
+        long lineCount = 0;
+        int successfulRecords = 0;
+        int quarantinedRecords = 0;
+        int skippedLines = 0;
+        FileInfo.ProcessingStatus finalStatus = FileInfo.ProcessingStatus.FAILED; // Default to FAILED
+        String finalMessage = "An unexpected error occurred.";
+
+        try {
+            Map<Long, ExtensionLimits> extensionLimits = employeeLookupService.getExtensionLimits();
+            Map<Long, List<ExtensionRange>> extensionRanges = employeeLookupService.getExtensionRanges();
+            CdrProcessor initialParser = getProcessorForPlantType(plantTypeId);
+            boolean headerProcessed = false;
+
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(new ByteArrayInputStream(streamBytes), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    lineCount++;
+                    String trimmedLine = line.trim();
+                    if (trimmedLine.isEmpty()) continue;
+
+                    if (!headerProcessed && initialParser.isHeaderLine(trimmedLine)) {
+                        initialParser.parseHeader(trimmedLine);
+                        headerProcessed = true;
+                        continue;
+                    }
+                    if (!headerProcessed) {
+                        quarantinedRecords++;
+                        continue; // Skip lines before header
+                    }
+
+                    CdrData preliminaryCdrData = initialParser.evaluateFormat(trimmedLine, null, null);
+                    if (preliminaryCdrData == null) {
+                        skippedLines++;
+                        continue;
+                    }
+
+                    Optional<CommunicationLocation> targetCommLocationOpt = commLocationLookupService.findBestCommunicationLocation(
+                            plantTypeId, preliminaryCdrData.getCallingPartyNumber(), preliminaryCdrData.getCallingPartyNumberPartition(),
+                            preliminaryCdrData.getFinalCalledPartyNumber(), preliminaryCdrData.getFinalCalledPartyNumberPartition(),
+                            preliminaryCdrData.getLastRedirectDn(), preliminaryCdrData.getLastRedirectDnPartition(),
+                            preliminaryCdrData.getDateTimeOrigination());
+
+                    if (targetCommLocationOpt.isPresent()) {
+                        LineProcessingContext context = LineProcessingContext.builder()
+                                .cdrLine(trimmedLine).commLocation(targetCommLocationOpt.get())
+                                .cdrProcessor(initialParser).extensionRanges(extensionRanges)
+                                .extensionLimits(extensionLimits).fileInfo(fileInfo).build();
+
+                        ProcessingOutcome outcome = cdrProcessorService.processSingleCdrLineSync(context);
+                        switch (outcome) {
+                            case SUCCESS -> successfulRecords++;
+                            case QUARANTINED -> quarantinedRecords++;
+                            case SKIPPED -> skippedLines++;
+                        }
+                    } else {
+                        quarantinedRecords++;
+                        // Manually quarantine unroutable records
+                        preliminaryCdrData.setRawCdrLine(trimmedLine);
+                        preliminaryCdrData.setFileInfo(fileInfo);
+                        failedCallRecordPersistenceService.quarantineRecord(preliminaryCdrData,
+                                QuarantineErrorType.PENDING_ASSOCIATION, "Could not route CDR to a CommunicationLocation", "CdrRoutingService_SyncUnroutable", null);
+                    }
+                }
+            }
+
+            finalStatus = FileInfo.ProcessingStatus.COMPLETED;
+            finalMessage = "File processed successfully.";
+
+        } catch (Exception e) {
+            log.error("Critical failure during synchronous processing of file ID: {}. Rolling back.", fileInfo.getId(), e);
+            finalStatus = FileInfo.ProcessingStatus.FAILED;
+            finalMessage = "A critical error occurred: " + e.getMessage();
+            // Re-throw to ensure transaction rollback
+            throw new RuntimeException("Synchronous processing failed for file " + filename, e);
+        } finally {
+            // This ensures the final status is always set, even on exceptions.
+            fileInfoPersistenceService.updateStatus(fileInfo.getId(), finalStatus);
+        }
+
+        return resultBuilder
+                .status(finalStatus.name())
+                .message(finalMessage)
+                .linesRead(lineCount)
+                .successfulRecords(successfulRecords)
+                .quarantinedRecords(quarantinedRecords)
+                .skippedLines(skippedLines)
+                .build();
     }
 }

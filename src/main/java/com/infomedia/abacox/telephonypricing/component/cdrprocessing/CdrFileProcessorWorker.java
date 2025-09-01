@@ -46,13 +46,13 @@ public class CdrFileProcessorWorker {
 
                 // If reprocessFile completes without throwing an exception, we mark it as COMPLETED.
                 // The internal logic of reprocessFile already handles logging the outcome.
-                fileInfoPersistenceService.updateStatus(fileInfo.getId(), FileInfo.ProcessingStatus.COMPLETED, null);
+                fileInfoPersistenceService.updateStatus(fileInfo.getId(), FileInfo.ProcessingStatus.COMPLETED);
                 log.info("Successfully processed and marked file ID {} as COMPLETED.", fileInfo.getId());
 
             } catch (Exception e) {
                 // This catch block handles unexpected, critical failures in the routing service itself.
                 log.error("Critical failure while processing file ID: {}. Marking as FAILED.", fileInfo.getId(), e);
-                fileInfoPersistenceService.updateStatus(fileInfo.getId(), FileInfo.ProcessingStatus.FAILED, e.getMessage());
+                fileInfoPersistenceService.updateStatus(fileInfo.getId(), FileInfo.ProcessingStatus.FAILED);
             }
         }
     }

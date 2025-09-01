@@ -1,8 +1,6 @@
 package com.infomedia.abacox.telephonypricing.controller;
 
-import com.infomedia.abacox.telephonypricing.component.cdrprocessing.CdrFormatDetectorService;
-import com.infomedia.abacox.telephonypricing.component.cdrprocessing.CdrProcessingExecutor;
-import com.infomedia.abacox.telephonypricing.component.cdrprocessing.FileInfoPersistenceService;
+import com.infomedia.abacox.telephonypricing.component.cdrprocessing.*;
 import com.infomedia.abacox.telephonypricing.component.configmanager.ConfigKey;
 import com.infomedia.abacox.telephonypricing.component.configmanager.ConfigService;
 import com.infomedia.abacox.telephonypricing.dto.generic.MessageResponse;
@@ -24,6 +22,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -39,7 +38,9 @@ public class CdrController {
     private final CdrProcessingExecutor cdrProcessingExecutor;
     private final FileInfoPersistenceService fileInfoPersistenceService;
     private final CdrFormatDetectorService cdrFormatDetectorService;
+    private final CdrRoutingService cdrRoutingService;
     private final ConfigService configService;
+
 
     @PostMapping(value = "/process", consumes = MediaType.MULTIPART_FORM_DATA_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     @Operation(summary = "Queue a CDR file or ZIP archive for processing",
@@ -64,6 +65,32 @@ public class CdrController {
         }
 
         return new MessageResponse(String.format("%d file(s) queued for processing successfully.", filesQueued));
+    }
+
+    @PostMapping(value = "/process-sync", consumes = MediaType.MULTIPART_FORM_DATA_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "Process a single CDR file synchronously",
+            description = "Submits a single CDR file for immediate, synchronous processing. The result summary is returned in the response. Fails if the file has been processed before.")
+    public ResponseEntity<CdrProcessingResultDto> processCdrSync(@Parameter(description = "The single CDR file to process") @RequestParam("file") MultipartFile file) {
+        log.info("Received file for synchronous processing: {}", file.getOriginalFilename());
+
+        if (file.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Uploaded file cannot be empty.");
+        }
+        String originalFilename = file.getOriginalFilename();
+        if (originalFilename != null && originalFilename.toLowerCase().endsWith(".zip")) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ZIP archives are not supported for synchronous processing. Please upload a single CDR file.");
+        }
+
+        try {
+            CdrProcessingResultDto result = cdrRoutingService.routeAndProcessCdrStreamSync(
+                    file.getOriginalFilename(),
+                    file.getInputStream()
+            );
+            return ResponseEntity.ok(result);
+        } catch (IOException e) {
+            log.error("IO error during synchronous processing of file: {}", file.getOriginalFilename(), e);
+            throw new UncheckedIOException("Failed to read uploaded file.", e);
+        }
     }
 
     private int queueSingleFile(MultipartFile file) {
