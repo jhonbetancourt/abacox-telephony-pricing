@@ -185,16 +185,16 @@ public class CdrRoutingService {
     }
 
     public void processFileInfo(Long fileInfoId) {
-        log.info("Starting reprocessing for FileInfo ID: {}", fileInfoId);
+        log.info("Starting processing for FileInfo ID: {}", fileInfoId);
         FileInfo fileInfo = fileInfoPersistenceService.findById(fileInfoId);
 
         if (fileInfo == null) {
-            log.info("Outcome for FileInfo ID {}: REPROCESS_FAILED. Reason: FileInfo record not found.", fileInfoId);
+            log.info("Outcome for FileInfo ID {}: PROCESS_FAILED. Reason: FileInfo record not found.", fileInfoId);
             return;
         }
 
         if (fileInfo.getFileContent() == null || fileInfo.getFileContent().length == 0) {
-            log.info("Outcome for FileInfo ID {}: REPROCESS_FAILED. Reason: No file content is archived for this record.", fileInfoId);
+            log.info("Outcome for FileInfo ID {}: PROCESS_FAILED. Reason: No file content is archived for this record.", fileInfoId);
             return;
         }
 
@@ -205,7 +205,7 @@ public class CdrRoutingService {
             routeAndProcessCdrStreamInternal(fileInfo.getFilename(), inputStream, fileInfo.getParentId().longValue(), false);
 
         } catch (IOException | DataFormatException e) {
-            log.info("Outcome for FileInfo ID {}: REPROCESS_FAILED. Reason: Failed to decompress file content.", fileInfoId, e);
+            log.info("Outcome for FileInfo ID {}: PROCESS_FAILED. Reason: Failed to decompress file content.", fileInfoId, e);
         }
     }
 
