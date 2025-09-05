@@ -2,9 +2,12 @@ package com.infomedia.abacox.telephonypricing.service;
 
 import com.infomedia.abacox.telephonypricing.component.export.excel.ExcelGeneratorBuilder;
 import com.infomedia.abacox.telephonypricing.component.modeltools.ModelConverter;
+import com.infomedia.abacox.telephonypricing.db.entity.FailedCallRecord;
 import com.infomedia.abacox.telephonypricing.db.repository.ConferenceCallsReportViewRepository;
+import com.infomedia.abacox.telephonypricing.db.repository.FailedCallRecordRepository;
 import com.infomedia.abacox.telephonypricing.db.view.ConferenceCallsReportView;
 import com.infomedia.abacox.telephonypricing.db.view.CorporateReportView;
+import com.infomedia.abacox.telephonypricing.dto.failedcallrecord.FailedCallRecordDto;
 import com.infomedia.abacox.telephonypricing.dto.report.*;
 import com.infomedia.abacox.telephonypricing.db.repository.ReportRepository;
 import com.infomedia.abacox.telephonypricing.db.repository.CorporateReportViewRepository;
@@ -29,8 +32,24 @@ public class ReportService {
     private final ReportRepository reportRepository;
     private final CorporateReportViewRepository corporateReportViewRepository;
     private final ConferenceCallsReportViewRepository conferenceCallsReportViewRepository;
+    private final FailedCallRecordRepository failedCallRecordRepository;
     private final ModelConverter modelConverter;
 
+    @Transactional(readOnly = true)
+    public Page<FailedCallRecordDto> generateFailedCallRecordsReport(Specification<FailedCallRecord> specification, Pageable pageable) {
+        return modelConverter.mapPage(failedCallRecordRepository.findAll(specification, pageable), FailedCallRecordDto.class);
+    }
+
+    public ByteArrayResource exportExcelFailedCallRecordsReport(Specification<FailedCallRecord> specification
+            , Pageable pageable, ExcelGeneratorBuilder builder) {
+        Page<FailedCallRecordDto> collection = generateFailedCallRecordsReport(specification, pageable);
+        try {
+            InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
+            return new ByteArrayResource(inputStream.readAllBytes());
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
 
     @Transactional(readOnly = true)
     public Page<CorporateReportDto> generateCorporateReport(Specification<CorporateReportView> specification, Pageable pageable) {

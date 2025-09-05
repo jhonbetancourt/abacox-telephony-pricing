@@ -26,13 +26,8 @@ public class CommLocationService extends CrudService<CommunicationLocation, Long
                 .builder()
                 .directory(cDto.getDirectory())
                 .plantTypeId(cDto.getPlantTypeId())
-                .serial(cDto.getSerial())
                 .indicatorId(cDto.getIndicatorId())
                 .pbxPrefix(cDto.getPbxPrefix())
-                .captureDate(cDto.getCaptureDate())
-                .cdrCount(cDto.getCdrCount())
-                .fileName(cDto.getFileName())
-                .headerId(cDto.getHeaderId())
                 .build();
         return save(communicationLocation);
     }
@@ -41,13 +36,8 @@ public class CommLocationService extends CrudService<CommunicationLocation, Long
         CommunicationLocation communicationLocation = get(id);
         cDto.getDirectory().ifPresent(communicationLocation::setDirectory);
         cDto.getPlantTypeId().ifPresent(communicationLocation::setPlantTypeId);
-        cDto.getSerial().ifPresent(communicationLocation::setSerial);
         cDto.getIndicatorId().ifPresent(communicationLocation::setIndicatorId);
         cDto.getPbxPrefix().ifPresent(communicationLocation::setPbxPrefix);
-        cDto.getCaptureDate().ifPresent(communicationLocation::setCaptureDate);
-        cDto.getCdrCount().ifPresent(communicationLocation::setCdrCount);
-        cDto.getFileName().ifPresent(communicationLocation::setFileName);
-        cDto.getHeaderId().ifPresent(communicationLocation::setHeaderId);
         return save(communicationLocation);
     }
 

@@ -1,4 +1,3 @@
-// File: com/infomedia/abacox/telephonypricing/component/cdrprocessing/CdrFileProcessorWorker.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
 import com.infomedia.abacox.telephonypricing.db.entity.FileInfo;
@@ -24,7 +23,7 @@ public class CdrFileProcessorWorker {
      * It will continuously process all available pending files sequentially until the queue is empty.
      * The fixedDelay now represents the idle polling interval when no work is found.
      */
-    @Scheduled(fixedDelay = 5000, initialDelay = 5000) // Check for work every 5 seconds when idle
+    @Scheduled(fixedDelay = 5000, initialDelay = 5000)
     public void processPendingFiles() {
         log.trace("Worker triggered. Checking for pending files...");
 
@@ -44,8 +43,8 @@ public class CdrFileProcessorWorker {
             try {
                 cdrRoutingService.processFileInfo(fileInfo.getId());
 
-                // If reprocessFile completes without throwing an exception, we mark it as COMPLETED.
-                // The internal logic of reprocessFile already handles logging the outcome.
+                // If processFileInfo completes without throwing an exception, we mark it as COMPLETED.
+                // The internal logic of processFileInfo already handles logging the outcome.
                 fileInfoPersistenceService.updateStatus(fileInfo.getId(), FileInfo.ProcessingStatus.COMPLETED);
                 log.info("Successfully processed and marked file ID {} as COMPLETED.", fileInfo.getId());
 

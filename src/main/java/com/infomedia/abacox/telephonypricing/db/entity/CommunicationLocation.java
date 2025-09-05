@@ -65,14 +65,6 @@ public class CommunicationLocation extends ActivableEntity {
     private PlantType plantType;
 
     /**
-     * Serial number of the installation.
-     * Original field: COMUBICACION_SERIAL
-     */
-    @Column(name = "serial", length = 20, nullable = false)
-    @ColumnDefault("")
-    private String serial;
-
-    /**
      * ID of the indicator/area code.
      * Original field: COMUBICACION_INDICATIVO_ID
      */
@@ -98,35 +90,4 @@ public class CommunicationLocation extends ActivableEntity {
     @Column(name = "pbx_prefix", length = 32, nullable = false)
     @ColumnDefault("")
     private String pbxPrefix;
-
-    /**
-     * Date of capture/recording.
-     * Original field: COMUBICACION_FECHACAPTURA
-     * Note: This field was nullable in the original schema.
-     */
-    @Column(name = "capture_date")
-    private LocalDateTime captureDate;
-
-    /**
-     * Number of Call Detail Records (CDRs).
-     * Original field: COMUBICACION_CDRS
-     */
-    @Column(name = "cdr_count", nullable = false)
-    @ColumnDefault("0")
-    private Integer cdrCount;
-
-    /**
-     * File name or path.
-     * Original field: COMUBICACION_ARCHIVO
-     */
-    @Column(name = "file_name", length = 80, nullable = false)
-    @ColumnDefault("")
-    private String fileName;
-
-    /**
-     * ID of the header.
-     * Original field: COMUBICACION_CABECERA_ID
-     */
-    @Column(name = "header_id", nullable = true)
-    private Long headerId;
 }

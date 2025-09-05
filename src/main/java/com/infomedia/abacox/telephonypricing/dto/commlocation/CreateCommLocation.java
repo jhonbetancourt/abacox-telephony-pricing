@@ -24,24 +24,9 @@ public class CreateCommLocation {
     
     private Long plantTypeId;
     
-    @NotBlank
-    @Size(max = 20)
-    private String serial;
-    
     private Long indicatorId;
     
     @NotBlank
     @Size(max = 32)
     private String pbxPrefix;
-    
-    private LocalDateTime captureDate;
-    
-    @NotNull
-    private Integer cdrCount = 0;
-    
-    @NotBlank
-    @Size(max = 80)
-    private String fileName;
-    
-    private Long headerId;
 }

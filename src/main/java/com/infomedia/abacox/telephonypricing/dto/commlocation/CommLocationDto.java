@@ -9,8 +9,6 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
-
 /**
  * DTO for {@link CommunicationLocation}
  */
@@ -23,12 +21,7 @@ public class CommLocationDto extends ActivableDto {
     private String directory;
     private Long plantTypeId;
     private PlantTypeDto plantType;
-    private String serial;
     private Long indicatorId;
     private IndicatorDto indicator;
     private String pbxPrefix;
-    private LocalDateTime captureDate;
-    private Integer cdrCount;
-    private String fileName;
-    private Long headerId;
 }

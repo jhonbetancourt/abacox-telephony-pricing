@@ -39,6 +39,10 @@ public class CdrRoutingService {
                 .orElseThrow(() -> new IllegalArgumentException("No CDR processor found for plant type ID: " + plantTypeId));
     }
 
+    /**
+     * Entry point for new, asynchronous file uploads from the controller.
+     * This method handles the initial duplicate check.
+     */
     protected void routeAndProcessCdrStreamInternal(String filename, InputStream inputStream, Long plantTypeId, boolean forceProcess) {
         log.info("Starting CDR stream processing for file: {}, PlantTypeID: {}, Force: {}", filename, plantTypeId, forceProcess);
 
@@ -63,19 +67,18 @@ public class CdrRoutingService {
             return;
         }
 
+        // If the file is new (or forced), proceed to the core processing logic.
         Map<Long, ExtensionLimits> extensionLimits = employeeLookupService.getExtensionLimits();
         Map<Long, List<ExtensionRange>> extensionRanges = employeeLookupService.getExtensionRanges();
+        processStreamContent(fileInfo, streamBytes, extensionLimits, extensionRanges);
+    }
 
-        if (fileInfo == null || fileInfo.getId() == null) {
-            log.info("Outcome for file [{}]: FAILED. Reason: Failed to create or get FileInfo.", filename);
-            CdrData streamErrorData = new CdrData();
-            streamErrorData.setRawCdrLine("STREAM_FILEINFO_ERROR_ROUTING: " + filename);
-            failedCallRecordPersistenceService.quarantineRecord(streamErrorData, QuarantineErrorType.IO_EXCEPTION,
-                "Failed to establish FileInfo for routed stream " + filename, "RouteStreamInit_FileInfo", null);
-            return;
-        }
-        log.debug("Using FileInfo ID: {} for routed stream: {}", fileInfo.getId(), filename);
-
+    /**
+     * The core, shared logic for processing the content of a CDR file stream.
+     * This method does NOT perform duplicate checks and is called by both async and sync flows.
+     */
+    private void processStreamContent(FileInfo fileInfo, byte[] streamBytes, Map<Long, ExtensionLimits> extensionLimits, Map<Long, List<ExtensionRange>> extensionRanges) {
+        Long plantTypeId = fileInfo.getParentId().longValue();
         CdrProcessor initialParser = getProcessorForPlantType(plantTypeId);
         boolean headerProcessedByInitialParser = false;
         long lineCount = 0;
@@ -96,12 +99,12 @@ public class CdrRoutingService {
                 if (!headerProcessedByInitialParser && initialParser.isHeaderLine(trimmedLine)) {
                     initialParser.parseHeader(trimmedLine);
                     headerProcessedByInitialParser = true;
-                    log.debug("Processed header line using initial parser {} for stream: {}", initialParser.getClass().getSimpleName(), filename);
+                    log.debug("Processed header line using initial parser {} for file: {}", initialParser.getClass().getSimpleName(), fileInfo.getFilename());
                     continue;
                 }
 
                 if (!headerProcessedByInitialParser) {
-                    log.debug("Skipping line {} as header has not been processed by initial parser: {}", lineCount, trimmedLine);
+                    log.warn("Skipping line {} as header has not been processed by initial parser: {}", lineCount, trimmedLine);
                     CdrData tempData = new CdrData(); tempData.setRawCdrLine(trimmedLine); tempData.setFileInfo(fileInfo);
                     failedCallRecordPersistenceService.quarantineRecord(tempData,
                             QuarantineErrorType.MISSING_HEADER, "CDR data encountered before header (routing stage)", "RouteStream_HeaderCheck", null);
@@ -166,10 +169,10 @@ public class CdrRoutingService {
             }
 
             log.info("Outcome for file [{}]: SUCCESS. Total lines read: {}, Processed CDRs: {}, Unroutable CDRs: {}",
-                    filename, lineCount, totalProcessedCount, unroutableCdrCount);
+                    fileInfo.getFilename(), lineCount, totalProcessedCount, unroutableCdrCount);
 
         } catch (IOException e) {
-            log.info("Outcome for file [{}]: FAILED. Reason: Critical error reading from in-memory stream.", filename, e);
+            log.error("Outcome for file [{}]: FAILED. Reason: Critical error reading from in-memory stream.", fileInfo.getFilename(), e);
             CdrData tempData = new CdrData(); tempData.setRawCdrLine("STREAM_ROUTING_IN_MEMORY_READ_ERROR"); tempData.setFileInfo(fileInfo);
             failedCallRecordPersistenceService.quarantineRecord(tempData,
                     QuarantineErrorType.IO_EXCEPTION, e.getMessage(), "RouteStream_InMemory_IOException", null);
@@ -184,73 +187,58 @@ public class CdrRoutingService {
         log.info("Cleanup complete for FileInfo ID {}: Deleted {} CallRecords and {} FailedCallRecords.", fileInfoId, deletedCallRecords, deletedFailedRecords);
     }
 
+    /**
+     * Entry point for the worker or reprocessing tasks. This method fetches an existing
+     * FileInfo record and calls the core processing logic, bypassing duplicate checks.
+     */
     public void processFileInfo(Long fileInfoId) {
         log.info("Starting processing for FileInfo ID: {}", fileInfoId);
         FileInfo fileInfo = fileInfoPersistenceService.findById(fileInfoId);
 
         if (fileInfo == null) {
-            log.info("Outcome for FileInfo ID {}: PROCESS_FAILED. Reason: FileInfo record not found.", fileInfoId);
+            log.error("Outcome for FileInfo ID {}: FAILED. Reason: FileInfo record not found.", fileInfoId);
             return;
         }
 
         if (fileInfo.getFileContent() == null || fileInfo.getFileContent().length == 0) {
-            log.info("Outcome for FileInfo ID {}: PROCESS_FAILED. Reason: No file content is archived for this record.", fileInfoId);
+            log.error("Outcome for FileInfo ID {}: FAILED. Reason: No file content is archived for this record.", fileInfoId);
             return;
         }
 
         try {
             byte[] decompressedContent = CdrUtil.decompress(fileInfo.getFileContent());
-            InputStream inputStream = new ByteArrayInputStream(decompressedContent);
 
-            routeAndProcessCdrStreamInternal(fileInfo.getFilename(), inputStream, fileInfo.getParentId().longValue(), false);
+            // Pre-load the context data once before processing
+            Map<Long, ExtensionLimits> extensionLimits = employeeLookupService.getExtensionLimits();
+            Map<Long, List<ExtensionRange>> extensionRanges = employeeLookupService.getExtensionRanges();
+
+            // Call the core processing logic directly, bypassing the duplicate check
+            processStreamContent(fileInfo, decompressedContent, extensionLimits, extensionRanges);
 
         } catch (IOException | DataFormatException e) {
-            log.info("Outcome for FileInfo ID {}: PROCESS_FAILED. Reason: Failed to decompress file content.", fileInfoId, e);
+            log.error("Outcome for FileInfo ID {}: FAILED. Reason: Failed to decompress file content.", fileInfoId, e);
         }
     }
 
     public void reprocessFileInfo(Long fileInfoId) {
-        reprocessFileInfo(fileInfoId, false); // Default to cleaning up existing records
+        reprocessFileInfo(fileInfoId, false); // Default to not cleaning up
     }
 
     public void reprocessFileInfo(Long fileInfoId, boolean cleanupExistingRecords) {
         log.info("Starting reprocessing for FileInfo ID: {}, Cleanup: {}", fileInfoId, cleanupExistingRecords);
-        FileInfo fileInfo = fileInfoPersistenceService.findById(fileInfoId);
 
-        if (fileInfo == null) {
-            log.info("Outcome for FileInfo ID {}: REPROCESS_FAILED. Reason: FileInfo record not found.", fileInfoId);
-            return;
+        if (cleanupExistingRecords) {
+            cleanupRecordsForFile(fileInfoId);
         }
 
-        if (fileInfo.getFileContent() == null || fileInfo.getFileContent().length == 0) {
-            log.info("Outcome for FileInfo ID {}: REPROCESS_FAILED. Reason: No file content is archived for this record.", fileInfoId);
-            return;
-        }
-
-        try {
-            if (cleanupExistingRecords) {
-                cleanupRecordsForFile(fileInfoId);
-            }
-
-            byte[] decompressedContent = CdrUtil.decompress(fileInfo.getFileContent());
-            InputStream inputStream = new ByteArrayInputStream(decompressedContent);
-
-            // Reprocessing is always "forced" in the sense that it bypasses the checksum check
-            routeAndProcessCdrStreamInternal(fileInfo.getFilename(), inputStream, fileInfo.getParentId().longValue(), true);
-
-        } catch (IOException | DataFormatException e) {
-            log.info("Outcome for FileInfo ID {}: REPROCESS_FAILED. Reason: Failed to decompress file content.", fileInfoId, e);
-        }
+        // After optional cleanup, the process is the same as a normal worker pickup.
+        processFileInfo(fileInfoId);
     }
 
     /**
      * Processes a single CDR file stream synchronously within a single transaction.
-     *
-     * @param filename    The name of the file.
-     * @param inputStream The content of the file.
-     * @return A DTO summarizing the processing results.
      */
-    @Transactional // This annotation makes the entire method a single transaction.
+    @Transactional
     public CdrProcessingResultDto routeAndProcessCdrStreamSync(String filename, InputStream inputStream) {
         log.info("Starting SYNCHRONOUS CDR stream processing for file: {}", filename);
 
@@ -265,14 +253,12 @@ public class CdrRoutingService {
         Long plantTypeId = cdrFormatDetectorService.detectPlantType(streamBytes)
                 .orElseThrow(() -> new ValidationException("Could not recognize CDR format for file: " + filename));
 
-        // Create FileInfo, but fail if it already exists.
         FileInfoPersistenceService.FileInfoCreationResult fileInfoResult = fileInfoPersistenceService.createOrGetFileInfo(filename, plantTypeId, "SYNC_STREAM", streamBytes);
         if (!fileInfoResult.isNew()) {
             throw new ValidationException("File with the same content has already been processed. FileInfo ID: " + fileInfoResult.getFileInfo().getId());
         }
         FileInfo fileInfo = fileInfoResult.getFileInfo();
 
-        // CORRECTED: Use the service to update the status to IN_PROGRESS
         fileInfoPersistenceService.updateStatus(fileInfo.getId(), FileInfo.ProcessingStatus.IN_PROGRESS);
 
         CdrProcessingResultDto.CdrProcessingResultDtoBuilder resultBuilder = CdrProcessingResultDto.builder().fileInfoId(fileInfo.getId());
@@ -280,7 +266,7 @@ public class CdrRoutingService {
         int successfulRecords = 0;
         int quarantinedRecords = 0;
         int skippedLines = 0;
-        FileInfo.ProcessingStatus finalStatus = FileInfo.ProcessingStatus.FAILED; // Default to FAILED
+        FileInfo.ProcessingStatus finalStatus = FileInfo.ProcessingStatus.FAILED;
         String finalMessage = "An unexpected error occurred.";
 
         try {
@@ -303,7 +289,7 @@ public class CdrRoutingService {
                     }
                     if (!headerProcessed) {
                         quarantinedRecords++;
-                        continue; // Skip lines before header
+                        continue;
                     }
 
                     CdrData preliminaryCdrData = initialParser.evaluateFormat(trimmedLine, null, null);
@@ -332,7 +318,6 @@ public class CdrRoutingService {
                         }
                     } else {
                         quarantinedRecords++;
-                        // Manually quarantine unroutable records
                         preliminaryCdrData.setRawCdrLine(trimmedLine);
                         preliminaryCdrData.setFileInfo(fileInfo);
                         failedCallRecordPersistenceService.quarantineRecord(preliminaryCdrData,
@@ -347,11 +332,8 @@ public class CdrRoutingService {
         } catch (Exception e) {
             log.error("Critical failure during synchronous processing of file ID: {}. Rolling back.", fileInfo.getId(), e);
             finalStatus = FileInfo.ProcessingStatus.FAILED;
-            finalMessage = "A critical error occurred: " + e.getMessage();
-            // Re-throw to ensure transaction rollback
             throw new RuntimeException("Synchronous processing failed for file " + filename, e);
         } finally {
-            // This ensures the final status is always set, even on exceptions.
             fileInfoPersistenceService.updateStatus(fileInfo.getId(), finalStatus);
         }
 
