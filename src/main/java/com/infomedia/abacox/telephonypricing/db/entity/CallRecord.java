@@ -44,7 +44,7 @@ public class CallRecord extends AuditedEntity {
      * Original field: ACUMTOTAL_DIAL
      */
     @Column(name = "dial", length = 50, nullable = false)
-    @ColumnDefault("")
+    @ColumnDefault("''")
     private String dial;
 
     /**
@@ -97,7 +97,7 @@ public class CallRecord extends AuditedEntity {
      * Original field: ACUMTOTAL_FUN_EXTENSION
      */
     @Column(name = "employee_extension", length = 50, nullable = false)
-    @ColumnDefault("")
+    @ColumnDefault("''")
     private String employeeExtension;
 
     /**
@@ -105,7 +105,7 @@ public class CallRecord extends AuditedEntity {
      * Original field: ACUMTOTAL_FUN_CLAVE
      */
     @Column(name = "employee_auth_code", length = 50, nullable = false)
-    @ColumnDefault("")
+    @ColumnDefault("''")
     private String employeeAuthCode;
 
     /**
@@ -132,7 +132,7 @@ public class CallRecord extends AuditedEntity {
      * Original field: ACUMTOTAL_TELEFONO_DESTINO
      */
     @Column(name = "destination_phone", length = 50, nullable = false)
-    @ColumnDefault("")
+    @ColumnDefault("''")
     private String destinationPhone;
 
     /**
@@ -207,7 +207,7 @@ public class CallRecord extends AuditedEntity {
      * Original field: ACUMTOTAL_TRONCAL
      */
     @Column(name = "trunk", length = 50, nullable = false)
-    @ColumnDefault("")
+    @ColumnDefault("''")
     private String trunk;
 
     /**
@@ -215,7 +215,7 @@ public class CallRecord extends AuditedEntity {
      * Original field: ACUMTOTAL_TRONCALINI
      */
     @Column(name = "initial_trunk", length = 50, nullable = false)
-    @ColumnDefault("")
+    @ColumnDefault("''")
     private String initialTrunk;
 
     /**
@@ -242,7 +242,7 @@ public class CallRecord extends AuditedEntity {
      * Original field: ACUMTOTAL_FUN_TRANSFER
      */
     @Column(name = "employee_transfer", length = 50)
-    @ColumnDefault("")
+    @ColumnDefault("''")
     private String employeeTransfer;
 
     /**

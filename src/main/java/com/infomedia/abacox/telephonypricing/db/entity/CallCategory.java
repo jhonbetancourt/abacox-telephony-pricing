@@ -40,7 +40,7 @@ public class CallCategory extends ActivableEntity {
      * Original field: CLASELLAMA_NOMBRE
      */
     @Column(name = "name", length = 80, nullable = false)
-    @ColumnDefault("")
+    @ColumnDefault("''")
     private String name;
 
     // The following field was commented out in the original schema:

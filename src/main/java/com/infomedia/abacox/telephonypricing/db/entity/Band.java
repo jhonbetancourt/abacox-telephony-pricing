@@ -61,7 +61,7 @@ public class Band extends ActivableEntity {
      * Original field: BANDA_NOMBRE
      */
     @Column(name = "name", length = 50, nullable = false)
-    @ColumnDefault("")
+    @ColumnDefault("''")
     private String name;
 
     /**

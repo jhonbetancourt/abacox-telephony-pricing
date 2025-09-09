@@ -40,7 +40,7 @@ public class FileInfo {
      * Original field: FILEINFO_ARCHIVO
      */
     @Column(name = "filename", length = 255, nullable = false)
-    @ColumnDefault("")
+    @ColumnDefault("''")
     private String filename;
 
     /**
@@ -71,7 +71,7 @@ public class FileInfo {
      * Original field: FILEINFO_CTL
      */
     @Column(name = "checksum", length = 64, nullable = false)
-    @ColumnDefault("")
+    @ColumnDefault("''")
     private String checksum;
 
     /**
@@ -79,7 +79,7 @@ public class FileInfo {
      * Original field: FILEINFO_TIPO
      */
     @Column(name = "type", length = 64, nullable = false)
-    @ColumnDefault("")
+    @ColumnDefault("''")
     private String type;
 
     /**

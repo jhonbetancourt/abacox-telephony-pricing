@@ -59,7 +59,7 @@ public class Subdivision extends ActivableEntity {
      * Original field: SUBDIRECCION_NOMBRE
      */
     @Column(name = "name", length = 200, nullable = false)
-    @ColumnDefault("")
+    @ColumnDefault("''")
     private String name;
 
     // The following field was commented out in the original schema:

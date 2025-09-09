@@ -47,7 +47,7 @@ public class Company extends ActivableEntity {
      * Original field: EMPRESA_DIRECCION
      */
     @Column(name = "address", length = 255, nullable = false)
-    @ColumnDefault("")
+    @ColumnDefault("''")
     private String address;
 
     /**
@@ -55,7 +55,7 @@ public class Company extends ActivableEntity {
      * Original field: EMPRESA_EMPRESA
      */
     @Column(name = "name", length = 100, nullable = false)
-    @ColumnDefault("")
+    @ColumnDefault("''")
     private String name;
 
     /**
@@ -63,7 +63,7 @@ public class Company extends ActivableEntity {
      * Original field: EMPRESA_NIT
      */
     @Column(name = "tax_id", length = 100, nullable = false)
-    @ColumnDefault("")
+    @ColumnDefault("''")
     private String taxId;
 
     /**
@@ -78,7 +78,7 @@ public class Company extends ActivableEntity {
      * Original field: EMPRESA_URL
      */
     @Column(name = "website", length = 100, nullable = false)
-    @ColumnDefault("")
+    @ColumnDefault("''")
     private String website;
 
     /**

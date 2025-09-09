@@ -1,5 +1,6 @@
 package com.infomedia.abacox.telephonypricing.db.view;
 
+import com.infomedia.abacox.telephonypricing.db.util.ExcludeFromDdl;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -16,6 +17,7 @@ import java.time.LocalDateTime;
 @Table(name = "v_corporate_report")
 @Getter
 @NoArgsConstructor
+@ExcludeFromDdl
 public class CorporateReportView {
 
     @Id

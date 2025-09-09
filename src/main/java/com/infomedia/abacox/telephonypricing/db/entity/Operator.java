@@ -40,7 +40,7 @@ public class Operator extends ActivableEntity {
      * Original field: OPERADOR_NOMBRE
      */
     @Column(name = "name", length = 50, nullable = false)
-    @ColumnDefault("")
+    @ColumnDefault("''")
     private String name;
 
     /**

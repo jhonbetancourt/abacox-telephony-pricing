@@ -40,7 +40,7 @@ public class Employee extends ActivableEntity {
      * Original field: FUNCIONARIO_NOMBRE
      */
     @Column(name = "name", length = 255, nullable = false)
-    @ColumnDefault("")
+    @ColumnDefault("''")
     private String name;
 
     /**
@@ -86,7 +86,7 @@ public class Employee extends ActivableEntity {
      * Original field: FUNCIONARIO_CLAVE
      */
     @Column(name = "auth_code", length = 50, nullable = false)
-    @ColumnDefault("")
+    @ColumnDefault("''")
     private String authCode;
 
     /**
@@ -94,7 +94,7 @@ public class Employee extends ActivableEntity {
      * Original field: FUNCIONARIO_EXTENSION
      */
     @Column(name = "extension", length = 50, nullable = false)
-    @ColumnDefault("")
+    @ColumnDefault("''")
     private String extension;
 
     /**
@@ -140,7 +140,7 @@ public class Employee extends ActivableEntity {
      * Original field: FUNCIONARIO_CORREO
      */
     @Column(name = "email", length = 100, nullable = false)
-    @ColumnDefault("")
+    @ColumnDefault("''")
     private String email;
 
     /**
@@ -148,7 +148,7 @@ public class Employee extends ActivableEntity {
      * Original field: FUNCIONARIO_TELEFONO
      */
     @Column(name = "phone", length = 50, nullable = false)
-    @ColumnDefault("")
+    @ColumnDefault("''")
     private String phone;
 
     /**
@@ -156,7 +156,7 @@ public class Employee extends ActivableEntity {
      * Original field: FUNCIONARIO_DIRECCION
      */
     @Column(name = "address", length = 255, nullable = false)
-    @ColumnDefault("")
+    @ColumnDefault("''")
     private String address;
 
     /**
@@ -164,6 +164,6 @@ public class Employee extends ActivableEntity {
      * Original field: FUNCIONARIO_NUMEROID
      */
     @Column(name = "id_number", length = 20, nullable = false)
-    @ColumnDefault("")
+    @ColumnDefault("''")
     private String idNumber;
 }

@@ -21,7 +21,4 @@ public class VirtualEntity {
 
     @Id
     private Long id;
-
-    // No other fields are needed.
-    // No getters/setters are needed.
 }

@@ -80,7 +80,7 @@ public class Prefix extends ActivableEntity {
      * Original field: PREFIJO_PREFIJO
      */
     @Column(name = "code", length = 10, nullable = false)
-    @ColumnDefault("")
+    @ColumnDefault("''")
     private String code;
 
     /**

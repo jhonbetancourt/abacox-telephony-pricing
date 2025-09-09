@@ -42,7 +42,7 @@ public class CommunicationLocation extends ActivableEntity {
      * Original field: COMUBICACION_DIRECTORIO
      */
     @Column(name = "directory", length = 80, nullable = false)
-    @ColumnDefault("")
+    @ColumnDefault("''")
     private String directory;
 
     /**
@@ -88,6 +88,6 @@ public class CommunicationLocation extends ActivableEntity {
      * Original field: COMUBICACION_PREFIJOPBX
      */
     @Column(name = "pbx_prefix", length = 32, nullable = false)
-    @ColumnDefault("")
+    @ColumnDefault("''")
     private String pbxPrefix;
 }

@@ -58,7 +58,7 @@ public class OfficeDetails extends ActivableEntity {
      * Original field: DATOSOFICINA_DIRECCION
      */
     @Column(name = "address", length = 100, nullable = false)
-    @ColumnDefault("")
+    @ColumnDefault("''")
     private String address;
 
     /**
@@ -66,7 +66,7 @@ public class OfficeDetails extends ActivableEntity {
      * Original field: DATOSOFICINA_TELEFONO
      */
     @Column(name = "phone", length = 100, nullable = false)
-    @ColumnDefault("")
+    @ColumnDefault("''")
     private String phone;
 
     /**

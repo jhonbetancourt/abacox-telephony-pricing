@@ -59,7 +59,7 @@ public class Indicator extends ActivableEntity {
      * Original field: INDICATIVO_DPTO_PAIS
      */
     @Column(name = "department_country", length = 80, nullable = false)
-    @ColumnDefault("")
+    @ColumnDefault("''")
     private String departmentCountry;
 
     /**
@@ -67,7 +67,7 @@ public class Indicator extends ActivableEntity {
      * Original field: INDICATIVO_CIUDAD
      */
     @Column(name = "city_name", length = 80, nullable = false)
-    @ColumnDefault("")
+    @ColumnDefault("''")
     private String cityName;
 
     /**

@@ -40,7 +40,7 @@ public class OriginCountry extends ActivableEntity {
      * Original field: MPORIGEN_SIMBOLO
      */
     @Column(name = "currency_symbol", length = 10, nullable = false)
-    @ColumnDefault("$")
+    @ColumnDefault("'$'")
     private String currencySymbol;
 
     /**
@@ -48,7 +48,7 @@ public class OriginCountry extends ActivableEntity {
      * Original field: MPORIGEN_PAIS
      */
     @Column(name = "name", length = 50, nullable = false)
-    @ColumnDefault("")
+    @ColumnDefault("''")
     private String name;
 
     /**
@@ -56,7 +56,7 @@ public class OriginCountry extends ActivableEntity {
      * Original field: MPORIGEN_CCODE
      */
     @Column(name = "code", length = 3, nullable = false)
-    @ColumnDefault("")
+    @ColumnDefault("''")
     private String code;
     
     /**

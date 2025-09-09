@@ -37,9 +37,6 @@ public class ViewManagerService {
         List<String> requiredViews = List.of(
                 "v_corporate_report"
                 , "v_conference_calls_report"
-       //         "v_employee_activity_report"
-                //, "v_another_report_view" // <-- Add future views here
-                //, "v_summary_view"
         );
 
         // Iterate and ensure each view exists.
@@ -79,7 +76,7 @@ public class ViewManagerService {
             log.info("Successfully created view '{}'.", viewName);
 
         } catch (Exception e) {
-            log.error("Failed to create view '{}'. Error: {}", viewName, e.getMessage());
+            log.error("Failed to create view '{}'. Error: {}", viewName, e.getMessage(), e);
             // Depending on your application's needs, you might want to re-throw this as a runtime exception
             // to halt application startup if the view is critical.
             // throw new RuntimeException("Failed to create critical view: " + viewName, e);

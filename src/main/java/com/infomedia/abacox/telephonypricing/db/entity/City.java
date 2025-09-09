@@ -40,7 +40,7 @@ public class City extends ActivableEntity {
      * Original field: CIUDADES_DEPARTAMENTO
      */
     @Column(name = "department", length = 80, nullable = false)
-    @ColumnDefault("")
+    @ColumnDefault("''")
     private String department;
 
     /**
@@ -48,7 +48,7 @@ public class City extends ActivableEntity {
      * Original field: CIUDADES_CLASIFICACION
      */
     @Column(name = "classification", length = 80, nullable = false)
-    @ColumnDefault("")
+    @ColumnDefault("''")
     private String classification;
 
     /**
@@ -56,7 +56,7 @@ public class City extends ActivableEntity {
      * Original field: CIUDADES_MUNICIPIO
      */
     @Column(name = "municipality", length = 80, nullable = false)
-    @ColumnDefault("")
+    @ColumnDefault("''")
     private String municipality;
 
     /**
@@ -64,7 +64,7 @@ public class City extends ActivableEntity {
      * Original field: CIUDADES_CABMUNICIPAL
      */
     @Column(name = "municipal_capital", length = 80, nullable = false)
-    @ColumnDefault("")
+    @ColumnDefault("''")
     private String municipalCapital;
 
     /**
@@ -72,7 +72,7 @@ public class City extends ActivableEntity {
      * Original field: CIUDADES_LATITUD
      */
     @Column(name = "latitude", length = 15, nullable = false)
-    @ColumnDefault("")
+    @ColumnDefault("''")
     private String latitude;
 
     /**
@@ -80,7 +80,7 @@ public class City extends ActivableEntity {
      * Original field: CIUDADES_LONGITUD
      */
     @Column(name = "longitude", length = 15, nullable = false)
-    @ColumnDefault("")
+    @ColumnDefault("''")
     private String longitude;
 
     /**
@@ -112,6 +112,6 @@ public class City extends ActivableEntity {
      * Original field: CIUDADES_ORIGEN
      */
     @Column(name = "origin", length = 50, nullable = false)
-    @ColumnDefault("")
+    @ColumnDefault("''")
     private String origin;
 }

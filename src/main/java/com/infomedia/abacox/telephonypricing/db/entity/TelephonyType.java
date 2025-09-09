@@ -40,7 +40,7 @@ public class TelephonyType extends ActivableEntity {
      * Original field: TIPOTELE_NOMBRE
      */
     @Column(name = "name", length = 40, nullable = false)
-    @ColumnDefault("")
+    @ColumnDefault("''")
     private String name;
 
     /**

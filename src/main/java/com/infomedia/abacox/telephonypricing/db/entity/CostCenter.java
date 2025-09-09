@@ -40,7 +40,7 @@ public class CostCenter extends ActivableEntity {
      * Original field: CENTROCOSTOS_CENTRO_COSTO
      */
     @Column(name = "name", length = 100, nullable = false)
-    @ColumnDefault("")
+    @ColumnDefault("''")
     private String name;
 
     /**
@@ -48,7 +48,7 @@ public class CostCenter extends ActivableEntity {
      * Original field: CENTROCOSTOS_OT
      */
     @Column(name = "work_order", length = 50, nullable = false)
-    @ColumnDefault("")
+    @ColumnDefault("''")
     private String workOrder;
 
     /**

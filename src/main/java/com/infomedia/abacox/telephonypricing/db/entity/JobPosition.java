@@ -40,6 +40,6 @@ public class JobPosition extends ActivableEntity {
      * Original field: FUNCARGO_NOMBRE
      */
     @Column(name = "name", length = 100, nullable = false)
-    @ColumnDefault("")
+    @ColumnDefault("''")
     private String name;
 }

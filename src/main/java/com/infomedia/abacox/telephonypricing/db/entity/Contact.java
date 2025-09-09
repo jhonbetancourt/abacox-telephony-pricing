@@ -86,7 +86,7 @@ public class Contact extends ActivableEntity {
      * Original field: DIRECTORIO_TELEFONO
      */
     @Column(name = "phone_number", length = 255, nullable = false)
-    @ColumnDefault("")
+    @ColumnDefault("''")
     private String phoneNumber;
 
     /**
@@ -94,7 +94,7 @@ public class Contact extends ActivableEntity {
      * Original field: DIRECTORIO_NOMBRE
      */
     @Column(name = "name", length = 255, nullable = false)
-    @ColumnDefault("")
+    @ColumnDefault("''")
     private String name;
 
     /**
