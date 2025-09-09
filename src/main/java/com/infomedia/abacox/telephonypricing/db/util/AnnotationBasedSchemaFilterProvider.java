@@ -20,8 +20,6 @@ public class AnnotationBasedSchemaFilterProvider implements SchemaFilterProvider
     private static final Set<String> EXCLUDED_TABLES = scanForExcludedTables();
 
     private static Set<String> scanForExcludedTables() {
-        log.info("Scanning classpath for @ExcludeFromDdl annotations...");
-
         final String basePackage = "com.infomedia.abacox.telephonypricing.db";
         
         final Reflections reflections = new Reflections(new ConfigurationBuilder()
@@ -37,11 +35,9 @@ public class AnnotationBasedSchemaFilterProvider implements SchemaFilterProvider
                 String tableName = tableAnnotation.name();
                 excludedTableNames.add(tableName.toLowerCase());
                 // Use structured logging with placeholders {}
-                log.info("Found @ExcludeFromDdl on entity [{}]. Excluding table: '{}'", clazz.getSimpleName(), tableName);
             } else {
                 String tableName = clazz.getSimpleName();
                 excludedTableNames.add(tableName.toLowerCase());
-                log.warn("Found @ExcludeFromDdl on entity [{}], but it has no @Table(name=...) annotation. Excluding table based on class name: '{}'", clazz.getSimpleName(), tableName);
             }
         }
         return Collections.unmodifiableSet(excludedTableNames);
