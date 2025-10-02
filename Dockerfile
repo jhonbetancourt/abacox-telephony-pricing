@@ -11,4 +11,4 @@ COPY target/*.jar app.jar
 # Expose the application port
 EXPOSE 8080
 
-ENTRYPOINT ["sh", "-c", "java -Xmx112m -Xtune:virtualized -XX:+IdleTuningGcOnIdle -Xshareclasses -jar app.jar"]
+ENTRYPOINT ["sh", "-c", "java -jar app.jar"]
