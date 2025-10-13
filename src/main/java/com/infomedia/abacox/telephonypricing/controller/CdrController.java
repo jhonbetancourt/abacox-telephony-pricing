@@ -57,7 +57,7 @@ public class CdrController {
         String contentType = file.getContentType();
         String originalFilename = file.getOriginalFilename();
 
-        int filesQueued = 0;
+        int filesQueued;
         if ("application/zip".equals(contentType) || (originalFilename != null && originalFilename.toLowerCase().endsWith(".zip"))) {
             filesQueued = queueZipFile(file);
         } else {
@@ -94,34 +94,55 @@ public class CdrController {
     }
 
     private int queueSingleFile(MultipartFile file) {
-        log.info("Queueing single file: {}", file.getOriginalFilename());
+        String filename = file.getOriginalFilename();
+        log.info("Attempting to queue single file: {}", filename);
         try {
             byte[] fileBytes = file.getBytes();
+            if (fileBytes.length == 0) {
+                log.warn("Uploaded file '{}' is empty and will be ignored.", filename);
+                return 0;
+            }
             Long plantTypeId = cdrFormatDetectorService.detectPlantType(fileBytes)
-                    .orElseThrow(() -> new ValidationException("Could not recognize CDR format for file: " + file.getOriginalFilename()));
+                    .orElseThrow(() -> new ValidationException("Could not recognize CDR format."));
 
             fileInfoPersistenceService.createOrGetFileInfo(
-                    file.getOriginalFilename(),
-                    plantTypeId, // MODIFIED
+                    filename,
+                    plantTypeId,
                     "ROUTED_STREAM",
                     fileBytes
             );
+            log.info("Successfully queued single file: {}", filename);
             return 1;
+        } catch (ValidationException e) {
+            // Business logic failure, not an upload failure. Log and return OK.
+            log.warn("Skipping file '{}' due to a processing error: {}", filename, e.getMessage());
+            return 0; // 0 files successfully queued
         } catch (IOException e) {
-            log.error("Error reading bytes for single file: {}", file.getOriginalFilename(), e);
-            throw new RuntimeException("Failed to queue single file: " + file.getOriginalFilename(), e);
+            // This is a fundamental upload I/O failure. Propagate it to return an error response.
+            log.error("IO error while reading single file '{}'.", filename, e);
+            throw new UncheckedIOException("Failed to read uploaded file: " + filename, e);
+        } catch (Exception e) {
+            // Catch any other unexpected errors during the queuing logic. Treat as a processing failure.
+            log.error("An unexpected error occurred while attempting to queue file '{}'. The file will be skipped.", filename, e);
+            return 0;
         }
     }
 
     private int queueZipFile(MultipartFile zipFile) {
-        log.info("Queueing files from ZIP archive: {}", zipFile.getOriginalFilename());
-        int fileCount = 0;
+        String zipFilename = zipFile.getOriginalFilename();
+        log.info("Processing files from ZIP archive: {}", zipFilename);
+        int successfullyQueuedCount = 0;
         try (ZipInputStream zis = new ZipInputStream(zipFile.getInputStream())) {
             ZipEntry zipEntry;
             while ((zipEntry = zis.getNextEntry()) != null) {
-                if (!zipEntry.isDirectory()) {
-                    String entryName = zipEntry.getName();
-                    log.info("Queueing file from ZIP: {}", entryName);
+                if (zipEntry.isDirectory()) {
+                    zis.closeEntry();
+                    continue;
+                }
+
+                String entryName = zipEntry.getName();
+                try {
+                    log.debug("Processing entry '{}' from ZIP '{}'", entryName, zipFilename);
                     ByteArrayOutputStream baos = new ByteArrayOutputStream();
                     byte[] buffer = new byte[4096];
                     int len;
@@ -130,28 +151,43 @@ public class CdrController {
                     }
                     byte[] fileBytes = baos.toByteArray();
 
-                    // Detect plant type for each file in the zip
+                    if (fileBytes.length == 0) {
+                        log.warn("Skipping empty file '{}' inside ZIP archive '{}'.", entryName, zipFilename);
+                        continue;
+                    }
+
                     Long plantTypeId = cdrFormatDetectorService.detectPlantType(fileBytes)
-                            .orElseThrow(() -> new ValidationException("Could not recognize CDR format for file '" + entryName + "' within ZIP archive."));
+                            .orElseThrow(() -> new ValidationException("Could not recognize CDR format."));
 
                     fileInfoPersistenceService.createOrGetFileInfo(
                             entryName,
-                            plantTypeId, // MODIFIED
+                            plantTypeId,
                             "ROUTED_STREAM",
                             fileBytes
                     );
-                    fileCount++;
+
+                    log.info("Successfully queued file from ZIP: {}", entryName);
+                    successfullyQueuedCount++;
+
+                } catch (ValidationException e) {
+                    log.warn("Skipping file '{}' in ZIP '{}' due to a processing error: {}", entryName, zipFilename, e.getMessage());
+                } catch (IOException e) {
+                    log.error("IO error while reading entry '{}' from ZIP '{}'. Skipping this entry.", entryName, zipFilename, e);
+                } catch (Exception e) {
+                    log.error("An unexpected error occurred while processing entry '{}' in ZIP '{}'. Skipping this entry.", entryName, zipFilename, e);
+                } finally {
+                    zis.closeEntry();
                 }
-                zis.closeEntry();
             }
         } catch (IOException e) {
-            log.error("Error processing ZIP file: {}", zipFile.getOriginalFilename(), e);
-            throw new RuntimeException("Failed to queue ZIP file: " + zipFile.getOriginalFilename(), e);
+            // This is a fundamental upload I/O failure (e.g., reading the zip stream itself). Propagate it.
+            log.error("IO error while processing ZIP file '{}'. This is considered an upload failure.", zipFilename, e);
+            throw new UncheckedIOException("Failed to read uploaded ZIP file: " + zipFilename, e);
         }
-        return fileCount;
+        log.info("Finished processing ZIP archive '{}'. Successfully queued {} file(s).", zipFilename, successfullyQueuedCount);
+        return successfullyQueuedCount;
     }
 
-    // ... (rest of the controller methods for reprocessing remain the same)
     @PostMapping("/reprocess/files")
     @Operation(summary = "Reprocess one or more previously processed files",
             description = "Submits a task to reprocess files based on their FileInfo IDs.")
