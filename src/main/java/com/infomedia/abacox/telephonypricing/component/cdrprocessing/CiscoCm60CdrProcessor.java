@@ -25,8 +25,6 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
     private int minExpectedFieldsForValidCdr = 0;
 
     private static final List<String> IGNORED_AUTH_CODES = List.of("Invalid Authorization Code", "Invalid Authorization Level");
-
-    private final EmployeeLookupService employeeLookupService;
     private final CdrConfigService cdrConfigService;
 
     @Override
@@ -50,6 +48,13 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
         if ("INTEGER".equalsIgnoreCase(firstField)) {
             log.debug("Skipping 'INTEGER' type definition line."); return null;
         }
+
+        // cdrRecordType=1 is a CDR, cdrRecordType=2 is a CMR. We skip CMRs.
+        if ("2".equals(firstField)) {
+            log.debug("Skipping CMR record (cdrRecordType=2).");
+            return null;
+        }
+
         if (fields.size() < this.minExpectedFieldsForValidCdr) {
             log.debug("Cisco CM 6.0 CDR line has insufficient fields ({}). Expected at least {}. Line: {}", fields.size(), minExpectedFieldsForValidCdr, cdrLine);
             cdrData.setMarkedForQuarantine(true);

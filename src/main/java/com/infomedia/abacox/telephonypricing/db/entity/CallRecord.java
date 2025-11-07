@@ -257,7 +257,7 @@ public class CallRecord extends AuditedEntity {
      * Assignment cause code.
      * Original field: ACUMTOTAL_CAUSA_ASIGNA
      */
-    @Column(name = "assignment_cause", nullable = false)
+    @Column(name = "assignment_cause")
     @ColumnDefault("0")
     private Integer assignmentCause;
 

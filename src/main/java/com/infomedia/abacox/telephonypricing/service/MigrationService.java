@@ -100,7 +100,7 @@ public class MigrationService {
                     .password(runRequest.getPassword())
                     .build();
 
-            tablesToMigrate = defineMigrationOrderAndMappings();
+            tablesToMigrate = defineMigrationOrderAndMappings(runRequest);
             int totalTableCount = tablesToMigrate.size();
             totalTables.set(totalTableCount);
 
@@ -168,7 +168,7 @@ public class MigrationService {
         }
     }
 
-    private List<TableMigrationConfig> defineMigrationOrderAndMappings() {
+    private List<TableMigrationConfig> defineMigrationOrderAndMappings(MigrationStart runRequest) {
         List<TableMigrationConfig> configs = new ArrayList<>();
 
         // Level 0: No FK dependencies among these
@@ -394,10 +394,6 @@ public class MigrationService {
                         entry("COMUBICACION_SERIAL", "serial"),
                         entry("COMUBICACION_INDICATIVO_ID", "indicatorId"),
                         entry("COMUBICACION_PREFIJOPBX", "pbxPrefix"),
-                        entry("COMUBICACION_FECHACAPTURA", "captureDate"),
-                        entry("COMUBICACION_CDRS", "cdrCount"),
-                        entry("COMUBICACION_ARCHIVO", "fileName"),
-                        entry("COMUBICACION_CABECERA_ID", "headerId"),
                         entry("COMUBICACION_ACTIVO", "active"),
                         entry("COMUBICACION_FCREACION", "createdDate"),
                         entry("COMUBICACION_FMODIFICADO", "lastModifiedDate")
@@ -769,8 +765,29 @@ public class MigrationService {
                         entry("ACUMTOTAL_FUNDESTINO_ID", "destinationEmployeeId"),
                         entry("ACUMTOTAL_FCREACION", "createdDate"),
                         entry("ACUMTOTAL_FMODIFICADO", "lastModifiedDate")
-                )).maxEntriesToMigrate(100000)
+                )).maxEntriesToMigrate(runRequest.getMaxCallRecordEntries())
                         .orderByClause("ACUMTOTAL_ID DESC")
+                .build());
+
+        configs.add(TableMigrationConfig.builder()
+                .sourceTableName("acumfallido")
+                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.FailedCallRecord")
+                .sourceIdColumnName("ACUMFALLIDO_ID")
+                .targetIdFieldName("id")
+                .columnMapping(Map.ofEntries(
+                        entry("ACUMFALLIDO_ID", "id"),
+                        entry("ACUMFALLIDO_EXTENSION", "employeeExtension"),
+                        entry("ACUMFALLIDO_CDR", "cdrString"),
+                        entry("ACUMFALLIDO_TIPO", "errorType"), // Note: smallint to String conversion will be attempted by the migrator
+                        entry("ACUMFALLIDO_MENSAJE", "errorMessage"),
+                        entry("ACUMFALLIDO_ACUMTOTAL_ID", "originalCallRecordId"),
+                        entry("ACUMFALLIDO_COMUBICACION_ID", "commLocationId"),
+                        // AuditedEntity fields
+                        entry("ACUMFALLIDO_FCREACION", "createdDate"),
+                        entry("ACUMFALLIDO_FMODIFICADO", "lastModifiedDate")
+                ))
+                .maxEntriesToMigrate(runRequest.getMaxFailedCallRecordEntries()) // Limit for performance, similar to CallRecord
+                .orderByClause("ACUMFALLIDO_ID DESC") // Get the most recent failures first
                 .build());
 
 

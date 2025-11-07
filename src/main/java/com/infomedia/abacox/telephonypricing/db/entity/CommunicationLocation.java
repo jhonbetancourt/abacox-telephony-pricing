@@ -90,4 +90,12 @@ public class CommunicationLocation extends ActivableEntity {
     @Column(name = "pbx_prefix", length = 32, nullable = false)
     @ColumnDefault("''")
     private String pbxPrefix;
+
+    /**
+     * Serial number.
+     * Original field: COMUBICACION_SERIAL
+     */
+    @Column(name = "serial", length = 200, nullable = false)
+    @ColumnDefault("''")
+    private String serial;
 }

@@ -24,4 +24,8 @@ public class MigrationStart {
     private Boolean encryption;
     @NotNull
     private Boolean trustServerCertificate;
+    @NotNull
+    private Integer maxCallRecordEntries;
+    @NotNull
+    private Integer maxFailedCallRecordEntries;
 }
