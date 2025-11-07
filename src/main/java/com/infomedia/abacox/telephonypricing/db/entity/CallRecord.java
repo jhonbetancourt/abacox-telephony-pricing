@@ -34,7 +34,7 @@ public class CallRecord extends AuditedEntity {
             name = "call_record_id_seq",
             sequenceName = "call_record_id_seq",
             allocationSize = 1,
-            initialValue = 10000000
+            initialValue = 1000000000
     )
     @Column(name = "id", nullable = false)
     private Long id;
