@@ -7,14 +7,17 @@ import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 
-@Component("ciscoCm60Processor")
+@Component("ciscoCm120Processor")
 @Log4j2
 @RequiredArgsConstructor
-public class CiscoCm60CdrProcessor implements CdrProcessor {
+public class CiscoCm120CdrProcessor implements CdrProcessor {
 
-    public static final Long PLANT_TYPE_IDENTIFIER = 26L; // CM_6_0
+    public static final Long PLANT_TYPE_IDENTIFIER = 56L; // CM_12_0
     private static final String INTERNAL_CDR_RECORD_TYPE_HEADER_KEY = "cdrrecordtype";
     private static final String CDR_SEPARATOR = ",";
     private static final String DEFAULT_CONFERENCE_IDENTIFIER_PREFIX = "b";
@@ -29,9 +32,9 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
 
     @Override
     public CdrData evaluateFormat(String cdrLine, CommunicationLocation commLocation, ExtensionLimits extensionLimits) {
-        log.debug("Evaluating Cisco CM 6.0 CDR line: {}", cdrLine);
+        log.debug("Evaluating Cisco CM 12.0 CDR line: {}", cdrLine);
         if (currentHeaderPositions.isEmpty() || !currentHeaderPositions.containsKey("_max_mapped_header_index_")) {
-            log.debug("Cisco CM 6.0 Headers not parsed. Cannot process line: {}", cdrLine);
+            log.debug("Cisco CM 12.0 Headers not parsed. Cannot process line: {}", cdrLine);
             CdrData errorData = new CdrData(); errorData.setRawCdrLine(cdrLine);
             errorData.setMarkedForQuarantine(true); errorData.setQuarantineReason("Header not parsed prior to CDR line processing.");
             errorData.setQuarantineStep(QuarantineErrorType.MISSING_HEADER.name()); return errorData;
@@ -56,7 +59,7 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
         }
 
         if (fields.size() < this.minExpectedFieldsForValidCdr) {
-            log.debug("Cisco CM 6.0 CDR line has insufficient fields ({}). Expected at least {}. Line: {}", fields.size(), minExpectedFieldsForValidCdr, cdrLine);
+            log.debug("Cisco CM 12.0 CDR line has insufficient fields ({}). Expected at least {}. Line: {}", fields.size(), minExpectedFieldsForValidCdr, cdrLine);
             cdrData.setMarkedForQuarantine(true);
             cdrData.setQuarantineReason("Insufficient fields. Found " + fields.size() + ", expected " + minExpectedFieldsForValidCdr);
             cdrData.setQuarantineStep(QuarantineErrorType.PARSER_ERROR.name()); return cdrData;
@@ -128,7 +131,13 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
         cdrData.setDestConversationId(parseLongField(getFieldValue(fields, "destConversationId")));
         cdrData.setGlobalCallIDCallId(parseLongField(getFieldValue(fields, "globalCallIDCallId")));
 
-        log.debug("Initial parsed Cisco CM 6.0 fields: {}", cdrData);
+        // *** EXTRACT CM 12.0+ SPECIFIC FIELDS ***
+        //cdrData.setOrigDeviceType(getFieldValue(fields, "origDeviceType"));
+        //cdrData.setDestDeviceType(getFieldValue(fields, "destDeviceType"));
+        //cdrData.setOrigDeviceSessionID(getFieldValue(fields, "origDeviceSessionID"));
+        //cdrData.setDestDeviceSessionID(getFieldValue(fields, "destDeviceSessionID"));
+
+        log.debug("Initial parsed Cisco CM 12.0 fields: {}", cdrData);
 
         // --- Start of Logic Block (PHP: CM_FormatoCDR after field extraction) ---
 
@@ -274,7 +283,7 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
         cdrData.setEffectiveDestinationNumber(cdrData.getFinalCalledPartyNumber());
         cdrData.setOriginalFinalCalledPartyNumber(cdrData.getFinalCalledPartyNumber());
 
-        log.debug("Final evaluated Cisco CM 6.0 CDR data: {}", cdrData);
+        log.debug("Final evaluated Cisco CM 12.0 CDR data: {}", cdrData);
         return cdrData;
     }
 
@@ -308,6 +317,13 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
         conceptualToActualHeaderMap.put("globalCallIDCallId", "globalCallID_callId".toLowerCase());
         conceptualToActualHeaderMap.put("durationSeconds", "duration".toLowerCase());
         conceptualToActualHeaderMap.put("authCodeDescription", "authCodeDescription".toLowerCase());
+
+        // *** NEW FIELDS FOR CM 12.0+ ***
+        conceptualToActualHeaderMap.put("origDeviceType", "origDeviceType".toLowerCase());
+        conceptualToActualHeaderMap.put("destDeviceType", "destDeviceType".toLowerCase());
+        conceptualToActualHeaderMap.put("origDeviceSessionID", "origDeviceSessionID".toLowerCase());
+        conceptualToActualHeaderMap.put("destDeviceSessionID", "destDeviceSessionID".toLowerCase());
+
         this.conferenceIdentifierActual = DEFAULT_CONFERENCE_IDENTIFIER_PREFIX.toUpperCase();
     }
 
@@ -332,7 +348,7 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
         }
         this.minExpectedFieldsForValidCdr = maxIndex + 1;
         currentHeaderPositions.put("_max_mapped_header_index_", maxIndex);
-        log.debug("Parsed Cisco CM 6.0 headers. Mapped positions: {}. Min expected fields: {}", currentHeaderPositions, minExpectedFieldsForValidCdr);
+        log.debug("Parsed Cisco CM 12.0 headers. Mapped positions: {}. Min expected fields: {}", currentHeaderPositions, minExpectedFieldsForValidCdr);
     }
 
     private String getFieldValue(List<String> fields, String conceptualFieldName) {
@@ -425,18 +441,18 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
         for (String line : initialLines) {
             if (isHeaderLine(line)) {
                 List<String> headers = CdrUtil.parseCsvLine(line, CDR_SEPARATOR);
-                // CM 6.0 does NOT have origDeviceType, destDeviceType, origDeviceSessionID, destDeviceSessionID
+                // CM 12.0+ HAS origDeviceType, destDeviceType, origDeviceSessionID, destDeviceSessionID
                 boolean hasNewFields = headers.stream()
                         .anyMatch(h -> h.equalsIgnoreCase("origDeviceType") ||
                                 h.equalsIgnoreCase("destDeviceType") ||
                                 h.equalsIgnoreCase("origDeviceSessionID") ||
                                 h.equalsIgnoreCase("destDeviceSessionID"));
 
-                if (!hasNewFields) {
-                    log.debug("Detected Cisco CM 6.0 format (no device type/session fields)");
+                if (hasNewFields) {
+                    log.debug("Detected Cisco CM 12.0+ format (has device type/session fields)");
                     return true;
                 } else {
-                    log.debug("Detected CM 12.0+ format (has device type/session fields), not CM 6.0");
+                    log.debug("Detected older CM format (no device type/session fields), not CM 12.0");
                     return false;
                 }
             }
