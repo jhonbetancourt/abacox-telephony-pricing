@@ -27,6 +27,15 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
     private static final List<String> IGNORED_AUTH_CODES = List.of("Invalid Authorization Code", "Invalid Authorization Level");
     private final CdrConfigService cdrConfigService;
 
+    // --- NEW: List of fields that indicate a CMR file, not a CDR file ---
+    private static final List<String> CMR_SPECIFIC_FIELDS = List.of(
+            "numberPacketsSent",
+            "numberOctetsSent",
+            "jitter",
+            "latency",
+            "varVQMetrics"
+    );
+
     @Override
     public CdrData evaluateFormat(String cdrLine, CommunicationLocation commLocation, ExtensionLimits extensionLimits) {
         log.debug("Evaluating Cisco CM 6.0 CDR line: {}", cdrLine);
@@ -425,22 +434,33 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
         for (String line : initialLines) {
             if (isHeaderLine(line)) {
                 List<String> headers = CdrUtil.parseCsvLine(line, CDR_SEPARATOR);
-                // CM 6.0 does NOT have origDeviceType, destDeviceType, origDeviceSessionID, destDeviceSessionID
-                boolean hasNewFields = headers.stream()
+
+                // Check 1: Reject if it contains CMR-specific fields
+                boolean isCmr = headers.stream()
+                        .anyMatch(h -> CMR_SPECIFIC_FIELDS.stream().anyMatch(cmrField -> cmrField.equalsIgnoreCase(h)));
+                if (isCmr) {
+                    log.debug("Detected CMR format based on fields like 'jitter', 'latency', etc. This is not a CM 6.0 CDR processor target.");
+                    return false;
+                }
+
+                // Check 2: Reject if it contains fields from newer CM versions (e.g., 12.0+)
+                boolean hasNewerCmFields = headers.stream()
                         .anyMatch(h -> h.equalsIgnoreCase("origDeviceType") ||
                                 h.equalsIgnoreCase("destDeviceType") ||
                                 h.equalsIgnoreCase("origDeviceSessionID") ||
                                 h.equalsIgnoreCase("destDeviceSessionID"));
 
-                if (!hasNewFields) {
-                    log.debug("Detected Cisco CM 6.0 format (no device type/session fields)");
-                    return true;
-                } else {
+                if (hasNewerCmFields) {
                     log.debug("Detected CM 12.0+ format (has device type/session fields), not CM 6.0");
                     return false;
                 }
+
+                // If both checks pass, we can assume it's a CM 6.0 CDR file
+                log.debug("Detected Cisco CM 6.0 CDR format (no CMR or newer CM fields found).");
+                return true;
             }
         }
+        // No header line was found in the initial lines
         return false;
     }
 }
