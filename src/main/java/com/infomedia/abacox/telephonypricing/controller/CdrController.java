@@ -3,7 +3,6 @@ package com.infomedia.abacox.telephonypricing.controller;
 import com.infomedia.abacox.telephonypricing.component.cdrprocessing.*;
 import com.infomedia.abacox.telephonypricing.component.configmanager.ConfigKey;
 import com.infomedia.abacox.telephonypricing.component.configmanager.ConfigService;
-import com.infomedia.abacox.telephonypricing.db.entity.FileInfo;
 import com.infomedia.abacox.telephonypricing.dto.generic.MessageResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -92,12 +91,7 @@ public class CdrController {
             CdrProcessor processor = getProcessorForPlantType(plantTypeId);
             List<String> initialLines = CdrUtil.readInitialLines(fileBytes);
             if (!processor.probe(initialLines)) {
-                log.warn("File '{}' was rejected by the processor's probe for plantTypeId {}.", originalFilename, plantTypeId);
-                CdrProcessingResultDto notACdrResult = CdrProcessingResultDto.builder()
-                        .status(FileInfo.ProcessingStatus.FAILED.name())
-                        .message("File format not recognized for the specified plant type.")
-                        .build();
-                return ResponseEntity.ok(notACdrResult);
+                throw new ValidationException("File format is not valid for the specified plantTypeId.");
             }
 
             CdrProcessingResultDto result = cdrRoutingService.routeAndProcessCdrStreamSync(
