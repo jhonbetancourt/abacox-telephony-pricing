@@ -15,7 +15,7 @@ import java.util.*;
 public class CiscoCm60CdrProcessor implements CdrProcessor {
 
     // Now a list to support multiple identifiers
-    public static final List<Long> PLANT_TYPE_IDENTIFIERS = List.of(26L, 56L);
+    public static final List<Long> PLANT_TYPE_IDENTIFIERS = List.of(26L, 27L); // Example: CM_6_0 and CM_7_0
     private static final String INTERNAL_CDR_RECORD_TYPE_HEADER_KEY = "cdrrecordtype";
     private static final String CDR_SEPARATOR = ",";
     private static final String DEFAULT_CONFERENCE_IDENTIFIER_PREFIX = "b";
@@ -28,7 +28,7 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
     private static final List<String> IGNORED_AUTH_CODES = List.of("Invalid Authorization Code", "Invalid Authorization Level");
     private final CdrConfigService cdrConfigService;
 
-    // --- NEW: List of fields that indicate a CMR file, not a CDR file ---
+    // --- List of fields that indicate a CMR file, not a CDR file ---
     private static final List<String> CMR_SPECIFIC_FIELDS = List.of(
             "numberPacketsSent",
             "numberOctetsSent",
@@ -425,5 +425,29 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
     @Override
     public List<String> getIgnoredAuthCodeDescriptions() {
         return IGNORED_AUTH_CODES;
+    }
+
+    @Override
+    public boolean probe(List<String> initialLines) {
+        if (initialLines == null || initialLines.isEmpty()) {
+            return false;
+        }
+        for (String line : initialLines) {
+            if (isHeaderLine(line)) {
+                List<String> headers = CdrUtil.parseCsvLine(line, CDR_SEPARATOR);
+
+                // Reject if it contains CMR-specific fields
+                boolean isCmr = headers.stream()
+                        .anyMatch(h -> CMR_SPECIFIC_FIELDS.stream().anyMatch(cmrField -> cmrField.equalsIgnoreCase(h)));
+                if (isCmr) {
+                    log.warn("Detected CMR format based on presence of CMR-specific fields. This file will be rejected by this processor.");
+                    return false; // This is a CMR file, reject it.
+                }
+                // If it's a header and not a CMR, it's a valid CDR file for this processor.
+                return true;
+            }
+        }
+        // No header line was found in the initial lines, so we cannot validate the format.
+        return false;
     }
 }

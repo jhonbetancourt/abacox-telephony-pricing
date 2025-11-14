@@ -3,6 +3,7 @@ package com.infomedia.abacox.telephonypricing.controller;
 import com.infomedia.abacox.telephonypricing.component.cdrprocessing.*;
 import com.infomedia.abacox.telephonypricing.component.configmanager.ConfigKey;
 import com.infomedia.abacox.telephonypricing.component.configmanager.ConfigService;
+import com.infomedia.abacox.telephonypricing.db.entity.FileInfo;
 import com.infomedia.abacox.telephonypricing.dto.generic.MessageResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -39,6 +41,7 @@ public class CdrController {
     private final FileInfoPersistenceService fileInfoPersistenceService;
     private final CdrRoutingService cdrRoutingService;
     private final ConfigService configService;
+    private final List<CdrProcessor> cdrProcessors;
 
 
     @PostMapping(value = "/process", consumes = MediaType.MULTIPART_FORM_DATA_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
@@ -85,9 +88,21 @@ public class CdrController {
         }
 
         try {
+            byte[] fileBytes = file.getBytes();
+            CdrProcessor processor = getProcessorForPlantType(plantTypeId);
+            List<String> initialLines = CdrUtil.readInitialLines(fileBytes);
+            if (!processor.probe(initialLines)) {
+                log.warn("File '{}' was rejected by the processor's probe for plantTypeId {}.", originalFilename, plantTypeId);
+                CdrProcessingResultDto notACdrResult = CdrProcessingResultDto.builder()
+                        .status(FileInfo.ProcessingStatus.FAILED.name())
+                        .message("File format not recognized for the specified plant type.")
+                        .build();
+                return ResponseEntity.ok(notACdrResult);
+            }
+
             CdrProcessingResultDto result = cdrRoutingService.routeAndProcessCdrStreamSync(
                     file.getOriginalFilename(),
-                    file.getInputStream(),
+                    new ByteArrayInputStream(fileBytes), // Use a new stream from the validated bytes
                     plantTypeId
             );
             return ResponseEntity.ok(result);
@@ -107,6 +122,15 @@ public class CdrController {
                 return 0;
             }
 
+            // --- Validation Step ---
+            CdrProcessor processor = getProcessorForPlantType(plantTypeId);
+            List<String> initialLines = CdrUtil.readInitialLines(fileBytes);
+            if (!processor.probe(initialLines)) {
+                log.warn("File '{}' was rejected by the processor's probe for plantTypeId {}. Skipping queue.", filename, plantTypeId);
+                return 0; // Skip the file, but return OK response.
+            }
+            // --- End Validation Step ---
+
             fileInfoPersistenceService.createOrGetFileInfo(
                     filename,
                     plantTypeId,
@@ -116,8 +140,8 @@ public class CdrController {
             log.info("Successfully queued single file: {}", filename);
             return 1;
         } catch (ValidationException e) {
-            // Business logic failure, not an upload failure. Log and return OK.
-            log.warn("Skipping file '{}' due to a processing error: {}", filename, e.getMessage());
+            // Business logic failure, e.g. no processor found.
+            log.warn("Skipping file '{}' due to a validation error: {}", filename, e.getMessage());
             return 0; // 0 files successfully queued
         } catch (IOException e) {
             // This is a fundamental upload I/O failure. Propagate it to return an error response.
@@ -135,6 +159,7 @@ public class CdrController {
         log.info("Processing files from ZIP archive: {}, PlantTypeID: {}", zipFilename, plantTypeId);
         int successfullyQueuedCount = 0;
         try (ZipInputStream zis = new ZipInputStream(zipFile.getInputStream())) {
+            CdrProcessor processor = getProcessorForPlantType(plantTypeId); // Get processor once for the whole zip
             ZipEntry zipEntry;
             while ((zipEntry = zis.getNextEntry()) != null) {
                 if (zipEntry.isDirectory()) {
@@ -157,6 +182,14 @@ public class CdrController {
                         log.warn("Skipping empty file '{}' inside ZIP archive '{}'.", entryName, zipFilename);
                         continue;
                     }
+
+                    // --- Validation Step ---
+                    List<String> initialLines = CdrUtil.readInitialLines(fileBytes);
+                    if (!processor.probe(initialLines)) {
+                        log.warn("File '{}' in ZIP was rejected by the processor's probe for plantTypeId {}. Skipping queue.", entryName, plantTypeId);
+                        continue; // Skip this file in the zip
+                    }
+                    // --- End Validation Step ---
 
                     fileInfoPersistenceService.createOrGetFileInfo(
                             entryName,
@@ -182,9 +215,20 @@ public class CdrController {
             // This is a fundamental upload I/O failure (e.g., reading the zip stream itself). Propagate it.
             log.error("IO error while processing ZIP file '{}'. This is considered an upload failure.", zipFilename, e);
             throw new UncheckedIOException("Failed to read uploaded ZIP file: " + zipFilename, e);
+        } catch (ValidationException e) {
+            // This catches the case where no processor could be found for the given plantTypeId for the whole zip.
+            log.warn("Could not process ZIP file '{}' due to a validation error: {}", zipFilename, e.getMessage());
+            return 0;
         }
         log.info("Finished processing ZIP archive '{}'. Successfully queued {} file(s).", zipFilename, successfullyQueuedCount);
         return successfullyQueuedCount;
+    }
+
+    private CdrProcessor getProcessorForPlantType(Long plantTypeId) {
+        return cdrProcessors.stream()
+                .filter(p -> p.getPlantTypeIdentifiers().contains(plantTypeId))
+                .findFirst()
+                .orElseThrow(() -> new ValidationException("No CDR processor found for plant type ID: " + plantTypeId));
     }
 
     @PostMapping("/reprocess/files")

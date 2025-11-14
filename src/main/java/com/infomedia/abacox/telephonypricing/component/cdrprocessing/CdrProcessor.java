@@ -7,6 +7,15 @@ import java.util.List;
 
 public interface CdrProcessor {
     /**
+     * Probes the initial lines of a file to validate if this processor can handle the format.
+     * This is used to reject incompatible files (e.g., CMR instead of CDR) for a given plant type.
+     *
+     * @param initialLines A list of the first few lines of the file.
+     * @return true if the processor accepts the format, false otherwise.
+     */
+    boolean probe(List<String> initialLines);
+
+    /**
      * Checks if the given line is a header line for this CDR type.
      * The line passed here should be the raw (or trimmed) line from the file.
      * The implementation is responsible for any necessary cleaning (like removing quotes)

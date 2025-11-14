@@ -1,11 +1,15 @@
 // File: com/infomedia/abacox/telephonypricing/component/cdrprocessing/CdrUtil.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
+import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.regex.Pattern;
@@ -17,6 +21,8 @@ import lombok.extern.log4j.Log4j2;
 
 @Log4j2
 public class CdrUtil {
+
+    private static final int PROBE_LINE_COUNT = 5; // Read the first few lines for validation
 
     public static List<String> parseCsvLine(String line, String separator) {
         if (line == null) return Arrays.asList("");
@@ -313,5 +319,26 @@ public class CdrUtil {
             }
             return outputStream.toByteArray();
         }
+    }
+
+    /**
+     * Reads the first few lines of a file's content for probing/validation.
+     * @param fileContent The byte array of the file content.
+     * @return A list of the first few lines.
+     */
+    public static List<String> readInitialLines(byte[] fileContent) {
+        List<String> lines = new ArrayList<>();
+        if (fileContent == null || fileContent.length == 0) {
+            return lines;
+        }
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(new ByteArrayInputStream(fileContent), StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = reader.readLine()) != null && lines.size() < PROBE_LINE_COUNT) {
+                lines.add(line);
+            }
+        } catch (IOException e) {
+            log.error("Failed to read initial lines from file content for probing.", e);
+        }
+        return lines;
     }
 }
