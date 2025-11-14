@@ -52,7 +52,7 @@ SELECT
     ct.name AS contact_name,
     c.name AS company_name
 FROM call_record cr
-         JOIN employee emp ON emp.id = cr.employee_id
+         LEFT JOIN employee emp ON emp.id = cr.employee_id
          JOIN communication_location cl ON cl.id = cr.comm_location_id
          JOIN telephony_type tt ON tt.id = cr.telephony_type_id
          LEFT JOIN subdivision s ON s.id = emp.subdivision_id
@@ -63,4 +63,4 @@ FROM call_record cr
          LEFT JOIN indicator ind_dest ON ind_dest.id = cr.indicator_id
          LEFT JOIN contact ct ON cr.dial = ct.phone_number
          LEFT JOIN company c ON c.id = ct.company_id
-         LEFT JOIN origin_country oc ON oc.id = ind_origin.origin_country_id
+         LEFT JOIN origin_country oc ON oc.id = ind_origin.origin_country_id;
