@@ -14,7 +14,8 @@ import java.util.*;
 @RequiredArgsConstructor
 public class CiscoCm60CdrProcessor implements CdrProcessor {
 
-    public static final Long PLANT_TYPE_IDENTIFIER = 26L; // CM_6_0
+    // Now a list to support multiple identifiers
+    public static final List<Long> PLANT_TYPE_IDENTIFIERS = List.of(26L, 56L);
     private static final String INTERNAL_CDR_RECORD_TYPE_HEADER_KEY = "cdrrecordtype";
     private static final String CDR_SEPARATOR = ",";
     private static final String DEFAULT_CONFERENCE_IDENTIFIER_PREFIX = "b";
@@ -404,8 +405,8 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
     }
 
     @Override
-    public Long getPlantTypeIdentifier() {
-        return PLANT_TYPE_IDENTIFIER;
+    public List<Long> getPlantTypeIdentifiers() {
+        return PLANT_TYPE_IDENTIFIERS;
     }
 
     private boolean isConferenceIdentifier(String number) {
@@ -424,27 +425,5 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
     @Override
     public List<String> getIgnoredAuthCodeDescriptions() {
         return IGNORED_AUTH_CODES;
-    }
-
-    @Override
-    public boolean probe(List<String> initialLines) {
-        if (initialLines == null || initialLines.isEmpty()) {
-            return false;
-        }
-        for (String line : initialLines) {
-            if (isHeaderLine(line)) {
-                List<String> headers = CdrUtil.parseCsvLine(line, CDR_SEPARATOR);
-
-                //Reject if it contains CMR-specific fields
-                boolean isCmr = headers.stream()
-                        .anyMatch(h -> CMR_SPECIFIC_FIELDS.stream().anyMatch(cmrField -> cmrField.equalsIgnoreCase(h)));
-                if (isCmr) {
-                    log.debug("Detected CMR format based on fields like 'jitter', 'latency', etc. This is not a CM 6.0 CDR processor target.");
-                    return false;
-                }
-            }
-        }
-        // No header line was found in the initial lines
-        return false;
     }
 }

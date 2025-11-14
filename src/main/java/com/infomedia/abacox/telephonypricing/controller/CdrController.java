@@ -37,31 +37,32 @@ public class CdrController {
 
     private final CdrProcessingExecutor cdrProcessingExecutor;
     private final FileInfoPersistenceService fileInfoPersistenceService;
-    private final CdrFormatDetectorService cdrFormatDetectorService;
     private final CdrRoutingService cdrRoutingService;
     private final ConfigService configService;
 
 
     @PostMapping(value = "/process", consumes = MediaType.MULTIPART_FORM_DATA_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     @Operation(summary = "Queue a CDR file or ZIP archive for processing",
-            description = "Submits a CDR file (or a ZIP archive of CDR files). The file format is automatically detected. The file is saved and queued for reliable, asynchronous processing.")
-    public MessageResponse processCdr(@Parameter(description = "The CDR file or ZIP archive to upload") @RequestParam("file") MultipartFile file
-            , @RequestHeader (value = "X-API-KEY") String apiKey) {
+            description = "Submits a CDR file (or a ZIP archive of CDR files) for a specific plant type. The file is saved and queued for reliable, asynchronous processing.")
+    public MessageResponse processCdr(
+            @Parameter(description = "The CDR file or ZIP archive to upload") @RequestParam("file") MultipartFile file,
+            @Parameter(description = "The unique identifier for the plant type (e.g., PBX model)") @RequestParam("plantTypeId") Long plantTypeId,
+            @RequestHeader (value = "X-API-KEY") String apiKey) {
 
         if(!apiKey.equals(configService.getValue(ConfigKey.CDR_UPLOAD_API_KEY).asString())) {
             throw new SecurityException("Invalid API Key");
         }
 
-        log.info("Received file for queueing: {}", file.getOriginalFilename());
+        log.info("Received file for queueing: {}, PlantTypeID: {}", file.getOriginalFilename(), plantTypeId);
 
         String contentType = file.getContentType();
         String originalFilename = file.getOriginalFilename();
 
         int filesQueued;
         if ("application/zip".equals(contentType) || (originalFilename != null && originalFilename.toLowerCase().endsWith(".zip"))) {
-            filesQueued = queueZipFile(file);
+            filesQueued = queueZipFile(file, plantTypeId);
         } else {
-            filesQueued = queueSingleFile(file);
+            filesQueued = queueSingleFile(file, plantTypeId);
         }
 
         return new MessageResponse(String.format("%d file(s) queued for processing successfully.", filesQueued));
@@ -69,9 +70,11 @@ public class CdrController {
 
     @PostMapping(value = "/processSingle", consumes = MediaType.MULTIPART_FORM_DATA_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     @Operation(summary = "Process a single CDR file synchronously",
-            description = "Submits a single CDR file for immediate, synchronous processing. The result summary is returned in the response. Fails if the file has been processed before.")
-    public ResponseEntity<CdrProcessingResultDto> processCdrSync(@Parameter(description = "The single CDR file to process") @RequestParam("file") MultipartFile file) {
-        log.info("Received file for synchronous processing: {}", file.getOriginalFilename());
+            description = "Submits a single CDR file for immediate, synchronous processing for a specific plant type. The result summary is returned in the response. Fails if the file has been processed before.")
+    public ResponseEntity<CdrProcessingResultDto> processCdrSync(
+            @Parameter(description = "The single CDR file to process") @RequestParam("file") MultipartFile file,
+            @Parameter(description = "The unique identifier for the plant type (e.g., PBX model)") @RequestParam("plantTypeId") Long plantTypeId) {
+        log.info("Received file for synchronous processing: {}, PlantTypeID: {}", file.getOriginalFilename(), plantTypeId);
 
         if (file.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Uploaded file cannot be empty.");
@@ -84,7 +87,8 @@ public class CdrController {
         try {
             CdrProcessingResultDto result = cdrRoutingService.routeAndProcessCdrStreamSync(
                     file.getOriginalFilename(),
-                    file.getInputStream()
+                    file.getInputStream(),
+                    plantTypeId
             );
             return ResponseEntity.ok(result);
         } catch (IOException e) {
@@ -93,17 +97,15 @@ public class CdrController {
         }
     }
 
-    private int queueSingleFile(MultipartFile file) {
+    private int queueSingleFile(MultipartFile file, Long plantTypeId) {
         String filename = file.getOriginalFilename();
-        log.info("Attempting to queue single file: {}", filename);
+        log.info("Attempting to queue single file: {}, PlantTypeID: {}", filename, plantTypeId);
         try {
             byte[] fileBytes = file.getBytes();
             if (fileBytes.length == 0) {
                 log.warn("Uploaded file '{}' is empty and will be ignored.", filename);
                 return 0;
             }
-            Long plantTypeId = cdrFormatDetectorService.detectPlantType(fileBytes)
-                    .orElseThrow(() -> new ValidationException("Could not recognize CDR format."));
 
             fileInfoPersistenceService.createOrGetFileInfo(
                     filename,
@@ -128,9 +130,9 @@ public class CdrController {
         }
     }
 
-    private int queueZipFile(MultipartFile zipFile) {
+    private int queueZipFile(MultipartFile zipFile, Long plantTypeId) {
         String zipFilename = zipFile.getOriginalFilename();
-        log.info("Processing files from ZIP archive: {}", zipFilename);
+        log.info("Processing files from ZIP archive: {}, PlantTypeID: {}", zipFilename, plantTypeId);
         int successfullyQueuedCount = 0;
         try (ZipInputStream zis = new ZipInputStream(zipFile.getInputStream())) {
             ZipEntry zipEntry;
@@ -155,9 +157,6 @@ public class CdrController {
                         log.warn("Skipping empty file '{}' inside ZIP archive '{}'.", entryName, zipFilename);
                         continue;
                     }
-
-                    Long plantTypeId = cdrFormatDetectorService.detectPlantType(fileBytes)
-                            .orElseThrow(() -> new ValidationException("Could not recognize CDR format."));
 
                     fileInfoPersistenceService.createOrGetFileInfo(
                             entryName,

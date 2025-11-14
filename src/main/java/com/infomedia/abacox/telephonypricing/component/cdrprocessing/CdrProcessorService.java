@@ -153,7 +153,7 @@ public class CdrProcessorService {
 
     private CdrProcessor getProcessorForPlantType(Long plantTypeId) {
         return cdrProcessors.stream()
-                .filter(p -> p.getPlantTypeIdentifier().equals(plantTypeId))
+                .filter(p -> p.getPlantTypeIdentifiers().contains(plantTypeId))
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("No CDR processor found for plant type ID: " + plantTypeId));
     }

@@ -1,4 +1,4 @@
-// File: com/infomedia/abacox/telephonypricing/cdr/ICdrTypeProcessor.java
+// File: com/infomedia/abacox/telephonypricing/cdr/CdrProcessor.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
 import com.infomedia.abacox.telephonypricing.db.entity.CommunicationLocation;
@@ -6,15 +6,6 @@ import com.infomedia.abacox.telephonypricing.db.entity.CommunicationLocation;
 import java.util.List;
 
 public interface CdrProcessor {
-    /**
-     * Probes the initial lines of a file to determine if this processor can handle the format.
-     * This is the key method for automatic format detection.
-     *
-     * @param initialLines A list of the first few lines of the file.
-     * @return true if the processor recognizes the format, false otherwise.
-     */
-    boolean probe(List<String> initialLines);
-
     /**
      * Checks if the given line is a header line for this CDR type.
      * The line passed here should be the raw (or trimmed) line from the file.
@@ -43,11 +34,11 @@ public interface CdrProcessor {
     CdrData evaluateFormat(String cdrLine, CommunicationLocation commLocation, ExtensionLimits extensionLimits);
 
     /**
-     * Gets a unique identifier for the plant type this processor handles.
+     * Gets the unique identifiers for the plant types this processor handles.
      *
-     * @return String identifier.
+     * @return A list of unique Long identifiers.
      */
-    Long getPlantTypeIdentifier();
+    List<Long> getPlantTypeIdentifiers();
 
     /**
      * Gets a list of authorization code descriptions that should be ignored

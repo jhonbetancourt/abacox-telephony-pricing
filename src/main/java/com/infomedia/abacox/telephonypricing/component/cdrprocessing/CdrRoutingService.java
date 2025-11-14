@@ -30,11 +30,10 @@ public class CdrRoutingService {
     private final CallRecordPersistenceService callRecordPersistenceService;
     private final List<CdrProcessor> cdrProcessors;
     private final EmployeeLookupService employeeLookupService;
-    private final CdrFormatDetectorService cdrFormatDetectorService;
 
     private CdrProcessor getProcessorForPlantType(Long plantTypeId) {
         return cdrProcessors.stream()
-                .filter(p -> p.getPlantTypeIdentifier().equals(plantTypeId))
+                .filter(p -> p.getPlantTypeIdentifiers().contains(plantTypeId))
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("No CDR processor found for plant type ID: " + plantTypeId));
     }
@@ -239,7 +238,7 @@ public class CdrRoutingService {
      * Processes a single CDR file stream synchronously within a single transaction.
      */
     @Transactional
-    public CdrProcessingResultDto routeAndProcessCdrStreamSync(String filename, InputStream inputStream) {
+    public CdrProcessingResultDto routeAndProcessCdrStreamSync(String filename, InputStream inputStream, Long plantTypeId) {
         log.info("Starting SYNCHRONOUS CDR stream processing for file: {}", filename);
 
         byte[] streamBytes;
@@ -249,9 +248,6 @@ public class CdrRoutingService {
             log.error("Failed to read input stream for sync processing of file: {}", filename, e);
             throw new UncheckedIOException(e);
         }
-
-        Long plantTypeId = cdrFormatDetectorService.detectPlantType(streamBytes)
-                .orElseThrow(() -> new ValidationException("Could not recognize CDR format for file: " + filename));
 
         FileInfoPersistenceService.FileInfoCreationResult fileInfoResult = fileInfoPersistenceService.createOrGetFileInfo(filename, plantTypeId, "SYNC_STREAM", streamBytes);
         if (!fileInfoResult.isNew()) {
