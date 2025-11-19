@@ -21,6 +21,7 @@ SELECT
     cr.service_date,
     cr.is_incoming,
     cr.duration,
+    CEIL(cr.duration / 60.0) AS billed_minutes,
     cr.ring_count,
     cr.trunk,
     cr.initial_trunk,

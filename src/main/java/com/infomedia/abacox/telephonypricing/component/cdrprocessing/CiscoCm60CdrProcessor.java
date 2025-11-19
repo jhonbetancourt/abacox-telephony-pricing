@@ -15,7 +15,7 @@ import java.util.*;
 public class CiscoCm60CdrProcessor implements CdrProcessor {
 
     // Now a list to support multiple identifiers
-    public static final List<Long> PLANT_TYPE_IDENTIFIERS = List.of(26L, 27L); // Example: CM_6_0 and CM_7_0
+    public static final List<Long> PLANT_TYPE_IDENTIFIERS = List.of(26L, 56L);
     private static final String INTERNAL_CDR_RECORD_TYPE_HEADER_KEY = "cdrrecordtype";
     private static final String CDR_SEPARATOR = ",";
     private static final String DEFAULT_CONFERENCE_IDENTIFIER_PREFIX = "b";

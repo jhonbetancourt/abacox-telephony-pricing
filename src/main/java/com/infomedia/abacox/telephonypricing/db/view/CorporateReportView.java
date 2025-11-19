@@ -93,6 +93,9 @@ public class CorporateReportView {
     @Column(name = "duration")
     private Integer duration;
 
+    @Column(name = "billed_minutes")
+    private Integer billedMinutes;
+
     @Column(name = "ring_count")
     private Integer ringCount;
 

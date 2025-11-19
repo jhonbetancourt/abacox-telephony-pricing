@@ -38,6 +38,7 @@ public class CorporateReportDto {
     private String employeeTransfer;
     private Integer assignmentCause;
     private Integer duration;
+    private Integer billedMinutes;
     private Integer ringCount;
     private BigDecimal billedAmount;
     private BigDecimal pricePerMinute;
