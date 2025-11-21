@@ -48,17 +48,20 @@ public class EmployeeLookupService {
     }
 
     /**
-     * Finds an employee by extension or auth code. If not found by direct match,
-     * and the extension is valid, it attempts to find a match in extension ranges.
-     * If a range matches and auto-creation is enabled, the employee will be persisted.
+     * Finds an employee by extension or auth code.
+     * Logic:
+     * 1. Tries to match by Auth Code (if present and valid).
+     * 2. If Auth Code match fails (or wasn't provided), tries to match by Extension.
+     * 3. If both fail, attempts to find a match in Extension Ranges.
+     * 4. If a range matches and auto-creation is enabled, the employee will be persisted.
      */
-    @Transactional // Keep @Transactional for potential employee creation
+    @Transactional
     public Optional<Employee> findEmployeeByExtensionOrAuthCode(String extension, String authCode,
-                                                                Long commLocationIdContext, List<String> ignoredAuthCodeDescriptions, Map<Long, List<ExtensionRange>> extensionRanges) {
-        StringBuilder queryStr = new StringBuilder("SELECT e.* FROM employee e ");
-        queryStr.append(" LEFT JOIN communication_location cl ON e.communication_location_id = cl.id ");
-        queryStr.append(" WHERE e.active = true ");
+                                                                Long commLocationIdContext,
+                                                                List<String> ignoredAuthCodeDescriptions,
+                                                                Map<Long, List<ExtensionRange>> extensionRanges) {
 
+        // --- 1. Preparation ---
         boolean hasAuthCode = authCode != null && !authCode.isEmpty();
         String cleanedExtension = (extension != null) ? CdrUtil.cleanPhoneNumber(extension, null, false).getCleanedNumber() : null;
         if (cleanedExtension != null && cleanedExtension.startsWith("+")) {
@@ -69,6 +72,16 @@ public class EmployeeLookupService {
         boolean isAuthCodeIgnoredType = hasAuthCode && ignoredAuthCodeDescriptions.stream()
                 .anyMatch(ignored -> ignored.equalsIgnoreCase(authCode));
 
+        boolean searchGlobally = (hasAuthCode && !isAuthCodeIgnoredType) ?
+                cdrConfigService.areAuthCodesGlobal() :
+                cdrConfigService.areExtensionsGlobal();
+
+        // --- 2. Primary Query Construction ---
+        StringBuilder queryStr = new StringBuilder("SELECT e.* FROM employee e ");
+        queryStr.append(" LEFT JOIN communication_location cl ON e.communication_location_id = cl.id ");
+        queryStr.append(" WHERE e.active = true ");
+
+        // Decide whether to query by AuthCode OR Extension primarily
         if (hasAuthCode && !isAuthCodeIgnoredType) {
             queryStr.append(" AND e.auth_code = :authCode ");
         } else if (hasExtension) {
@@ -78,25 +91,22 @@ public class EmployeeLookupService {
             return Optional.empty();
         }
 
-        boolean searchGlobally = (hasAuthCode && !isAuthCodeIgnoredType) ?
-                                 cdrConfigService.areAuthCodesGlobal() :
-                                 cdrConfigService.areExtensionsGlobal();
-
+        // Apply Location/Global constraints
         if (!searchGlobally && commLocationIdContext != null) {
             queryStr.append(" AND e.communication_location_id = :commLocationIdContext ");
         }
         queryStr.append(" AND (cl.id IS NULL OR cl.active = true) ");
 
-
+        // Ordering
         if (searchGlobally && commLocationIdContext != null) {
             queryStr.append(" ORDER BY CASE WHEN e.communication_location_id = :commLocationIdContext THEN 0 ELSE 1 END, e.created_date DESC LIMIT 1");
         } else {
             queryStr.append(" ORDER BY e.created_date DESC LIMIT 1");
         }
 
-
         jakarta.persistence.Query nativeQuery = entityManager.createNativeQuery(queryStr.toString(), Employee.class);
 
+        // Parameters
         if (hasAuthCode && !isAuthCodeIgnoredType) {
             nativeQuery.setParameter("authCode", authCode);
         } else if (hasExtension) {
@@ -109,15 +119,55 @@ public class EmployeeLookupService {
             nativeQuery.setParameter("commLocationIdContext", commLocationIdContext);
         }
 
-
+        // --- 3. Execution & Fallback Logic ---
         try {
             Employee employee = (Employee) nativeQuery.getSingleResult();
-            log.debug("Found existing employee by extension/auth_code: {}", employee.getId());
+            log.debug("Found existing employee by primary search (AuthCode/Ext): {}", employee.getId());
             return Optional.of(employee);
         } catch (jakarta.persistence.NoResultException e) {
+
+            // --- NEW FALLBACK: If we searched by AuthCode and failed, try searching by Extension now ---
+            if (hasAuthCode && !isAuthCodeIgnoredType && hasExtension) {
+                log.debug("Auth code lookup failed, falling back to extension lookup for: {}", cleanedExtension);
+
+                StringBuilder fallbackSb = new StringBuilder("SELECT e.* FROM employee e ");
+                fallbackSb.append(" LEFT JOIN communication_location cl ON e.communication_location_id = cl.id ");
+                fallbackSb.append(" WHERE e.active = true AND e.extension = :extension ");
+                fallbackSb.append(" AND (cl.id IS NULL OR cl.active = true) ");
+
+                if (!searchGlobally && commLocationIdContext != null) {
+                    fallbackSb.append(" AND e.communication_location_id = :commLocationIdContext ");
+                }
+
+                if (searchGlobally && commLocationIdContext != null) {
+                    fallbackSb.append(" ORDER BY CASE WHEN e.communication_location_id = :commLocationIdContext THEN 0 ELSE 1 END, e.created_date DESC LIMIT 1");
+                } else {
+                    fallbackSb.append(" ORDER BY e.created_date DESC LIMIT 1");
+                }
+
+                jakarta.persistence.Query fallbackQuery = entityManager.createNativeQuery(fallbackSb.toString(), Employee.class);
+                fallbackQuery.setParameter("extension", cleanedExtension);
+
+                if (!searchGlobally && commLocationIdContext != null) {
+                    fallbackQuery.setParameter("commLocationIdContext", commLocationIdContext);
+                } else if (searchGlobally && commLocationIdContext != null) {
+                    fallbackQuery.setParameter("commLocationIdContext", commLocationIdContext);
+                }
+
+                try {
+                    Employee fallbackEmployee = (Employee) fallbackQuery.getSingleResult();
+                    log.debug("Found existing employee by fallback extension lookup: {}", fallbackEmployee.getId());
+                    return Optional.of(fallbackEmployee);
+                } catch (jakarta.persistence.NoResultException ex2) {
+                    // Fallback failed too, proceed to ranges
+                    log.trace("Fallback extension lookup also returned no result.");
+                }
+            }
+
+            // --- 4. Range Lookup (Conceptual Employee) ---
             boolean phpExtensionValida = hasExtension &&
-                                         (!cleanedExtension.startsWith("0") || cleanedExtension.equals("0")) &&
-                                         cleanedExtension.matches("^[0-9#*+]+$");
+                    (!cleanedExtension.startsWith("0") || cleanedExtension.equals("0")) &&
+                    cleanedExtension.matches("^[0-9#*+]+$");
 
             if (phpExtensionValida) {
                 Optional<Employee> conceptualEmployeeOpt = findEmployeeByExtensionRange(cleanedExtension, commLocationIdContext, extensionRanges);

@@ -127,7 +127,7 @@ public class IndicatorLookupService {
         if (prefixHasAssociatedBands && effectivePrefixId != null) {
             queryBuilder.append("LEFT JOIN band b ON b.prefix_id = :prefixIdFunc AND b.active = true ");
             queryBuilder.append("LEFT JOIN band_indicator bi ON bi.band_id = b.id AND bi.indicator_id = i.id ");
-            whereClauses.add("(b.origin_indicator_id = 0 OR b.origin_indicator_id = :originIndicatorIdForBandContext)");
+            whereClauses.add("(b.origin_indicator_id = 0 OR b.origin_indicator_id IS NULL OR b.origin_indicator_id = :originIndicatorIdForBandContext)");
         } else {
             queryBuilder.append("LEFT JOIN band b ON 1=0 ");
         }

@@ -123,7 +123,7 @@ public class TelephonyTypeLookupService {
                     bandQueryBuilder.append("JOIN band_indicator bi ON b.id = bi.band_id AND bi.indicator_id = :destinationIndicatorId ");
                 }
                 bandQueryBuilder.append("WHERE b.active = true AND b.prefix_id = :prefixId ");
-                bandQueryBuilder.append("AND (b.origin_indicator_id = 0 OR b.origin_indicator_id = :originIndicatorIdForBand) ");
+                bandQueryBuilder.append("AND (b.origin_indicator_id = 0 OR b.origin_indicator_id IS NULL OR b.origin_indicator_id = :originIndicatorIdForBand) ");
                 bandQueryBuilder.append("ORDER BY b.origin_indicator_id DESC NULLS LAST LIMIT 1");
 
                 jakarta.persistence.Query bandQuery = entityManager.createNativeQuery(bandQueryBuilder.toString(), Tuple.class);

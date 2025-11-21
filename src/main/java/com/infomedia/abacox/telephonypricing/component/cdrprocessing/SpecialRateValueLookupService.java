@@ -62,7 +62,7 @@ public class SpecialRateValueLookupService {
                           "AND (sr.valid_from IS NULL OR sr.valid_from <= :callDateTime) " +
                           "AND (sr.valid_to IS NULL OR sr.valid_to >= :callDateTime) " +
                           "AND (" + dayColumn + " = true " + (isHoliday ? "OR sr.holiday_enabled = true" : "") + ") " +
-                          "AND (sr.origin_indicator_id = 0 OR sr.origin_indicator_id = :originIndicatorId) " +
+                          "AND (sr.origin_indicator_id = 0 OR sr.origin_indicator_id IS NULL OR sr.origin_indicator_id = :originIndicatorId) " +
                           "AND (sr.telephony_type_id = 0 OR sr.telephony_type_id = :telephonyTypeId) " + // 0 for all types
                           "AND (sr.operator_id = 0 OR sr.operator_id = :operatorId) " + // 0 for all operators
                           "AND (sr.band_id = 0 OR sr.band_id = :bandId) " + // 0 for all bands
