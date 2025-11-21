@@ -1,4 +1,3 @@
-// src/main/java/com/infomedia/abacox/telephonypricing/db/entity/Subdivision.java
 package com.infomedia.abacox.telephonypricing.db.entity;
 
 import com.infomedia.abacox.telephonypricing.db.entity.superclass.ActivableEntity;
@@ -8,13 +7,12 @@ import lombok.*;
 import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.ColumnDefault;
 
+/**
+ * Entity representing subdivisions or departments.
+ * Original table name: SUBDIRECCION
+ */
 @Entity
-@Table(
-    name = "subdivision",
-    indexes = {
-        @Index(name = "idx_subdivision_parent", columnList = "parent_subdivision_id")
-    }
-)
+@Table(name = "subdivision")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -22,6 +20,10 @@ import org.hibernate.annotations.ColumnDefault;
 @SuperBuilder(toBuilder = true)
 public class Subdivision extends ActivableEntity {
 
+    /**
+     * Primary key for the department.
+     * Original field: SUBDIRECCION_ID
+     */
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "subdivision_id_seq")
     @SequenceGenerator(
@@ -33,10 +35,17 @@ public class Subdivision extends ActivableEntity {
     @Column(name = "id", nullable = false)
     private Long id;
 
+    /**
+     * ID of the parent department.
+     * Original field: SUBDIRECCION_PERTENECE
+     */
     @Column(name = "parent_subdivision_id")
     private Long parentSubdivisionId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    /**
+     * Parent subdivision relationship.
+     */
+    @ManyToOne
     @JoinColumn(
             name = "parent_subdivision_id", 
             insertable = false, 
@@ -45,7 +54,21 @@ public class Subdivision extends ActivableEntity {
     )
     private Subdivision parentSubdivision;
 
+    /**
+     * Name of the department.
+     * Original field: SUBDIRECCION_NOMBRE
+     */
     @Column(name = "name", length = 200, nullable = false)
     @ColumnDefault("''")
     private String name;
+
+    // The following field was commented out in the original schema:
+
+    /**
+     * ID of the department head (commented out in original schema).
+     * Original field: SUBDIRECCION_JEFE
+     */
+    // @Column(name = "head_id", nullable = false)
+    // @ColumnDefault("0")
+    // private Integer headId;
 }

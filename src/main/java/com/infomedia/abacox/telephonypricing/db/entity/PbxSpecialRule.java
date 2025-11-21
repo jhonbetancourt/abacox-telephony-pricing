@@ -1,4 +1,3 @@
-// src/main/java/com/infomedia/abacox/telephonypricing/db/entity/PbxSpecialRule.java
 package com.infomedia.abacox.telephonypricing.db.entity;
 
 import com.infomedia.abacox.telephonypricing.db.entity.superclass.ActivableEntity;
@@ -12,14 +11,7 @@ import org.hibernate.annotations.ColumnDefault;
  * Original table name: pbxespecial
  */
 @Entity
-@Table(
-    name = "pbx_special_rule",
-    indexes = {
-        // 1. Rule Lookup: Filters by comm_location_id (or null) and direction.
-        // Important for PbxSpecialRuleLookupService.
-        @Index(name = "idx_pbx_rule_lookup", columnList = "comm_location_id, direction, active")
-    }
-)
+@Table(name = "pbx_special_rule")
 @Getter
 @Setter
 @NoArgsConstructor

@@ -1,4 +1,3 @@
-// src/main/java/com/infomedia/abacox/telephonypricing/db/entity/Trunk.java
 package com.infomedia.abacox.telephonypricing.db.entity;
 
 import com.infomedia.abacox.telephonypricing.db.entity.superclass.ActivableEntity;
@@ -12,16 +11,7 @@ import org.hibernate.annotations.ColumnDefault;
  * Original table name: celulink
  */
 @Entity
-@Table(
-    name = "trunk",
-    indexes = {
-        // 1. Name Lookup: TrunkLookupService queries by name (often UPPER case in SQL, but index helps standard match).
-        @Index(name = "idx_trunk_name", columnList = "name"),
-        
-        // 2. Location Scope: Often filters by comm_location_id (specific or global=0).
-        @Index(name = "idx_trunk_comm_loc", columnList = "comm_location_id")
-    }
-)
+@Table(name = "trunk")
 @Getter
 @Setter
 @NoArgsConstructor

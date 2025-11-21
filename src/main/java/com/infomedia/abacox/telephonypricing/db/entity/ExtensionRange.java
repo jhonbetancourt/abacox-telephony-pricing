@@ -1,4 +1,3 @@
-// src/main/java/com/infomedia/abacox/telephonypricing/db/entity/ExtensionRange.java
 package com.infomedia.abacox.telephonypricing.db.entity;
 
 import com.infomedia.abacox.telephonypricing.db.entity.superclass.ActivableEntity;
@@ -7,17 +6,12 @@ import lombok.*;
 import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.ColumnDefault;
 
+/**
+ * Entity representing extension ranges.
+ * Original table name: rangoext
+ */
 @Entity
-@Table(
-    name = "extension_range",
-    indexes = {
-        // Used in EmployeeLookupService::getExtensionRanges
-        @Index(name = "idx_ext_range_comm_loc_active", columnList = "comm_location_id, active"),
-        
-        // Used for range comparison logic
-        @Index(name = "idx_ext_range_vals", columnList = "range_start, range_end")
-    }
-)
+@Table(name = "extension_range")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -25,6 +19,10 @@ import org.hibernate.annotations.ColumnDefault;
 @SuperBuilder(toBuilder = true)
 public class ExtensionRange extends ActivableEntity {
 
+    /**
+     * Primary key for the extension range.
+     * Original field: RANGOEXT_ID
+     */
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "extension_range_id_seq")
     @SequenceGenerator(
@@ -36,10 +34,17 @@ public class ExtensionRange extends ActivableEntity {
     @Column(name = "id", nullable = false)
     private Long id;
 
+    /**
+     * ID of the communication location.
+     * Original field: RANGOEXT_COMUBICACION_ID
+     */
     @Column(name = "comm_location_id")
     private Long commLocationId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    /**
+     * Communication location relationship.
+     */
+    @ManyToOne
     @JoinColumn(
             name = "comm_location_id",
             insertable = false,
@@ -48,10 +53,17 @@ public class ExtensionRange extends ActivableEntity {
     )
     private CommunicationLocation commLocation;
 
+    /**
+     * ID of the subdivision.
+     * Original field: RANGOEXT_SUBDIRECCION_ID
+     */
     @Column(name = "subdivision_id")
     private Long subdivisionId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    /**
+     * Subdivision relationship.
+     */
+    @ManyToOne
     @JoinColumn(
             name = "subdivision_id",
             insertable = false,
@@ -60,22 +72,41 @@ public class ExtensionRange extends ActivableEntity {
     )
     private Subdivision subdivision;
 
+    /**
+     * Prefix for the extension range.
+     * Original field: RANGOEXT_PREFIJO
+     */
     @Column(name = "prefix", length = 250, nullable = false)
     @ColumnDefault("''")
     private String prefix;
 
+    /**
+     * Starting extension in the range.
+     * Original field: RANGOEXT_DESDE
+     */
     @Column(name = "range_start", length = 50, nullable = false)
     @ColumnDefault("0")
     private Long rangeStart;
 
+    /**
+     * Ending extension in the range.
+     * Original field: RANGOEXT_HASTA
+     */
     @Column(name = "range_end", length = 50, nullable = false)
     @ColumnDefault("0")
     private Long rangeEnd;
 
+    /**
+     * ID of the cost center.
+     * Original field: RANGOEXT_CENTROCOSTOS_ID
+     */
     @Column(name = "cost_center_id")
     private Long costCenterId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    /**
+     * Cost center relationship.
+     */
+    @ManyToOne
     @JoinColumn(
             name = "cost_center_id",
             insertable = false,
