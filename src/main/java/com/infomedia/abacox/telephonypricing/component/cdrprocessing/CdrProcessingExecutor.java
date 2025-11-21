@@ -7,9 +7,9 @@ import org.springframework.stereotype.Service;
 
 import java.io.InputStream;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 @Service
@@ -17,82 +17,104 @@ import java.util.concurrent.TimeUnit;
 @RequiredArgsConstructor
 public class CdrProcessingExecutor {
 
-    private final ExecutorService sequentialExecutor = Executors.newSingleThreadExecutor();
+    // CONSTANT: The max number of parallel files
+    private static final int MAX_THREADS = 4;
+
+    // CHANGED: Use ThreadPoolExecutor directly to access metrics (getActiveCount)
+    // We use a LinkedBlockingQueue but we will manually manage flow control in the Worker
+    private final ThreadPoolExecutor taskExecutor = new ThreadPoolExecutor(
+            MAX_THREADS, 
+            MAX_THREADS,
+            0L, TimeUnit.MILLISECONDS,
+            new LinkedBlockingQueue<>()
+    );
+    
     private final CdrRoutingService cdrRoutingService;
-    private final CdrProcessorService cdrProcessorService; // Added for direct access
+    private final CdrProcessorService cdrProcessorService;
     private final FailedCallRecordPersistenceService failedCallRecordPersistenceService;
 
-    public Future<?> submitCdrStreamProcessing(String filename, InputStream inputStream, Long plantTypeId) {
-        return submitCdrStreamProcessing(filename, inputStream, plantTypeId, false);
+    /**
+     * Calculates how many threads are currently idle.
+     * Use this to determine how many new files to fetch from the DB.
+     */
+    public int getAvailableSlots() {
+        // Active count is approximate, but sufficient for this logic.
+        int active = taskExecutor.getActiveCount();
+        // Also check the queue size. If there are tasks in the queue, we have 0 slots available.
+        int queued = taskExecutor.getQueue().size();
+        
+        if (queued > 0) {
+            return 0;
+        }
+        
+        int available = MAX_THREADS - active;
+        return Math.max(0, available);
     }
 
     public Future<?> submitCdrStreamProcessing(String filename, InputStream inputStream, Long plantTypeId, boolean forceProcess) {
         log.debug("Submitting CDR stream processing task for file: {}, PlantTypeID: {}, Force: {}", filename, plantTypeId, forceProcess);
-        return sequentialExecutor.submit(() -> {
+        return taskExecutor.submit(() -> {
             try {
                 cdrRoutingService.routeAndProcessCdrStreamInternal(filename, inputStream, plantTypeId, forceProcess);
             } catch (Exception e) {
-                log.debug("Uncaught exception during sequential execution of routeAndProcessCdrStream for file: {}", filename, e);
+                log.error("Uncaught exception during execution of routeAndProcessCdrStream for file: {}", filename, e);
                 CdrData streamErrorData = new CdrData();
                 streamErrorData.setRawCdrLine("STREAM_PROCESSING_FATAL_ERROR: " + filename);
                 failedCallRecordPersistenceService.quarantineRecord(streamErrorData, QuarantineErrorType.UNHANDLED_EXCEPTION,
-                        "Fatal error in sequential executor task: " + e.getMessage(), "SequentialExecutorTask", null);
+                        "Fatal error in executor task: " + e.getMessage(), "ExecutorTask", null);
             }
         });
     }
 
-    public Future<?> submitFileReprocessing(Long fileInfoId) {
-        return submitFileReprocessing(fileInfoId, true);
+    public void submitTask(Runnable task) {
+        taskExecutor.submit(task);
     }
 
     public Future<?> submitFileReprocessing(Long fileInfoId, boolean cleanupExistingRecords) {
-        log.debug("Submitting file reprocessing task for FileInfo ID: {}, Cleanup: {}", fileInfoId, cleanupExistingRecords);
-        return sequentialExecutor.submit(() -> {
+        return taskExecutor.submit(() -> {
             try {
                 cdrRoutingService.reprocessFileInfo(fileInfoId, cleanupExistingRecords);
             } catch (Exception e) {
-                log.debug("Uncaught exception during sequential execution of reprocessFile for FileInfo ID: {}", fileInfoId, e);
+                log.error("Uncaught exception during execution of reprocessFile for FileInfo ID: {}", fileInfoId, e);
             }
         });
     }
 
     public Future<?> submitCallRecordReprocessing(Long callRecordId) {
-        log.debug("Submitting CallRecord reprocessing task for ID: {}", callRecordId);
-        return sequentialExecutor.submit(() -> {
+        return taskExecutor.submit(() -> {
             try {
                 cdrProcessorService.reprocessCallRecord(callRecordId);
             } catch (Exception e) {
-                log.debug("Uncaught exception during sequential execution of reprocessCallRecord for ID: {}", callRecordId, e);
+                log.error("Uncaught exception during execution of reprocessCallRecord for ID: {}", callRecordId, e);
             }
         });
     }
 
     public Future<?> submitFailedCallRecordReprocessing(Long failedCallRecordId) {
-        log.debug("Submitting FailedCallRecord reprocessing task for ID: {}", failedCallRecordId);
-        return sequentialExecutor.submit(() -> {
+        return taskExecutor.submit(() -> {
             try {
                 cdrProcessorService.reprocessFailedCallRecord(failedCallRecordId);
             } catch (Exception e) {
-                log.debug("Uncaught exception during sequential execution of reprocessFailedCallRecord for ID: {}", failedCallRecordId, e);
+                log.error("Uncaught exception during execution of reprocessFailedCallRecord for ID: {}", failedCallRecordId, e);
             }
         });
     }
 
     @PreDestroy
     public void shutdownExecutor() {
-        log.debug("Shutting down CDR Routing sequential executor...");
-        sequentialExecutor.shutdown();
+        log.debug("Shutting down CDR Processing executor...");
+        taskExecutor.shutdown();
         try {
-            if (!sequentialExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
-                log.debug("CDR Routing executor did not terminate in the specified time.");
-                List<Runnable> droppedTasks = sequentialExecutor.shutdownNow();
-                log.debug("CDR Routing executor was forcefully shut down. {} tasks were dropped.", droppedTasks.size());
+            if (!taskExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
+                log.debug("CDR Processing executor did not terminate in the specified time.");
+                List<Runnable> droppedTasks = taskExecutor.shutdownNow();
+                log.debug("CDR Processing executor was forcefully shut down. {} tasks were dropped.", droppedTasks.size());
             }
         } catch (InterruptedException e) {
-            log.debug("CDR Routing executor shutdown interrupted.", e);
-            sequentialExecutor.shutdownNow();
+            log.debug("CDR Processing executor shutdown interrupted.", e);
+            taskExecutor.shutdownNow();
             Thread.currentThread().interrupt();
         }
-        log.debug("CDR Routing sequential executor shut down.");
+        log.debug("CDR Processing executor shut down.");
     }
 }

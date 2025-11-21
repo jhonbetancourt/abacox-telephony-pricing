@@ -235,7 +235,7 @@ public class CdrController {
         log.info("Received request to reprocess FileInfo IDs: {}", fileInfoIds);
 
         for (Long fileInfoId : fileInfoIds) {
-            cdrProcessingExecutor.submitFileReprocessing(fileInfoId);
+            cdrProcessingExecutor.submitFileReprocessing(fileInfoId, true);
         }
         return new MessageResponse(String.format("Reprocessing task submitted for %d file(s).", fileInfoIds.size()));
     }

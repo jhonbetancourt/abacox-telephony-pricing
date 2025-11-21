@@ -8,7 +8,7 @@ import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-import java.util.Optional;
+import java.util.List;
 
 @Component
 @Log4j2
@@ -17,42 +17,44 @@ public class CdrFileProcessorWorker {
 
     private final FileInfoPersistenceService fileInfoPersistenceService;
     private final CdrRoutingService cdrRoutingService;
+    private final CdrProcessingExecutor cdrProcessingExecutor;
 
-    /**
-     * This scheduled method acts as a trigger for the processing loop.
-     * It will continuously process all available pending files sequentially until the queue is empty.
-     * The fixedDelay now represents the idle polling interval when no work is found.
-     */
-    @Scheduled(fixedDelay = 5000, initialDelay = 5000)
+    @Scheduled(fixedDelay = 2000, initialDelay = 5000)
     public void processPendingFiles() {
-        log.trace("Worker triggered. Checking for pending files...");
+        
+        // 1. Check how many slots are open in the thread pool
+        int availableSlots = cdrProcessingExecutor.getAvailableSlots();
 
-        // Loop continuously until no more pending files are found
-        while (true) {
-            Optional<FileInfo> fileToProcessOpt = fileInfoPersistenceService.findAndLockPendingFile();
+        // 2. If system is busy, skip this cycle entirely. 
+        // This prevents memory buildup.
+        if (availableSlots <= 0) {
+            log.trace("Thread pool is full (or has queued items). Skipping DB fetch this cycle.");
+            return;
+        }
 
-            if (fileToProcessOpt.isEmpty()) {
-                // No more pending files, break the loop and wait for the next schedule
-                log.trace("No pending files found. Worker going idle.");
-                break;
-            }
+        log.debug("Thread pool has {} open slots. Fetching pending files...", availableSlots);
 
-            FileInfo fileInfo = fileToProcessOpt.get();
-            log.info("Worker picked up file for processing: ID={}, Name={}", fileInfo.getId(), fileInfo.getFilename());
+        // 3. Only fetch exactly what we can handle immediately
+        List<FileInfo> filesToProcess = fileInfoPersistenceService.findAndLockPendingFiles(availableSlots);
 
-            try {
-                cdrRoutingService.processFileInfo(fileInfo.getId());
+        if (filesToProcess.isEmpty()) {
+            return;
+        }
 
-                // If processFileInfo completes without throwing an exception, we mark it as COMPLETED.
-                // The internal logic of processFileInfo already handles logging the outcome.
-                fileInfoPersistenceService.updateStatus(fileInfo.getId(), FileInfo.ProcessingStatus.COMPLETED);
-                log.info("Successfully processed and marked file ID {} as COMPLETED.", fileInfo.getId());
+        log.info("Worker fetched batch of {} files. Submitting to executor...", filesToProcess.size());
 
-            } catch (Exception e) {
-                // This catch block handles unexpected, critical failures in the routing service itself.
-                log.error("Critical failure while processing file ID: {}. Marking as FAILED.", fileInfo.getId(), e);
-                fileInfoPersistenceService.updateStatus(fileInfo.getId(), FileInfo.ProcessingStatus.FAILED);
-            }
+        for (FileInfo fileInfo : filesToProcess) {
+            cdrProcessingExecutor.submitTask(() -> {
+                log.info("Worker starting processing for file ID={}, Name={}", fileInfo.getId(), fileInfo.getFilename());
+                try {
+                    cdrRoutingService.processFileInfo(fileInfo.getId());
+                    fileInfoPersistenceService.updateStatus(fileInfo.getId(), FileInfo.ProcessingStatus.COMPLETED);
+                    log.info("Successfully processed file ID {}", fileInfo.getId());
+                } catch (Exception e) {
+                    log.error("Critical failure processing file ID: {}. Marking FAILED.", fileInfo.getId(), e);
+                    fileInfoPersistenceService.updateStatus(fileInfo.getId(), FileInfo.ProcessingStatus.FAILED);
+                }
+            });
         }
     }
 
@@ -63,7 +65,7 @@ public class CdrFileProcessorWorker {
 
         @EventListener(ContextRefreshedEvent.class)
         public void onApplicationEvent() {
-            log.info("Application started. Checking for files to recover...");
+            log.info("Application started. Recovering stalled files...");
             fileInfoPersistenceService.resetInProgressToPending();
         }
     }
