@@ -43,7 +43,7 @@ import java.time.LocalDateTime;
         @Index(name = "idx_call_record_file_info", columnList = "file_info_id"),
 
         // 8. Duplicate Check
-        @Index(name = "idx_call_record_ctl_hash", columnList = "ctl_hash", unique = true)
+        @Index(name = "idx_call_record_ctl_hash", columnList = "ctl_hash")
     }
 )
 @Getter
@@ -67,7 +67,7 @@ public class CallRecord extends AuditedEntity {
     @Column(name = "comm_location_id")
     private Long commLocationId;
     
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne
     @JoinColumn(name = "comm_location_id", insertable = false, updatable = false, foreignKey = @ForeignKey(name = "fk_call_record_comm_location"))
     private CommunicationLocation commLocation;
 
@@ -77,7 +77,7 @@ public class CallRecord extends AuditedEntity {
     @Column(name = "operator_id")
     private Long operatorId;
     
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne
     @JoinColumn(name = "operator_id", insertable = false, updatable = false, foreignKey = @ForeignKey(name = "fk_call_record_operator"))
     private Operator operator;
 
@@ -92,7 +92,7 @@ public class CallRecord extends AuditedEntity {
     @Column(name = "indicator_id")
     private Long indicatorId;
     
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne
     @JoinColumn(name = "indicator_id", insertable = false, updatable = false, foreignKey = @ForeignKey(name = "fk_call_record_indicator"))
     private Indicator indicator;
 
@@ -111,7 +111,7 @@ public class CallRecord extends AuditedEntity {
     @Column(name = "telephony_type_id")
     private Long telephonyTypeId;
     
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne
     @JoinColumn(name = "telephony_type_id", insertable = false, updatable = false, foreignKey = @ForeignKey(name = "fk_call_record_telephony_type"))
     private TelephonyType telephonyType;
 
@@ -142,7 +142,7 @@ public class CallRecord extends AuditedEntity {
     @Column(name = "employee_id")
     private Long employeeId;
     
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne
     @JoinColumn(name = "employee_id", insertable = false, updatable = false, foreignKey = @ForeignKey(name = "fk_call_record_employee"))
     private Employee employee;
 
@@ -160,14 +160,14 @@ public class CallRecord extends AuditedEntity {
     @Column(name = "destination_employee_id")
     private Long destinationEmployeeId;
     
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne
     @JoinColumn(name = "destination_employee_id", insertable = false, updatable = false, foreignKey = @ForeignKey(name = "fk_call_record_destination_employee"))
     private Employee destinationEmployee;
 
     @Column(name = "file_info_id")
     private Long fileInfoId;
     
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne
     @JoinColumn(name = "file_info_id", insertable = false, updatable = false, foreignKey = @ForeignKey(name = "fk_call_record_file_info"))
     private FileInfo fileInfo;
 

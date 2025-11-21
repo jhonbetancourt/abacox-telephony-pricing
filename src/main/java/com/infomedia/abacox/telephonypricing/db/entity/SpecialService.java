@@ -31,7 +31,7 @@ public class SpecialService extends ActivableEntity {
     @Column(name = "indicator_id")
     private Long indicatorId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne
     @JoinColumn(name = "indicator_id", insertable = false, updatable = false, foreignKey = @ForeignKey(name = "fk_special_service_indicator"))
     private Indicator indicator;
 
@@ -58,7 +58,7 @@ public class SpecialService extends ActivableEntity {
     @Column(name = "origin_country_id")
     private Long originCountryId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne
     @JoinColumn(name = "origin_country_id", insertable = false, updatable = false, foreignKey = @ForeignKey(name = "fk_special_service_origin_country"))
     private OriginCountry originCountry;
 }

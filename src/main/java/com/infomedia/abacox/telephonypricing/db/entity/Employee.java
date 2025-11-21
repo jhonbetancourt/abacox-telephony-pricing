@@ -54,7 +54,7 @@ public class Employee extends ActivableEntity {
     @Column(name = "subdivision_id")
     private Long subdivisionId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne
     @JoinColumn(
             name = "subdivision_id",
             insertable = false,
@@ -66,7 +66,7 @@ public class Employee extends ActivableEntity {
     @Column(name = "cost_center_id")
     private Long costCenterId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne
     @JoinColumn(
             name = "cost_center_id",
             insertable = false,
@@ -86,7 +86,7 @@ public class Employee extends ActivableEntity {
     @Column(name = "communication_location_id")
     private Long communicationLocationId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne
     @JoinColumn(
             name = "communication_location_id",
             insertable = false,
@@ -98,7 +98,7 @@ public class Employee extends ActivableEntity {
     @Column(name = "job_position_id")
     private Long jobPositionId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne
     @JoinColumn(
             name = "job_position_id",
             insertable = false,

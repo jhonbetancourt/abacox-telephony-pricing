@@ -34,7 +34,7 @@ public class TrunkRate extends ActivableEntity {
     @Column(name = "trunk_id")
     private Long trunkId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne
     @JoinColumn(name = "trunk_id", insertable = false, updatable = false, foreignKey = @ForeignKey(name = "fk_trunk_rate_trunk"))
     private Trunk trunk;
 
@@ -49,14 +49,14 @@ public class TrunkRate extends ActivableEntity {
     @Column(name = "operator_id")
     private Long operatorId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne
     @JoinColumn(name = "operator_id", insertable = false, updatable = false, foreignKey = @ForeignKey(name = "fk_trunk_rate_operator"))
     private Operator operator;
 
     @Column(name = "telephony_type_id")
     private Long telephonyTypeId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne
     @JoinColumn(name = "telephony_type_id", insertable = false, updatable = false, foreignKey = @ForeignKey(name = "fk_trunk_rate_telephony_type"))
     private TelephonyType telephonyType;
 

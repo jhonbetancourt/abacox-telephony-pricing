@@ -45,7 +45,7 @@ public class CommunicationLocation extends ActivableEntity {
     @Column(name = "plant_type_id")
     private Long plantTypeId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne
     @JoinColumn(
             name = "plant_type_id", 
             insertable = false, 
@@ -57,7 +57,7 @@ public class CommunicationLocation extends ActivableEntity {
     @Column(name = "indicator_id")
     private Long indicatorId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne
     @JoinColumn(
             name = "indicator_id", 
             insertable = false, 

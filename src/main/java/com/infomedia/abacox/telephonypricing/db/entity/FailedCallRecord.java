@@ -56,7 +56,7 @@ public class FailedCallRecord extends AuditedEntity {
     @Column(name = "file_info_id")
     private Long fileInfoId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne
     @JoinColumn(
             name = "file_info_id",
             insertable = false,
@@ -68,7 +68,7 @@ public class FailedCallRecord extends AuditedEntity {
     @Column(name = "comm_location_id")
     private Long commLocationId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne
     @JoinColumn(
             name = "comm_location_id",
             insertable = false,

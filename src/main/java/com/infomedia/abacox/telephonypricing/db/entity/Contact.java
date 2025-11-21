@@ -35,14 +35,14 @@ public class Contact extends ActivableEntity {
     @Column(name = "employee_id")
     private Long employeeId;
     
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne
     @JoinColumn(name = "employee_id", insertable = false, updatable = false, foreignKey = @ForeignKey(name = "fk_contact_employee"))
     private Employee employee;
 
     @Column(name = "company_id")
     private Long companyId;
     
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne
     @JoinColumn(name = "company_id", insertable = false, updatable = false, foreignKey = @ForeignKey(name = "fk_contact_company"))
     private Company company;
 
@@ -60,7 +60,7 @@ public class Contact extends ActivableEntity {
     @Column(name = "indicator_id")
     private Long indicatorId;
     
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne
     @JoinColumn(name = "indicator_id", insertable = false, updatable = false, foreignKey = @ForeignKey(name = "fk_contact_indicator"))
     private Indicator indicator;
 }

@@ -36,7 +36,7 @@ public class Subdivision extends ActivableEntity {
     @Column(name = "parent_subdivision_id")
     private Long parentSubdivisionId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne
     @JoinColumn(
             name = "parent_subdivision_id", 
             insertable = false, 

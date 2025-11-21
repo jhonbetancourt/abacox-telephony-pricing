@@ -40,7 +40,7 @@ public class Series extends ActivableEntity {
     @Column(name = "indicator_id")
     private Long indicatorId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne
     @JoinColumn(
             name = "indicator_id", 
             insertable = false, 

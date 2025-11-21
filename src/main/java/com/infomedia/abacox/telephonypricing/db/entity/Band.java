@@ -32,7 +32,7 @@ public class Band extends ActivableEntity {
     @Column(name = "prefix_id")
     private Long prefixId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne
     @JoinColumn(name = "prefix_id", insertable = false, updatable = false, foreignKey = @ForeignKey(name = "fk_band_prefix"))
     private Prefix prefix;
 
@@ -47,7 +47,7 @@ public class Band extends ActivableEntity {
     @Column(name = "origin_indicator_id")
     private Long originIndicatorId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne
     @JoinColumn(name = "origin_indicator_id", insertable = false, updatable = false, foreignKey = @ForeignKey(name = "fk_band_origin_indicator"))
     private Indicator originIndicator;
 

@@ -32,14 +32,14 @@ public class BandIndicator extends AuditedEntity {
     @Column(name = "band_id")
     private Long bandId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne
     @JoinColumn(name = "band_id", insertable = false, updatable = false, foreignKey = @ForeignKey(name = "fk_band_indicator_band"))
     private Band band;
 
     @Column(name = "indicator_id")
     private Long indicatorId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne
     @JoinColumn(name = "indicator_id", insertable = false, updatable = false, foreignKey = @ForeignKey(name = "fk_band_indicator_indicator"))
     private Indicator indicator;
 }

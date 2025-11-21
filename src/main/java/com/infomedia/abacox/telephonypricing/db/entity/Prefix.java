@@ -42,7 +42,7 @@ public class Prefix extends ActivableEntity {
     @Column(name = "operator_id")
     private Long operatorId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne
     @JoinColumn(
             name = "operator_id", 
             insertable = false, 
@@ -54,7 +54,7 @@ public class Prefix extends ActivableEntity {
     @Column(name = "telephony_type_id")
     private Long telephonyTypeId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne
     @JoinColumn(
             name = "telephony_type_id",
             insertable = false, 

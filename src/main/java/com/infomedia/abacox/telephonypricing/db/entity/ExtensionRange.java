@@ -39,7 +39,7 @@ public class ExtensionRange extends ActivableEntity {
     @Column(name = "comm_location_id")
     private Long commLocationId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne
     @JoinColumn(
             name = "comm_location_id",
             insertable = false,
@@ -51,7 +51,7 @@ public class ExtensionRange extends ActivableEntity {
     @Column(name = "subdivision_id")
     private Long subdivisionId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne
     @JoinColumn(
             name = "subdivision_id",
             insertable = false,
@@ -75,7 +75,7 @@ public class ExtensionRange extends ActivableEntity {
     @Column(name = "cost_center_id")
     private Long costCenterId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne
     @JoinColumn(
             name = "cost_center_id",
             insertable = false,

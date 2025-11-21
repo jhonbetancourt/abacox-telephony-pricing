@@ -46,7 +46,7 @@ public class TrunkRule extends ActivableEntity {
     @Column(name = "telephony_type_id")
     private Long telephonyTypeId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne
     @JoinColumn(
             name = "telephony_type_id",
             insertable = false,
@@ -62,7 +62,7 @@ public class TrunkRule extends ActivableEntity {
     @Column(name = "trunk_id")
     private Long trunkId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne
     @JoinColumn(
             name = "trunk_id",
             insertable = false,
@@ -75,7 +75,7 @@ public class TrunkRule extends ActivableEntity {
     @ColumnDefault("0")
     private Long newOperatorId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne
     @JoinColumn(
             name = "new_operator_id",
             insertable = false,
@@ -88,7 +88,7 @@ public class TrunkRule extends ActivableEntity {
     @ColumnDefault("0")
     private Long newTelephonyTypeId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne
     @JoinColumn(
             name = "new_telephony_type_id",
             insertable = false,
@@ -104,7 +104,7 @@ public class TrunkRule extends ActivableEntity {
     @Column(name = "origin_indicator_id")
     private Long originIndicatorId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne
     @JoinColumn(
             name = "origin_indicator_id",
             insertable = false,

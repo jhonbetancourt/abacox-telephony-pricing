@@ -38,14 +38,14 @@ public class TelephonyTypeConfig extends ActivableEntity {
     @Column(name = "telephony_type_id")
     private Long telephonyTypeId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne
     @JoinColumn(name = "telephony_type_id", insertable = false, updatable = false, foreignKey = @ForeignKey(name = "fk_telephony_type_config_telephony_type"))
     private TelephonyType telephonyType;
 
     @Column(name = "origin_country_id")
     private Long originCountryId;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne
     @JoinColumn(name = "origin_country_id", insertable = false, updatable = false, foreignKey = @ForeignKey(name = "fk_telephony_type_config_origin_country"))
     private OriginCountry originCountry;
 }
