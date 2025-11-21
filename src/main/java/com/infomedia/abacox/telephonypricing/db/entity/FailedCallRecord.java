@@ -1,3 +1,4 @@
+// src/main/java/com/infomedia/abacox/telephonypricing/db/entity/FailedCallRecord.java
 package com.infomedia.abacox.telephonypricing.db.entity;
 
 import com.infomedia.abacox.telephonypricing.db.entity.superclass.AuditedEntity;
@@ -6,7 +7,15 @@ import lombok.*;
 import lombok.experimental.SuperBuilder;
 
 @Entity
-@Table(name = "failed_call_record")
+@Table(
+    name = "failed_call_record",
+    indexes = {
+        // Optimizes ProcessingFailureReportQueries
+        @Index(name = "idx_failed_call_created", columnList = "created_date"),
+        @Index(name = "idx_failed_call_error", columnList = "error_type"),
+        @Index(name = "idx_failed_call_comm_loc", columnList = "comm_location_id")
+    }
+)
 @Getter
 @Setter
 @NoArgsConstructor
@@ -30,24 +39,24 @@ public class FailedCallRecord extends AuditedEntity {
 
     @ToString.Exclude
     @Column(name = "cdr_string", columnDefinition = "TEXT")
-    private String cdrString; // The raw CDR line that failed
+    private String cdrString;
 
     @Column(name = "error_type", length = 50)
-    private String errorType; // e.g., PARSING_ERROR, ENRICHMENT_ERROR, DB_ERROR
+    private String errorType;
 
     @Column(name = "error_message", columnDefinition = "TEXT")
-    private String errorMessage; // Detailed error message
+    private String errorMessage;
 
     @Column(name = "original_call_record_id")
-    private Long originalCallRecordId; // If failure happened during reprocessing/update
+    private Long originalCallRecordId;
 
     @Column(name = "processing_step", length = 100)
-    private String processingStep; // e.g., "Parsing", "LookupEmployee", "CalculateRate"
+    private String processingStep;
 
     @Column(name = "file_info_id")
     private Long fileInfoId;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(
             name = "file_info_id",
             insertable = false,
@@ -59,7 +68,7 @@ public class FailedCallRecord extends AuditedEntity {
     @Column(name = "comm_location_id")
     private Long commLocationId;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(
             name = "comm_location_id",
             insertable = false,

@@ -1,3 +1,4 @@
+// src/main/java/com/infomedia/abacox/telephonypricing/db/entity/CommunicationLocation.java
 package com.infomedia.abacox.telephonypricing.db.entity;
 
 import com.infomedia.abacox.telephonypricing.db.entity.superclass.ActivableEntity;
@@ -9,23 +10,23 @@ import java.time.LocalDateTime;
 import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.ColumnDefault;
 
-/**
- * Entity representing communication location/installation details.
- * Original table name: COMUBICACION
- */
 @Entity
-@Table(name = "communication_location")
+@Table(
+    name = "communication_location",
+    indexes = {
+        // Critical for findActiveCommLocationsByPlantType
+        @Index(name = "idx_comm_loc_plant_active", columnList = "plant_type_id, active"),
+        
+        // Critical for general lookups in reports
+        @Index(name = "idx_comm_loc_indicator", columnList = "indicator_id")
+    }
+)
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @SuperBuilder(toBuilder = true)
 public class CommunicationLocation extends ActivableEntity {
-
-    /**
-     * Primary key for the communication location.
-     * Original field: COMUBICACION_ID
-     */
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "communication_location_id_seq")
     @SequenceGenerator(
@@ -37,25 +38,14 @@ public class CommunicationLocation extends ActivableEntity {
     @Column(name = "id", nullable = false)
     private Long id;
 
-    /**
-     * Directory/location name.
-     * Original field: COMUBICACION_DIRECTORIO
-     */
     @Column(name = "directory", length = 80, nullable = false)
     @ColumnDefault("''")
     private String directory;
 
-    /**
-     * ID of the plant type.
-     * Original field: COMUBICACION_TIPOPLANTA_ID
-     */
     @Column(name = "plant_type_id")
     private Long plantTypeId;
 
-    /**
-     * Plant type relationship.
-     */
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(
             name = "plant_type_id", 
             insertable = false, 
@@ -64,17 +54,10 @@ public class CommunicationLocation extends ActivableEntity {
     )
     private PlantType plantType;
 
-    /**
-     * ID of the indicator/area code.
-     * Original field: COMUBICACION_INDICATIVO_ID
-     */
     @Column(name = "indicator_id")
     private Long indicatorId;
 
-    /**
-     * Indicator relationship.
-     */
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(
             name = "indicator_id", 
             insertable = false, 
@@ -83,18 +66,10 @@ public class CommunicationLocation extends ActivableEntity {
     )
     private Indicator indicator;
 
-    /**
-     * PBX prefix.
-     * Original field: COMUBICACION_PREFIJOPBX
-     */
     @Column(name = "pbx_prefix", length = 32, nullable = false)
     @ColumnDefault("''")
     private String pbxPrefix;
 
-    /**
-     * Serial number.
-     * Original field: COMUBICACION_SERIAL
-     */
     @Column(name = "serial", length = 200, nullable = false)
     @ColumnDefault("''")
     private String serial;

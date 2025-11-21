@@ -1,3 +1,4 @@
+// src/main/java/com/infomedia/abacox/telephonypricing/db/entity/SpecialRateValue.java
 package com.infomedia.abacox.telephonypricing.db.entity;
 
 import com.infomedia.abacox.telephonypricing.db.entity.superclass.ActivableEntity;
@@ -14,7 +15,14 @@ import java.time.LocalDateTime;
  * Original table name: valorespecial
  */
 @Entity
-@Table(name = "special_rate_value")
+@Table(
+    name = "special_rate_value",
+    indexes = {
+        // 1. Rate Lookup: The query in SpecialRateValueLookupService filters heavily on
+        // Date Range + Telephony Type + Operator + Band + Origin Indicator.
+        @Index(name = "idx_special_rate_lookup", columnList = "valid_from, valid_to, telephony_type_id, operator_id, band_id, origin_indicator_id")
+    }
+)
 @Getter
 @Setter
 @NoArgsConstructor
