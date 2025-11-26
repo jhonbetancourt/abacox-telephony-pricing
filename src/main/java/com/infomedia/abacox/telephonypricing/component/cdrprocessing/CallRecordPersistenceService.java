@@ -1,67 +1,88 @@
-// File: com/infomedia/abacox/telephonypricing/component/cdrprocessing/CallRecordPersistenceService.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
-import com.infomedia.abacox.telephonypricing.component.utils.Compression7zUtil;
+import com.infomedia.abacox.telephonypricing.component.utils.CompressionZipUtil;
 import com.infomedia.abacox.telephonypricing.db.entity.CallRecord;
 import com.infomedia.abacox.telephonypricing.db.entity.CommunicationLocation;
 import jakarta.persistence.EntityManager;
-import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.NoResultException;
+import jakarta.persistence.PersistenceContext;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 @Service
 @Log4j2
+@RequiredArgsConstructor
 public class CallRecordPersistenceService {
 
     @PersistenceContext
     private EntityManager entityManager;
-    private final FailedCallRecordPersistenceService failedCallRecordPersistenceService;
     private final CdrConfigService cdrConfigService;
 
-    public CallRecordPersistenceService(FailedCallRecordPersistenceService failedCallRecordPersistenceService, CdrConfigService cdrConfigService) {
-        this.failedCallRecordPersistenceService = failedCallRecordPersistenceService;
-        this.cdrConfigService = cdrConfigService;
+    /**
+     * Batch lookup for duplicate checking.
+     * Efficiently checks if a list of hashes exists in the DB using a single query.
+     */
+    @Transactional(readOnly = true)
+    public Set<Long> findExistingHashes(List<Long> hashes) {
+        if (hashes == null || hashes.isEmpty()) return Collections.emptySet();
+
+        List<Long> found = entityManager.createQuery(
+                        "SELECT cr.ctlHash FROM CallRecord cr WHERE cr.ctlHash IN :hashes", Long.class)
+                .setParameter("hashes", hashes)
+                .getResultList();
+
+        return new HashSet<>(found);
     }
 
+    /**
+     * Creates a CallRecord entity in memory from the DTO.
+     * Does NOT persist to DB. Used by the BatchWorker.
+     */
+    public CallRecord createEntityFromDto(CdrData cdrData, CommunicationLocation commLocation) {
+        CallRecord callRecord = new CallRecord();
+        mapCdrDataToCallRecord(cdrData, callRecord, commLocation);
+        return callRecord;
+    }
+
+    /**
+     * Synchronous persistence method.
+     * Used ONLY for Admin Reprocessing or specific synchronous flows.
+     * Performs inline duplicate check and inline compression.
+     */
     @Transactional
     public CallRecord saveOrUpdateCallRecord(CdrData cdrData, CommunicationLocation commLocation) {
         if (cdrData.isMarkedForQuarantine()) {
-            log.debug("CDR marked for quarantine, not saving to CallRecord: {}", cdrData.getCtlHash());
             return null;
         }
 
         Long cdrHash = cdrData.getCtlHash();
-        log.debug("Generated CDR Hash: {}", cdrHash);
+        
+        // Quick duplicate check (single query)
+        List<Long> existing = entityManager.createQuery("SELECT cr.id FROM CallRecord cr WHERE cr.ctlHash = :hash", Long.class)
+                .setParameter("hash", cdrHash)
+                .getResultList();
 
-
-        CallRecord existingRecord = findByCtlHash(cdrHash);
-        if (existingRecord != null) {
-            log.debug("Duplicate CDR detected based on hash {}. Original ID: {}. Ignoring.",
-                    cdrHash, existingRecord.getId());
-            // As per request, do not quarantine, just ignore.
-            return existingRecord;
+        if (!existing.isEmpty()) {
+            log.debug("Duplicate CDR detected during sync save. Hash: {}", cdrHash);
+            return entityManager.find(CallRecord.class, existing.get(0));
         }
 
-        CallRecord callRecord = new CallRecord();
-        mapCdrDataToCallRecord(cdrData, callRecord, commLocation);
+        CallRecord callRecord = createEntityFromDto(cdrData, commLocation);
 
         try {
-            log.debug("Persisting CallRecord: {}", callRecord);
             entityManager.persist(callRecord);
-            log.debug("Saved new CallRecord with ID: {} for CDR line: {}", callRecord.getId(), cdrData.getCtlHash());
             return callRecord;
         } catch (Exception e) {
-            log.debug("Database error while saving CallRecord for CDR: {}. Error: {}", cdrData.getCtlHash(), e.getMessage(), e);
-            failedCallRecordPersistenceService.quarantineRecord(cdrData,
-                    QuarantineErrorType.DB_INSERT_FAILED,
-                    "Database error: " + e.getMessage(),
-                    "saveOrUpdateCallRecord_Persist",
-                    null);
+            log.error("Database error while saving CallRecord during sync process: {}", e.getMessage());
             return null;
         }
     }
@@ -87,25 +108,29 @@ public class CallRecordPersistenceService {
         return deletedCount;
     }
 
-
+    /**
+     * Maps fields from CdrData DTO to CallRecord Entity.
+     * Handles compression logic:
+     * 1. If preCompressedData exists (Batch flow), uses it directly.
+     * 2. If not (Sync flow), compresses the raw string inline.
+     */
     public void mapCdrDataToCallRecord(CdrData cdrData, CallRecord callRecord, CommunicationLocation commLocation) {
 
-        callRecord.setDial(cdrData.getEffectiveDestinationNumber() != null ? cdrData.getEffectiveDestinationNumber().substring(0, Math.min(cdrData.getEffectiveDestinationNumber().length(), 50)) : "");
-        callRecord.setDestinationPhone(cdrData.getOriginalFinalCalledPartyNumber() != null ? cdrData.getOriginalFinalCalledPartyNumber().substring(0, Math.min(cdrData.getOriginalFinalCalledPartyNumber().length(), 50)) : "");
+        callRecord.setDial(truncate(cdrData.getEffectiveDestinationNumber(), 50));
+        callRecord.setDestinationPhone(truncate(cdrData.getOriginalFinalCalledPartyNumber(), 50));
         callRecord.setCommLocationId(commLocation.getId());
 
         LocalDateTime serviceDateUtc = cdrData.getDateTimeOrigination();
         if (serviceDateUtc != null) {
             LocalDateTime serviceDateInTargetZone = DateTimeUtil.convertToZone(serviceDateUtc, cdrConfigService.getTargetDatabaseZoneId());
             callRecord.setServiceDate(serviceDateInTargetZone);
-            log.trace("ServiceDate UTC: {} -> TargetZone ({}): {}", serviceDateUtc, cdrConfigService.getTargetDatabaseZoneId(), serviceDateInTargetZone);
         } else {
             callRecord.setServiceDate(null);
         }
 
         callRecord.setOperatorId(cdrData.getOperatorId());
-        callRecord.setEmployeeExtension(cdrData.getCallingPartyNumber() != null ? cdrData.getCallingPartyNumber().substring(0, Math.min(cdrData.getCallingPartyNumber().length(), 50)) : "");
-        callRecord.setEmployeeAuthCode(cdrData.getAuthCodeDescription() != null ? cdrData.getAuthCodeDescription().substring(0, Math.min(cdrData.getAuthCodeDescription().length(), 50)) : "");
+        callRecord.setEmployeeExtension(truncate(cdrData.getCallingPartyNumber(), 50));
+        callRecord.setEmployeeAuthCode(truncate(cdrData.getAuthCodeDescription(), 50));
         callRecord.setIndicatorId(cdrData.getIndicatorId());
         callRecord.setDuration(cdrData.getDurationSeconds());
         callRecord.setRingCount(cdrData.getRingingTimeSeconds());
@@ -114,28 +139,39 @@ public class CallRecordPersistenceService {
         callRecord.setPricePerMinute(cdrData.getPricePerMinute());
         callRecord.setInitialPrice(cdrData.getInitialPricePerMinute());
         callRecord.setIsIncoming(cdrData.getCallDirection() == CallDirection.INCOMING);
-        callRecord.setTrunk(cdrData.getDestDeviceName() != null ? cdrData.getDestDeviceName().substring(0, Math.min(cdrData.getDestDeviceName().length(), 50)) : "");
-        callRecord.setInitialTrunk(cdrData.getOrigDeviceName() != null ? cdrData.getOrigDeviceName().substring(0, Math.min(cdrData.getOrigDeviceName().length(), 50)) : "");
+        callRecord.setTrunk(truncate(cdrData.getDestDeviceName(), 50));
+        callRecord.setInitialTrunk(truncate(cdrData.getOrigDeviceName(), 50));
         callRecord.setEmployeeId(cdrData.getEmployeeId());
-        callRecord.setEmployeeTransfer(cdrData.getEmployeeTransferExtension() != null ? cdrData.getEmployeeTransferExtension().substring(0, Math.min(cdrData.getEmployeeTransferExtension().length(), 50)) : "");
-        callRecord.setTransferCause(cdrData.getTransferCause().getValue());
-        callRecord.setAssignmentCause(cdrData.getAssignmentCause().getValue());
+        callRecord.setEmployeeTransfer(truncate(cdrData.getEmployeeTransferExtension(), 50));
+        
+        if (cdrData.getTransferCause() != null) callRecord.setTransferCause(cdrData.getTransferCause().getValue());
+        if (cdrData.getAssignmentCause() != null) callRecord.setAssignmentCause(cdrData.getAssignmentCause().getValue());
+        
         callRecord.setDestinationEmployeeId(cdrData.getDestinationEmployeeId());
+        
         if (cdrData.getFileInfo() != null) {
             callRecord.setFileInfoId(cdrData.getFileInfo().getId().longValue());
         }
 
-        // Compress the CDR string before saving
-        try {
-            byte[] compressedCdr = Compression7zUtil.compressString(cdrData.getRawCdrLine());
-            callRecord.setCdrString(compressedCdr);
-            log.trace("Compressed CDR string from {} to {} bytes",
-                    cdrData.getRawCdrLine().length(), compressedCdr.length);
-        } catch (IOException e) {
-            log.warn("Failed to compress CDR string for hash {}: {}.",
-                    cdrData.getCtlHash(), e.getMessage());
+        // BINARY DATA HANDLING
+        // Priority 1: Use batch-compressed data (CPU heavy work done in parallel worker)
+        if (cdrData.getPreCompressedData() != null) {
+            callRecord.setCdrString(cdrData.getPreCompressedData());
+        } else {
+            // Priority 2: Fallback for synchronous reprocessing flows
+            try {
+                byte[] compressedCdr = CompressionZipUtil.compressString(cdrData.getRawCdrLine());
+                callRecord.setCdrString(compressedCdr);
+            } catch (IOException e) {
+                log.warn("Failed to compress CDR string inline for hash {}: {}", cdrData.getCtlHash(), e.getMessage());
+            }
         }
 
         callRecord.setCtlHash(cdrData.getCtlHash());
+    }
+
+    private String truncate(String input, int limit) {
+        if (input == null) return "";
+        return input.length() > limit ? input.substring(0, limit) : input;
     }
 }

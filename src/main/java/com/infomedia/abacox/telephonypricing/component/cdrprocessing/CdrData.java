@@ -1,4 +1,3 @@
-// File: com/infomedia/abacox/telephonypricing/cdr/CdrData.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
 import com.infomedia.abacox.telephonypricing.component.utils.XXHash64Util;
@@ -7,44 +6,50 @@ import com.infomedia.abacox.telephonypricing.db.entity.FileInfo;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.ToString;
+import lombok.extern.log4j.Log4j2;
 
 import java.math.BigDecimal;
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 
 @Data
 @NoArgsConstructor
+@Log4j2
 public class CdrData {
     // Fields from PHP's $info_arr after parsing
     @ToString.Exclude
     private String rawCdrLine;
+    
+    // NEW FIELD: Stores the compressed byte array generated during processing
+    @ToString.Exclude
+    private byte[] preCompressedData;
+    
     private Long ctlHash;
-    private LocalDateTime dateTimeOrigination; // date + time combined
-    private String callingPartyNumber; // ext
-    private String finalCalledPartyNumber; // dial_number (can be modified)
-    private String originalFinalCalledPartyNumber; // Stores the initial value of finalCalledPartyNumber before any modifications
-    private String originalFinalCalledPartyNumberPartition; // Stores the initial value of finalCalledPartyNumberPartition
+    private LocalDateTime dateTimeOrigination; 
+    private String callingPartyNumber; 
+    private String finalCalledPartyNumber; 
+    private String originalFinalCalledPartyNumber; 
+    private String originalFinalCalledPartyNumberPartition; 
 
-    private Integer durationSeconds; // duration_seg
-    private String authCodeDescription; // acc_code
-    private CallDirection callDirection = CallDirection.OUTGOING; // incoming (0=saliente, 1=entrante)
-    private Integer ringingTimeSeconds; // ring
+    private Integer durationSeconds; 
+    private String authCodeDescription; 
+    private CallDirection callDirection = CallDirection.OUTGOING; 
+    private Integer ringingTimeSeconds; 
 
-    // Cisco specific fields that might be used in enrichment
+    // Cisco specific fields
     private String callingPartyNumberPartition;
-    private String finalCalledPartyNumberPartition; // Can be modified
+    private String finalCalledPartyNumberPartition; 
     private String originalCalledPartyNumber;
     private String originalCalledPartyNumberPartition;
-    private String lastRedirectDn; // ext-redir
-    private String lastRedirectDnPartition; // partredir
+    private String lastRedirectDn; 
+    private String lastRedirectDnPartition; 
     private String originalLastRedirectDn;
-    private String destMobileDeviceName; // partmovil
-    private String finalMobileCalledPartyNumber; // ext-movil
+    private String destMobileDeviceName; 
+    private String finalMobileCalledPartyNumber; 
 
-    private Integer lastRedirectRedirectReason; // code_transfer
-    private String origDeviceName; // troncal-ini
-    private String destDeviceName; // troncal
+    private Integer lastRedirectRedirectReason; 
+    private String origDeviceName; 
+    private String destDeviceName; 
     private String disconnectCauseOrig;
     private String disconnectCauseDest;
 
@@ -61,25 +66,24 @@ public class CdrData {
     private Integer destCallTerminationOnBehalfOf;
     private Long destConversationId;
     private Long globalCallIDCallId;
-    private String conferenceIdentifierUsed; // e.g., "b001..." or "i123..."
+    private String conferenceIdentifierUsed; 
 
-
-    // Fields populated during enrichment (mimicking $infovalor and other additions)
+    // Fields populated during enrichment
     private Long employeeId;
-    private Employee employee; // For convenience
+    private Employee employee; 
     private Long destinationEmployeeId;
-    private Employee destinationEmployee; // For convenience
+    private Employee destinationEmployee; 
     private AssignmentCause assignmentCause = AssignmentCause.NOT_ASSIGNED;
     private TransferCause transferCause = TransferCause.NONE;
-    private String employeeTransferExtension; // Populated from lastRedirectDn if transferCause is set
+    private String employeeTransferExtension; 
 
     private Long telephonyTypeId;
-    private String telephonyTypeName; // For display/logging
+    private String telephonyTypeName; 
     private Long operatorId;
-    private String operatorName; // For display/logging
-    private Long indicatorId; // Destination indicator for outgoing, Source indicator for incoming
-    private String destinationCityName; // For display/logging (destination for outgoing, source for incoming)
-    private String effectiveDestinationNumber; // The number used for tariffing after cleaning/PBX rules
+    private String operatorName; 
+    private Long indicatorId; 
+    private String destinationCityName; 
+    private String effectiveDestinationNumber; 
 
     private BigDecimal billedAmount = BigDecimal.ZERO;
     private BigDecimal pricePerMinute = BigDecimal.ZERO;
@@ -89,7 +93,7 @@ public class CdrData {
     private BigDecimal vatRate = BigDecimal.ZERO;
     private boolean chargeBySecond = false;
 
-    private boolean isInternalCall = false; // Flag if call is internal
+    private boolean isInternalCall = false; 
     private String pbxSpecialRuleAppliedInfo;
 
     private FileInfo fileInfo;
@@ -110,7 +114,6 @@ public class CdrData {
     private String originalDialNumberBeforeCMETransform;
     private String originalDialNumberBeforePbxOutgoing;
     private String originalDialNumberBeforePbxIncoming;
-
 
     public long getDateTimeOriginationEpochSeconds() {
         return dateTimeOrigination != null ? dateTimeOrigination.toEpochSecond(ZoneOffset.UTC) : 0;

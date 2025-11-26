@@ -1,17 +1,17 @@
-// File: com/infomedia/abacox/telephonypricing/component/cdrprocessing/CdrRoutingService.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
 import com.infomedia.abacox.telephonypricing.db.entity.CommunicationLocation;
 import com.infomedia.abacox.telephonypricing.db.entity.ExtensionRange;
 import com.infomedia.abacox.telephonypricing.db.entity.FileInfo;
-import jakarta.validation.ValidationException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -30,6 +30,7 @@ public class CdrRoutingService {
     private final CallRecordPersistenceService callRecordPersistenceService;
     private final List<CdrProcessor> cdrProcessors;
     private final EmployeeLookupService employeeLookupService;
+    private final FileProcessingTrackerService trackerService;
 
     private CdrProcessor getProcessorForPlantType(Long plantTypeId) {
         return cdrProcessors.stream()
@@ -41,15 +42,17 @@ public class CdrRoutingService {
     private void processStreamContent(FileInfo fileInfo, InputStream contentStream,
                                       Map<Long, ExtensionLimits> extensionLimits,
                                       Map<Long, List<ExtensionRange>> extensionRanges) {
-        // TIMER START: Core Processing
+
+        // METRICS: Start Timer
         long startTime = System.currentTimeMillis();
+
+        trackerService.initFile(fileInfo.getId());
 
         Long plantTypeId = fileInfo.getParentId().longValue();
         CdrProcessor initialParser = getProcessorForPlantType(plantTypeId);
-        
-        // Local variable to store header map for this specific file stream
         Map<String, Integer> currentFileHeaderMap = null;
-        
+
+        // METRICS: Counters
         long lineCount = 0;
         long totalProcessedCount = 0;
         long unroutableCdrCount = 0;
@@ -67,29 +70,24 @@ public class CdrRoutingService {
 
                 if (currentFileHeaderMap == null && initialParser.isHeaderLine(trimmedLine)) {
                     currentFileHeaderMap = initialParser.parseHeader(trimmedLine);
-                    log.debug("Processed header line for file: {}", fileInfo.getFilename());
                     continue;
                 }
 
                 if (currentFileHeaderMap == null) {
-                    log.warn("Skipping line {} as header has not been processed by initial parser: {}", lineCount, trimmedLine);
                     CdrData tempData = new CdrData();
                     tempData.setRawCdrLine(trimmedLine);
                     tempData.setFileInfo(fileInfo);
                     failedCallRecordPersistenceService.quarantineRecord(tempData,
                             QuarantineErrorType.MISSING_HEADER,
-                            "CDR data encountered before header (routing stage)",
+                            "CDR data encountered before header",
                             "RouteStream_HeaderCheck", null);
                     unroutableCdrCount++;
                     continue;
                 }
 
                 CdrData preliminaryCdrData = initialParser.evaluateFormat(trimmedLine, null, null, currentFileHeaderMap);
+                if (preliminaryCdrData == null) continue;
 
-                if (preliminaryCdrData == null) {
-                    log.trace("Initial parser returned null for line, skipping routing: {}", trimmedLine);
-                    continue;
-                }
                 preliminaryCdrData.setRawCdrLine(trimmedLine);
                 preliminaryCdrData.setFileInfo(fileInfo);
 
@@ -108,7 +106,7 @@ public class CdrRoutingService {
                 if (targetCommLocationOpt.isPresent()) {
                     CommunicationLocation targetCommLocation = targetCommLocationOpt.get();
                     CdrProcessor finalProcessor = getProcessorForPlantType(targetCommLocation.getPlantTypeId());
-                    
+
                     LineProcessingContext lineProcessingContext = LineProcessingContext.builder()
                             .cdrLine(trimmedLine)
                             .commLocation(targetCommLocation)
@@ -120,13 +118,12 @@ public class CdrRoutingService {
                             .build();
                     batch.add(lineProcessingContext);
                 } else {
-                    log.debug("Could not route CDR at line {} to a CommunicationLocation", lineCount);
+                    unroutableCdrCount++;
                     preliminaryCdrData.setCommLocationId(null);
                     failedCallRecordPersistenceService.quarantineRecord(preliminaryCdrData,
                             QuarantineErrorType.PENDING_ASSOCIATION,
                             "Could not route CDR to a CommunicationLocation",
                             "CdrRoutingService_Unroutable", null);
-                    unroutableCdrCount++;
                 }
 
                 if (batch.size() >= CdrConfigService.CDR_PROCESSING_BATCH_SIZE) {
@@ -142,36 +139,54 @@ public class CdrRoutingService {
                 batch.clear();
             }
 
-            // TIMER END: Calculate Stats
+            trackerService.markParsingComplete(fileInfo.getId());
+
+            // METRICS: Final Calculation
             long endTime = System.currentTimeMillis();
             long durationMs = endTime - startTime;
             double seconds = durationMs / 1000.0;
             double linesPerSecond = (seconds > 0) ? (lineCount / seconds) : 0.0;
 
-            // FIX: Use String.format to format numbers before passing to SLF4J
-            log.info("Outcome for file [{}]: SUCCESS. Time: {}ms ({}s). Speed: {} lines/sec. Read: {}, Processed: {}, Unroutable: {}",
+            log.info("Outcome for file [{}]: SUCCESS. Time: {}ms. Speed: {} lines/sec. Read: {}, Routed: {}, Unroutable: {}",
                     fileInfo.getFilename(),
                     durationMs,
-                    String.format("%.2f", seconds),
                     String.format("%.2f", linesPerSecond),
                     lineCount,
                     totalProcessedCount,
                     unroutableCdrCount);
 
         } catch (IOException e) {
-            log.error("Outcome for file [{}]: FAILED. Reason: Critical error reading from stream.",
-                    fileInfo.getFilename(), e);
-            CdrData tempData = new CdrData();
-            tempData.setRawCdrLine("STREAM_ROUTING_READ_ERROR");
-            tempData.setFileInfo(fileInfo);
-            failedCallRecordPersistenceService.quarantineRecord(tempData,
-                    QuarantineErrorType.IO_EXCEPTION,
-                    e.getMessage(),
-                    "RouteStream_IOException", null);
+            log.error("Outcome for file [{}]: FAILED. IO Error.", fileInfo.getFilename(), e);
+            trackerService.markParsingComplete(fileInfo.getId());
+            fileInfoPersistenceService.updateStatus(fileInfo.getId(), FileInfo.ProcessingStatus.FAILED);
         }
     }
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional
+    public void processFileInfo(Long fileInfoId) {
+        log.info("Starting processing for FileInfo ID: {}", fileInfoId);
+        FileInfo fileInfo = fileInfoPersistenceService.findById(fileInfoId);
+
+        if (fileInfo == null || fileInfo.getFileContent() == null) {
+            log.error("FileInfo ID {}: FAILED (Missing Data)", fileInfoId);
+            return;
+        }
+
+        Optional<FileInfoData> fileDataOpt = fileInfoPersistenceService.getOriginalFileData(fileInfoId);
+
+        if (fileDataOpt.isPresent()) {
+            try (InputStream contentStream = fileDataOpt.get().content()) {
+                Map<Long, ExtensionLimits> extensionLimits = employeeLookupService.getExtensionLimits();
+                Map<Long, List<ExtensionRange>> extensionRanges = employeeLookupService.getExtensionRanges();
+
+                processStreamContent(fileInfo, contentStream, extensionLimits, extensionRanges);
+            } catch (IOException e) {
+                log.error("Stream read error for file {}", fileInfoId, e);
+            }
+        }
+    }
+
+    @Transactional
     public void cleanupRecordsForFile(Long fileInfoId) {
         log.debug("Cleaning up existing records for FileInfo ID: {}", fileInfoId);
         int deletedCallRecords = callRecordPersistenceService.deleteByFileInfoId(fileInfoId);
@@ -181,58 +196,12 @@ public class CdrRoutingService {
     }
 
     @Transactional
-    public void processFileInfo(Long fileInfoId) {
-        long startTime = System.currentTimeMillis();
-        log.info("Starting processing for FileInfo ID: {}", fileInfoId);
-        
-        FileInfo fileInfo = fileInfoPersistenceService.findById(fileInfoId);
-
-        if (fileInfo == null) {
-            log.error("Outcome for FileInfo ID {}: FAILED. Reason: FileInfo record not found.", fileInfoId);
-            return;
-        }
-
-        if (fileInfo.getFileContent() == null) {
-            log.error("Outcome for FileInfo ID {}: FAILED. Reason: No file content is archived for this record.",
-                    fileInfoId);
-            return;
-        }
-
-        Optional<FileInfoData> fileDataOpt = fileInfoPersistenceService.getOriginalFileData(fileInfoId);
-
-        if (!fileDataOpt.isPresent()) {
-            log.error("Outcome for FileInfo ID {}: FAILED. Reason: Failed to retrieve file content stream.",
-                    fileInfoId);
-            return;
-        }
-
-        try (InputStream contentStream = fileDataOpt.get().content()) {
-            Map<Long, ExtensionLimits> extensionLimits = employeeLookupService.getExtensionLimits();
-            Map<Long, List<ExtensionRange>> extensionRanges = employeeLookupService.getExtensionRanges();
-
-            processStreamContent(fileInfo, contentStream, extensionLimits, extensionRanges);
-
-        } catch (IOException e) {
-            log.error("Outcome for FileInfo ID {}: FAILED. Reason: Failed to read file content stream.",
-                    fileInfoId, e);
-        } finally {
-            long duration = System.currentTimeMillis() - startTime;
-            log.info("Total processing time for FileInfo ID {}: {} ms", fileInfoId, duration);
-        }
-    }
-
-    @Transactional
     public void reprocessFileInfo(Long fileInfoId, boolean cleanupExistingRecords) {
-        long startTime = System.currentTimeMillis();
-        log.info("Starting reprocessing for FileInfo ID: {}, Cleanup: {}", fileInfoId, cleanupExistingRecords);
-
+        log.info("Starting reprocessing for FileInfo ID: {}", fileInfoId);
         if (cleanupExistingRecords) {
             cleanupRecordsForFile(fileInfoId);
         }
         processFileInfo(fileInfoId);
-        
-        long duration = System.currentTimeMillis() - startTime;
-        log.info("Reprocessing complete for FileInfo ID {}. Total Time: {} ms", fileInfoId, duration);
     }
 
     @Transactional
@@ -261,8 +230,6 @@ public class CdrRoutingService {
             Map<Long, ExtensionLimits> extensionLimits = employeeLookupService.getExtensionLimits();
             Map<Long, List<ExtensionRange>> extensionRanges = employeeLookupService.getExtensionRanges();
             CdrProcessor initialParser = getProcessorForPlantType(fileInfo.getParentId().longValue());
-            
-            // Local map
             Map<String, Integer> currentHeaderMap = null;
 
             try (InputStream inputStream = fileDataOpt.get().content();
@@ -281,7 +248,6 @@ public class CdrRoutingService {
                     }
 
                     if (currentHeaderMap == null) {
-                        log.warn("Quarantining line {} - header not processed: {}", lineCount, trimmedLine);
                         CdrData tempData = new CdrData();
                         tempData.setRawCdrLine(trimmedLine);
                         tempData.setFileInfo(fileInfo);
@@ -314,8 +280,7 @@ public class CdrRoutingService {
 
                     if (targetCommLocationOpt.isPresent()) {
                         CommunicationLocation targetCommLocation = targetCommLocationOpt.get();
-                        CdrProcessor finalProcessor = getProcessorForPlantType(
-                                targetCommLocation.getPlantTypeId());
+                        CdrProcessor finalProcessor = getProcessorForPlantType(targetCommLocation.getPlantTypeId());
 
                         LineProcessingContext context = LineProcessingContext.builder()
                                 .cdrLine(trimmedLine)
@@ -324,7 +289,7 @@ public class CdrRoutingService {
                                 .extensionRanges(extensionRanges)
                                 .extensionLimits(extensionLimits)
                                 .fileInfo(fileInfo)
-                                .headerPositions(currentHeaderMap) // Pass map
+                                .headerPositions(currentHeaderMap)
                                 .build();
 
                         ProcessingOutcome outcome = cdrProcessorService.processSingleCdrLineSync(context);
@@ -334,7 +299,6 @@ public class CdrRoutingService {
                             case SKIPPED -> skippedLines++;
                         }
                     } else {
-                        log.debug("Could not route CDR at line {} to a CommunicationLocation", lineCount);
                         quarantinedRecords++;
                         preliminaryCdrData.setRawCdrLine(trimmedLine);
                         preliminaryCdrData.setFileInfo(fileInfo);
