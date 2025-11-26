@@ -31,7 +31,6 @@ public class CdrProcessingExecutor {
     
     private final CdrRoutingService cdrRoutingService;
     private final CdrProcessorService cdrProcessorService;
-    private final FailedCallRecordPersistenceService failedCallRecordPersistenceService;
 
     /**
      * Calculates how many threads are currently idle.
@@ -49,21 +48,6 @@ public class CdrProcessingExecutor {
         
         int available = MAX_THREADS - active;
         return Math.max(0, available);
-    }
-
-    public Future<?> submitCdrStreamProcessing(String filename, InputStream inputStream, Long plantTypeId, boolean forceProcess) {
-        log.debug("Submitting CDR stream processing task for file: {}, PlantTypeID: {}, Force: {}", filename, plantTypeId, forceProcess);
-        return taskExecutor.submit(() -> {
-            try {
-                cdrRoutingService.routeAndProcessCdrStreamInternal(filename, inputStream, plantTypeId, forceProcess);
-            } catch (Exception e) {
-                log.error("Uncaught exception during execution of routeAndProcessCdrStream for file: {}", filename, e);
-                CdrData streamErrorData = new CdrData();
-                streamErrorData.setRawCdrLine("STREAM_PROCESSING_FATAL_ERROR: " + filename);
-                failedCallRecordPersistenceService.quarantineRecord(streamErrorData, QuarantineErrorType.UNHANDLED_EXCEPTION,
-                        "Fatal error in executor task: " + e.getMessage(), "ExecutorTask", null);
-            }
-        });
     }
 
     public void submitTask(Runnable task) {

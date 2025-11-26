@@ -22,9 +22,6 @@ import java.time.LocalDateTime;
         // 3. Missed Call Report (Complex UNION query)
         // Uses employee_transfer to link back to employee extension
         @Index(name = "idx_call_record_transfer", columnList = "employee_transfer"),
-        // To optimize the specific Missed Call WHERE clause
-        @Index(name = "idx_call_record_missed_opt", columnList = "service_date, is_incoming, ring_count, duration"),
-
         // 4. Dialed Number Usage Report
         // Joins on cr.dial = contact.phone_number
         @Index(name = "idx_call_record_dial_svc", columnList = "dial, service_date"),
@@ -41,9 +38,6 @@ import java.time.LocalDateTime;
         
         // 7. File reprocessing / Cleanup
         @Index(name = "idx_call_record_file_info", columnList = "file_info_id"),
-
-        // 8. Duplicate Check
-        @Index(name = "idx_call_record_ctl_hash", columnList = "ctl_hash")
     }
 )
 @Getter
@@ -53,7 +47,6 @@ import java.time.LocalDateTime;
 @ToString
 @SuperBuilder(toBuilder = true)
 public class CallRecord extends AuditedEntity {
-    // ... (Fields remain unchanged) ...
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "call_record_id_seq")
     @SequenceGenerator(name = "call_record_id_seq", sequenceName = "call_record_id_seq", allocationSize = 1, initialValue = 1000000000)

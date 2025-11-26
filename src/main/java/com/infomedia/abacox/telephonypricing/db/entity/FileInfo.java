@@ -2,9 +2,9 @@ package com.infomedia.abacox.telephonypricing.db.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
-
 import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.ColumnDefault;
+import java.sql.Blob;
 import java.time.LocalDateTime;
 
 /**
@@ -52,7 +52,7 @@ public class FileInfo {
     private Integer parentId;
 
     /**
-     * Size of the file in bytes.
+     * Size of the file in bytes (uncompressed).
      * Original field: FILEINFO_TAMANO
      */
     @Column(name = "size", nullable = false)
@@ -83,13 +83,14 @@ public class FileInfo {
     private String type;
 
     /**
-     * The ZIP-compressed content of the file.
+     * The LZMA-compressed content of the file stored as a BLOB.
      * Stored as a Large Object (LOB) in the database.
+     * Using Blob allows for streaming access without loading entire content into memory.
      */
+    @ToString.Exclude
     @Lob
     @Column(name = "file_content")
-    private byte[] fileContent;
-
+    private Blob fileContent;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "processing_status", nullable = false, length = 20)

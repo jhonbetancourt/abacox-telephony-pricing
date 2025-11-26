@@ -19,14 +19,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.UncheckedIOException;
+import java.io.*;
 import java.util.List;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipInputStream;
 
 @RequiredArgsConstructor
 @RestController
@@ -44,10 +40,10 @@ public class CdrController {
 
 
     @PostMapping(value = "/process", consumes = MediaType.MULTIPART_FORM_DATA_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
-    @Operation(summary = "Queue a CDR file or ZIP archive for processing",
-            description = "Submits a CDR file (or a ZIP archive of CDR files) for a specific plant type. The file is saved and queued for reliable, asynchronous processing.")
+    @Operation(summary = "Queue a CDR file for processing",
+            description = "Submits a CDR file for a specific plant type. The file is saved and queued for reliable, asynchronous processing.")
     public MessageResponse processCdr(
-            @Parameter(description = "The CDR file or ZIP archive to upload") @RequestParam("file") MultipartFile file,
+            @Parameter(description = "The CDR file to upload") @RequestParam("file") MultipartFile file,
             @Parameter(description = "The unique identifier for the plant type (e.g., PBX model)") @RequestParam("plantTypeId") Long plantTypeId,
             @RequestHeader (value = "X-API-KEY") String apiKey) {
 
@@ -57,15 +53,7 @@ public class CdrController {
 
         log.info("Received file for queueing: {}, PlantTypeID: {}", file.getOriginalFilename(), plantTypeId);
 
-        String contentType = file.getContentType();
-        String originalFilename = file.getOriginalFilename();
-
-        int filesQueued;
-        if ("application/zip".equals(contentType) || (originalFilename != null && originalFilename.toLowerCase().endsWith(".zip"))) {
-            filesQueued = queueZipFile(file, plantTypeId);
-        } else {
-            filesQueued = queueSingleFile(file, plantTypeId);
-        }
+        int filesQueued = queueSingleFile(file, plantTypeId);
 
         return new MessageResponse(String.format("%d file(s) queued for processing successfully.", filesQueued));
     }
@@ -76,146 +64,131 @@ public class CdrController {
     public ResponseEntity<CdrProcessingResultDto> processCdrSync(
             @Parameter(description = "The single CDR file to process") @RequestParam("file") MultipartFile file,
             @Parameter(description = "The unique identifier for the plant type (e.g., PBX model)") @RequestParam("plantTypeId") Long plantTypeId) {
-        log.info("Received file for synchronous processing: {}, PlantTypeID: {}", file.getOriginalFilename(), plantTypeId);
+
+        log.info("Received file for synchronous processing: {}, PlantTypeID: {}",
+                file.getOriginalFilename(), plantTypeId);
 
         if (file.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Uploaded file cannot be empty.");
         }
-        String originalFilename = file.getOriginalFilename();
-        if (originalFilename != null && originalFilename.toLowerCase().endsWith(".zip")) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "ZIP archives are not supported for synchronous processing. Please upload a single CDR file.");
-        }
 
+        File tempFile = null;
         try {
-            byte[] fileBytes = file.getBytes();
+            // Create temporary file
+            tempFile = File.createTempFile("sync_upload_", "_" + file.getOriginalFilename());
+            tempFile.deleteOnExit();
+
+            // Transfer multipart file to temp file (streaming)
+            file.transferTo(tempFile);
+
+            // Probe file using streaming approach
             CdrProcessor processor = getProcessorForPlantType(plantTypeId);
-            List<String> initialLines = CdrUtil.readInitialLines(fileBytes);
+            List<String> initialLines = CdrUtil.readInitialLinesFromFile(tempFile);
+
             if (!processor.probe(initialLines)) {
                 throw new ValidationException("File format is not valid for the specified plantTypeId.");
             }
 
+            // Create or get FileInfo
+            FileInfoPersistenceService.FileInfoCreationResult fileInfoResult =
+                    fileInfoPersistenceService.createOrGetFileInfo(
+                            file.getOriginalFilename(),
+                            plantTypeId,
+                            "SYNC_STREAM",
+                            tempFile
+                    );
+
+            if (!fileInfoResult.isNew()) {
+                throw new ValidationException(
+                        "File with the same content has already been processed. FileInfo ID: " +
+                                fileInfoResult.getFileInfo().getId());
+            }
+
+            // Process the file synchronously
             CdrProcessingResultDto result = cdrRoutingService.routeAndProcessCdrStreamSync(
-                    file.getOriginalFilename(),
-                    new ByteArrayInputStream(fileBytes), // Use a new stream from the validated bytes
-                    plantTypeId
+                    fileInfoResult.getFileInfo()
             );
+
             return ResponseEntity.ok(result);
+
+        } catch (ValidationException e) {
+            log.warn("Validation error during sync processing: {}", e.getMessage());
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, e.getMessage());
         } catch (IOException e) {
             log.error("IO error during synchronous processing of file: {}", file.getOriginalFilename(), e);
-            throw new UncheckedIOException("Failed to read uploaded file.", e);
+            throw new UncheckedIOException("Failed to process uploaded file.", e);
+        } finally {
+            // Ensure temp file is deleted
+            if (tempFile != null && tempFile.exists()) {
+                if (tempFile.delete()) {
+                    log.debug("Temporary file deleted: {}", tempFile.getAbsolutePath());
+                } else {
+                    log.warn("Failed to delete temporary file: {}", tempFile.getAbsolutePath());
+                }
+            }
         }
     }
 
     private int queueSingleFile(MultipartFile file, Long plantTypeId) {
         String filename = file.getOriginalFilename();
         log.info("Attempting to queue single file: {}, PlantTypeID: {}", filename, plantTypeId);
+
+        File tempFile = null;
         try {
-            byte[] fileBytes = file.getBytes();
-            if (fileBytes.length == 0) {
+            // Check if file is empty before creating temp file
+            if (file.isEmpty()) {
                 log.warn("Uploaded file '{}' is empty and will be ignored.", filename);
                 return 0;
             }
 
-            // --- Validation Step ---
-            CdrProcessor processor = getProcessorForPlantType(plantTypeId);
-            List<String> initialLines = CdrUtil.readInitialLines(fileBytes);
-            if (!processor.probe(initialLines)) {
-                log.warn("File '{}' was rejected by the processor's probe for plantTypeId {}. Skipping queue.", filename, plantTypeId);
-                return 0; // Skip the file, but return OK response.
-            }
-            // --- End Validation Step ---
+            // Create temporary file
+            tempFile = File.createTempFile("upload_", "_" + filename);
+            tempFile.deleteOnExit(); // Backup cleanup in case of JVM crash
 
+            // Transfer multipart file to temp file (streaming, no full load into memory)
+            file.transferTo(tempFile);
+
+            // Probe file using streaming approach
+            CdrProcessor processor = getProcessorForPlantType(plantTypeId);
+            List<String> initialLines = CdrUtil.readInitialLinesFromFile(tempFile);
+
+            if (!processor.probe(initialLines)) {
+                log.warn("File '{}' was rejected by the processor's probe for plantTypeId {}. Skipping queue.",
+                        filename, plantTypeId);
+                return 0;
+            }
+
+            // Create or get FileInfo using the temp file
             fileInfoPersistenceService.createOrGetFileInfo(
                     filename,
                     plantTypeId,
                     "ROUTED_STREAM",
-                    fileBytes
+                    tempFile
             );
+
             log.info("Successfully queued single file: {}", filename);
             return 1;
+
         } catch (ValidationException e) {
-            // Business logic failure, e.g. no processor found.
             log.warn("Skipping file '{}' due to a validation error: {}", filename, e.getMessage());
-            return 0; // 0 files successfully queued
-        } catch (IOException e) {
-            // This is a fundamental upload I/O failure. Propagate it to return an error response.
-            log.error("IO error while reading single file '{}'.", filename, e);
-            throw new UncheckedIOException("Failed to read uploaded file: " + filename, e);
-        } catch (Exception e) {
-            // Catch any other unexpected errors during the queuing logic. Treat as a processing failure.
-            log.error("An unexpected error occurred while attempting to queue file '{}'. The file will be skipped.", filename, e);
             return 0;
-        }
-    }
-
-    private int queueZipFile(MultipartFile zipFile, Long plantTypeId) {
-        String zipFilename = zipFile.getOriginalFilename();
-        log.info("Processing files from ZIP archive: {}, PlantTypeID: {}", zipFilename, plantTypeId);
-        int successfullyQueuedCount = 0;
-        try (ZipInputStream zis = new ZipInputStream(zipFile.getInputStream())) {
-            CdrProcessor processor = getProcessorForPlantType(plantTypeId); // Get processor once for the whole zip
-            ZipEntry zipEntry;
-            while ((zipEntry = zis.getNextEntry()) != null) {
-                if (zipEntry.isDirectory()) {
-                    zis.closeEntry();
-                    continue;
-                }
-
-                String entryName = zipEntry.getName();
-                try {
-                    log.debug("Processing entry '{}' from ZIP '{}'", entryName, zipFilename);
-                    ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                    byte[] buffer = new byte[4096];
-                    int len;
-                    while ((len = zis.read(buffer)) > 0) {
-                        baos.write(buffer, 0, len);
-                    }
-                    byte[] fileBytes = baos.toByteArray();
-
-                    if (fileBytes.length == 0) {
-                        log.warn("Skipping empty file '{}' inside ZIP archive '{}'.", entryName, zipFilename);
-                        continue;
-                    }
-
-                    // --- Validation Step ---
-                    List<String> initialLines = CdrUtil.readInitialLines(fileBytes);
-                    if (!processor.probe(initialLines)) {
-                        log.warn("File '{}' in ZIP was rejected by the processor's probe for plantTypeId {}. Skipping queue.", entryName, plantTypeId);
-                        continue; // Skip this file in the zip
-                    }
-                    // --- End Validation Step ---
-
-                    fileInfoPersistenceService.createOrGetFileInfo(
-                            entryName,
-                            plantTypeId,
-                            "ROUTED_STREAM",
-                            fileBytes
-                    );
-
-                    log.info("Successfully queued file from ZIP: {}", entryName);
-                    successfullyQueuedCount++;
-
-                } catch (ValidationException e) {
-                    log.warn("Skipping file '{}' in ZIP '{}' due to a processing error: {}", entryName, zipFilename, e.getMessage());
-                } catch (IOException e) {
-                    log.error("IO error while reading entry '{}' from ZIP '{}'. Skipping this entry.", entryName, zipFilename, e);
-                } catch (Exception e) {
-                    log.error("An unexpected error occurred while processing entry '{}' in ZIP '{}'. Skipping this entry.", entryName, zipFilename, e);
-                } finally {
-                    zis.closeEntry();
+        } catch (IOException e) {
+            log.error("IO error while processing single file '{}'.", filename, e);
+            throw new UncheckedIOException("Failed to process uploaded file: " + filename, e);
+        } catch (Exception e) {
+            log.error("An unexpected error occurred while attempting to queue file '{}'. The file will be skipped.",
+                    filename, e);
+            return 0;
+        } finally {
+            // Ensure temp file is deleted
+            if (tempFile != null && tempFile.exists()) {
+                if (tempFile.delete()) {
+                    log.debug("Temporary file deleted: {}", tempFile.getAbsolutePath());
+                } else {
+                    log.warn("Failed to delete temporary file: {}", tempFile.getAbsolutePath());
                 }
             }
-        } catch (IOException e) {
-            // This is a fundamental upload I/O failure (e.g., reading the zip stream itself). Propagate it.
-            log.error("IO error while processing ZIP file '{}'. This is considered an upload failure.", zipFilename, e);
-            throw new UncheckedIOException("Failed to read uploaded ZIP file: " + zipFilename, e);
-        } catch (ValidationException e) {
-            // This catches the case where no processor could be found for the given plantTypeId for the whole zip.
-            log.warn("Could not process ZIP file '{}' due to a validation error: {}", zipFilename, e.getMessage());
-            return 0;
         }
-        log.info("Finished processing ZIP archive '{}'. Successfully queued {} file(s).", zipFilename, successfullyQueuedCount);
-        return successfullyQueuedCount;
     }
 
     private CdrProcessor getProcessorForPlantType(Long plantTypeId) {
@@ -271,7 +244,7 @@ public class CdrController {
     @GetMapping("/download/{fileInfoId}")
     @Operation(summary = "Download the original CDR file",
             description = "Retrieves the original, unprocessed CDR file content based on its FileInfo ID.")
-    public ResponseEntity<byte[]> downloadCdrFile(@PathVariable Long fileInfoId) {
+    public ResponseEntity<StreamingResponseBody> downloadCdrFile(@PathVariable Long fileInfoId) {
         log.info("Request to download original file for FileInfo ID: {}", fileInfoId);
 
         return fileInfoPersistenceService.getOriginalFileData(fileInfoId)
@@ -279,12 +252,29 @@ public class CdrController {
                     HttpHeaders headers = new HttpHeaders();
                     headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
                     headers.setContentDispositionFormData("attachment", fileData.filename());
-                    headers.setContentLength(fileData.content().length);
+                    headers.setContentLength(fileData.length());
 
-                    log.info("Serving file '{}' ({} bytes) for download.", fileData.filename(), fileData.content().length);
-                    return new ResponseEntity<>(fileData.content(), headers, HttpStatus.OK);
+                    StreamingResponseBody responseBody = outputStream -> {
+                        try (InputStream inputStream = fileData.content()) {
+                            byte[] buffer = new byte[8192];
+                            int bytesRead;
+                            while ((bytesRead = inputStream.read(buffer)) != -1) {
+                                outputStream.write(buffer, 0, bytesRead);
+                            }
+                            outputStream.flush();
+                            log.info("Successfully streamed file '{}' ({} bytes) for download.",
+                                    fileData.filename(), fileData.length());
+                        } catch (IOException e) {
+                            log.error("Error streaming file '{}' for FileInfo ID: {}",
+                                    fileData.filename(), fileInfoId, e);
+                            throw new RuntimeException("Failed to stream file content", e);
+                        }
+                    };
+
+                    return new ResponseEntity<>(responseBody, headers, HttpStatus.OK);
                 })
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "File not found or content is unavailable for FileInfo ID: " + fileInfoId));
     }
+
 }

@@ -8,11 +8,18 @@ import jakarta.persistence.PersistenceContext;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.extern.log4j.Log4j2;
+import org.hibernate.engine.jdbc.BlobProxy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.tukaani.xz.LZMAInputStream;
 
-import java.io.IOException;
+import java.io.*;
+import java.nio.charset.StandardCharsets;
+import java.sql.Blob;
+import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
@@ -37,9 +44,16 @@ public class FileInfoPersistenceService {
      * Creates a new FileInfo record with compressed content, or retrieves an existing one.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public FileInfoCreationResult createOrGetFileInfo(String filename, Long parentId, String type, byte[] uncompressedContent) {
-        String checksum = CdrUtil.sha256(uncompressedContent);
-        log.debug("Attempting to create/get FileInfo. Filename: {}, Checksum: {}", filename, checksum);
+    public FileInfoCreationResult createOrGetFileInfo(String filename, Long parentId, String type, File file) throws IOException {
+        log.debug("Attempting to create/get FileInfo. Filename: {}, File size: {}", filename, file.length());
+
+        // Calculate checksum using streaming approach
+        String checksum;
+        try (InputStream fileInputStream = new FileInputStream(file)) {
+            checksum = CdrUtil.sha256Stream(fileInputStream);
+        }
+
+        log.debug("Calculated checksum: {}", checksum);
 
         FileInfo fileInfo = findByChecksumInternal(checksum);
         boolean isNew = false;
@@ -52,20 +66,89 @@ public class FileInfoPersistenceService {
             fileInfo.setType(type.length() > 64 ? type.substring(0, 64) : type);
             fileInfo.setDate(LocalDateTime.now());
             fileInfo.setChecksum(checksum);
-            fileInfo.setSize(uncompressedContent.length);
+            fileInfo.setSize((int) file.length());
             fileInfo.setProcessingStatus(FileInfo.ProcessingStatus.PENDING);
 
+            File tempCompressedFile = null;
             try {
-                fileInfo.setFileContent(CdrUtil.compress(uncompressedContent));
+                tempCompressedFile = createCompressedBlobFromFile(file, fileInfo);
+
+                entityManager.persist(fileInfo);
+                entityManager.flush();
+
+                // Schedule cleanup after transaction commits
+                final File fileToDelete = tempCompressedFile;
+                scheduleFileCleanup(fileToDelete);
+
             } catch (IOException e) {
                 log.error("Failed to compress file content for {}.", filename, e);
+                // If transaction fails, clean up immediately
+                if (tempCompressedFile != null && tempCompressedFile.exists()) {
+                    if (tempCompressedFile.delete()) {
+                        log.debug("Cleaned up temp compressed file after error: {}", tempCompressedFile.getAbsolutePath());
+                    }
+                }
                 fileInfo.setFileContent(null);
+                throw e;
             }
-
-            entityManager.persist(fileInfo);
-            entityManager.flush();
         }
         return new FileInfoCreationResult(fileInfo, isNew);
+    }
+
+    /**
+     * Creates a compressed blob from a file and returns the temporary compressed file.
+     * The temp file should be deleted after the transaction commits.
+     */
+    private File createCompressedBlobFromFile(File sourceFile, FileInfo fileInfo) throws IOException {
+        File tempCompressedFile = File.createTempFile("compressed_", ".lzma");
+        tempCompressedFile.deleteOnExit(); // Backup cleanup in case of JVM crash
+
+        try (InputStream fileInputStream = new FileInputStream(sourceFile);
+             FileOutputStream tempOutputStream = new FileOutputStream(tempCompressedFile)) {
+
+            CdrUtil.compressStream(fileInputStream, tempOutputStream);
+        }
+
+        // Log compression statistics
+        double compressionRatio = sourceFile.length() > 0
+                ? (100.0 * tempCompressedFile.length() / sourceFile.length())
+                : 0;
+        log.debug("LZMA compression: {} bytes -> {} bytes ({}% of original size)",
+                sourceFile.length(), tempCompressedFile.length(), String.format("%.2f", compressionRatio));
+
+        // Create Blob from the compressed file stream
+        InputStream compressedInputStream = new FileInputStream(tempCompressedFile);
+        Blob blob = BlobProxy.generateProxy(compressedInputStream, tempCompressedFile.length());
+        fileInfo.setFileContent(blob);
+
+        return tempCompressedFile;
+    }
+
+    /**
+     * Schedules a file for deletion after the current transaction commits.
+     * If the transaction rolls back, the file is deleted immediately.
+     */
+    private void scheduleFileCleanup(File file) {
+        if (file == null) {
+            return;
+        }
+
+        TransactionSynchronizationManager.registerSynchronization(
+                new TransactionSynchronization() {
+                    @Override
+                    public void afterCompletion(int status) {
+                        if (file.exists()) {
+                            if (file.delete()) {
+                                log.debug("Deleted temp compressed file after transaction {}: {}",
+                                        status == STATUS_COMMITTED ? "commit" : "rollback",
+                                        file.getAbsolutePath());
+                            } else {
+                                log.warn("Failed to delete temp compressed file: {}", file.getAbsolutePath());
+                            }
+                        }
+                    }
+                }
+        );
     }
 
     private FileInfo findByChecksumInternal(String checksum) {
@@ -110,15 +193,6 @@ public class FileInfoPersistenceService {
         }
     }
 
-    /**
-     * Deprecated single fetch wrapper, kept for backward compatibility.
-     */
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public Optional<FileInfo> findAndLockPendingFile() {
-        List<FileInfo> files = findAndLockPendingFiles(1);
-        return files.isEmpty() ? Optional.empty() : Optional.of(files.get(0));
-    }
-
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public int resetInProgressToPending() {
         int updatedCount = entityManager.createQuery(
@@ -133,21 +207,38 @@ public class FileInfoPersistenceService {
     }
 
     /**
-     * Retrieves and decompresses the original file content.
+     * Retrieves the file content as a decompressed InputStream.
+     * The caller is responsible for closing the stream.
+     *
+     * @param fileInfoId The ID of the FileInfo record
+     * @return Optional containing FileInfoData with filename and decompressed content stream, or empty if not found
      */
     @Transactional(readOnly = true)
     public Optional<FileInfoData> getOriginalFileData(Long fileInfoId) {
         FileInfo fileInfo = findById(fileInfoId);
-        if (fileInfo == null || fileInfo.getFileContent() == null || fileInfo.getFileContent().length == 0) {
+        if (fileInfo == null || fileInfo.getFileContent() == null) {
             log.warn("Could not find FileInfo or its content for ID: {}", fileInfoId);
             return Optional.empty();
         }
 
         try {
-            byte[] decompressedContent = CdrUtil.decompress(fileInfo.getFileContent());
-            return Optional.of(new FileInfoData(fileInfo.getFilename(), decompressedContent));
-        } catch (IOException | DataFormatException e) {
-            log.error("Failed to decompress content for FileInfo ID: {}", fileInfoId, e);
+            // Get the compressed data stream from the Blob
+            InputStream compressedStream = fileInfo.getFileContent().getBinaryStream();
+
+            // Wrap it in an LZMA decompression stream
+            InputStream decompressedStream = new LZMAInputStream(compressedStream);
+
+            // Create FileInfoData with the stream and the original uncompressed size
+            FileInfoData fileInfoData = new FileInfoData(
+                    fileInfo.getFilename(),
+                    decompressedStream,
+                    fileInfo.getSize()
+            );
+
+            return Optional.of(fileInfoData);
+
+        } catch (SQLException | IOException e) {
+            log.error("Failed to create decompression stream for FileInfo ID: {}", fileInfoId, e);
             return Optional.empty();
         }
     }

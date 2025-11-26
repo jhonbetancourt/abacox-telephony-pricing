@@ -1,11 +1,7 @@
 // File: com/infomedia/abacox/telephonypricing/component/cdrprocessing/CdrUtil.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
-import java.io.BufferedReader;
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -17,6 +13,9 @@ import java.util.stream.Collectors;
 import java.util.zip.DataFormatException;
 import java.util.zip.Deflater;
 import java.util.zip.Inflater;
+import org.tukaani.xz.LZMA2Options;
+import org.tukaani.xz.LZMAInputStream;
+import org.tukaani.xz.LZMAOutputStream;
 import lombok.extern.log4j.Log4j2;
 
 @Log4j2
@@ -255,6 +254,52 @@ public class CdrUtil {
         }
     }
 
+    /**
+     * Calculates SHA-256 hash from an InputStream without loading entire content into memory.
+     * The stream is NOT closed by this method.
+     */
+    public static String sha256Stream(InputStream inputStream) throws IOException {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] buffer = new byte[8192];
+            int bytesRead;
+
+            while ((bytesRead = inputStream.read(buffer)) != -1) {
+                digest.update(buffer, 0, bytesRead);
+            }
+
+            byte[] hash = digest.digest();
+            StringBuilder hexString = new StringBuilder(2 * hash.length);
+            for (byte b : hash) {
+                hexString.append(String.format("%02x", b));
+            }
+
+            return hexString.toString();
+
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException("SHA-256 algorithm not found", e);
+        }
+    }
+
+    /**
+     * Compresses data from an InputStream to an OutputStream using LZMA with maximum compression.
+     * Neither stream is closed by this method.
+     */
+    public static void compressStream(InputStream inputStream, OutputStream outputStream) throws IOException {
+        LZMA2Options options = new LZMA2Options(LZMA2Options.PRESET_MAX);
+
+        try (LZMAOutputStream lzmaOutputStream = new LZMAOutputStream(outputStream, options, -1)) {
+            byte[] buffer = new byte[8192];
+            int bytesRead;
+
+            while ((bytesRead = inputStream.read(buffer)) != -1) {
+                lzmaOutputStream.write(buffer, 0, bytesRead);
+            }
+
+            lzmaOutputStream.finish();
+        }
+    }
+
     public static boolean isPossibleExtension(String extensionNumber, ExtensionLimits limits) {
         if (limits == null || extensionNumber == null || extensionNumber.isEmpty()) {
             return false;
@@ -281,13 +326,88 @@ public class CdrUtil {
     }
 
     /**
-     * Decompresses a byte array using the ZIP/INFLATE algorithm.
+     * Decompresses a byte array using LZMA compression (7z format).
+     * This method provides better decompression ratios than ZIP/DEFLATE.
+     * 
+     * @param compressedData The byte array compressed with LZMA.
+     * @return The original, uncompressed byte array.
+     * @throws IOException if an I/O error occurs during decompression.
+     * @throws DataFormatException if the compressed data format is invalid.
+     */
+    public static byte[] decompress(byte[] compressedData) throws IOException, DataFormatException {
+        if (compressedData == null || compressedData.length == 0) {
+            throw new DataFormatException("Compressed data is null or empty");
+        }
+
+        try (ByteArrayInputStream inputStream = new ByteArrayInputStream(compressedData);
+             LZMAInputStream lzmaInputStream = new LZMAInputStream(inputStream);
+             ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            
+            byte[] buffer = new byte[8192];
+            int bytesRead;
+            while ((bytesRead = lzmaInputStream.read(buffer)) != -1) {
+                outputStream.write(buffer, 0, bytesRead);
+            }
+            
+            return outputStream.toByteArray();
+            
+        } catch (IOException e) {
+            log.error("Failed to decompress LZMA data", e);
+            throw new DataFormatException("Invalid LZMA compressed data: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Compresses a byte array using LZMA compression with maximum compression level (7z format).
+     * This method provides significantly better compression ratios than ZIP/DEFLATE,
+     * at the cost of slower compression speed. Ideal for archival storage of CDR data.
+     * 
+     * @param data The byte array to compress.
+     * @return The compressed byte array in LZMA format.
+     * @throws IOException if an I/O error occurs during compression.
+     */
+    public static byte[] compress(byte[] data) throws IOException {
+        if (data == null || data.length == 0) {
+            return new byte[0];
+        }
+
+        try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream()) {
+            // Configure LZMA2 with maximum compression (preset 9)
+            // Preset 9 provides the best compression ratio but is slower
+            LZMA2Options options = new LZMA2Options(LZMA2Options.PRESET_MAX);
+            
+            try (LZMAOutputStream lzmaOutputStream = new LZMAOutputStream(outputStream, options, data.length)) {
+                lzmaOutputStream.write(data);
+                lzmaOutputStream.finish();
+            }
+            
+            byte[] compressed = outputStream.toByteArray();
+            
+            // Log compression statistics for monitoring
+            double compressionRatio = data.length > 0 ? (100.0 * compressed.length / data.length) : 0;
+            log.debug("LZMA compression: {} bytes -> {} bytes ({}% of original size)", 
+                     data.length, compressed.length, String.format("%.2f", compressionRatio));
+            
+            return compressed;
+            
+        } catch (IOException e) {
+            log.error("Failed to compress data with LZMA", e);
+            throw e;
+        }
+    }
+
+    /**
+     * Legacy method for decompressing ZIP/DEFLATE compressed data.
+     * Used for backward compatibility with existing data in the database.
+     * 
      * @param compressedData The byte array compressed with Deflater.
      * @return The original, uncompressed byte array.
      * @throws IOException if an I/O error occurs.
      * @throws DataFormatException if the compressed data format is invalid.
+     * @deprecated Use {@link #decompress(byte[])} instead for new data.
      */
-    public static byte[] decompress(byte[] compressedData) throws IOException, DataFormatException {
+    @Deprecated
+    public static byte[] decompressLegacyZip(byte[] compressedData) throws IOException, DataFormatException {
         Inflater inflater = new Inflater();
         inflater.setInput(compressedData);
 
@@ -304,41 +424,33 @@ public class CdrUtil {
     }
 
     /**
-     * Compresses a byte array using the ZIP/DEFLATE algorithm.
+     * Reads the first few lines of a file for probing/validation using streaming.
+     * Never loads the entire file into memory.
+     *
+     * @param file The file to read from.
+     * @return A list of the first few lines (up to PROBE_LINE_COUNT).
      */
-    public static byte[] compress(byte[] data) throws IOException {
-        Deflater deflater = new Deflater();
-        deflater.setInput(data);
-        deflater.finish();
-
-        try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream(data.length)) {
-            byte[] buffer = new byte[1024];
-            while (!deflater.finished()) {
-                int count = deflater.deflate(buffer);
-                outputStream.write(buffer, 0, count);
-            }
-            return outputStream.toByteArray();
-        }
-    }
-
-    /**
-     * Reads the first few lines of a file's content for probing/validation.
-     * @param fileContent The byte array of the file content.
-     * @return A list of the first few lines.
-     */
-    public static List<String> readInitialLines(byte[] fileContent) {
+    public static List<String> readInitialLinesFromFile(File file) {
         List<String> lines = new ArrayList<>();
-        if (fileContent == null || fileContent.length == 0) {
+        if (file == null || !file.exists() || file.length() == 0) {
             return lines;
         }
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(new ByteArrayInputStream(fileContent), StandardCharsets.UTF_8))) {
+
+        try (InputStream inputStream = new FileInputStream(file);
+             InputStreamReader reader = new InputStreamReader(inputStream, StandardCharsets.UTF_8);
+             BufferedReader bufferedReader = new BufferedReader(reader)) {
+
             String line;
-            while ((line = reader.readLine()) != null && lines.size() < PROBE_LINE_COUNT) {
+            while ((line = bufferedReader.readLine()) != null && lines.size() < PROBE_LINE_COUNT) {
                 lines.add(line);
             }
+
+            log.debug("Read {} initial lines from file for probing", lines.size());
+
         } catch (IOException e) {
-            log.error("Failed to read initial lines from file content for probing.", e);
+            log.error("Failed to read initial lines from file '{}' for probing.", file.getName(), e);
         }
+
         return lines;
     }
 }
