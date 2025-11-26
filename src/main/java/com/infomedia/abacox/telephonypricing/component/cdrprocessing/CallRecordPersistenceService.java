@@ -1,6 +1,7 @@
 // File: com/infomedia/abacox/telephonypricing/component/cdrprocessing/CallRecordPersistenceService.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
+import com.infomedia.abacox.telephonypricing.component.utils.Compression7zUtil;
 import com.infomedia.abacox.telephonypricing.db.entity.CallRecord;
 import com.infomedia.abacox.telephonypricing.db.entity.CommunicationLocation;
 import jakarta.persistence.EntityManager;
@@ -10,6 +11,7 @@ import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.IOException;
 import java.time.LocalDateTime;
 
 @Service
@@ -33,7 +35,7 @@ public class CallRecordPersistenceService {
             return null;
         }
 
-        String cdrHash = CdrUtil.generateCtlHash(cdrData.getRawCdrLine(), commLocation.getId());
+        Long cdrHash = cdrData.getCtlHash();
         log.debug("Generated CDR Hash: {}", cdrHash);
 
 
@@ -46,7 +48,7 @@ public class CallRecordPersistenceService {
         }
 
         CallRecord callRecord = new CallRecord();
-        mapCdrDataToCallRecord(cdrData, callRecord, commLocation, cdrHash);
+        mapCdrDataToCallRecord(cdrData, callRecord, commLocation);
 
         try {
             log.debug("Persisting CallRecord: {}", callRecord);
@@ -65,7 +67,7 @@ public class CallRecordPersistenceService {
     }
 
     @Transactional(readOnly = true)
-    public CallRecord findByCtlHash(String ctlHash) {
+    public CallRecord findByCtlHash(Long ctlHash) {
         try {
             return entityManager.createQuery("SELECT cr FROM CallRecord cr WHERE cr.ctlHash = :hash", CallRecord.class)
                     .setParameter("hash", ctlHash)
@@ -86,7 +88,7 @@ public class CallRecordPersistenceService {
     }
 
 
-    public void mapCdrDataToCallRecord(CdrData cdrData, CallRecord callRecord, CommunicationLocation commLocation, String cdrHash) {
+    public void mapCdrDataToCallRecord(CdrData cdrData, CallRecord callRecord, CommunicationLocation commLocation) {
 
         callRecord.setDial(cdrData.getEffectiveDestinationNumber() != null ? cdrData.getEffectiveDestinationNumber().substring(0, Math.min(cdrData.getEffectiveDestinationNumber().length(), 50)) : "");
         callRecord.setDestinationPhone(cdrData.getOriginalFinalCalledPartyNumber() != null ? cdrData.getOriginalFinalCalledPartyNumber().substring(0, Math.min(cdrData.getOriginalFinalCalledPartyNumber().length(), 50)) : "");
@@ -122,7 +124,18 @@ public class CallRecordPersistenceService {
         if (cdrData.getFileInfo() != null) {
             callRecord.setFileInfoId(cdrData.getFileInfo().getId().longValue());
         }
-        callRecord.setCdrString(cdrData.getRawCdrLine());
-        callRecord.setCtlHash(cdrHash);
+
+        // Compress the CDR string before saving
+        try {
+            byte[] compressedCdr = Compression7zUtil.compressString(cdrData.getRawCdrLine());
+            callRecord.setCdrString(compressedCdr);
+            log.trace("Compressed CDR string from {} to {} bytes",
+                    cdrData.getRawCdrLine().length(), compressedCdr.length);
+        } catch (IOException e) {
+            log.warn("Failed to compress CDR string for hash {}: {}.",
+                    cdrData.getCtlHash(), e.getMessage());
+        }
+
+        callRecord.setCtlHash(cdrData.getCtlHash());
     }
 }

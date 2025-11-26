@@ -70,9 +70,8 @@ public class FileInfo {
      * Control or checksum information.
      * Original field: FILEINFO_CTL
      */
-    @Column(name = "checksum", length = 64, nullable = false)
-    @ColumnDefault("''")
-    private String checksum;
+    @Column(name = "checksum", nullable = false)
+    private Long checksum;
 
     /**
      * Type or MIME type of the file.

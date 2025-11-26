@@ -38,8 +38,8 @@ public class FailedCallRecord extends AuditedEntity {
     private String employeeExtension;
 
     @ToString.Exclude
-    @Column(name = "cdr_string", columnDefinition = "TEXT")
-    private String cdrString;
+    @Column(name = "cdr_string", columnDefinition = "BYTEA")
+    private byte[] cdrString;
 
     @Column(name = "error_type", length = 50)
     private String errorType;
@@ -78,6 +78,6 @@ public class FailedCallRecord extends AuditedEntity {
     private CommunicationLocation commLocation;
 
     @ToString.Exclude
-    @Column(name = "ctl_hash", length = 64, unique = true)
-    private String ctlHash;
+    @Column(name = "ctl_hash", unique = true)
+    private Long ctlHash;
 }

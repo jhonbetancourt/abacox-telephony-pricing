@@ -1,6 +1,7 @@
 // File: com/infomedia/abacox/telephonypricing/cdr/CdrData.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
+import com.infomedia.abacox.telephonypricing.component.utils.XXHash64Util;
 import com.infomedia.abacox.telephonypricing.db.entity.Employee;
 import com.infomedia.abacox.telephonypricing.db.entity.FileInfo;
 import lombok.Data;
@@ -8,6 +9,7 @@ import lombok.NoArgsConstructor;
 import lombok.ToString;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 
@@ -17,7 +19,7 @@ public class CdrData {
     // Fields from PHP's $info_arr after parsing
     @ToString.Exclude
     private String rawCdrLine;
-    private String ctlHash;
+    private Long ctlHash;
     private LocalDateTime dateTimeOrigination; // date + time combined
     private String callingPartyNumber; // ext
     private String finalCalledPartyNumber; // dial_number (can be modified)
@@ -116,6 +118,6 @@ public class CdrData {
 
     public void setRawCdrLine(String rawCdrLine) {
         this.rawCdrLine = rawCdrLine;
-        this.ctlHash = CdrUtil.generateCtlHash(rawCdrLine, commLocationId);
+        this.ctlHash = XXHash64Util.hash(rawCdrLine.getBytes());
     }
 }

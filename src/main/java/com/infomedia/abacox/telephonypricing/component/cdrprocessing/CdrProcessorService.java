@@ -1,5 +1,7 @@
+// File: com/infomedia/abacox/telephonypricing/component/cdrprocessing/CdrProcessorService.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
+import com.infomedia.abacox.telephonypricing.component.utils.Compression7zUtil;
 import com.infomedia.abacox.telephonypricing.db.entity.*;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -8,6 +10,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -46,14 +54,10 @@ public class CdrProcessorService {
         this.fileInfoPersistenceService = fileInfoPersistenceService;
     }
 
-    /**
-     * Processes a batch of CDR lines within a single, new transaction for ASYNC operations.
-     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void processCdrBatch(List<LineProcessingContext> batch) {
         log.debug("Starting transactional processing for a batch of {} records.", batch.size());
         for (LineProcessingContext context : batch) {
-            // This method now calls the refactored private helper
             processSingleCdrLineInternal(context);
         }
         log.debug("Flushing and clearing EntityManager after processing batch.");
@@ -62,22 +66,10 @@ public class CdrProcessorService {
         log.debug("Completed transactional processing for batch of {} records.", batch.size());
     }
 
-    /**
-     * Processes a single CDR line within the CALLER'S transaction for SYNC operations.
-     * It returns the outcome for result aggregation.
-     *
-     * @param lineProcessingContext The context for the line to be processed.
-     * @return The outcome of the processing (SUCCESS, QUARANTINED, SKIPPED).
-     */
     public ProcessingOutcome processSingleCdrLineSync(LineProcessingContext lineProcessingContext) {
-        // This method is not transactional itself; it joins the caller's transaction.
         return processSingleCdrLineInternal(lineProcessingContext);
     }
 
-    /**
-     * Private helper containing the core logic to process one line.
-     * It is called by both the async batch processor and the sync single-line processor.
-     */
     private ProcessingOutcome processSingleCdrLineInternal(LineProcessingContext lineProcessingContext) {
         String cdrLine = lineProcessingContext.getCdrLine();
         CommunicationLocation targetCommLocation = lineProcessingContext.getCommLocation();
@@ -87,11 +79,17 @@ public class CdrProcessorService {
         CdrData cdrData = null;
 
         try {
-            // FileInfo is already managed by the calling service, so we just use it.
             FileInfo currentFileInfo = lineProcessingContext.getFileInfo();
 
             CdrProcessor processor = lineProcessingContext.getCdrProcessor();
-            cdrData = processor.evaluateFormat(cdrLine, targetCommLocation, lineProcessingContext.getCommLocationExtensionLimits());
+            
+            // Pass the map from context
+            cdrData = processor.evaluateFormat(
+                    cdrLine, 
+                    targetCommLocation, 
+                    lineProcessingContext.getCommLocationExtensionLimits(), 
+                    lineProcessingContext.getHeaderPositions()
+            );
 
             if (cdrData == null) {
                 log.trace("Processor returned null for line, skipping: {}", cdrLine);
@@ -177,6 +175,38 @@ public class CdrProcessorService {
         Map<Long, ExtensionLimits> extensionLimits = employeeLookupService.getExtensionLimits();
         Map<Long, List<ExtensionRange>> extensionRanges = employeeLookupService.getExtensionRanges();
 
+        // *** Key Fix: Retrieve Header Map for Reprocessing ***
+        Map<String, Integer> headerPositions = new HashMap<>();
+        if (fileInfo != null) {
+            Optional<FileInfoData> fileDataOpt = fileInfoPersistenceService.getOriginalFileData(fileInfoId);
+            if (fileDataOpt.isPresent()) {
+                try (InputStream is = fileDataOpt.get().content();
+                     InputStreamReader reader = new InputStreamReader(is, StandardCharsets.UTF_8);
+                     BufferedReader br = new BufferedReader(reader)) {
+                    
+                    String line;
+                    // Scan the first 5 lines looking for a header
+                    int linesChecked = 0;
+                    while ((line = br.readLine()) != null && linesChecked < 5) {
+                        line = line.trim();
+                        if (!line.isEmpty() && processor.isHeaderLine(line)) {
+                            headerPositions = processor.parseHeader(line);
+                            log.debug("Found header for reprocessing in file ID {}", fileInfoId);
+                            break;
+                        }
+                        linesChecked++;
+                    }
+                    if (headerPositions.isEmpty()) {
+                        log.warn("Header not found in first 50 lines of FileInfo ID {} during reprocessing setup.", fileInfoId);
+                    }
+                } catch (IOException e) {
+                    log.error("Failed to read header from FileInfo ID {} for reprocessing.", fileInfoId, e);
+                }
+            }
+        } else {
+            log.warn("FileInfo ID {} not found. Reprocessing will likely fail if parser requires header map.", fileInfoId);
+        }
+
         LineProcessingContext context = LineProcessingContext.builder()
                 .cdrLine(cdrLine)
                 .commLocation(commLocation)
@@ -184,13 +214,21 @@ public class CdrProcessorService {
                 .extensionRanges(extensionRanges)
                 .extensionLimits(extensionLimits)
                 .fileInfo(fileInfo)
+                .headerPositions(headerPositions) // Add retrieved map
                 .build();
 
         return Optional.of(context);
     }
 
     private CdrData executeReprocessingLogic(LineProcessingContext context) {
-        CdrData cdrData = context.getCdrProcessor().evaluateFormat(context.getCdrLine(), context.getCommLocation(), context.getCommLocationExtensionLimits());
+        // Pass the map from context
+        CdrData cdrData = context.getCdrProcessor().evaluateFormat(
+                context.getCdrLine(), 
+                context.getCommLocation(), 
+                context.getCommLocationExtensionLimits(), 
+                context.getHeaderPositions()
+        );
+
         if (cdrData == null) {
             log.debug("Processor returned null for line during reprocessing, skipping: {}", context.getCdrLine());
             cdrData = new CdrData();
@@ -218,10 +256,17 @@ public class CdrProcessorService {
             return false;
         }
 
-        log.info("Reprocessing CallRecord ID: {}, CDR Line: {}", callRecordId, callRecord.getCdrString());
+        String cdrString;
+        try {
+            cdrString = Compression7zUtil.decompressToString(callRecord.getCdrString());
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to decompress CDR string for CallRecord ID " + callRecordId, e);
+        }
+
+        log.info("Reprocessing CallRecord ID: {}, CDR Line: {}", callRecordId, cdrString);
 
         Optional<LineProcessingContext> contextOpt = buildReprocessingContext(
-                callRecord.getCdrString(),
+                cdrString,
                 callRecord.getCommLocationId(),
                 callRecord.getFileInfoId()
         );
@@ -253,8 +298,7 @@ public class CdrProcessorService {
             log.info("Outcome for CallRecord ID {}: REPROCESSED_TO_QUARANTINE. Reason: {}", callRecordId, processedCdrData.getQuarantineReason());
             return false;
         } else {
-            String newHash = CdrUtil.generateCtlHash(processedCdrData.getRawCdrLine(), processedCdrData.getCommLocationId());
-            callRecordPersistenceService.mapCdrDataToCallRecord(processedCdrData, callRecord, contextOpt.get().getCommLocation(), newHash);
+            callRecordPersistenceService.mapCdrDataToCallRecord(processedCdrData, callRecord, contextOpt.get().getCommLocation());
             entityManager.merge(callRecord);
             log.info("Outcome for CallRecord ID {}: REPROCESSED_SUCCESS. Record updated.", callRecordId);
             return true;
@@ -269,17 +313,24 @@ public class CdrProcessorService {
             return false;
         }
 
-        log.info("Reprocessing FailedCallRecord ID: {}, CDR Line: {}", failedCallRecordId, failedCallRecord.getCdrString());
+        String cdrString;
+        try {
+            cdrString = Compression7zUtil.decompressToString(failedCallRecord.getCdrString());
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to decompress CDR string for FailedCallRecord ID " + failedCallRecordId, e);
+        }
+
+        log.info("Reprocessing FailedCallRecord ID: {}, CDR Line: {}", failedCallRecordId, cdrString);
 
         Optional<LineProcessingContext> contextOpt = buildReprocessingContext(
-                failedCallRecord.getCdrString(),
+                cdrString,
                 failedCallRecord.getCommLocationId(),
                 failedCallRecord.getFileInfoId()
         );
 
         if (contextOpt.isEmpty()) {
             CdrData tempData = new CdrData();
-            tempData.setRawCdrLine(failedCallRecord.getCdrString());
+            tempData.setRawCdrLine(cdrString);
             tempData.setCommLocationId(failedCallRecord.getCommLocationId());
             failedCallRecordPersistenceService.quarantineRecord(
                 tempData,
@@ -324,6 +375,4 @@ public class CdrProcessorService {
             }
         }
     }
-
-
 }

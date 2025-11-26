@@ -165,10 +165,10 @@ public class CallRecord extends AuditedEntity {
     private FileInfo fileInfo;
 
     @ToString.Exclude
-    @Column(name = "ctl_hash", length = 64, unique = true)
-    private String ctlHash;
+    @Column(name = "ctl_hash", unique = true)
+    private Long ctlHash;
 
     @ToString.Exclude
-    @Column(name = "cdr_string", columnDefinition = "TEXT")
-    private String cdrString;
+    @Column(name = "cdr_string", columnDefinition = "BYTEA")
+    private byte[] cdrString;
 }

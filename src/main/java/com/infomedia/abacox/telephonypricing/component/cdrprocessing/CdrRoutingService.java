@@ -1,3 +1,4 @@
+// File: com/infomedia/abacox/telephonypricing/component/cdrprocessing/CdrRoutingService.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
 import com.infomedia.abacox.telephonypricing.db.entity.CommunicationLocation;
@@ -37,17 +38,15 @@ public class CdrRoutingService {
                 .orElseThrow(() -> new IllegalArgumentException("No CDR processor found for plant type ID: " + plantTypeId));
     }
 
-    /**
-     * The core, shared logic for processing the content of a CDR file stream.
-     * This method does NOT perform duplicate checks and is called by both async and sync flows.
-     * Accepts an InputStream for memory-efficient processing.
-     */
     private void processStreamContent(FileInfo fileInfo, InputStream contentStream,
                                       Map<Long, ExtensionLimits> extensionLimits,
                                       Map<Long, List<ExtensionRange>> extensionRanges) {
         Long plantTypeId = fileInfo.getParentId().longValue();
         CdrProcessor initialParser = getProcessorForPlantType(plantTypeId);
-        boolean headerProcessedByInitialParser = false;
+        
+        // Local variable to store header map for this specific file stream
+        Map<String, Integer> currentFileHeaderMap = null;
+        
         long lineCount = 0;
         long totalProcessedCount = 0;
         long unroutableCdrCount = 0;
@@ -63,19 +62,17 @@ public class CdrRoutingService {
                 String trimmedLine = line.trim();
                 if (trimmedLine.isEmpty()) continue;
 
-                log.trace("Routing line {}: {}", lineCount, trimmedLine);
+                // log.trace("Routing line {}: {}", lineCount, trimmedLine);
 
-                if (!headerProcessedByInitialParser && initialParser.isHeaderLine(trimmedLine)) {
-                    initialParser.parseHeader(trimmedLine);
-                    headerProcessedByInitialParser = true;
-                    log.debug("Processed header line using initial parser {} for file: {}",
-                            initialParser.getClass().getSimpleName(), fileInfo.getFilename());
+                if (currentFileHeaderMap == null && initialParser.isHeaderLine(trimmedLine)) {
+                    // Capture map locally
+                    currentFileHeaderMap = initialParser.parseHeader(trimmedLine);
+                    log.debug("Processed header line for file: {}", fileInfo.getFilename());
                     continue;
                 }
 
-                if (!headerProcessedByInitialParser) {
-                    log.warn("Skipping line {} as header has not been processed by initial parser: {}",
-                            lineCount, trimmedLine);
+                if (currentFileHeaderMap == null) {
+                    log.warn("Skipping line {} as header has not been processed by initial parser: {}", lineCount, trimmedLine);
                     CdrData tempData = new CdrData();
                     tempData.setRawCdrLine(trimmedLine);
                     tempData.setFileInfo(fileInfo);
@@ -87,7 +84,8 @@ public class CdrRoutingService {
                     continue;
                 }
 
-                CdrData preliminaryCdrData = initialParser.evaluateFormat(trimmedLine, null, null);
+                // Pass the map to evaluateFormat
+                CdrData preliminaryCdrData = initialParser.evaluateFormat(trimmedLine, null, null, currentFileHeaderMap);
 
                 if (preliminaryCdrData == null) {
                     log.trace("Initial parser returned null for line, skipping routing: {}", trimmedLine);
@@ -111,6 +109,7 @@ public class CdrRoutingService {
                 if (targetCommLocationOpt.isPresent()) {
                     CommunicationLocation targetCommLocation = targetCommLocationOpt.get();
                     CdrProcessor finalProcessor = getProcessorForPlantType(targetCommLocation.getPlantTypeId());
+                    
                     LineProcessingContext lineProcessingContext = LineProcessingContext.builder()
                             .cdrLine(trimmedLine)
                             .commLocation(targetCommLocation)
@@ -118,6 +117,7 @@ public class CdrRoutingService {
                             .extensionRanges(extensionRanges)
                             .extensionLimits(extensionLimits)
                             .fileInfo(fileInfo)
+                            .headerPositions(currentFileHeaderMap) // Pass map to context
                             .build();
                     batch.add(lineProcessingContext);
                 } else {
@@ -132,7 +132,7 @@ public class CdrRoutingService {
                 }
 
                 if (batch.size() >= CdrConfigService.CDR_PROCESSING_BATCH_SIZE) {
-                    log.debug("Processing a batch of {} CDRs...", batch.size());
+                    // log.debug("Processing a batch of {} CDRs...", batch.size());
                     cdrProcessorService.processCdrBatch(batch);
                     totalProcessedCount += batch.size();
                     batch.clear();
@@ -140,7 +140,7 @@ public class CdrRoutingService {
             }
 
             if (!batch.isEmpty()) {
-                log.debug("Processing the final batch of {} CDRs...", batch.size());
+                // log.debug("Processing the final batch of {} CDRs...", batch.size());
                 cdrProcessorService.processCdrBatch(batch);
                 totalProcessedCount += batch.size();
                 batch.clear();
@@ -171,10 +171,6 @@ public class CdrRoutingService {
                 fileInfoId, deletedCallRecords, deletedFailedRecords);
     }
 
-    /**
-     * Entry point for the worker or reprocessing tasks. This method fetches an existing
-     * FileInfo record and calls the core processing logic, bypassing duplicate checks.
-     */
     @Transactional
     public void processFileInfo(Long fileInfoId) {
         log.info("Starting processing for FileInfo ID: {}", fileInfoId);
@@ -200,11 +196,9 @@ public class CdrRoutingService {
         }
 
         try (InputStream contentStream = fileDataOpt.get().content()) {
-            // Pre-load the context data once before processing
             Map<Long, ExtensionLimits> extensionLimits = employeeLookupService.getExtensionLimits();
             Map<Long, List<ExtensionRange>> extensionRanges = employeeLookupService.getExtensionRanges();
 
-            // Call the core processing logic directly, bypassing the duplicate check
             processStreamContent(fileInfo, contentStream, extensionLimits, extensionRanges);
 
         } catch (IOException e) {
@@ -213,10 +207,6 @@ public class CdrRoutingService {
         }
     }
 
-    /**
-     * Reprocesses an existing FileInfo record, optionally cleaning up existing records first.
-     * This is useful for correcting processing errors or applying updated business rules.
-     */
     @Transactional
     public void reprocessFileInfo(Long fileInfoId, boolean cleanupExistingRecords) {
         log.info("Starting reprocessing for FileInfo ID: {}, Cleanup: {}", fileInfoId, cleanupExistingRecords);
@@ -224,16 +214,9 @@ public class CdrRoutingService {
         if (cleanupExistingRecords) {
             cleanupRecordsForFile(fileInfoId);
         }
-
-        // After optional cleanup, the process is the same as a normal worker pickup.
         processFileInfo(fileInfoId);
     }
 
-    /**
-     * Processes a single CDR file synchronously within a single transaction.
-     * Expects the file to already be saved in FileInfo.
-     * Returns detailed processing results including line counts and outcome status.
-     */
     @Transactional
     public CdrProcessingResultDto routeAndProcessCdrStreamSync(FileInfo fileInfo) {
         log.info("Starting SYNCHRONOUS CDR stream processing for FileInfo ID: {}", fileInfo.getId());
@@ -259,7 +242,9 @@ public class CdrRoutingService {
             Map<Long, ExtensionLimits> extensionLimits = employeeLookupService.getExtensionLimits();
             Map<Long, List<ExtensionRange>> extensionRanges = employeeLookupService.getExtensionRanges();
             CdrProcessor initialParser = getProcessorForPlantType(fileInfo.getParentId().longValue());
-            boolean headerProcessed = false;
+            
+            // Local map
+            Map<String, Integer> currentHeaderMap = null;
 
             try (InputStream inputStream = fileDataOpt.get().content();
                  InputStreamReader reader = new InputStreamReader(inputStream, StandardCharsets.UTF_8);
@@ -271,13 +256,12 @@ public class CdrRoutingService {
                     String trimmedLine = line.trim();
                     if (trimmedLine.isEmpty()) continue;
 
-                    if (!headerProcessed && initialParser.isHeaderLine(trimmedLine)) {
-                        initialParser.parseHeader(trimmedLine);
-                        headerProcessed = true;
+                    if (currentHeaderMap == null && initialParser.isHeaderLine(trimmedLine)) {
+                        currentHeaderMap = initialParser.parseHeader(trimmedLine);
                         continue;
                     }
 
-                    if (!headerProcessed) {
+                    if (currentHeaderMap == null) {
                         log.warn("Quarantining line {} - header not processed: {}", lineCount, trimmedLine);
                         CdrData tempData = new CdrData();
                         tempData.setRawCdrLine(trimmedLine);
@@ -292,7 +276,7 @@ public class CdrRoutingService {
                         continue;
                     }
 
-                    CdrData preliminaryCdrData = initialParser.evaluateFormat(trimmedLine, null, null);
+                    CdrData preliminaryCdrData = initialParser.evaluateFormat(trimmedLine, null, null, currentHeaderMap);
                     if (preliminaryCdrData == null) {
                         skippedLines++;
                         continue;
@@ -321,6 +305,7 @@ public class CdrRoutingService {
                                 .extensionRanges(extensionRanges)
                                 .extensionLimits(extensionLimits)
                                 .fileInfo(fileInfo)
+                                .headerPositions(currentHeaderMap) // Pass map
                                 .build();
 
                         ProcessingOutcome outcome = cdrProcessorService.processSingleCdrLineSync(context);

@@ -1,5 +1,6 @@
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
+import com.infomedia.abacox.telephonypricing.component.utils.XXHash64Util;
 import com.infomedia.abacox.telephonypricing.db.entity.FileInfo;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
@@ -14,7 +15,9 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.tukaani.xz.LZMA2Options;
 import org.tukaani.xz.LZMAInputStream;
+import org.tukaani.xz.LZMAOutputStream;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
@@ -48,9 +51,9 @@ public class FileInfoPersistenceService {
         log.debug("Attempting to create/get FileInfo. Filename: {}, File size: {}", filename, file.length());
 
         // Calculate checksum using streaming approach
-        String checksum;
+        Long checksum;
         try (InputStream fileInputStream = new FileInputStream(file)) {
-            checksum = CdrUtil.sha256Stream(fileInputStream);
+            checksum = XXHash64Util.hash(fileInputStream);
         }
 
         log.debug("Calculated checksum: {}", checksum);
@@ -95,6 +98,26 @@ public class FileInfoPersistenceService {
         return new FileInfoCreationResult(fileInfo, isNew);
     }
 
+
+    /**
+     * Compresses data from an InputStream to an OutputStream using LZMA with maximum compression.
+     * Neither stream is closed by this method.
+     */
+    public static void compressStream(InputStream inputStream, OutputStream outputStream) throws IOException {
+        LZMA2Options options = new LZMA2Options(LZMA2Options.PRESET_MAX);
+
+        try (LZMAOutputStream lzmaOutputStream = new LZMAOutputStream(outputStream, options, -1)) {
+            byte[] buffer = new byte[8192];
+            int bytesRead;
+
+            while ((bytesRead = inputStream.read(buffer)) != -1) {
+                lzmaOutputStream.write(buffer, 0, bytesRead);
+            }
+
+            lzmaOutputStream.finish();
+        }
+    }
+
     /**
      * Creates a compressed blob from a file and returns the temporary compressed file.
      * The temp file should be deleted after the transaction commits.
@@ -106,7 +129,7 @@ public class FileInfoPersistenceService {
         try (InputStream fileInputStream = new FileInputStream(sourceFile);
              FileOutputStream tempOutputStream = new FileOutputStream(tempCompressedFile)) {
 
-            CdrUtil.compressStream(fileInputStream, tempOutputStream);
+            compressStream(fileInputStream, tempOutputStream);
         }
 
         // Log compression statistics
@@ -151,7 +174,7 @@ public class FileInfoPersistenceService {
         );
     }
 
-    private FileInfo findByChecksumInternal(String checksum) {
+    private FileInfo findByChecksumInternal(Long checksum) {
         try {
             return entityManager.createQuery("SELECT fi FROM FileInfo fi WHERE fi.checksum = :checksum", FileInfo.class)
                     .setParameter("checksum", checksum)
