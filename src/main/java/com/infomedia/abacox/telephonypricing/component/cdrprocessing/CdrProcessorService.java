@@ -74,7 +74,7 @@ public class CdrProcessorService {
         String cdrLine = lineProcessingContext.getCdrLine();
         CommunicationLocation targetCommLocation = lineProcessingContext.getCommLocation();
 
-        log.info("Processing CDR line for CommLocation {}: {}", targetCommLocation.getId(), cdrLine);
+        log.debug("Processing CDR line for CommLocation {}: {}", targetCommLocation.getId(), cdrLine);
 
         CdrData cdrData = null;
 
@@ -106,7 +106,7 @@ public class CdrProcessorService {
                         QuarantineErrorType.INITIAL_VALIDATION_ERROR;
                 failedCallRecordPersistenceService.quarantineRecord(cdrData, errorType,
                         cdrData.getQuarantineReason(), cdrData.getQuarantineStep(), null);
-                log.info("Outcome for CDR line -> Status: QUARANTINED, Details: Validation failed. Reason: {}", cdrData.getQuarantineReason());
+                log.debug("Outcome for CDR line -> Status: QUARANTINED, Details: Validation failed. Reason: {}", cdrData.getQuarantineReason());
                 return ProcessingOutcome.QUARANTINED;
             }
 
@@ -118,15 +118,15 @@ public class CdrProcessorService {
                         QuarantineErrorType.ENRICHMENT_ERROR;
                 failedCallRecordPersistenceService.quarantineRecord(cdrData, errorType,
                         cdrData.getQuarantineReason(), cdrData.getQuarantineStep(), null);
-                log.info("Outcome for CDR line -> Status: QUARANTINED, Details: Enrichment failed. Reason: {}", cdrData.getQuarantineReason());
+                log.debug("Outcome for CDR line -> Status: QUARANTINED, Details: Enrichment failed. Reason: {}", cdrData.getQuarantineReason());
                 return ProcessingOutcome.QUARANTINED;
             } else {
                 CallRecord savedRecord = callRecordPersistenceService.saveOrUpdateCallRecord(cdrData, targetCommLocation);
                 if (savedRecord != null) {
-                    log.info("Outcome for CDR line -> Status: SUCCESS, Details: CallRecord ID: {}", savedRecord.getId());
+                    log.debug("Outcome for CDR line -> Status: SUCCESS, Details: CallRecord ID: {}", savedRecord.getId());
                     return ProcessingOutcome.SUCCESS;
                 } else {
-                    log.info("Outcome for CDR line -> Status: QUARANTINED, Details: Persistence failed. Reason: {}", cdrData.getQuarantineReason());
+                    log.debug("Outcome for CDR line -> Status: QUARANTINED, Details: Persistence failed. Reason: {}", cdrData.getQuarantineReason());
                     return ProcessingOutcome.QUARANTINED;
                 }
             }
@@ -144,7 +144,7 @@ public class CdrProcessorService {
 
             failedCallRecordPersistenceService.quarantineRecord(cdrData,
                     QuarantineErrorType.UNHANDLED_EXCEPTION, e.getMessage(), step, null);
-            log.info("Outcome for CDR line -> Status: QUARANTINED, Details: Unhandled Exception: {}", e.getMessage());
+            log.debug("Outcome for CDR line -> Status: QUARANTINED, Details: Unhandled Exception: {}", e.getMessage());
             return ProcessingOutcome.QUARANTINED;
         }
     }
