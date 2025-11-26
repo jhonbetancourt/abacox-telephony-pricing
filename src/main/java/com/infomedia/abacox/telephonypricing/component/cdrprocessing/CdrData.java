@@ -9,6 +9,7 @@ import lombok.ToString;
 import lombok.extern.log4j.Log4j2;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 
@@ -121,6 +122,6 @@ public class CdrData {
 
     public void setRawCdrLine(String rawCdrLine) {
         this.rawCdrLine = rawCdrLine;
-        this.ctlHash = XXHash64Util.hash(rawCdrLine.getBytes());
+        this.ctlHash = XXHash64Util.hash(rawCdrLine.getBytes(StandardCharsets.UTF_8));
     }
 }
