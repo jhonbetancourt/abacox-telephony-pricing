@@ -71,13 +71,12 @@ public class BatchPersistenceWorker {
         entityManager.clear();
         long flushTime = System.currentTimeMillis() - flushStart;
 
+        long totalTime = System.currentTimeMillis() - batchStartTime;
+        log.info("Persisted Batch of {} records in {} ms. (DB Write/Flush took {} ms)",
+                count, totalTime, flushTime);
         // 3. Update Tracker (Decrement counts)
         // Must be done AFTER flush ensures data is committed (or prepared to commit)
         updateFileTrackers(batch);
-
-        long totalTime = System.currentTimeMillis() - batchStartTime;
-        log.info("Persisted Batch of {} records in {} ms. (DB Write/Flush took {} ms)", 
-                count, totalTime, flushTime);
     }
 
     private void updateFileTrackers(List<ProcessedCdrResult> batch) {
