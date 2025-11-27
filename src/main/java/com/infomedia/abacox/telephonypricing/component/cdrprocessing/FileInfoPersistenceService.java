@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.util.StreamUtils;
 
 // CHANGED: Standard Java ZIP imports
 import java.util.zip.Deflater;
@@ -279,4 +280,42 @@ public class FileInfoPersistenceService {
             entityManager.merge(fileInfo);
         }
     }
+
+    @Transactional(readOnly = true)
+    public FileInfoMetadata getFileMetadata(Long fileInfoId) {
+        FileInfo fileInfo = findById(fileInfoId);
+        if (fileInfo == null) {
+            return null;
+        }
+        return new FileInfoMetadata(fileInfo.getFilename(), fileInfo.getSize());
+    }
+
+    /**
+     * Streams the content directly to the provided OutputStream within a Transaction.
+     * This keeps the PostgreSQL Large Object descriptor open while reading.
+     */
+    @Transactional(readOnly = true, propagation = Propagation.REQUIRED)
+    public void streamFileContent(Long fileInfoId, OutputStream outputStream) {
+        FileInfo fileInfo = findById(fileInfoId);
+        if (fileInfo == null || fileInfo.getFileContent() == null) {
+            throw new RuntimeException("File content not found for ID: " + fileInfoId);
+        }
+
+        try (InputStream blobStream = fileInfo.getFileContent().getBinaryStream();
+             InputStream gzipStream = new GZIPInputStream(blobStream)) {
+
+            // Efficiently copy the decompressed stream to the HTTP output stream
+            StreamUtils.copy(gzipStream, outputStream);
+
+            // Flush ensures data is sent before transaction closes
+            outputStream.flush();
+
+        } catch (SQLException | IOException e) {
+            log.error("Error streaming content for file ID: {}", fileInfoId, e);
+            throw new RuntimeException("Failed to stream file content", e);
+        }
+    }
+
+    // Helper record for metadata
+    public record FileInfoMetadata(String filename, long size) {}
 }

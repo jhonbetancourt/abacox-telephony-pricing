@@ -247,34 +247,34 @@ public class CdrController {
     public ResponseEntity<StreamingResponseBody> downloadCdrFile(@PathVariable Long fileInfoId) {
         log.info("Request to download original file for FileInfo ID: {}", fileInfoId);
 
-        return fileInfoPersistenceService.getOriginalFileData(fileInfoId)
-                .map(fileData -> {
-                    HttpHeaders headers = new HttpHeaders();
-                    headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
-                    headers.setContentDispositionFormData("attachment", fileData.filename());
-                    headers.setContentLength(fileData.length());
+        // 1. Fetch Metadata first (short transaction)
+        FileInfoPersistenceService.FileInfoMetadata metadata = fileInfoPersistenceService.getFileMetadata(fileInfoId);
 
-                    StreamingResponseBody responseBody = outputStream -> {
-                        try (InputStream inputStream = fileData.content()) {
-                            byte[] buffer = new byte[8192];
-                            int bytesRead;
-                            while ((bytesRead = inputStream.read(buffer)) != -1) {
-                                outputStream.write(buffer, 0, bytesRead);
-                            }
-                            outputStream.flush();
-                            log.info("Successfully streamed file '{}' ({} bytes) for download.",
-                                    fileData.filename(), fileData.length());
-                        } catch (IOException e) {
-                            log.error("Error streaming file '{}' for FileInfo ID: {}",
-                                    fileData.filename(), fileInfoId, e);
-                            throw new RuntimeException("Failed to stream file content", e);
-                        }
-                    };
+        if (metadata == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "File not found for ID: " + fileInfoId);
+        }
 
-                    return new ResponseEntity<>(responseBody, headers, HttpStatus.OK);
-                })
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "File not found or content is unavailable for FileInfo ID: " + fileInfoId));
+        // 2. Setup Headers
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
+        headers.setContentDispositionFormData("attachment", metadata.filename());
+        headers.setContentLength(metadata.size());
+
+        // 3. Create Streaming Response
+        // The lambda passed here will be executed by a Spring TaskExecutor.
+        // Inside this lambda, we call the SERVICE method which starts its own Transaction.
+        StreamingResponseBody responseBody = outputStream -> {
+            try {
+                fileInfoPersistenceService.streamFileContent(fileInfoId, outputStream);
+                log.info("Successfully streamed file '{}' ({} bytes)", metadata.filename(), metadata.size());
+            } catch (Exception e) {
+                // Log and rethrow. Note: Client might see a broken stream if headers were already sent.
+                log.error("Failed to stream file content for ID: {}", fileInfoId, e);
+                throw new IOException("Error streaming file", e);
+            }
+        };
+
+        return new ResponseEntity<>(responseBody, headers, HttpStatus.OK);
     }
 
 }
