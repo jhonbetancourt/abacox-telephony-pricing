@@ -4,6 +4,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.zip.Deflater;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
@@ -14,12 +15,19 @@ public class CompressionZipUtil {
             return new byte[0];
         }
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
-        try (GZIPOutputStream gzip = new GZIPOutputStream(bos)) {
+
+        try (GZIPOutputStream gzip = new GZIPOutputStream(bos) {
+            {
+                def.setLevel(Deflater.BEST_COMPRESSION); 
+            }
+        }) {
             gzip.write(data.getBytes(StandardCharsets.UTF_8));
         }
+        
         return bos.toByteArray();
     }
 
+    // Decompression remains exactly the same
     public static String decompressToString(byte[] compressedData) throws IOException {
         if (compressedData == null || compressedData.length == 0) {
             return "";

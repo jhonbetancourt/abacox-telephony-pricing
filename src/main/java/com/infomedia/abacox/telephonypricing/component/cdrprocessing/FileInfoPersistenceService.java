@@ -15,19 +15,19 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
-import org.tukaani.xz.LZMA2Options;
-import org.tukaani.xz.LZMAInputStream;
-import org.tukaani.xz.LZMAOutputStream;
+
+// CHANGED: Standard Java ZIP imports
+import java.util.zip.Deflater;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.GZIPOutputStream;
 
 import java.io.*;
-import java.nio.charset.StandardCharsets;
 import java.sql.Blob;
 import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
-import java.util.zip.DataFormatException;
 
 @Service
 @Log4j2
@@ -100,21 +100,23 @@ public class FileInfoPersistenceService {
 
 
     /**
-     * Compresses data from an InputStream to an OutputStream using LZMA with maximum compression.
-     * Neither stream is closed by this method.
+     * Compresses data from an InputStream to an OutputStream using GZIP with maximum compression.
+     * The GZIPOutputStream is closed automatically, which writes the trailer and finishes compression.
      */
     public static void compressStream(InputStream inputStream, OutputStream outputStream) throws IOException {
-        LZMA2Options options = new LZMA2Options(LZMA2Options.PRESET_MAX);
-
-        try (LZMAOutputStream lzmaOutputStream = new LZMAOutputStream(outputStream, options, -1)) {
+        // CHANGED: Use GZIPOutputStream with anonymous subclass to set Best Compression (Level 9)
+        try (GZIPOutputStream gzipOutputStream = new GZIPOutputStream(outputStream) {
+            {
+                def.setLevel(Deflater.BEST_COMPRESSION);
+            }
+        }) {
             byte[] buffer = new byte[8192];
             int bytesRead;
 
             while ((bytesRead = inputStream.read(buffer)) != -1) {
-                lzmaOutputStream.write(buffer, 0, bytesRead);
+                gzipOutputStream.write(buffer, 0, bytesRead);
             }
-
-            lzmaOutputStream.finish();
+            // gzipOutputStream.close() is called automatically here via try-with-resources
         }
     }
 
@@ -123,8 +125,9 @@ public class FileInfoPersistenceService {
      * The temp file should be deleted after the transaction commits.
      */
     private File createCompressedBlobFromFile(File sourceFile, FileInfo fileInfo) throws IOException {
-        File tempCompressedFile = File.createTempFile("compressed_", ".lzma");
-        tempCompressedFile.deleteOnExit(); // Backup cleanup in case of JVM crash
+        // CHANGED: Extension to .gz
+        File tempCompressedFile = File.createTempFile("compressed_", ".gz");
+        tempCompressedFile.deleteOnExit(); 
 
         try (InputStream fileInputStream = new FileInputStream(sourceFile);
              FileOutputStream tempOutputStream = new FileOutputStream(tempCompressedFile)) {
@@ -136,7 +139,9 @@ public class FileInfoPersistenceService {
         double compressionRatio = sourceFile.length() > 0
                 ? (100.0 * tempCompressedFile.length() / sourceFile.length())
                 : 0;
-        log.debug("LZMA compression: {} bytes -> {} bytes ({}% of original size)",
+        
+        // CHANGED: Log message
+        log.debug("GZIP (Max) compression: {} bytes -> {} bytes ({}% of original size)",
                 sourceFile.length(), tempCompressedFile.length(), String.format("%.2f", compressionRatio));
 
         // Create Blob from the compressed file stream
@@ -248,8 +253,8 @@ public class FileInfoPersistenceService {
             // Get the compressed data stream from the Blob
             InputStream compressedStream = fileInfo.getFileContent().getBinaryStream();
 
-            // Wrap it in an LZMA decompression stream
-            InputStream decompressedStream = new LZMAInputStream(compressedStream);
+            // CHANGED: Wrap it in a GZIP decompression stream
+            InputStream decompressedStream = new GZIPInputStream(compressedStream);
 
             // Create FileInfoData with the stream and the original uncompressed size
             FileInfoData fileInfoData = new FileInfoData(
