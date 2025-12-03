@@ -1,4 +1,3 @@
-// src/main/java/com/infomedia/abacox/telephonypricing/db/entity/FailedCallRecord.java
 package com.infomedia.abacox.telephonypricing.db.entity;
 
 import com.infomedia.abacox.telephonypricing.db.entity.superclass.AuditedEntity;
@@ -13,7 +12,9 @@ import lombok.experimental.SuperBuilder;
         // Optimizes ProcessingFailureReportQueries
         @Index(name = "idx_failed_call_created", columnList = "created_date"),
         @Index(name = "idx_failed_call_error", columnList = "error_type"),
-        @Index(name = "idx_failed_call_comm_loc", columnList = "comm_location_id")
+        @Index(name = "idx_failed_call_comm_loc", columnList = "comm_location_id"),
+        // Optimizes duplicate checks against failed records
+        @Index(name = "idx_failed_call_ctl_hash", columnList = "ctl_hash")
     }
 )
 @Getter

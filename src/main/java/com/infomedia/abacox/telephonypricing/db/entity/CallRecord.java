@@ -38,6 +38,9 @@ import java.time.LocalDateTime;
         
         // 7. File reprocessing / Cleanup
         @Index(name = "idx_call_record_file_info", columnList = "file_info_id"),
+
+        // 8. Duplicate Detection (Hash)
+        @Index(name = "idx_call_record_ctl_hash", columnList = "ctl_hash")
     }
 )
 @Getter
