@@ -78,6 +78,6 @@ public class FailedCallRecord extends AuditedEntity {
     private CommunicationLocation commLocation;
 
     @ToString.Exclude
-    @Column(name = "ctl_hash", unique = true)
+    @Column(name = "ctl_hash")
     private Long ctlHash;
 }
