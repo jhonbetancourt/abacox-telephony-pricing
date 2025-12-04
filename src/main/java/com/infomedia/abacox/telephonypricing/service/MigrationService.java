@@ -777,7 +777,7 @@ public class MigrationService {
                 .columnMapping(Map.ofEntries(
                         entry("ACUMFALLIDO_ID", "id"),
                         entry("ACUMFALLIDO_EXTENSION", "employeeExtension"),
-                        entry("ACUMFALLIDO_CDR", "cdrString"),
+                        //entry("ACUMFALLIDO_CDR", "cdrString"),
                         entry("ACUMFALLIDO_TIPO", "errorType"), // Note: smallint to String conversion will be attempted by the migrator
                         entry("ACUMFALLIDO_MENSAJE", "errorMessage"),
                         entry("ACUMFALLIDO_ACUMTOTAL_ID", "originalCallRecordId"),
