@@ -12,9 +12,7 @@ import lombok.experimental.SuperBuilder;
         // Optimizes ProcessingFailureReportQueries
         @Index(name = "idx_failed_call_created", columnList = "created_date"),
         @Index(name = "idx_failed_call_error", columnList = "error_type"),
-        @Index(name = "idx_failed_call_comm_loc", columnList = "comm_location_id"),
-        // Optimizes duplicate checks against failed records
-        @Index(name = "idx_failed_call_ctl_hash", columnList = "ctl_hash")
+        @Index(name = "idx_failed_call_comm_loc", columnList = "comm_location_id")
     }
 )
 @Getter
@@ -79,6 +77,6 @@ public class FailedCallRecord extends AuditedEntity {
     private CommunicationLocation commLocation;
 
     @ToString.Exclude
-    @Column(name = "ctl_hash")
+    @Column(name = "ctl_hash", unique = true)
     private Long ctlHash;
 }

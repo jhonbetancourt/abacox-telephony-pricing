@@ -70,7 +70,7 @@ public class FileInfo {
      * Control or checksum information.
      * Original field: FILEINFO_CTL
      */
-    @Column(name = "checksum", nullable = false)
+    @Column(name = "checksum", nullable = false, unique = true)
     private Long checksum;
 
     /**
