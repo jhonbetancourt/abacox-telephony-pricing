@@ -32,7 +32,51 @@ public class MigrationRowProcessor {
     @PersistenceContext
     private final EntityManager entityManager;
 
-    // ... (processSingleRowInsert and processSelfRefUpdateBatch are unchanged) ...
+    /**
+     * Helper to determine if a custom transformer should be used.
+     * Uses reflection on targetEntityClass to find the field type for default conversion.
+     */
+    private Object convertValueByFieldLookup(Object sourceValue, 
+                                             String targetFieldName, 
+                                             Class<?> targetEntityClass, 
+                                             TableMigrationConfig config) throws Exception {
+        
+        // 1. Check for Custom Transformer
+        if (config.getCustomValueTransformers() != null && 
+            config.getCustomValueTransformers().containsKey(targetFieldName)) {
+            try {
+                return config.getCustomValueTransformers().get(targetFieldName).apply(sourceValue);
+            } catch (Exception e) {
+                throw new RuntimeException("Custom value transformation failed for field '" + targetFieldName + "': " + e.getMessage(), e);
+            }
+        }
+
+        // 2. Default Fallback (Look up field type inside MigrationUtils)
+        return MigrationUtils.convertToFieldType(sourceValue, targetEntityClass, targetFieldName);
+    }
+    
+    /**
+     * Helper to determine if a custom transformer should be used.
+     * Uses the provided explicit Class type for default conversion.
+     */
+    private Object convertValueByType(Object sourceValue, 
+                                      String targetFieldName, 
+                                      Class<?> targetType, 
+                                      TableMigrationConfig config) throws Exception {
+        // 1. Check for Custom Transformer
+        if (config.getCustomValueTransformers() != null && 
+            config.getCustomValueTransformers().containsKey(targetFieldName)) {
+            try {
+                return config.getCustomValueTransformers().get(targetFieldName).apply(sourceValue);
+            } catch (Exception e) {
+                throw new RuntimeException("Custom value transformation failed for field '" + targetFieldName + "': " + e.getMessage(), e);
+            }
+        }
+
+        // 2. Default Fallback (Use explicit type)
+        return MigrationUtils.convertToFieldType(sourceValue, targetType, null);
+    }
+
     @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
     public boolean processSingleRowInsert(Map<String, Object> sourceRow,
                                           TableMigrationConfig tableConfig,
@@ -54,7 +98,8 @@ public class MigrationRowProcessor {
                 return true; // Treat as skipped successfully
             }
 
-            targetIdValue = MigrationUtils.convertToFieldType(sourceIdValue, targetEntityClass, idFieldName);
+            // Convert ID using override logic (field lookup)
+            targetIdValue = convertValueByFieldLookup(sourceIdValue, idFieldName, targetEntityClass, tableConfig);
 
             boolean exists = checkEntityExistsInternal(tableName, idColumnName, targetIdValue);
             if (exists) {
@@ -96,7 +141,8 @@ public class MigrationRowProcessor {
 
                     if (!treatAsNull && sourceValue != null) {
                         try {
-                            convertedTargetValue = MigrationUtils.convertToFieldType(sourceValue, targetEntityClass, targetField);
+                            // Convert Field Value using override logic (field lookup)
+                            convertedTargetValue = convertValueByFieldLookup(sourceValue, targetField, targetEntityClass, tableConfig);
                         } catch (Exception e) {
                             log.warn("Skipping field '{}' for row with ID {} due to conversion error: {}. Source Col: {}, Source type: {}, Value: '{}'",
                                      targetField, targetIdValue, e.getMessage(), sourceCol,
@@ -179,7 +225,8 @@ public class MigrationRowProcessor {
                         Object targetParentId = null;
 
                         try {
-                            targetId = MigrationUtils.convertToFieldType(sourceIdValue, targetEntityClass, idFieldName);
+                            // Ensure ID conversion logic matches Insert Pass
+                            targetId = convertValueByFieldLookup(sourceIdValue, idFieldName, targetEntityClass, tableConfig);
 
                             boolean treatParentAsNull = false;
                             if (tableConfig.isTreatZeroIdAsNullForForeignKeys()
@@ -189,7 +236,8 @@ public class MigrationRowProcessor {
                             }
 
                             if (!treatParentAsNull && sourceParentIdValue != null) {
-                                targetParentId = MigrationUtils.convertToFieldType(sourceParentIdValue, selfRefFkType, null);
+                                // Apply conversion override for the Parent FK field using explicit type
+                                targetParentId = convertValueByType(sourceParentIdValue, selfRefFkField.getName(), selfRefFkType, tableConfig);
                             }
 
                             if (targetParentId != null) {
@@ -254,7 +302,6 @@ public class MigrationRowProcessor {
         log.debug("Processing historical activeness for batch of size {} for table {}", batchData.size(), targetTableName);
 
         // Group all rows in the current batch by their historical control ID.
-        // Since we fetched by complete groups, we know each group here is complete.
         Map<Object, List<Map<String, Object>>> groupedByHistoricalControlId = batchData.stream()
                 .filter(row -> row.get(sourceHistoricalControlIdColumn) != null)
                 .collect(Collectors.groupingBy(row -> row.get(sourceHistoricalControlIdColumn)));
@@ -271,6 +318,8 @@ public class MigrationRowProcessor {
             historicalChain.sort(Comparator.comparing((Map<String, Object> row) -> {
                 Object dateVal = row.get(sourceValidFromDateColumn);
                 try {
+                    // We don't support custom mapping for validFrom date logic here currently (unless passed via map), 
+                    // relying on standard conversion for sorting
                     LocalDateTime ldt = (LocalDateTime) MigrationUtils.convertToFieldType(dateVal, LocalDateTime.class, null);
                     return ldt != null ? ldt : LocalDateTime.MIN;
                 } catch (Exception e) {
@@ -278,7 +327,7 @@ public class MigrationRowProcessor {
                              dateVal, histCtlId, e.getMessage());
                     return LocalDateTime.MIN;
                 }
-            }).reversed()); // <-- CRITICAL FIX: reversed() for DESC order
+            }).reversed()); 
 
             // The first record in the sorted list is the most recent one
             Map<String, Object> mostRecentRecord = historicalChain.get(0);
@@ -299,7 +348,8 @@ public class MigrationRowProcessor {
                 Object sourceId = recordInChain.get(tableConfig.getSourceIdColumnName());
                 if (sourceId == null) continue;
                 try {
-                    Object targetId = MigrationUtils.convertToFieldType(sourceId, targetEntityClass, targetIdFieldName);
+                    // Ensure ID conversion uses overrides
+                    Object targetId = convertValueByFieldLookup(sourceId, targetIdFieldName, targetEntityClass, tableConfig);
                     updatesToPerform.add(new HistoricalRecordUpdate(targetId, isEmployeeActive));
                 } catch (Exception e) {
                     log.error("Could not convert source ID {} for historical update.", sourceId, e);
@@ -322,7 +372,8 @@ public class MigrationRowProcessor {
                 Object sourceId = sourceRow.get(tableConfig.getSourceIdColumnName());
                 if (sourceId == null) return;
                 try {
-                    Object targetId = MigrationUtils.convertToFieldType(sourceId, targetEntityClass, targetIdFieldName);
+                    // Ensure ID conversion uses overrides
+                    Object targetId = convertValueByFieldLookup(sourceId, targetIdFieldName, targetEntityClass, tableConfig);
                     Object validFromRaw = sourceRow.get(sourceValidFromDateColumn);
                     LocalDateTime validFrom = (LocalDateTime) MigrationUtils.convertToFieldType(validFromRaw, LocalDateTime.class, null);
                     boolean isActive = (validFrom != null && !validFrom.isAfter(now));

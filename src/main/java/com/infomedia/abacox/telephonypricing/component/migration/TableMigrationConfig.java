@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 
 import java.util.Map;
+import java.util.function.Function;
 
 @Data
 @NoArgsConstructor
@@ -18,6 +19,16 @@ public class TableMigrationConfig {
     private String sourceIdColumnName;
     private String targetIdFieldName;
     private Map<String, String> columnMapping;
+
+    /**
+     * Map of Target Field Name -> Transformation Function.
+     * The function receives the raw Source Value (Object) and returns the Converted Target Value (Object).
+     * This takes precedence over default MigrationUtils conversion.
+     * 
+     * Example: 
+     * map.put("isActive", (val) -> "Y".equals(val) ? true : false);
+     */
+    private Map<String, Function<Object, Object>> customValueTransformers;
 
     @Builder.Default
     private boolean selfReferencing = false;

@@ -5,6 +5,7 @@ import com.infomedia.abacox.telephonypricing.component.migration.DataMigrationEx
 import com.infomedia.abacox.telephonypricing.component.migration.MigrationParams;
 import com.infomedia.abacox.telephonypricing.component.migration.SourceDbConfig;
 import com.infomedia.abacox.telephonypricing.component.migration.TableMigrationConfig;
+import com.infomedia.abacox.telephonypricing.component.utils.CompressionZipUtil;
 import com.infomedia.abacox.telephonypricing.dto.migration.MigrationStart;
 import com.infomedia.abacox.telephonypricing.dto.migration.MigrationStatus;
 import com.infomedia.abacox.telephonypricing.exception.MigrationAlreadyInProgressException;
@@ -13,8 +14,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
 
+import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
@@ -23,6 +26,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
 
 import static java.util.Map.entry;
 
@@ -769,6 +773,19 @@ public class MigrationService {
                         .orderByClause("ACUMTOTAL_ID DESC")
                 .build());
 
+        Map<String, Function<Object, Object>> customTransformers = new HashMap<>();
+
+        //String to gzip compressed byte[] transformer
+        customTransformers.put("cdrString", (sourceValue) -> {
+            if (sourceValue == null) return null;
+            try {
+                return CompressionZipUtil.compressString(sourceValue.toString());
+            } catch (IOException e) {
+                log.error("Error compressing CDR string during migration: {}", e.getMessage());
+            }
+            return null;
+        });
+
         configs.add(TableMigrationConfig.builder()
                 .sourceTableName("acumfallido")
                 .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.FailedCallRecord")
@@ -777,7 +794,7 @@ public class MigrationService {
                 .columnMapping(Map.ofEntries(
                         entry("ACUMFALLIDO_ID", "id"),
                         entry("ACUMFALLIDO_EXTENSION", "employeeExtension"),
-                        //entry("ACUMFALLIDO_CDR", "cdrString"),
+                        entry("ACUMFALLIDO_CDR", "cdrString"),
                         entry("ACUMFALLIDO_TIPO", "errorType"), // Note: smallint to String conversion will be attempted by the migrator
                         entry("ACUMFALLIDO_MENSAJE", "errorMessage"),
                         entry("ACUMFALLIDO_ACUMTOTAL_ID", "originalCallRecordId"),
@@ -786,6 +803,7 @@ public class MigrationService {
                         entry("ACUMFALLIDO_FCREACION", "createdDate"),
                         entry("ACUMFALLIDO_FMODIFICADO", "lastModifiedDate")
                 ))
+                .customValueTransformers(customTransformers)
                 .maxEntriesToMigrate(runRequest.getMaxFailedCallRecordEntries()) // Limit for performance, similar to CallRecord
                 .orderByClause("ACUMFALLIDO_ID DESC") // Get the most recent failures first
                 .build());
