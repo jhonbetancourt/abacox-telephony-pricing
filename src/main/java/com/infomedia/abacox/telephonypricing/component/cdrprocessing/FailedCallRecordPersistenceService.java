@@ -5,9 +5,13 @@ import com.infomedia.abacox.telephonypricing.db.entity.FailedCallRecord;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.NoResultException;
 import jakarta.persistence.PersistenceContext;
+import jakarta.persistence.PersistenceException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
+import org.hibernate.exception.ConstraintViolationException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
@@ -96,9 +100,10 @@ public class FailedCallRecordPersistenceService {
 
     /**
      * Synchronous quarantine method.
-     * Used ONLY for Admin Reprocessing or specific synchronous flows where BatchWorker is bypassed.
+     * Uses REQUIRES_NEW to isolate the insert attempt from the main processing transaction.
+     * This prevents the main transaction from being marked as RollbackOnly if a duplicate key occurs.
      */
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public FailedCallRecord quarantineRecord(CdrData cdrData,
                                              QuarantineErrorType errorType, String errorMessage, String processingStep,
                                              Long originalCallRecordId) {
@@ -107,23 +112,18 @@ public class FailedCallRecordPersistenceService {
         }
 
         Long ctlHash = cdrData.getCtlHash();
-        FailedCallRecord existingRecord = findByCtlHash(ctlHash);
-        FailedCallRecord recordToSave;
+        
+        // 1. Try to find existing record
+        FailedCallRecord recordToSave = findByCtlHash(ctlHash);
 
-        if (existingRecord != null) {
-            recordToSave = existingRecord;
-            recordToSave.setErrorType(errorType.name());
-            recordToSave.setErrorMessage(errorMessage);
-            recordToSave.setProcessingStep(truncate(processingStep, 100));
-            recordToSave.setEmployeeExtension(truncate(cdrData.getCallingPartyNumber(), 50));
-            if (originalCallRecordId != null) {
-                recordToSave.setOriginalCallRecordId(originalCallRecordId);
-            }
+        if (recordToSave != null) {
+            // Update Existing
+            updateQuarantineDetails(recordToSave, cdrData, errorType, errorMessage, processingStep, originalCallRecordId);
         } else {
+            // 2. Prepare New Record
             recordToSave = new FailedCallRecord();
             recordToSave.setCtlHash(ctlHash);
             
-            // Inline compression for sync flow
             try {
                 byte[] compressed = CompressionZipUtil.compressString(cdrData.getRawCdrLine());
                 recordToSave.setCdrString(compressed);
@@ -132,23 +132,61 @@ public class FailedCallRecordPersistenceService {
             }
 
             recordToSave.setCommLocationId(cdrData.getCommLocationId());
-            recordToSave.setEmployeeExtension(truncate(cdrData.getCallingPartyNumber(), 50));
-            recordToSave.setOriginalCallRecordId(originalCallRecordId);
-            if (cdrData.getFileInfo() != null) {
-                recordToSave.setFileInfoId(cdrData.getFileInfo().getId().longValue());
+            updateQuarantineDetails(recordToSave, cdrData, errorType, errorMessage, processingStep, originalCallRecordId);
+
+            // 3. Attempt Insert with Flush
+            try {
+                entityManager.persist(recordToSave);
+                entityManager.flush(); // Force execution to catch ConstraintViolation immediately
+            } catch (PersistenceException | DataIntegrityViolationException e) {
+                // Check for Duplicate Key violation
+                if (isDuplicateKeyException(e)) {
+                    log.debug("Race condition detected for hash {}. Switching to Update.", ctlHash);
+                    // Clear the persistence context to detach the failed entity
+                    entityManager.clear();
+                    
+                    // Fetch the winner of the race
+                    recordToSave = findByCtlHash(ctlHash);
+                    if (recordToSave != null) {
+                        updateQuarantineDetails(recordToSave, cdrData, errorType, errorMessage, processingStep, originalCallRecordId);
+                        entityManager.merge(recordToSave);
+                    }
+                } else {
+                    log.error("Failed to save quarantine record. Hash: {}", ctlHash, e);
+                    throw e; // Rethrow if it's not a duplicate key issue
+                }
             }
-            recordToSave.setErrorType(errorType.name());
-            recordToSave.setErrorMessage(errorMessage);
-            recordToSave.setProcessingStep(truncate(processingStep, 100));
         }
 
-        try {
-            entityManager.persist(recordToSave);
-            return recordToSave;
-        } catch (Exception e) {
-            log.error("CRITICAL: Could not save/update quarantine record. Hash: {}, Error: {}", ctlHash, e.getMessage());
-            return null;
+        return recordToSave;
+    }
+
+    private void updateQuarantineDetails(FailedCallRecord record, CdrData cdrData,
+                                         QuarantineErrorType errorType, String errorMessage, String processingStep,
+                                         Long originalCallRecordId) {
+        record.setErrorType(errorType.name());
+        record.setErrorMessage(errorMessage);
+        record.setProcessingStep(truncate(processingStep, 100));
+        record.setEmployeeExtension(truncate(cdrData.getCallingPartyNumber(), 50));
+        
+        if (originalCallRecordId != null) {
+            record.setOriginalCallRecordId(originalCallRecordId);
         }
+        if (cdrData.getFileInfo() != null && record.getFileInfoId() == null) {
+            record.setFileInfoId(cdrData.getFileInfo().getId().longValue());
+        }
+    }
+
+    private boolean isDuplicateKeyException(Exception e) {
+        Throwable cause = e.getCause();
+        while (cause != null) {
+            if (cause instanceof ConstraintViolationException || 
+                (cause.getMessage() != null && cause.getMessage().contains("duplicate key"))) {
+                return true;
+            }
+            cause = cause.getCause();
+        }
+        return false;
     }
 
     @Transactional(readOnly = true)
