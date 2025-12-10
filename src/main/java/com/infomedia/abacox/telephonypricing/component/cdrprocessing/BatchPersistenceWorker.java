@@ -29,13 +29,13 @@ public class BatchPersistenceWorker {
     private final CallRecordPersistenceService callRecordService;
     private final FailedCallRecordPersistenceService failedRecordService;
     private final FileProcessingTrackerService trackerService;
-    
+
     @PersistenceContext
     private EntityManager entityManager;
 
     private static final int BATCH_SIZE = 1000;
 
-    @Scheduled(fixedDelay = 200) 
+    @Scheduled(fixedDelay = 200)
     @Transactional(propagation = Propagation.REQUIRED)
     public void processPersistenceQueue() {
         List<ProcessedCdrResult> batch = new ArrayList<>(BATCH_SIZE);
@@ -64,8 +64,9 @@ public class BatchPersistenceWorker {
         if (!failedResults.isEmpty()) {
             processFailedBatch(failedResults);
         }
-        
+
         // 2. Measure Database Flush
+        // Since we deduplicated internally, this flush should be safe from Unique Constraint Violations
         long flushStart = System.currentTimeMillis();
         entityManager.flush();
         entityManager.clear();
@@ -74,9 +75,76 @@ public class BatchPersistenceWorker {
         long totalTime = System.currentTimeMillis() - batchStartTime;
         log.info("Persisted Batch of {} records in {} ms. (DB Write/Flush took {} ms)",
                 count, totalTime, flushTime);
+
         // 3. Update Tracker (Decrement counts)
-        // Must be done AFTER flush ensures data is committed (or prepared to commit)
         updateFileTrackers(batch);
+    }
+
+    private void processSuccessfulBatch(List<ProcessedCdrResult> results) {
+        // Step 1: In-Batch Deduplication
+        // We use a Map to ensure that if the batch contains the same hash multiple times,
+        // we only attempt to persist one of them.
+        Map<Long, ProcessedCdrResult> uniqueBatch = new HashMap<>();
+        for (ProcessedCdrResult res : results) {
+            uniqueBatch.put(res.getCdrData().getCtlHash(), res);
+        }
+
+        // Step 2: Check DB for existing hashes based on our unique keys
+        List<Long> hashesToCheck = new ArrayList<>(uniqueBatch.keySet());
+        Set<Long> existingInDb = callRecordService.findExistingHashes(hashesToCheck);
+
+        // Step 3: Remove those that are already in the DB
+        existingInDb.forEach(uniqueBatch::remove);
+
+        if (uniqueBatch.isEmpty()) {
+            return;
+        }
+
+        // Step 4: Compress remaining items (Parallel for CPU efficiency)
+        uniqueBatch.values().parallelStream().forEach(this::compressResultData);
+
+        // Step 5: Persist
+        for (ProcessedCdrResult res : uniqueBatch.values()) {
+            CallRecord entity = callRecordService.createEntityFromDto(res.getCdrData(), res.getCommLocation());
+            if (entity != null) {
+                entityManager.persist(entity);
+            }
+        }
+    }
+
+    private void processFailedBatch(List<ProcessedCdrResult> results) {
+        // Step 1: In-Batch Deduplication
+        // Collapses multiple failures for the same hash into a single entry (the last one processed)
+        Map<Long, ProcessedCdrResult> uniqueBatch = new HashMap<>();
+        for (ProcessedCdrResult res : results) {
+            uniqueBatch.put(res.getCdrData().getCtlHash(), res);
+        }
+
+        // Step 2: Check DB for existing records
+        List<Long> hashesToCheck = new ArrayList<>(uniqueBatch.keySet());
+        List<FailedCallRecord> existingRecords = failedRecordService.findExistingRecordsByHashes(hashesToCheck);
+        
+        Map<Long, FailedCallRecord> existingMap = existingRecords.stream()
+                .collect(Collectors.toMap(FailedCallRecord::getCtlHash, r -> r));
+
+        // Step 3: Compress (Parallel)
+        uniqueBatch.values().parallelStream().forEach(this::compressResultData);
+
+        // Step 4: Merge or Persist
+        for (ProcessedCdrResult res : uniqueBatch.values()) {
+            Long hash = res.getCdrData().getCtlHash();
+            FailedCallRecord existing = existingMap.get(hash);
+
+            if (existing != null) {
+                // Update existing record
+                failedRecordService.updateEntityFromDto(existing, res);
+                entityManager.merge(existing);
+            } else {
+                // Insert new record
+                FailedCallRecord newRecord = failedRecordService.createEntityFromDto(res);
+                entityManager.persist(newRecord);
+            }
+        }
     }
 
     private void updateFileTrackers(List<ProcessedCdrResult> batch) {
@@ -90,87 +158,6 @@ public class BatchPersistenceWorker {
         }
 
         processedCounts.forEach(trackerService::decrementPendingCount);
-    }
-
-    private void processSuccessfulBatch(List<ProcessedCdrResult> results) {
-        long start = System.currentTimeMillis();
-
-        List<Long> hashes = results.stream()
-                .map(r -> r.getCdrData().getCtlHash())
-                .collect(Collectors.toList());
-
-        long dbCheckStart = System.currentTimeMillis();
-        Set<Long> existingHashes = callRecordService.findExistingHashes(hashes);
-        long dbCheckTime = System.currentTimeMillis() - dbCheckStart;
-
-        List<ProcessedCdrResult> toPersist = results.stream()
-                .filter(res -> !existingHashes.contains(res.getCdrData().getCtlHash()))
-                .collect(Collectors.toList());
-
-        int skipped = results.size() - toPersist.size();
-
-        if (toPersist.isEmpty()) {
-            if (skipped > 0) log.debug("Batch: Skipped {} duplicate successful records.", skipped);
-            return;
-        }
-
-        long compressStart = System.currentTimeMillis();
-        toPersist.parallelStream().forEach(this::compressResultData);
-        long compressTime = System.currentTimeMillis() - compressStart;
-
-        long contextStart = System.currentTimeMillis();
-        int saved = 0;
-        for (ProcessedCdrResult res : toPersist) {
-            CallRecord entity = callRecordService.createEntityFromDto(res.getCdrData(), res.getCommLocation());
-            if (entity != null) {
-                entityManager.persist(entity);
-                saved++;
-            }
-        }
-        long contextTime = System.currentTimeMillis() - contextStart;
-        
-        log.debug("Success Batch -> DB Check: {}ms | Compress: {}ms | Context: {}ms | Saved: {}, Skipped: {}", 
-                dbCheckTime, compressTime, contextTime, saved, skipped);
-    }
-
-    private void processFailedBatch(List<ProcessedCdrResult> results) {
-        long start = System.currentTimeMillis();
-
-        List<Long> hashes = results.stream()
-                .map(r -> r.getCdrData().getCtlHash())
-                .collect(Collectors.toList());
-
-        long dbLookupStart = System.currentTimeMillis();
-        List<FailedCallRecord> existingRecords = failedRecordService.findExistingRecordsByHashes(hashes);
-        Map<Long, FailedCallRecord> existingMap = existingRecords.stream()
-                .collect(Collectors.toMap(FailedCallRecord::getCtlHash, r -> r));
-        long dbLookupTime = System.currentTimeMillis() - dbLookupStart;
-
-        long compressStart = System.currentTimeMillis();
-        results.parallelStream().forEach(this::compressResultData);
-        long compressTime = System.currentTimeMillis() - compressStart;
-
-        long contextStart = System.currentTimeMillis();
-        int saved = 0;
-        int updated = 0;
-
-        for (ProcessedCdrResult res : results) {
-            FailedCallRecord existing = existingMap.get(res.getCdrData().getCtlHash());
-            
-            if (existing != null) {
-                failedRecordService.updateEntityFromDto(existing, res);
-                entityManager.merge(existing);
-                updated++;
-            } else {
-                FailedCallRecord newRecord = failedRecordService.createEntityFromDto(res);
-                entityManager.persist(newRecord);
-                saved++;
-            }
-        }
-        long contextTime = System.currentTimeMillis() - contextStart;
-
-        log.debug("Failed Batch -> DB Lookup: {}ms | Compress: {}ms | Context: {}ms | New: {}, Updated: {}", 
-                dbLookupTime, compressTime, contextTime, saved, updated);
     }
 
     private void compressResultData(ProcessedCdrResult result) {

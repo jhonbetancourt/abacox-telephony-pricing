@@ -3,13 +3,18 @@ package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 import com.infomedia.abacox.telephonypricing.component.utils.CompressionZipUtil;
 import com.infomedia.abacox.telephonypricing.db.entity.CallRecord;
 import com.infomedia.abacox.telephonypricing.db.entity.CommunicationLocation;
+import com.infomedia.abacox.telephonypricing.db.entity.FailedCallRecord; // Needed for exception check logic or generic util
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.NoResultException;
 import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
+import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
@@ -26,6 +31,9 @@ public class CallRecordPersistenceService {
     @PersistenceContext
     private EntityManager entityManager;
     private final CdrConfigService cdrConfigService;
+    
+    // Inject the Transaction Manager
+    private final PlatformTransactionManager transactionManager;
 
     /**
      * Batch lookup for duplicate checking.
@@ -57,33 +65,55 @@ public class CallRecordPersistenceService {
      * Synchronous persistence method.
      * Used ONLY for Admin Reprocessing or specific synchronous flows.
      * Performs inline duplicate check and inline compression.
+     * 
+     * Concurrency Safety:
+     * Uses TransactionTemplate with REQUIRES_NEW to isolate the insert attempt.
      */
-    @Transactional
     public CallRecord saveOrUpdateCallRecord(CdrData cdrData, CommunicationLocation commLocation) {
         if (cdrData.isMarkedForQuarantine()) {
             return null;
         }
 
         Long cdrHash = cdrData.getCtlHash();
-        
-        // Quick duplicate check (single query)
-        List<Long> existing = entityManager.createQuery("SELECT cr.id FROM CallRecord cr WHERE cr.ctlHash = :hash", Long.class)
-                .setParameter("hash", cdrHash)
-                .getResultList();
 
-        if (!existing.isEmpty()) {
-            log.debug("Duplicate CDR detected during sync save. Hash: {}", cdrHash);
-            return entityManager.find(CallRecord.class, existing.get(0));
-        }
-
-        CallRecord callRecord = createEntityFromDto(cdrData, commLocation);
+        TransactionTemplate txTemplate = new TransactionTemplate(transactionManager);
+        txTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
 
         try {
-            entityManager.persist(callRecord);
-            return callRecord;
+            // BLOCK A: Try to insert in an isolated transaction
+            return txTemplate.execute(status -> {
+                // 1. Quick duplicate check
+                List<Long> existingIds = entityManager.createQuery("SELECT cr.id FROM CallRecord cr WHERE cr.ctlHash = :hash", Long.class)
+                        .setParameter("hash", cdrHash)
+                        .getResultList();
+
+                if (!existingIds.isEmpty()) {
+                    log.debug("Duplicate CDR detected during sync save. Hash: {}", cdrHash);
+                    return entityManager.find(CallRecord.class, existingIds.get(0));
+                }
+
+                // 2. Prepare Entity
+                CallRecord callRecord = createEntityFromDto(cdrData, commLocation);
+
+                // 3. Persist and Flush
+                // Flush is critical here to trigger ConstraintViolation immediately inside this block
+                entityManager.persist(callRecord);
+                entityManager.flush(); 
+                
+                return callRecord;
+            });
+
         } catch (Exception e) {
-            log.error("Database error while saving CallRecord during sync process: {}", e.getMessage());
-            return null;
+            // BLOCK B: Handle race condition outside the aborted transaction
+            if (isDuplicateKeyException(e)) {
+                log.debug("Race condition detected for CallRecord hash {}. Fetching existing.", cdrHash);
+                
+                // Retrieve the record that won the race
+                return txTemplate.execute(retryStatus -> findByCtlHash(cdrHash));
+            } else {
+                log.error("Database error while saving CallRecord during sync process: {}", e.getMessage());
+                return null;
+            }
         }
     }
 
@@ -110,9 +140,6 @@ public class CallRecordPersistenceService {
 
     /**
      * Maps fields from CdrData DTO to CallRecord Entity.
-     * Handles compression logic:
-     * 1. If preCompressedData exists (Batch flow), uses it directly.
-     * 2. If not (Sync flow), compresses the raw string inline.
      */
     public void mapCdrDataToCallRecord(CdrData cdrData, CallRecord callRecord, CommunicationLocation commLocation) {
 
@@ -168,6 +195,18 @@ public class CallRecordPersistenceService {
         }
 
         callRecord.setCtlHash(cdrData.getCtlHash());
+    }
+
+    private boolean isDuplicateKeyException(Exception e) {
+        Throwable cause = e;
+        while (cause != null) {
+            if (cause instanceof ConstraintViolationException || 
+                (cause.getMessage() != null && cause.getMessage().toLowerCase().contains("duplicate key"))) {
+                return true;
+            }
+            cause = cause.getCause();
+        }
+        return false;
     }
 
     private String truncate(String input, int limit) {
