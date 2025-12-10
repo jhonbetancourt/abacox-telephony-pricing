@@ -776,7 +776,7 @@ public class MigrationService {
         Map<String, Function<Object, Object>> customTransformers = new HashMap<>();
 
         //String to gzip compressed byte[] transformer
-        customTransformers.put("cdrString", (sourceValue) -> {
+        customTransformers.put("cdrString", sourceValue -> {
             if (sourceValue == null) return null;
             try {
                 return CompressionZipUtil.compressString(sourceValue.toString());
