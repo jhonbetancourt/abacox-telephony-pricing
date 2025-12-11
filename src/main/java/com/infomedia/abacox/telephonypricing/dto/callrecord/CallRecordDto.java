@@ -30,7 +30,7 @@ public class CallRecordDto extends AuditedDto {
     private Long operatorId;
     private OperatorDto operator;
     private String employeeExtension;
-    private String employeeKey;
+    private String employeeAuthCode;
     private Long indicatorId;
     private IndicatorDto indicator;
     private String destinationPhone;
@@ -52,4 +52,6 @@ public class CallRecordDto extends AuditedDto {
     private Long destinationEmployeeId;
     private EmployeeDto destinationEmployee;
     private Long fileInfoId;
+    private String cdrString;
+
 }

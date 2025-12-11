@@ -1,9 +1,11 @@
 package com.infomedia.abacox.telephonypricing.controller;
 
 import com.infomedia.abacox.telephonypricing.constants.DateTimePattern;
+import com.infomedia.abacox.telephonypricing.db.entity.CallRecord;
 import com.infomedia.abacox.telephonypricing.db.entity.FailedCallRecord;
 import com.infomedia.abacox.telephonypricing.db.view.ConferenceCallsReportView;
 import com.infomedia.abacox.telephonypricing.db.view.CorporateReportView;
+import com.infomedia.abacox.telephonypricing.dto.callrecord.CallRecordDto;
 import com.infomedia.abacox.telephonypricing.dto.failedcallrecord.FailedCallRecordDto;
 import com.infomedia.abacox.telephonypricing.dto.generic.PageableRequest;
 import com.infomedia.abacox.telephonypricing.dto.report.*;
@@ -65,6 +67,27 @@ public class ReportController {
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
                 .body(resource);
     }
+
+    @GetMapping(value = "callRecords", produces = MediaType.APPLICATION_JSON_VALUE)
+    public Page<CallRecordDto> getCallRecords(@Parameter(hidden = true) Pageable pageable
+            , @Parameter(hidden = true) @Filter Specification<CallRecord> spec
+            , @ParameterObject FilterRequest filterRequest) {
+        return reportService.generateCallRecordsReport(spec, pageable);
+    }
+
+    @GetMapping(value = "callRecords/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
+    public ResponseEntity<Resource> exportExcelCallRecords(@Parameter(hidden = true) Pageable pageable
+            , @Parameter(hidden = true) @Filter Specification<CallRecord> spec
+            , @ParameterObject FilterRequest filterRequest
+            , @ParameterObject ExcelRequest excelRequest) {
+        ByteArrayResource resource = reportService.exportExcelCallRecordsReport(spec
+                , pageable, excelRequest.toExcelGeneratorBuilder());
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=call_records.xlsx")
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .body(resource);
+    }
+
 
     @GetMapping(value = "corporateReport", produces = MediaType.APPLICATION_JSON_VALUE)
     public Page<CorporateReportDto> getCorporateReport(@Parameter(hidden = true) Pageable pageable

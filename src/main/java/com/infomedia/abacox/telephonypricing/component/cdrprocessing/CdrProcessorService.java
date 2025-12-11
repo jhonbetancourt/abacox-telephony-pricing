@@ -1,3 +1,4 @@
+// File: com/infomedia/abacox/telephonypricing/cdr/CdrProcessorService.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
 import com.infomedia.abacox.telephonypricing.component.utils.CompressionZipUtil;
@@ -191,6 +192,12 @@ public class CdrProcessorService {
             return false;
         }
 
+        // VALIDATION ADDED: Check if CDR content exists
+        if (callRecord.getCdrString() == null || callRecord.getCdrString().length == 0) {
+            log.error("Reprocessing request for CallRecord ID {} failed: Stored CDR content is empty or null.", callRecordId);
+            return false;
+        }
+
         String cdrString;
         try {
             cdrString = CompressionZipUtil.decompressToString(callRecord.getCdrString());
@@ -232,6 +239,12 @@ public class CdrProcessorService {
     public boolean reprocessFailedCallRecord(Long failedCallRecordId) {
         FailedCallRecord failedCallRecord = entityManager.find(FailedCallRecord.class, failedCallRecordId);
         if (failedCallRecord == null) {
+            return false;
+        }
+
+        // VALIDATION ADDED: Check if CDR content exists
+        if (failedCallRecord.getCdrString() == null || failedCallRecord.getCdrString().length == 0) {
+            log.error("Reprocessing request for FailedCallRecord ID {} failed: Stored CDR content is empty or null.", failedCallRecordId);
             return false;
         }
 
