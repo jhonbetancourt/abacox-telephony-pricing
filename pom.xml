@@ -28,7 +28,7 @@
 	</scm>
 	<properties>
 		<java.version>21</java.version>
-		<liquibase-version>4.27.0</liquibase-version>
+		<liquibase-version>4.31.1</liquibase-version>
 		<spring-boot-version>${project.parent.version}</spring-boot-version>
 	</properties>
 	<dependencies>
@@ -156,6 +156,16 @@
 			<groupId>org.lz4</groupId>
 			<artifactId>lz4-java</artifactId>
 			<version>1.8.0</version>
+		</dependency>
+
+		<dependency>
+			<groupId>org.liquibase</groupId>
+			<artifactId>liquibase-core</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.liquibase.ext</groupId>
+			<artifactId>liquibase-hibernate6</artifactId>
+			<version>${liquibase-version}</version>
 		</dependency>
 	</dependencies>
 

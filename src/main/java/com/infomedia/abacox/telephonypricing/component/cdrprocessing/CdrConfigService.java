@@ -44,13 +44,13 @@ public class CdrConfigService {
 
     public int getMinCallDurationForTariffing() {
         // Original PHP: $min_tiempo = defineParamCliente('CAPTURAS_TIEMPOCERO', $link);
-        int val = configService.getValue(ConfigKey.MIN_CALL_DURATION_FOR_TARIFFING).asInt();
+        int val = configService.getValue(ConfigKey.MIN_CALL_DURATION_FOR_TARIFFING).asInteger();
         return Math.max(0, val);
     }
 
     public int getMaxCallDurationSeconds() {
         // Original PHP: $max_tiempo = defineParamCliente('CAPTURAS_TIEMPOMAX', $link); (in minutes)
-        int maxMinutes = configService.getValue(ConfigKey.MAX_CALL_DURATION_MINUTES).asInt();
+        int maxMinutes = configService.getValue(ConfigKey.MAX_CALL_DURATION_MINUTES).asInteger();
         return maxMinutes * 60; // Convert minutes to seconds
     }
 
@@ -61,7 +61,7 @@ public class CdrConfigService {
 
     public int getMaxAllowedCaptureDateDaysInFuture() {
         // Original PHP: $dias_add = defineParamCliente('CAPTURAS_FECHAMAX', $link);
-        int val = configService.getValue(ConfigKey.MAX_ALLOWED_CAPTURE_DATE_DAYS_IN_FUTURE).asInt();
+        int val = configService.getValue(ConfigKey.MAX_ALLOWED_CAPTURE_DATE_DAYS_IN_FUTURE).asInteger();
         return Math.max(0, val);
     }
 

@@ -15,4 +15,6 @@ public interface ConfigValueRepository extends JpaRepository<ConfigValue, Long>,
     boolean existsByKey(String key);
 
     List<ConfigValue> findAllByKeyIn(List<String> keys);
+
+    Optional<ConfigValue> findByGroupAndKey(String group, String key);
 }

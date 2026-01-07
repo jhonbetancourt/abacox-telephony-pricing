@@ -35,8 +35,23 @@ import java.util.Map;
                 type = SecuritySchemeType.APIKEY,
                 paramName = "X-Username",
                 in = SecuritySchemeIn.HEADER
+        ),
+        @SecurityScheme(
+                name = "Tenant_Id",
+                type = SecuritySchemeType.APIKEY,
+                paramName = "X-Tenant-Id",
+                in = SecuritySchemeIn.HEADER,
+                description = "Tenant Identifier"
+        ),
+        @SecurityScheme(
+                name = "Internal_Api_Key",
+                type = SecuritySchemeType.APIKEY,
+                paramName = "X-Internal-Api-Key",
+                in = SecuritySchemeIn.HEADER,
+                description = "API Key for internal service-to-service communication"
         )
 })
+
 public class SwaggerConfig {
 
     @Value("${info.build.name}")

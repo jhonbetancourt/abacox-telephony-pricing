@@ -2,8 +2,8 @@ package com.infomedia.abacox.telephonypricing.component.configmanager;
 
 import com.infomedia.abacox.telephonypricing.db.entity.ConfigValue;
 import com.infomedia.abacox.telephonypricing.db.repository.ConfigValueRepository;
+import com.infomedia.abacox.telephonypricing.multitenancy.TenantContext;
 import com.infomedia.abacox.telephonypricing.service.common.CrudService;
-import jakarta.annotation.PostConstruct;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -11,168 +11,282 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
-/**
- * Manages application configuration values stored in the database.
- *
- * This service implements a "read-through/write-through" caching strategy to minimize database access.
- * - On startup, all configuration values are loaded into an in-memory cache.
- * - Read operations (getValue, findValue) are served directly from the cache.
- * - Write operations (setValue, updateConfiguration) update both the database and the cache to ensure consistency.
- *
- * This implementation uses a "Null Object Pattern" to store null values in the ConcurrentHashMap cache,
- * which does not natively support nulls.
- */
 @Service
 @Log4j2
 public class ConfigValueService extends CrudService<ConfigValue, Long, ConfigValueRepository> {
 
-    // A special, private object used to represent null values in the ConcurrentHashMap.
     private static final Object NULL_PLACEHOLDER = new Object();
+    private static final String DEFAULT_GROUP = "default";
+    private static final String FALLBACK_TENANT = "public";
 
-    // Thread-safe cache. The value is Object to accommodate both Strings and the NULL_PLACEHOLDER.
-    private final Map<String, Object> configCache = new ConcurrentHashMap<>();
+    // Cache: Tenant -> Group -> Key -> Value
+    private final Map<String, Map<String, Map<String, Object>>> tenantConfigCache = new ConcurrentHashMap<>();
 
-    // Thread-safe map for update callbacks. The list of callbacks is also thread-safe.
+    // Callbacks: Group:Key -> List of Consumers
     private final Map<String, List<Consumer<Value>>> updateCallbacks = new ConcurrentHashMap<>();
+
+    private static final class GroupCallbackRegistration {
+        final Consumer<ValueGroup> callback;
+        final Map<String, String> keysAndDefaults;
+
+        GroupCallbackRegistration(Consumer<ValueGroup> callback, Map<String, String> keysAndDefaults) {
+            this.callback = callback;
+            this.keysAndDefaults = keysAndDefaults;
+        }
+    }
+
+    private final Map<String, List<GroupCallbackRegistration>> groupUpdateCallbacks = new ConcurrentHashMap<>();
 
     public ConfigValueService(ConfigValueRepository repository) {
         super(repository);
     }
 
-    /**
-     * Encodes a String value for storage in the cache. Converts null to the placeholder.
-     */
     private Object encodeValue(String value) {
         return value == null ? NULL_PLACEHOLDER : value;
     }
 
-    /**
-     * Decodes an Object from the cache. Converts the placeholder back to null.
-     */
     private String decodeValue(Object storedValue) {
         return storedValue == NULL_PLACEHOLDER ? null : (String) storedValue;
     }
 
-    /**
-     * Loads all configuration values from the database into the cache on application startup.
-     */
-    @PostConstruct
-    public void initializeCache() {
-        log.info("Initializing configuration cache...");
-        // We cannot use putAll directly; we must encode each value.
-        getRepository().findAll().forEach(configValue -> {
-            configCache.put(configValue.getKey(), encodeValue(configValue.getValue()));
-        });
-        log.info("Configuration cache initialized with {} entries.", configCache.size());
+    private String getCallbackKey(String group, String key) {
+        return group + ":" + key;
     }
 
-    public Value getValue(String configKey, String defaultValue) {
-        Object storedValue = configCache.get(configKey);
-        // If the key doesn't exist in the cache, storedValue will be null.
-        if (storedValue == null) {
-            return new Value(configKey, defaultValue);
+    /**
+     * Safely resolves the current tenant.
+     * If TenantContext is null (e.g. during startup), defaults to "public".
+     */
+    private String resolveCurrentTenant() {
+        String tenant = TenantContext.getTenant();
+        return (tenant != null) ? tenant : FALLBACK_TENANT;
+    }
+
+    /**
+     * Ensures the cache for the CURRENT tenant is loaded.
+     */
+    private void ensureTenantCacheLoaded() {
+        String currentTenant = resolveCurrentTenant();
+
+        if (tenantConfigCache.containsKey(currentTenant)) {
+            return;
         }
-        // If the key exists, decode its value (which might be null).
-        return new Value(configKey, decodeValue(storedValue));
+
+        log.debug("Loading configuration cache for tenant: {}", currentTenant);
+        try {
+            // Because we are inside a TenantContext (or defaulted to public), 
+            // this repository call goes to the correct schema.
+            Map<String, Map<String, Object>> tenantCache = new ConcurrentHashMap<>();
+            
+            getRepository().findAll().forEach(configValue -> {
+                String group = Objects.requireNonNullElse(configValue.getGroup(), DEFAULT_GROUP);
+                tenantCache
+                    .computeIfAbsent(group, k -> new ConcurrentHashMap<>())
+                    .put(configValue.getKey(), encodeValue(configValue.getValue()));
+            });
+            
+            tenantConfigCache.put(currentTenant, tenantCache);
+        } catch (Exception e) {
+            // Fail gracefully if schema doesn't exist yet (e.g. bootstrapping)
+            // Store an empty map so we don't retry DB calls endlessly on every get()
+            log.warn("Could not load configs for tenant '{}'. Schema might be missing. Using empty cache.", currentTenant);
+            tenantConfigCache.put(currentTenant, new ConcurrentHashMap<>());
+        }
+    }
+
+    public void invalidateCurrentTenantCache() {
+        tenantConfigCache.remove(resolveCurrentTenant());
+    }
+
+    public Value getValue(String group, String configKey, String defaultValue) {
+        ensureTenantCacheLoaded();
+        String currentTenant = resolveCurrentTenant();
+        String effectiveGroup = Objects.requireNonNullElse(group, DEFAULT_GROUP);
+
+        // Safe get: tenantConfigCache key is guaranteed not null by resolveCurrentTenant()
+        Map<String, Object> groupCache = tenantConfigCache
+                .getOrDefault(currentTenant, Map.of())
+                .get(effectiveGroup);
+
+        if (groupCache == null) {
+            return new Value(effectiveGroup, configKey, defaultValue);
+        }
+
+        Object storedValue = groupCache.get(configKey);
+        if (storedValue == null) {
+            return new Value(effectiveGroup, configKey, defaultValue);
+        }
+
+        return new Value(effectiveGroup, configKey, decodeValue(storedValue));
     }
 
     @Transactional
-    public void setValue(String configKey, String value) {
-        setByKey(configKey, value);
+    public void setValue(String group, String configKey, String value) {
+        setByGroupAndKey(group, configKey, value);
     }
 
-    protected void setByKey(String configKey, String newValue) {
-        // Decode the old value from the cache for comparison.
-        String oldValue = decodeValue(configCache.get(configKey));
+    protected void setByGroupAndKey(String group, String configKey, String newValue) {
+        ensureTenantCacheLoaded();
+        String currentTenant = resolveCurrentTenant();
+        String effectiveGroup = Objects.requireNonNullElse(group, DEFAULT_GROUP);
 
-        // Only proceed if the value has actually changed
+        // Check if changed
+        Map<String, Map<String, Object>> tenantCache = tenantConfigCache.get(currentTenant);
+        String oldValue = Optional.ofNullable(tenantCache.get(effectiveGroup))
+                .map(g -> g.get(configKey))
+                .map(this::decodeValue)
+                .orElse(null);
+
         if (Objects.equals(oldValue, newValue)) {
             return;
         }
 
-        // Update or create the value in the database
-        ConfigValue configValue = getRepository().findByKey(configKey)
-                .orElseGet(() -> ConfigValue.builder().key(configKey).build());
+        // DB Update
+        ConfigValue configValue = getRepository().findByGroupAndKey(effectiveGroup, configKey)
+                .orElseGet(() -> ConfigValue.builder().group(effectiveGroup).key(configKey).build());
 
         configValue.setValue(newValue);
         getRepository().save(configValue);
 
-        // Update the cache (Write-through), encoding the new value.
-        configCache.put(configKey, encodeValue(newValue));
-        log.info("Updated config key '{}' to new value.", configKey);
+        // Cache Update
+        tenantCache
+                .computeIfAbsent(effectiveGroup, k -> new ConcurrentHashMap<>())
+                .put(configKey, encodeValue(newValue));
 
-        // Trigger callbacks with the original (decoded) new value.
-        onUpdateValue(configKey, newValue);
+        log.info("[Tenant: {}] Updated config '{}' in group '{}'.", currentTenant, configKey, effectiveGroup);
+
+        onUpdateValue(effectiveGroup, configKey, newValue);
     }
 
-    public Map<String, Object> getConfiguration() {
-        // Decode all values before returning the map to the caller.
-        return configCache.entrySet().stream()
+    public Map<String, Object> getConfigurationByGroup(String group, Map<String, String> keysAndDefaults) {
+        ensureTenantCacheLoaded();
+        String currentTenant = resolveCurrentTenant();
+        String effectiveGroup = Objects.requireNonNullElse(group, DEFAULT_GROUP);
+
+        Map<String, Object> groupCache = tenantConfigCache
+                .getOrDefault(currentTenant, Map.of())
+                .get(effectiveGroup);
+
+        return keysAndDefaults.entrySet().stream()
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        entry -> {
+                            if (groupCache == null) return entry.getValue();
+                            Object storedValue = groupCache.get(entry.getKey());
+                            return storedValue == null ? entry.getValue() : decodeValue(storedValue);
+                        }
+                ));
+    }
+
+    public Map<String, Object> getConfigurationByGroup(String group) {
+        ensureTenantCacheLoaded();
+        String currentTenant = resolveCurrentTenant();
+        String effectiveGroup = Objects.requireNonNullElse(group, DEFAULT_GROUP);
+
+        Map<String, Object> groupCache = tenantConfigCache
+                .getOrDefault(currentTenant, Map.of())
+                .get(effectiveGroup);
+
+        if (groupCache == null) return Map.of();
+
+        return groupCache.entrySet().stream()
                 .collect(Collectors.toMap(
                         Map.Entry::getKey,
                         entry -> decodeValue(entry.getValue())
                 ));
     }
 
-    public Map<String, Object> getConfigurationByKeys(List<String> keys) {
-        return keys.stream()
-                .filter(configCache::containsKey)
-                .collect(Collectors.toMap(
-                        Function.identity(),
-                        key -> decodeValue(configCache.get(key))
-                ));
-    }
-
-    public Map<String, Object> getConfigurationByKeys(Map<String, String> keysAndDefaults) {
-        return keysAndDefaults.entrySet().stream()
-                .collect(Collectors.toMap(
-                        Map.Entry::getKey,
-                        entry -> {
-                            Object storedValue = configCache.get(entry.getKey());
-                            // If key is not in cache, use the provided default.
-                            // Otherwise, decode the value from the cache.
-                            return storedValue == null ? entry.getValue() : decodeValue(storedValue);
-                        }
-                ));
-    }
-
     @Transactional
-    public void updateConfiguration(Map<String, String> configMap) {
-        // The map passed in can contain nulls, and setByKey handles them correctly.
-        configMap.forEach(this::setByKey);
+    public void updateConfiguration(String group, Map<String, Object> configMap) {
+        configMap.forEach((key, value) ->
+                setByGroupAndKey(group, key, value == null ? null : value.toString()));
     }
 
-    // --- Callback Mechanism (No changes needed here) ---
+    // --- Callback Registration ---
 
-    public void registerUpdateCallback(String configKey, Consumer<Value> callback) {
-        updateCallbacks.computeIfAbsent(configKey, k -> new CopyOnWriteArrayList<>()).add(callback);
+    public void registerUpdateCallback(String group, String configKey, Consumer<Value> callback) {
+        String effectiveGroup = Objects.requireNonNullElse(group, DEFAULT_GROUP);
+        String callbackKey = getCallbackKey(effectiveGroup, configKey);
+        updateCallbacks.computeIfAbsent(callbackKey, k -> new CopyOnWriteArrayList<>()).add(callback);
     }
 
-    public void unregisterUpdateCallback(String configKey, Consumer<Value> callback) {
-        List<Consumer<Value>> callbacks = updateCallbacks.get(configKey);
+    public void unregisterUpdateCallback(String group, String configKey, Consumer<Value> callback) {
+        String effectiveGroup = Objects.requireNonNullElse(group, DEFAULT_GROUP);
+        String callbackKey = getCallbackKey(effectiveGroup, configKey);
+        List<Consumer<Value>> callbacks = updateCallbacks.get(callbackKey);
         if (callbacks != null) {
             callbacks.remove(callback);
         }
     }
 
-    private void onUpdateValue(String configKey, String value) {
-        List<Consumer<Value>> callbacks = updateCallbacks.get(configKey);
-        if (callbacks != null && !callbacks.isEmpty()) {
-            callbacks.forEach(callback ->
-                    new Thread(() -> {
-                        try {
-                            // The callback receives the actual value (e.g., a null String), not the placeholder.
-                            callback.accept(new Value(configKey, value));
-                        } catch (Exception e) {
-                            log.error("Error executing update callback for key '{}'", configKey, e);
-                        }
-                    }).start());
+    public void registerGroupUpdateCallback(String group, Map<String, String> keysAndDefaults, Consumer<ValueGroup> callback) {
+        String effectiveGroup = Objects.requireNonNullElse(group, DEFAULT_GROUP);
+        groupUpdateCallbacks
+                .computeIfAbsent(effectiveGroup, k -> new CopyOnWriteArrayList<>())
+                .add(new GroupCallbackRegistration(callback, keysAndDefaults));
+    }
+
+    public void unregisterGroupUpdateCallback(String group, Consumer<ValueGroup> callback) {
+        String effectiveGroup = Objects.requireNonNullElse(group, DEFAULT_GROUP);
+        List<GroupCallbackRegistration> regs = groupUpdateCallbacks.get(effectiveGroup);
+        if (regs != null) {
+            regs.removeIf(r -> r.callback == callback);
         }
+    }
+
+    private void onUpdateValue(String group, String configKey, String value) {
+        Value changedValue = new Value(group, configKey, value);
+        String callbackKey = getCallbackKey(group, configKey);
+        
+        List<Consumer<Value>> keyCallbacks = updateCallbacks.get(callbackKey);
+        if (keyCallbacks != null) {
+            keyCallbacks.forEach(cb -> safeRun(() -> cb.accept(changedValue)));
+        }
+
+        List<GroupCallbackRegistration> groupRegs = groupUpdateCallbacks.get(group);
+        if (groupRegs != null) {
+            groupRegs.forEach(reg -> safeRun(() -> {
+                Map<String, Object> snapshot = (reg.keysAndDefaults == null)
+                        ? getConfigurationByGroup(group)
+                        : getConfigurationByGroup(group, reg.keysAndDefaults);
+                reg.callback.accept(new ValueGroup(group, snapshot));
+            }));
+        }
+    }
+
+    private void safeRun(Runnable r) {
+        try {
+            r.run();
+        } catch (Exception e) {
+            log.error("Error executing config update callback", e);
+        }
+    }
+
+    public Map<String, Map<String, Object>> getConfiguration() {
+        ensureTenantCacheLoaded();
+        String currentTenant = resolveCurrentTenant();
+
+        Map<String, Map<String, Object>> tenantCache = tenantConfigCache.get(currentTenant);
+
+        if (tenantCache == null) {
+            return Map.of();
+        }
+
+        // Return a decoded copy of the map
+        return tenantCache.entrySet().stream()
+                .collect(Collectors.toMap(
+                        Map.Entry::getKey,
+                        groupEntry -> groupEntry.getValue().entrySet().stream()
+                                .collect(Collectors.toMap(
+                                        Map.Entry::getKey,
+                                        valueEntry -> decodeValue(valueEntry.getValue())
+                                ))
+                ));
     }
 }

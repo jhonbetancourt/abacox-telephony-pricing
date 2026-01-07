@@ -26,7 +26,6 @@ public class DefaultDataLoadingService {
     private final SeriesRepository seriesRepository;
 
 
-    @EventListener(ApplicationReadyEvent.class)
     public void init() {
         loadOriginCountry();
         loadCallCategory();

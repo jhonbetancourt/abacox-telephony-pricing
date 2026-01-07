@@ -31,9 +31,10 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 @RestController
 @Tag(name = "CallCategory", description = "CallCategory API")
-@SecurityRequirements({
+@SecurityRequirements(value = {
         @SecurityRequirement(name = "JWT_Token"),
-        @SecurityRequirement(name = "Username")
+        @SecurityRequirement(name = "Username"),
+        @SecurityRequirement(name = "Tenant_Id")
 })
 @RequestMapping("/api/callCategory")
 public class CallCategoryController {

@@ -31,9 +31,10 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 @RestController
 @Tag(name = "PbxSpecialRule", description = "PBX Special Rule API")
-@SecurityRequirements({
+@SecurityRequirements(value = {
         @SecurityRequirement(name = "JWT_Token"),
-        @SecurityRequirement(name = "Username")
+        @SecurityRequirement(name = "Username"),
+        @SecurityRequirement(name = "Tenant_Id")
 })
 @RequestMapping("/api/pbxSpecialRule")
 public class PbxSpecialRuleController {

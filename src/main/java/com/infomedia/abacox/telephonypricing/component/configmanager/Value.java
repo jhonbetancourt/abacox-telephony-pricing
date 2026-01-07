@@ -22,18 +22,29 @@ import java.util.stream.Collectors;
 @Builder
 public class Value {
 
+    private String group; // Added group for context
+
     private String key;
 
     private String value;
+
+    // Constructor for backward compatibility or when group is not needed
+    public Value(String key, String value) {
+        this.key = key;
+        this.value = value;
+    }
 
     /**
      * Helper to create a consistent and informative error message.
      */
     private String getErrorMessage(String targetType) {
-        return String.format("Configuration value '%s' for key '%s' cannot be converted to %s.", value, key, targetType);
+        return String.format("Configuration value '%s' for key '%s' in group '%s' cannot be converted to %s.", value, key, group, targetType);
     }
 
-    public Integer asInt() {
+    // --- All other as...() methods remain exactly the same ---
+    // (No changes needed for the conversion logic)
+
+    public Integer asInteger() {
         try {
             return Integer.parseInt(value);
         } catch (NumberFormatException e) {
@@ -57,29 +68,20 @@ public class Value {
         }
     }
 
-    /**
-     * Note: Boolean.parseBoolean does not throw an exception.
-     * It returns `true` if the string value is "true" (case-insensitive), and `false` otherwise.
-     * This implementation maintains that standard behavior.
-     */
     public Boolean asBoolean() {
         return Boolean.parseBoolean(value);
     }
 
     public byte[] asBinary() {
         try {
-            // UTF-8 is a standard charset guaranteed to be available in any Java installation.
             return value.getBytes("UTF-8");
         } catch (UnsupportedEncodingException e) {
-            // This exception should theoretically never be thrown.
-            // Wrapping it in an IllegalStateException is a common pattern for "unreachable" checked exceptions.
             throw new IllegalStateException("UTF-8 encoding is not supported, which should be impossible.", e);
         }
     }
 
     public BigDecimal asBigDecimal() {
         try {
-            // The constructor can handle very large numbers and scientific notation.
             return new BigDecimal(value);
         } catch (NumberFormatException e) {
             throw new IllegalArgumentException(getErrorMessage("BigDecimal"), e);
@@ -98,23 +100,12 @@ public class Value {
         return value;
     }
 
-    /**
-     * Parses the value as a comma-separated list of strings.
-     * Trims whitespace from each element. Returns an empty list if the value is null or blank.
-     *
-     * @return A List of strings.
-     */
     public List<String> asStringList() {
         return asStringList(",");
     }
 
-    /**
-     * Parses the value as a list of strings using a specified delimiter.
-     * Trims whitespace from each element. Returns an empty list if the value is null or blank.
-     *
-     * @param delimiter The delimiter to split the string by (e.g., ",", ";", "|").
-     * @return A List of strings.
-     */
+
+
     public List<String> asStringList(String delimiter) {
         if (value == null || value.trim().isEmpty()) {
             return Collections.emptyList();
@@ -124,10 +115,6 @@ public class Value {
                 .collect(Collectors.toList());
     }
 
-    /**
-     * Parses the value as a UUID.
-     * @return The UUID object.
-     */
     public UUID asUUID() {
         try {
             return UUID.fromString(value);
@@ -136,11 +123,6 @@ public class Value {
         }
     }
 
-    /**
-     * Parses the value as a Duration (e.g., "PT15M" for 15 minutes).
-     * @return The Duration object.
-     * @see java.time.Duration#parse(CharSequence)
-     */
     public Duration asDuration() {
         try {
             return Duration.parse(value);
@@ -149,11 +131,6 @@ public class Value {
         }
     }
 
-    /**
-     * Parses the value as an Instant (e.g., "2023-10-27T10:15:30.00Z").
-     * @return The Instant object.
-     * @see java.time.Instant#parse(CharSequence)
-     */
     public Instant asInstant() {
         try {
             return Instant.parse(value);

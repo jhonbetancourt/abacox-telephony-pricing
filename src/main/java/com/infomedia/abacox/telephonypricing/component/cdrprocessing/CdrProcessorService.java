@@ -3,6 +3,7 @@ package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
 import com.infomedia.abacox.telephonypricing.component.utils.CompressionZipUtil;
 import com.infomedia.abacox.telephonypricing.db.entity.*;
+import com.infomedia.abacox.telephonypricing.multitenancy.TenantContext;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import lombok.extern.log4j.Log4j2;
@@ -157,6 +158,7 @@ public class CdrProcessorService {
         }
 
         ProcessedCdrResult result = ProcessedCdrResult.builder()
+                .tenantId(TenantContext.getTenant()) // <-- CAPTURE THE TENANT ID
                 .cdrData(cdrData)
                 .commLocation(commLocation)
                 .outcome(outcome)

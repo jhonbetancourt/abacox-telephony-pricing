@@ -1,52 +1,75 @@
+// E:/Github/abacox/abacox-telephony-pricing/src/main/java/com/infomedia/abacox/telephonypricing/component/cdrprocessing/CdrProcessingExecutor.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
+import com.infomedia.abacox.telephonypricing.multitenancy.TenantAwareTaskDecorator;
 import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Service;
 
-import java.io.InputStream;
-import java.util.List;
 import java.util.concurrent.Future;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 
 @Service
 @Log4j2
+// The constructor now injects the bean defined in its own nested class
 @RequiredArgsConstructor
 public class CdrProcessingExecutor {
 
-    // CONSTANT: The max number of parallel files
-    private static final int MAX_THREADS = 4;
+    // Inject the specific, qualified bean.
+    @Qualifier("cdrTaskExecutor")
+    private final ThreadPoolTaskExecutor taskExecutor;
 
-    // CHANGED: Use ThreadPoolExecutor directly to access metrics (getActiveCount)
-    // We use a LinkedBlockingQueue but we will manually manage flow control in the Worker
-    private final ThreadPoolExecutor taskExecutor = new ThreadPoolExecutor(
-            MAX_THREADS, 
-            MAX_THREADS,
-            0L, TimeUnit.MILLISECONDS,
-            new LinkedBlockingQueue<>()
-    );
-    
     private final CdrRoutingService cdrRoutingService;
     private final CdrProcessorService cdrProcessorService;
+
+    // This nested static class is a standard Spring Configuration.
+    // It's co-located here for organizational purposes.
+    @Configuration
+    public static class CdrExecutorConfig {
+        
+        // This method creates the Spring bean.
+        @Bean("cdrTaskExecutor") // Give the bean a specific name
+        public ThreadPoolTaskExecutor cdrTaskExecutor(
+                // Inject the property directly into the bean creation method
+                @Value("${app.cdr.processing.max-threads:4}") int maxThreads) {
+            
+            ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+            
+            // Use the configured value to set pool sizes
+            executor.setCorePoolSize(maxThreads);
+            executor.setMaxPoolSize(maxThreads);
+            executor.setQueueCapacity(100); 
+            executor.setThreadNamePrefix("cdr-exec-");
+            
+            // IMPORTANT: Apply the tenant-aware decorator
+            executor.setTaskDecorator(new TenantAwareTaskDecorator());
+            
+            executor.initialize();
+            return executor;
+        }
+    }
 
     /**
      * Calculates how many threads are currently idle.
      * Use this to determine how many new files to fetch from the DB.
      */
     public int getAvailableSlots() {
-        // Active count is approximate, but sufficient for this logic.
-        int active = taskExecutor.getActiveCount();
-        // Also check the queue size. If there are tasks in the queue, we have 0 slots available.
-        int queued = taskExecutor.getQueue().size();
-        
+        ThreadPoolExecutor executor = taskExecutor.getThreadPoolExecutor();
+        int active = executor.getActiveCount();
+        int queued = executor.getQueue().size();
+
         if (queued > 0) {
             return 0;
         }
         
-        int available = MAX_THREADS - active;
+        int maxThreads = taskExecutor.getMaxPoolSize();
+        int available = maxThreads - active;
         return Math.max(0, available);
     }
 
@@ -88,17 +111,6 @@ public class CdrProcessingExecutor {
     public void shutdownExecutor() {
         log.debug("Shutting down CDR Processing executor...");
         taskExecutor.shutdown();
-        try {
-            if (!taskExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
-                log.debug("CDR Processing executor did not terminate in the specified time.");
-                List<Runnable> droppedTasks = taskExecutor.shutdownNow();
-                log.debug("CDR Processing executor was forcefully shut down. {} tasks were dropped.", droppedTasks.size());
-            }
-        } catch (InterruptedException e) {
-            log.debug("CDR Processing executor shutdown interrupted.", e);
-            taskExecutor.shutdownNow();
-            Thread.currentThread().interrupt();
-        }
-        log.debug("CDR Processing executor shut down.");
+        log.debug("CDR Processing executor shut down signal sent.");
     }
 }

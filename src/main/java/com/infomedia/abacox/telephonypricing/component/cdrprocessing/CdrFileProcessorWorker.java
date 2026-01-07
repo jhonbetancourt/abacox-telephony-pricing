@@ -1,6 +1,7 @@
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
 import com.infomedia.abacox.telephonypricing.db.entity.FileInfo;
+import com.infomedia.abacox.telephonypricing.multitenancy.MultitenantRunner;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.context.event.ContextRefreshedEvent;
@@ -18,38 +19,39 @@ public class CdrFileProcessorWorker {
     private final FileInfoPersistenceService fileInfoPersistenceService;
     private final CdrRoutingService cdrRoutingService;
     private final CdrProcessingExecutor cdrProcessingExecutor;
+    private final MultitenantRunner multitenantRunner;
 
     @Scheduled(fixedDelay = 2000, initialDelay = 5000)
-    public void processPendingFiles() {
-        
-        // 1. Check how many slots are open in the thread pool
+    public void processPendingFilesForAllTenants() { // <-- RENAME for clarity
+        multitenantRunner.runForALlTenants(this::processPendingFilesForCurrentTenant);
+    }
+
+    private void processPendingFilesForCurrentTenant() { // <-- NEW METHOD with original logic
         int availableSlots = cdrProcessingExecutor.getAvailableSlots();
 
-        // 2. If system is busy, skip this cycle entirely. 
-        // This prevents memory buildup.
         if (availableSlots <= 0) {
-            log.trace("Thread pool is full (or has queued items). Skipping DB fetch this cycle.");
+            log.trace("Thread pool is full. Skipping DB fetch for current tenant this cycle.");
             return;
         }
 
-        log.debug("Thread pool has {} open slots. Fetching pending files...", availableSlots);
+        log.debug("Thread pool has {} open slots. Fetching pending files for current tenant...", availableSlots);
 
-        // 3. Only fetch exactly what we can handle immediately
         List<FileInfo> filesToProcess = fileInfoPersistenceService.findAndLockPendingFiles(availableSlots);
 
         if (filesToProcess.isEmpty()) {
             return;
         }
 
-        log.info("Worker fetched batch of {} files. Submitting to executor...", filesToProcess.size());
+        log.info("Worker fetched batch of {} files for current tenant. Submitting to executor...", filesToProcess.size());
 
         for (FileInfo fileInfo : filesToProcess) {
+            // Because this Runnable is created while TenantContext is set,
+            // the TenantAwareTaskDecorator will correctly propagate the context to the execution thread.
             cdrProcessingExecutor.submitTask(() -> {
                 log.info("Worker starting processing for file ID={}, Name={}", fileInfo.getId(), fileInfo.getFilename());
                 try {
                     cdrRoutingService.processFileInfo(fileInfo.getId());
-                    fileInfoPersistenceService.updateStatus(fileInfo.getId(), FileInfo.ProcessingStatus.COMPLETED);
-                    log.info("Successfully processed file ID {}", fileInfo.getId());
+                    // The 'updateStatus' call inside markParsingComplete will also be in the correct tenant context
                 } catch (Exception e) {
                     log.error("Critical failure processing file ID: {}. Marking FAILED.", fileInfo.getId(), e);
                     fileInfoPersistenceService.updateStatus(fileInfo.getId(), FileInfo.ProcessingStatus.FAILED);
@@ -62,11 +64,12 @@ public class CdrFileProcessorWorker {
     @RequiredArgsConstructor
     public static class StartupRecoveryService {
         private final FileInfoPersistenceService fileInfoPersistenceService;
+        private final MultitenantRunner multitenantRunner;
 
         @EventListener(ContextRefreshedEvent.class)
         public void onApplicationEvent() {
             log.info("Application started. Recovering stalled files...");
-            fileInfoPersistenceService.resetInProgressToPending();
+            multitenantRunner.runForALlTenants(fileInfoPersistenceService::resetInProgressToPending);
         }
     }
 }
