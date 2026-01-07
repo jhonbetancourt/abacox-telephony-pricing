@@ -10,6 +10,7 @@ import com.infomedia.abacox.telephonypricing.dto.migration.MigrationStart;
 import com.infomedia.abacox.telephonypricing.dto.migration.MigrationStatus;
 import com.infomedia.abacox.telephonypricing.exception.MigrationAlreadyInProgressException;
 import com.infomedia.abacox.telephonypricing.db.repository.EmployeeRepository;
+import com.infomedia.abacox.telephonypricing.multitenancy.TenantContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
@@ -53,13 +54,24 @@ public class MigrationService {
 
     public void startAsync(MigrationStart runRequest) {
         if (!isMigrationRunning.compareAndSet(false, true)) {
-             throw new MigrationAlreadyInProgressException("A data migration is already in progress.");
+            throw new MigrationAlreadyInProgressException("A data migration is already in progress.");
         }
-        log.info("Submitting migration task to executor service.");
+
+        // 1. Capture the tenant from the current HTTP thread
+        String currentTenant = TenantContext.getTenant();
+
+        log.info("Submitting migration task to executor service for tenant: {}", currentTenant);
         try {
             resetMigrationState();
             Future<?> future = migrationExecutorService.submit(() -> {
-                start(runRequest);
+                // 2. Set the tenant in the NEW thread
+                try {
+                    TenantContext.setTenant(currentTenant);
+                    start(runRequest);
+                } finally {
+                    // 3. Cleanup
+                    TenantContext.clear();
+                }
             });
             migrationTaskFuture.set(future);
         } catch (Exception e) {
