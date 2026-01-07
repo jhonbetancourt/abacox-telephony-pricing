@@ -1,13 +1,13 @@
 package com.infomedia.abacox.telephonypricing.service;
 
+import com.infomedia.abacox.telephonypricing.multitenancy.TenantContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
-import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.event.EventListener;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.FileCopyUtils;
 
 import java.io.IOException;
@@ -15,6 +15,7 @@ import java.io.InputStreamReader;
 import java.io.Reader;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
+import java.sql.PreparedStatement;
 import java.util.List;
 
 @Service
@@ -24,41 +25,48 @@ public class ViewManagerService {
 
     private final JdbcTemplate jdbcTemplate;
 
-    /**
-     * This method is triggered once the application is fully started.
-     * It initializes necessary database components, such as views.
-     */
+    @Transactional
     public void init() {
-        log.info("Application ready. Starting database views initialization tasks...");
-
-        // Define a list of all views that the application requires.
-        // This makes it easy to add more views in the future.
-        List<String> requiredViews = List.of(
-                "v_corporate_report"
-                , "v_conference_calls_report"
-        );
-
-        // Iterate and ensure each view exists.
-        requiredViews.forEach(this::createViewIfNotExists);
-
-        log.info("Database views initialization tasks complete.");
-    }
-
-    /**
-     * Checks if a database view exists and creates it from a corresponding SQL file if it does not.
-     * The SQL file is expected to be in 'src/main/resources/db/views/'.
-     *
-     * @param viewName The name of the database view to check and potentially create.
-     */
-    public void createViewIfNotExists(String viewName) {
-        if (viewExists(viewName)) {
-            log.info("View '{}' already exists. Skipping creation.", viewName);
+        String tenantId = TenantContext.getTenant();
+        if (tenantId == null || "public".equals(tenantId)) {
+            log.debug("Skipping tenant-specific view initialization for context: {}", tenantId);
             return;
         }
 
-        log.info("View '{}' does not exist. Attempting to create from SQL file.", viewName);
+        log.info("Starting database views initialization for tenant '{}'...", tenantId);
+
         try {
-            // Construct the path to the SQL file within the classpath resources.
+            // *** THE FINAL, CORRECT FIX ***
+            // Use the flexible `execute` method with a PreparedStatementCallback.
+            // This allows us to run a statement that returns a result set without processing it.
+            jdbcTemplate.execute("SELECT set_config('search_path', ?, false)", (PreparedStatement ps) -> {
+                ps.setString(1, tenantId);
+                ps.execute(); // This just executes the statement.
+                return null;  // We return null because we don't need any result from the callback.
+            });
+
+            List<String> requiredViews = List.of(
+                    "v_corporate_report",
+                    "v_conference_calls_report"
+            );
+
+            requiredViews.forEach(this::createViewIfNotExists);
+
+            log.info("Database views initialization tasks complete for tenant '{}'.", tenantId);
+        } catch (Exception e) {
+            log.error("A critical error occurred during view initialization for tenant '{}'.", tenantId, e);
+            throw new RuntimeException("View initialization failed for tenant: " + tenantId, e);
+        }
+    }
+
+    public void createViewIfNotExists(String viewName) {
+        if (viewExists(viewName)) {
+            log.info("View '{}' already exists in current tenant schema. Skipping creation.", viewName);
+            return;
+        }
+
+        log.info("View '{}' does not exist in current tenant schema. Attempting to create from SQL file.", viewName);
+        try {
             String sqlFilePath = "db/views/" + viewName + ".sql";
             Resource resource = new ClassPathResource(sqlFilePath);
 
@@ -67,41 +75,21 @@ public class ViewManagerService {
                 return;
             }
 
-            // Read the SQL content from the file.
             String sql = resourceAsString(resource);
-
-            // Execute the SQL to create the view.
             jdbcTemplate.execute(sql);
-            log.info("Successfully created view '{}'.", viewName);
+            log.info("Successfully created view '{}' in current tenant schema.", viewName);
 
         } catch (Exception e) {
-            log.error("Failed to create view '{}'. Error: {}", viewName, e.getMessage(), e);
-            // Depending on your application's needs, you might want to re-throw this as a runtime exception
-            // to halt application startup if the view is critical.
-            // throw new RuntimeException("Failed to create critical view: " + viewName, e);
+            throw new RuntimeException("Failed to create view '" + viewName + "'", e);
         }
     }
-
-    /**
-     * Checks if a specific view exists in the database.
-     * This query is specific to PostgreSQL.
-     *
-     * @param viewName The name of the view.
-     * @return true if the view exists, false otherwise.
-     */
+    
     private boolean viewExists(String viewName) {
-        // PostgreSQL-specific query to check for a view in the 'public' schema.
-        String sql = "SELECT EXISTS (SELECT FROM pg_views WHERE schemaname = 'public' AND viewname = ?)";
+        String sql = "SELECT EXISTS (SELECT FROM pg_views WHERE schemaname = current_schema() AND viewname = ?)";
         Boolean exists = jdbcTemplate.queryForObject(sql, Boolean.class, viewName);
         return exists != null && exists;
     }
 
-    /**
-     * A utility method to read a resource file into a String.
-     *
-     * @param resource The resource to read.
-     * @return The content of the resource as a String.
-     */
     private String resourceAsString(Resource resource) {
         try (Reader reader = new InputStreamReader(resource.getInputStream(), StandardCharsets.UTF_8)) {
             return FileCopyUtils.copyToString(reader);

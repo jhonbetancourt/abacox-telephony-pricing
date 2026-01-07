@@ -19,17 +19,35 @@ public class TenantProvisioningService {
         }
 
         try {
-            // 2. Create Schema & Tables (Using Liquibase "Sync")
-            // This replaces the old Flyway logic
-            schemaMigrationService.syncTenant(tenantId);
+            // 2. Create Schema & Tables.
+            schemaMigrationService.initializeNewTenantSchema(tenantId);
 
-            // 3. Populate Default Data (Admin, System User)
+            // 3. Populate Default Data. This is the step most likely to fail after schema creation.
             TenantContext.setTenant(tenantId);
             tenantInitService.init();
-            
+
+            log.info("Tenant '{}' provisioned successfully.", tenantId);
+
         } catch (Exception e) {
-            log.error("Failed to provision tenant: " + tenantId, e);
-            throw new RuntimeException("Provisioning failed", e);
+            log.error("Failed to provision tenant '{}' due to an error. Starting rollback procedure.", tenantId, e);
+
+            // --- ATTEMPT TO ROLL BACK / CLEAN UP ---
+            try {
+                log.warn("Attempting to drop the partially created schema for tenant '{}' to roll back.", tenantId);
+                schemaMigrationService.dropSchema(tenantId);
+                log.info("Successfully dropped schema for tenant '{}' as part of the rollback.", tenantId);
+            } catch (Exception cleanupException) {
+                // Log this as a critical secondary failure. The original exception 'e' is the root cause.
+                log.error(
+                        "CRITICAL: Rollback failed. Could not drop schema for tenant '{}' after a provisioning error. Manual database cleanup is required.",
+                        tenantId,
+                        cleanupException
+                );
+            }
+            // --- END OF ROLLBACK LOGIC ---
+
+            // Re-throw the original exception to ensure the caller knows the provisioning failed.
+            throw new RuntimeException("Provisioning failed for tenant '" + tenantId + "' and has been rolled back.", e);
         } finally {
             TenantContext.clear();
         }
@@ -44,10 +62,6 @@ public class TenantProvisioningService {
         try {
             // 2. Drop the Schema
             schemaMigrationService.dropSchema(tenantId);
-
-            // Optional: You might want to remove this tenant from a central directory table
-            // if you have a "Tenants" table in the public schema.
-
         } catch (Exception e) {
             log.error("Failed to deprovision tenant: " + tenantId, e);
             throw new RuntimeException("Deprovisioning failed", e);

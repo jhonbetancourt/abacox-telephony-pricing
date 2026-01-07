@@ -36,7 +36,7 @@ public class SchemaMigrationService {
 
     private final DataSource dataSource;
 
-    private static final String HIBERNATE_URL = "hibernate:spring:com.infomedia.abacox.users.entity?dialect=org.hibernate.dialect.PostgreSQLDialect";
+    private static final String HIBERNATE_URL = "hibernate:spring:com.infomedia.abacox.telephonypricing.db.entity?dialect=org.hibernate.dialect.PostgreSQLDialect";
 
     /**
      * 1. Creates Schema (if missing).
@@ -72,6 +72,34 @@ public class SchemaMigrationService {
 
         } finally {
             try { Files.deleteIfExists(tempFile); } catch (IOException ignored) {}
+        }
+    }
+
+    public void initializeNewTenantSchema(String tenantId) throws Exception {
+        log.info("Initializing NEW schema for tenant: {}", tenantId);
+        String changelog = previewMigration(tenantId);
+
+        // FAIL-FAST LOGIC: For a new tenant, an empty changelog is an error.
+        if (changelog == null || !changelog.contains("<changeSet")) {
+            log.error("CRITICAL PROVISIONING FAILURE: Liquibase diff generated no changes for new tenant '{}'. This likely indicates a misconfiguration (e.g., wrong entity package path). Halting.", tenantId);
+            throw new IllegalStateException("Failed to generate initial schema for new tenant '" + tenantId + "'. No database changes were detected.");
+        }
+
+        log.info("Applying generated changelog to initialize schema for tenant: {}", tenantId);
+        applyMigration(tenantId, changelog);
+        log.info("Schema initialized successfully for: {}", tenantId);
+    }
+
+    public void updateTenantSchema(String tenantId) throws Exception {
+        log.info("Checking for schema updates for tenant: {}", tenantId);
+        String changelog = previewMigration(tenantId);
+
+        if (changelog != null && changelog.contains("<changeSet")) {
+            log.info("Schema changes detected for tenant '{}'. Applying update...", tenantId);
+            applyMigration(tenantId, changelog);
+            log.info("Schema updated successfully for: {}", tenantId);
+        } else {
+            log.info("No schema changes detected for: {}", tenantId);
         }
     }
 
