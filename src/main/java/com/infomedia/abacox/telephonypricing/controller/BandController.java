@@ -31,10 +31,9 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 @RestController
 @Tag(name = "Band", description = "Band API")
-@SecurityRequirements(value = {
+@SecurityRequirements({
         @SecurityRequirement(name = "JWT_Token"),
-        @SecurityRequirement(name = "Username"),
-        @SecurityRequirement(name = "Tenant_Id")
+        @SecurityRequirement(name = "Username")
 })
 @RequestMapping("/api/band")
 public class BandController {

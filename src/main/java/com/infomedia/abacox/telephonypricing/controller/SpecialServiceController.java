@@ -31,10 +31,9 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 @RestController
 @Tag(name = "Special Service", description = "Special Service API")
-@SecurityRequirements(value = {
+@SecurityRequirements({
         @SecurityRequirement(name = "JWT_Token"),
-        @SecurityRequirement(name = "Username"),
-        @SecurityRequirement(name = "Tenant_Id")
+        @SecurityRequirement(name = "Username")
 })
 @RequestMapping("/api/specialService")
 public class SpecialServiceController {

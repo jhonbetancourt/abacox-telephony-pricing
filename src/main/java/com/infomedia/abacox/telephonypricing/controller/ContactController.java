@@ -31,10 +31,9 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 @RestController
 @Tag(name = "Contact", description = "Contact API")
-@SecurityRequirements(value = {
+@SecurityRequirements({
         @SecurityRequirement(name = "JWT_Token"),
-        @SecurityRequirement(name = "Username"),
-        @SecurityRequirement(name = "Tenant_Id")
+        @SecurityRequirement(name = "Username")
 })
 @RequestMapping("/api/contact")
 public class ContactController {

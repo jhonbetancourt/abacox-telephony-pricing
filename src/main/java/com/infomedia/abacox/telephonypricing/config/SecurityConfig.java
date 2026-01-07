@@ -1,12 +1,11 @@
 package com.infomedia.abacox.telephonypricing.config;
 
-import com.infomedia.abacox.telephonypricing.multitenancy.TenantFilter;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.*;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AuthenticationServiceException;
@@ -32,10 +31,7 @@ import java.io.IOException;
 @RequiredArgsConstructor
 public class SecurityConfig {
 
-    @Autowired
-    private InternalApiKeyFilter internalApiKeyFilter;
-    @Autowired
-    private TenantFilter tenantFilter;
+    private final ObjectMapper objectMapper;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -43,9 +39,7 @@ public class SecurityConfig {
                         auth.requestMatchers(publicPaths()).permitAll()
                 .anyRequest().authenticated())
                 .sessionManagement(manager -> manager.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .addFilterBefore(internalApiKeyFilter, UsernamePasswordAuthenticationFilter.class)
-                .addFilterBefore(tenantFilter, UsernamePasswordAuthenticationFilter.class)
-                .addFilterBefore(new UsernameAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class)
+            .addFilterBefore(new UsernameAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class)
             .csrf(AbstractHttpConfigurer::disable);
         return http.build();
     }

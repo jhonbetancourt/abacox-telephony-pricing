@@ -31,10 +31,9 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 @RestController
 @Tag(name = "Subdivision", description = "Subdivision API")
-@SecurityRequirements(value = {
+@SecurityRequirements({
         @SecurityRequirement(name = "JWT_Token"),
-        @SecurityRequirement(name = "Username"),
-        @SecurityRequirement(name = "Tenant_Id")
+        @SecurityRequirement(name = "Username")
 })
 @RequestMapping("/api/subdivision")
 public class SubdivisionController {

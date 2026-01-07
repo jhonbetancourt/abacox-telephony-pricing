@@ -27,11 +27,7 @@ import java.util.List;
 @RequiredArgsConstructor
 @RestController
 @Tag(name = "CdrController", description = "CDR Controller")
-@SecurityRequirements(value = {
-        @SecurityRequirement(name = "JWT_Token"),
-        @SecurityRequirement(name = "Username"),
-        @SecurityRequirement(name = "Tenant_Id")
-})
+@SecurityRequirements({@SecurityRequirement(name = "JWT_Token"), @SecurityRequirement(name = "Username")})
 @Log4j2
 @RequestMapping("/api/cdr")
 public class CdrController {

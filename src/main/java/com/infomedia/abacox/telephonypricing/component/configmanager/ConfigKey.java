@@ -13,39 +13,46 @@ import java.util.stream.Stream;
 @Getter
 public enum ConfigKey {
 
-    SERVICE_DATE_HOUR_OFFSET(ConfigGroup.CDR, "-5"),
-    SPECIAL_VALUE_TARIFFING(ConfigGroup.CDR, "true"),
-    MIN_CALL_DURATION_FOR_TARIFFING(ConfigGroup.CDR, "0"), // in seconds
-    MAX_CALL_DURATION_MINUTES(ConfigGroup.CDR, "2880"), // 48 hours
-    MIN_ALLOWED_CAPTURE_DATE(ConfigGroup.CDR, "2000-01-01"),
-    MAX_ALLOWED_CAPTURE_DATE_DAYS_IN_FUTURE(ConfigGroup.CDR, "90"),
-    CREATE_EMPLOYEES_AUTOMATICALLY_FROM_RANGE(ConfigGroup.CDR, "false"),
-    DEFAULT_UNRESOLVED_INTERNAL_CALL_TYPE_ID(ConfigGroup.CDR, TelephonyTypeEnum.NATIONAL_IP.getValue().toString()), // Corresponds to TelephonyTypeEnum.NATIONAL_IP
-    DEFAULT_INTERNAL_CALL_TYPE_ID(ConfigGroup.CDR, TelephonyTypeEnum.INTERNAL_SIMPLE.getValue().toString()), // Corresponds to TelephonyTypeEnum.INTERNAL_SIMPLE
-    EXTENSIONS_GLOBAL(ConfigGroup.CDR, "false"),
-    AUTH_CODES_GLOBAL(ConfigGroup.CDR, "false"),
+    // PUBLIC KEYS
+    // --- General CDR Processing ---
+    SERVICE_DATE_HOUR_OFFSET("-5", true),
+    SPECIAL_VALUE_TARIFFING("true", true),
+    MIN_CALL_DURATION_FOR_TARIFFING("0", true), // in seconds
+    MAX_CALL_DURATION_MINUTES("2880", true), // 48 hours
+    MIN_ALLOWED_CAPTURE_DATE("2000-01-01", true),
+    MAX_ALLOWED_CAPTURE_DATE_DAYS_IN_FUTURE("90", true),
+    CREATE_EMPLOYEES_AUTOMATICALLY_FROM_RANGE("false", true),
+    DEFAULT_UNRESOLVED_INTERNAL_CALL_TYPE_ID(TelephonyTypeEnum.NATIONAL_IP.getValue().toString(), true), // Corresponds to TelephonyTypeEnum.NATIONAL_IP
+    DEFAULT_INTERNAL_CALL_TYPE_ID(TelephonyTypeEnum.INTERNAL_SIMPLE.getValue().toString(), true), // Corresponds to TelephonyTypeEnum.INTERNAL_SIMPLE
+    EXTENSIONS_GLOBAL("false", true),
+    AUTH_CODES_GLOBAL("false", true),
 
     // --- Text Placeholders ---
-    ASSUMED_TEXT(ConfigGroup.CDR, "(ASUMIDO)"),
-    ORIGIN_TEXT(ConfigGroup.CDR, "(ORIGEN)"),
-    PREFIX_TEXT(ConfigGroup.CDR, "(PREFIJO)"),
-    EMPLOYEE_NAME_PREFIX_FROM_RANGE(ConfigGroup.CDR, "Funcionario"),
-    NO_PARTITION_PLACEHOLDER(ConfigGroup.CDR, "NN-VALIDA"),
-    CDR_UPLOAD_API_KEY(ConfigGroup.CDR, "024dc8fe-1d0d-41b2-8f96-dcf3ad9e4141");
+    ASSUMED_TEXT("(ASUMIDO)", true),
+    ORIGIN_TEXT("(ORIGEN)", true),
+    PREFIX_TEXT("(PREFIJO)", true),
+    EMPLOYEE_NAME_PREFIX_FROM_RANGE("Funcionario", true),
+    NO_PARTITION_PLACEHOLDER("NN-VALIDA", true),
+    CDR_UPLOAD_API_KEY("024dc8fe-1d0d-41b2-8f96-dcf3ad9e4141", true);
 
-    private final ConfigGroup group;
     private final String defaultValue;
+    private final boolean isPublic;
 
-    ConfigKey(ConfigGroup group, String defaultValue) {
-        this.group = group;
+    ConfigKey(String defaultValue, boolean isPublic) {
         this.defaultValue = defaultValue;
+        this.isPublic = isPublic;
     }
 
-
-    public static List<ConfigKey> getKeys(ConfigGroup group) {
+    public static List<ConfigKey> getPublicKeys() {
         return Stream.of(values())
-            .filter(key -> key.getGroup().equals(group))
+            .filter(ConfigKey::isPublic)
                 .toList();
+    }
+
+    public static List<ConfigKey> getPrivateKeys() {
+        return Stream.of(values())
+            .filter(key -> !key.isPublic())
+            .toList();
     }
 
     public static List<ConfigKey> getAllKeys() {

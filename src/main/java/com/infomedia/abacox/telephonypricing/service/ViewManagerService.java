@@ -28,6 +28,7 @@ public class ViewManagerService {
      * This method is triggered once the application is fully started.
      * It initializes necessary database components, such as views.
      */
+    @EventListener(ApplicationReadyEvent.class)
     public void init() {
         log.info("Application ready. Starting database views initialization tasks...");
 

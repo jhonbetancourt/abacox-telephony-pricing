@@ -1,5 +1,6 @@
 package com.infomedia.abacox.telephonypricing.controller;
 
+import com.infomedia.abacox.telephonypricing.component.export.excel.ExcelGeneratorBuilder;
 import com.infomedia.abacox.telephonypricing.component.modeltools.ModelConverter;
 import com.infomedia.abacox.telephonypricing.dto.bandindicator.BandIndicatorDto;
 import com.infomedia.abacox.telephonypricing.dto.bandindicator.CreateBandIndicator;
@@ -8,6 +9,7 @@ import com.infomedia.abacox.telephonypricing.db.entity.BandIndicator;
 import com.infomedia.abacox.telephonypricing.service.BandIndicatorService;
 import com.turkraft.springfilter.boot.Filter;
 import com.infomedia.abacox.telephonypricing.dto.generic.ExcelRequest;
+import com.infomedia.abacox.telephonypricing.dto.generic.FilterRequest;import com.infomedia.abacox.telephonypricing.dto.generic.ExcelRequest;
 import com.infomedia.abacox.telephonypricing.dto.generic.FilterRequest;
 import io.swagger.v3.oas.annotations.Parameter;
 import org.springdoc.core.annotations.ParameterObject;
@@ -29,10 +31,9 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 @RestController
 @Tag(name = "BandIndicator", description = "BandIndicator API")
-@SecurityRequirements(value = {
+@SecurityRequirements({
         @SecurityRequirement(name = "JWT_Token"),
-        @SecurityRequirement(name = "Username"),
-        @SecurityRequirement(name = "Tenant_Id")
+        @SecurityRequirement(name = "Username")
 })
 @RequestMapping("/api/bandIndicator")
 public class BandIndicatorController {
