@@ -44,7 +44,7 @@ public class CdrProcessingExecutor {
             // Use the configured value to set pool sizes
             executor.setCorePoolSize(maxThreads);
             executor.setMaxPoolSize(maxThreads);
-            executor.setQueueCapacity(100); 
+            executor.setQueueCapacity(200);
             executor.setThreadNamePrefix("cdr-exec-");
             
             // IMPORTANT: Apply the tenant-aware decorator
