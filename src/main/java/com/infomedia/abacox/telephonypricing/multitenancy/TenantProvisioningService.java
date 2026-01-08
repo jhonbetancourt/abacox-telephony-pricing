@@ -24,7 +24,7 @@ public class TenantProvisioningService {
 
             // 3. Populate Default Data. This is the step most likely to fail after schema creation.
             TenantContext.setTenant(tenantId);
-            tenantInitService.init();
+            tenantInitService.init(tenantId);
 
             log.info("Tenant '{}' provisioned successfully.", tenantId);
 
