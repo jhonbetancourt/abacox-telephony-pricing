@@ -1,6 +1,6 @@
 package com.infomedia.abacox.telephonypricing.service;
 
-import com.infomedia.abacox.telephonypricing.multitenancy.TenantContext;
+import com.infomedia.abacox.telephonypricing.multitenancy.TenantInitializer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.core.io.ClassPathResource;
@@ -21,13 +21,13 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 @Log4j2
-public class ViewManagerService {
+public class ViewManagerService implements TenantInitializer {
 
     private final JdbcTemplate jdbcTemplate;
 
     @Transactional
-    public void init() {
-        String tenantId = TenantContext.getTenant();
+    @Override
+    public void onTenantInit(String tenantId) {
         if (tenantId == null || "public".equals(tenantId)) {
             log.debug("Skipping tenant-specific view initialization for context: {}", tenantId);
             return;

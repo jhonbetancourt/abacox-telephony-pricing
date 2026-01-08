@@ -3,6 +3,7 @@ package com.infomedia.abacox.telephonypricing.service;
 import com.infomedia.abacox.telephonypricing.component.csv.CsvToDatabaseLoader;
 import com.infomedia.abacox.telephonypricing.db.entity.*;
 import com.infomedia.abacox.telephonypricing.db.repository.*;
+import com.infomedia.abacox.telephonypricing.multitenancy.TenantInitializer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -13,7 +14,7 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 @Log4j2
-public class DefaultDataLoadingService {
+public class DefaultDataLoadingService implements TenantInitializer {
 
     private final CsvToDatabaseLoader csvToDatabaseLoader;
     private final TelephonyTypeRepository telephonyTypeRepository;
@@ -25,8 +26,8 @@ public class DefaultDataLoadingService {
     private final PrefixRepository prefixRepository;
     private final SeriesRepository seriesRepository;
 
-
-    public void init() {
+    @Override
+    public void onTenantInit(String tenantId) {
         loadOriginCountry();
         loadCallCategory();
         loadTelephonyType();
@@ -132,4 +133,5 @@ public class DefaultDataLoadingService {
             }
         }
     }
+
 }
