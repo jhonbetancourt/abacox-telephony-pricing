@@ -17,12 +17,26 @@ public class InternalTenantController {
 
     private final TenantProvisioningService provisioningService;
     private final SchemaMigrationService migrationService;
+    private final TenantProvider tenantProvider;
+
+    @Operation(summary = "Check if a tenant schema exists")
+    @GetMapping(value = "/{tenantId}/exists")
+    public ResponseEntity<Boolean> checkTenantExists(@PathVariable String tenantId) {
+        // Simple check, returns 200 OK with true/false
+        return ResponseEntity.ok(tenantProvider.schemaExists(tenantId));
+    }
 
     @Operation(summary = "Provision a new tenant schema")
     @PostMapping("/{tenantId}")
     public ResponseEntity<String> provisionTenant(@PathVariable String tenantId) {
-        provisioningService.provisionTenant(tenantId);
-        return ResponseEntity.ok("Tenant " + tenantId + " provisioned successfully.");
+        try {
+            provisioningService.provisionTenant(tenantId);
+            return ResponseEntity.ok("Tenant " + tenantId + " provisioned/synced successfully.");
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body("Error provisioning tenant: " + e.getMessage());
+        }
     }
 
     @Operation(summary = "Deprovision (Delete) a tenant schema and all its data")

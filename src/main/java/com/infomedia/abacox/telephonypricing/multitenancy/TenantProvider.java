@@ -5,6 +5,7 @@ import org.springframework.stereotype.Component;
 
 import javax.sql.DataSource;
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Statement;
 import java.util.ArrayList;
@@ -15,6 +16,26 @@ import java.util.List;
 public class TenantProvider {
 
     private final DataSource dataSource;
+
+    /**
+     * Checks if a specific schema exists in the database.
+     */
+    public boolean schemaExists(String tenantId) {
+        try (Connection connection = dataSource.getConnection();
+             PreparedStatement ps = connection.prepareStatement(
+                     "SELECT count(*) FROM information_schema.schemata WHERE schema_name = ?")) {
+            
+            ps.setString(1, tenantId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt(1) > 0;
+                }
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to check if schema exists for " + tenantId, e);
+        }
+        return false;
+    }
 
     /**
      * Returns a list of all schema names that represent tenants.

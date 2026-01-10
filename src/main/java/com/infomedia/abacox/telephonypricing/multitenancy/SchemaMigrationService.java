@@ -13,6 +13,7 @@ import liquibase.resource.OpenOptions;
 import liquibase.resource.Resource;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import javax.sql.DataSource;
@@ -36,7 +37,11 @@ public class SchemaMigrationService {
 
     private final DataSource dataSource;
 
-    private static final String HIBERNATE_URL = "hibernate:spring:com.infomedia.abacox.telephonypricing.db.entity?dialect=org.hibernate.dialect.PostgreSQLDialect";
+    @Value("${abacox.multitenancy.entity-package}")
+    private String entityPackage;
+
+    @Value("${abacox.multitenancy.hibernate-dialect:org.hibernate.dialect.PostgreSQLDialect}")
+    private String hibernateDialect;
 
     /**
      * 1. Creates Schema (if missing).
@@ -44,6 +49,9 @@ public class SchemaMigrationService {
      * 3. Generates XML Changelog.
      */
     public String previewMigration(String tenantId) throws Exception {
+        // Construct the Liquibase Hibernate URL dynamically
+        String hibernateUrl = "hibernate:spring:" + entityPackage + "?dialect=" + hibernateDialect;
+        
         Path tempFile = Files.createTempFile("migration_" + tenantId + "_", ".xml");
         
         try (Connection connection = dataSource.getConnection()) {
@@ -56,7 +64,7 @@ public class SchemaMigrationService {
             targetDatabase.setDefaultSchemaName(tenantId);
 
             Database referenceDatabase = DatabaseFactory.getInstance()
-                    .openDatabase(HIBERNATE_URL, null, null, null, new ClassLoaderResourceAccessor());
+                    .openDatabase(hibernateUrl, null, null, null, new ClassLoaderResourceAccessor());
 
             CommandScope diffCmd = new CommandScope("diffChangelog");
             diffCmd.addArgumentValue(DbUrlConnectionCommandStep.DATABASE_ARG, targetDatabase);
@@ -75,6 +83,10 @@ public class SchemaMigrationService {
         }
     }
 
+    /**
+     * Used ONLY when creating a brand new tenant.
+     * Generates the changelog and applies it immediately.
+     */
     public void initializeNewTenantSchema(String tenantId) throws Exception {
         log.info("Initializing NEW schema for tenant: {}", tenantId);
         String changelog = previewMigration(tenantId);
@@ -88,19 +100,6 @@ public class SchemaMigrationService {
         log.info("Applying generated changelog to initialize schema for tenant: {}", tenantId);
         applyMigration(tenantId, changelog);
         log.info("Schema initialized successfully for: {}", tenantId);
-    }
-
-    public void updateTenantSchema(String tenantId) throws Exception {
-        log.info("Checking for schema updates for tenant: {}", tenantId);
-        String changelog = previewMigration(tenantId);
-
-        if (changelog != null && changelog.contains("<changeSet")) {
-            log.info("Schema changes detected for tenant '{}'. Applying update...", tenantId);
-            applyMigration(tenantId, changelog);
-            log.info("Schema updated successfully for: {}", tenantId);
-        } else {
-            log.info("No schema changes detected for: {}", tenantId);
-        }
     }
 
     /**
@@ -126,24 +125,6 @@ public class SchemaMigrationService {
         }
     }
 
-    /**
-     * AUTO-PROVISIONING:
-     * Automatically generates and applies the diff. 
-     * Use this when creating a NEW tenant (no review needed).
-     */
-    public void syncTenant(String tenantId) throws Exception {
-        log.info("Syncing schema for tenant: {}", tenantId);
-        String changelog = previewMigration(tenantId);
-        
-        // Only apply if there are actual changes
-        if (changelog != null && changelog.contains("<changeSet")) {
-            applyMigration(tenantId, changelog);
-            log.info("Schema synced successfully for: {}", tenantId);
-        } else {
-            log.info("No schema changes detected for: {}", tenantId);
-        }
-    }
-
     private void ensureSchemaExists(Connection connection, String tenantId) throws Exception {
         try (Statement stmt = connection.createStatement()) {
             stmt.execute("CREATE SCHEMA IF NOT EXISTS \"" + tenantId + "\"");
@@ -155,19 +136,13 @@ public class SchemaMigrationService {
         log.info("Bootstrapping Public Schema: {}", schemaName);
 
         try (Connection connection = dataSource.getConnection()) {
-            // 1. Ensure schema exists (public usually does, but safe to check)
             ensureSchemaExists(connection, schemaName);
-
-            // 2. Set Search Path
             connection.createStatement().execute("SET search_path TO \"" + schemaName + "\"");
 
-            // 3. Prepare Database
             Database targetDatabase = DatabaseFactory.getInstance()
                     .findCorrectDatabaseImplementation(new JdbcConnection(connection));
             targetDatabase.setDefaultSchemaName(schemaName);
 
-            // 4. Run Liquibase using the physical file in resources
-            // We use ClassLoaderResourceAccessor to find the file in src/main/resources
             Liquibase liquibase = new Liquibase(
                     "db/migration/public/V1__init_public.sql",
                     new ClassLoaderResourceAccessor(),
@@ -189,13 +164,10 @@ public class SchemaMigrationService {
         try (Connection connection = dataSource.getConnection();
              Statement stmt = connection.createStatement()) {
 
-            // PostgreSQL syntax to drop schema and everything inside it
             stmt.execute("DROP SCHEMA IF EXISTS \"" + tenantId + "\" CASCADE");
-
             log.info("Schema dropped successfully: {}", tenantId);
         }
     }
-
 
     public static class StringResourceAccessor extends AbstractResourceAccessor {
         private final String filename;
@@ -206,7 +178,6 @@ public class SchemaMigrationService {
             this.content = content;
         }
 
-        // --- The Missing Method (Liquibase 4.23+) ---
         @Override
         public List<Resource> getAll(String path) {
             if (path != null && path.endsWith(filename)) {
@@ -224,54 +195,31 @@ public class SchemaMigrationService {
         }
 
         @Override
-        public void close() throws Exception {
-            // No-op
-        }
+        public void close() throws Exception { }
 
         @Override
         public List<String> describeLocations() {
             return Collections.singletonList("String Memory");
         }
 
-        // Helper to create the Resource instance to avoid code duplication
         private Resource createResource() {
             return new Resource() {
                 @Override
-                public String getPath() {
-                    return filename;
-                }
-
+                public String getPath() { return filename; }
                 @Override
-                public URI getUri() {
-                    return URI.create("string://" + filename);
-                }
-
+                public URI getUri() { return URI.create("string://" + filename); }
                 @Override
-                public boolean exists() {
-                    return true;
-                }
-
+                public boolean exists() { return true; }
                 @Override
-                public Resource resolve(String other) {
-                    return null;
-                }
-
+                public Resource resolve(String other) { return null; }
                 @Override
-                public Resource resolveSibling(String other) {
-                    return null;
-                }
-
-                // Correct method name for modern Liquibase
+                public Resource resolveSibling(String other) { return null; }
                 @Override
                 public InputStream openInputStream() throws IOException {
                     return new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8));
                 }
-
                 @Override
-                public boolean isWritable() {
-                    return false;
-                }
-
+                public boolean isWritable() { return false; }
                 @Override
                 public OutputStream openOutputStream(OpenOptions openOptions) throws IOException {
                     throw new IOException("Read-only resource");
