@@ -79,13 +79,6 @@ public class ReportService {
         dto.setDestinationEmployeeId(entity.getDestinationEmployeeId());
         dto.setDestinationEmployee(modelConverter.map(entity.getDestinationEmployee(), EmployeeDto.class));
         dto.setFileInfoId(entity.getFileInfoId());
-        if(entity.getCdrString() != null && entity.getCdrString().length>0) {
-            try {
-                dto.setCdrString(CompressionZipUtil.decompressToString(entity.getCdrString()));
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-        }
         return dto;
     }
 
@@ -128,13 +121,6 @@ public class ReportService {
         dto.setFileInfoId(entity.getFileInfoId());
         dto.setCommLocationId(entity.getCommLocation() != null ? entity.getCommLocation().getId() : null);
         dto.setCommLocation(modelConverter.map(entity.getCommLocation(), CommLocationDto.class));
-        if(entity.getCdrString() != null && entity.getCdrString().length>0) {
-            try {
-                dto.setCdrString(CompressionZipUtil.decompressToString(entity.getCdrString()));
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-        }
         return dto;
     }
 

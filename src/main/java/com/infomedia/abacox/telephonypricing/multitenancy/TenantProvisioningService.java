@@ -66,6 +66,32 @@ public class TenantProvisioningService {
         }
     }
 
+    public void applyMigrationTenant(String tenantId, String changelog) {
+        if (changelog == null || !changelog.contains("<changeSet")) {
+            throw new IllegalStateException("Invalid changelog for tenant '" + tenantId + "'. No database changes were detected.");
+        }
+
+        try {
+            log.info("Applying changelog to migrate schema for tenant: {}", tenantId);
+            schemaMigrationService.applyMigration(tenantId, changelog);
+            TenantContext.setTenant(tenantId);
+            tenantInitService.init(tenantId);
+            log.info("Schema migrated successfully for: {}", tenantId);
+        }catch (Exception e){
+            throw new RuntimeException("Failed to apply migration for tenant '" + tenantId + "'.", e);
+        } finally {
+            TenantContext.clear();
+        }
+    }
+
+    public String previewMigrationTenant(String tenantId){
+        try {
+            return schemaMigrationService.previewMigration(tenantId);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to preview migration for tenant '" + tenantId + "'.", e);
+        }
+    }
+
     public void deprovisionTenant(String tenantId) {
         validateTenantId(tenantId);
 

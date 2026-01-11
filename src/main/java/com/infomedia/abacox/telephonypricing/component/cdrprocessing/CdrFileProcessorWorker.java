@@ -2,6 +2,7 @@ package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
 import com.infomedia.abacox.telephonypricing.db.entity.FileInfo;
 import com.infomedia.abacox.telephonypricing.multitenancy.MultitenantRunner;
+import com.infomedia.abacox.telephonypricing.service.MinioStorageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.context.event.ContextRefreshedEvent;
@@ -20,9 +21,17 @@ public class CdrFileProcessorWorker {
     private final CdrRoutingService cdrRoutingService;
     private final CdrProcessingExecutor cdrProcessingExecutor;
     private final MultitenantRunner multitenantRunner;
+    private final MinioStorageService minioStorageService;
 
     @Scheduled(fixedDelay = 2000, initialDelay = 5000)
-    public void processPendingFilesForAllTenants() { // <-- RENAME for clarity
+    public void processPendingFilesForAllTenants() {
+        // 1. Guard Clause: Check if MinIO is up before doing anything
+        if (!minioStorageService.isReady()) {
+            log.trace("Skipping CDR processing cycle: MinIO is unavailable.");
+            return;
+        }
+
+        // 2. Proceed if healthy
         multitenantRunner.runForAllTenants(this::processPendingFilesForCurrentTenant);
     }
 

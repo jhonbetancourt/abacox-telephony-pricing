@@ -167,7 +167,7 @@ public class CdrRoutingService {
         log.info("Starting processing for FileInfo ID: {}", fileInfoId);
         FileInfo fileInfo = fileInfoPersistenceService.findById(fileInfoId);
 
-        if (fileInfo == null || fileInfo.getFileContent() == null) {
+        if (fileInfo == null) {
             log.error("FileInfo ID {}: FAILED (Missing Data)", fileInfoId);
             return;
         }

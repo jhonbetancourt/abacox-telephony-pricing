@@ -1,21 +1,21 @@
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
+import com.infomedia.abacox.telephonypricing.component.configmanager.StorageKey;
 import com.infomedia.abacox.telephonypricing.component.utils.XXHash128Util;
-import com.infomedia.abacox.telephonypricing.component.utils.XXHash64Util;
 import com.infomedia.abacox.telephonypricing.db.entity.FileInfo;
+import com.infomedia.abacox.telephonypricing.multitenancy.TenantContext;
+import com.infomedia.abacox.telephonypricing.service.MinioStorageService;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import jakarta.persistence.NoResultException;
 import jakarta.persistence.PersistenceContext;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
-import org.hibernate.engine.jdbc.BlobProxy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StreamUtils;
 
 // CHANGED: Standard Java ZIP imports
@@ -25,8 +25,6 @@ import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
 import java.io.*;
-import java.sql.Blob;
-import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
@@ -34,10 +32,14 @@ import java.util.Optional;
 
 @Service
 @Log4j2
+@RequiredArgsConstructor
 public class FileInfoPersistenceService {
 
     @PersistenceContext
     private EntityManager entityManager;
+
+    // Inject the new MinIO service
+    private final MinioStorageService minioStorageService;
 
     @Getter
     @AllArgsConstructor
@@ -46,26 +48,48 @@ public class FileInfoPersistenceService {
         private final boolean isNew;
     }
 
-    /**
-     * Creates a new FileInfo record with compressed content, or retrieves an existing one.
-     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public FileInfoCreationResult createOrGetFileInfo(String filename, Long parentId, String type, File file) throws IOException {
-        log.debug("Attempting to create/get FileInfo. Filename: {}, File size: {}", filename, file.length());
 
-        // Calculate checksum using streaming approach
-        UUID checksum; // Changed Long to UUID
+        // 1. Calculate Hash
+        UUID checksum;
         try (InputStream fileInputStream = new FileInputStream(file)) {
-            checksum = XXHash128Util.hash(fileInputStream); // Changed to XXHash128Util
+            checksum = XXHash128Util.hash(fileInputStream);
         }
 
-        log.debug("Calculated checksum: {}", checksum);
-
+        // 2. Check DB
         FileInfo fileInfo = findByChecksumInternal(checksum);
         boolean isNew = false;
 
         if (fileInfo == null) {
             isNew = true;
+            String tenantId = TenantContext.getTenant();
+            String objectKey = checksum.toString();
+
+            // 3. Compress to Temp
+            File tempCompressedFile = File.createTempFile("minio_up_", ".gz");
+            try (InputStream in = new FileInputStream(file);
+                 OutputStream out = new FileOutputStream(tempCompressedFile)) {
+                compressStream(in, out);
+            }
+
+            // 4. Upload & CAPTURE RESULT
+            MinioStorageService.MinioUploadResult uploadResult;
+            try (InputStream uploadStream = new FileInputStream(tempCompressedFile)) {
+                uploadResult = minioStorageService.uploadFile(
+                        tenantId,
+                        StorageKey.CDR,
+                        objectKey,
+                        uploadStream,
+                        tempCompressedFile.length(),
+                        "application/gzip"
+                );
+            } catch (Exception e) {
+                tempCompressedFile.delete();
+                throw new IOException("Failed to upload to MinIO", e);
+            }
+
+            // 5. Save DB Record using returned metadata
             fileInfo = new FileInfo();
             fileInfo.setFilename(filename.length() > 255 ? filename.substring(0, 255) : filename);
             fileInfo.setParentId(parentId != null ? parentId.intValue() : 0);
@@ -75,29 +99,16 @@ public class FileInfoPersistenceService {
             fileInfo.setSize((int) file.length());
             fileInfo.setProcessingStatus(FileInfo.ProcessingStatus.PENDING);
 
-            File tempCompressedFile = null;
-            try {
-                tempCompressedFile = createCompressedBlobFromFile(file, fileInfo);
+            // SET STORAGE DATA FROM RESULT
+            fileInfo.setStorageBucket(uploadResult.bucketName());
+            fileInfo.setStorageObjectName(uploadResult.objectName());
 
-                entityManager.persist(fileInfo);
-                entityManager.flush();
+            entityManager.persist(fileInfo);
+            entityManager.flush();
 
-                // Schedule cleanup after transaction commits
-                final File fileToDelete = tempCompressedFile;
-                scheduleFileCleanup(fileToDelete);
-
-            } catch (IOException e) {
-                log.error("Failed to compress file content for {}.", filename, e);
-                // If transaction fails, clean up immediately
-                if (tempCompressedFile != null && tempCompressedFile.exists()) {
-                    if (tempCompressedFile.delete()) {
-                        log.debug("Cleaned up temp compressed file after error: {}", tempCompressedFile.getAbsolutePath());
-                    }
-                }
-                fileInfo.setFileContent(null);
-                throw e;
-            }
+            tempCompressedFile.delete();
         }
+
         return new FileInfoCreationResult(fileInfo, isNew);
     }
 
@@ -121,65 +132,6 @@ public class FileInfoPersistenceService {
             }
             // gzipOutputStream.close() is called automatically here via try-with-resources
         }
-    }
-
-    /**
-     * Creates a compressed blob from a file and returns the temporary compressed file.
-     * The temp file should be deleted after the transaction commits.
-     */
-    private File createCompressedBlobFromFile(File sourceFile, FileInfo fileInfo) throws IOException {
-        // CHANGED: Extension to .gz
-        File tempCompressedFile = File.createTempFile("compressed_", ".gz");
-        tempCompressedFile.deleteOnExit(); 
-
-        try (InputStream fileInputStream = new FileInputStream(sourceFile);
-             FileOutputStream tempOutputStream = new FileOutputStream(tempCompressedFile)) {
-
-            compressStream(fileInputStream, tempOutputStream);
-        }
-
-        // Log compression statistics
-        double compressionRatio = sourceFile.length() > 0
-                ? (100.0 * tempCompressedFile.length() / sourceFile.length())
-                : 0;
-        
-        // CHANGED: Log message
-        log.debug("GZIP (Max) compression: {} bytes -> {} bytes ({}% of original size)",
-                sourceFile.length(), tempCompressedFile.length(), String.format("%.2f", compressionRatio));
-
-        // Create Blob from the compressed file stream
-        InputStream compressedInputStream = new FileInputStream(tempCompressedFile);
-        Blob blob = BlobProxy.generateProxy(compressedInputStream, tempCompressedFile.length());
-        fileInfo.setFileContent(blob);
-
-        return tempCompressedFile;
-    }
-
-    /**
-     * Schedules a file for deletion after the current transaction commits.
-     * If the transaction rolls back, the file is deleted immediately.
-     */
-    private void scheduleFileCleanup(File file) {
-        if (file == null) {
-            return;
-        }
-
-        TransactionSynchronizationManager.registerSynchronization(
-                new TransactionSynchronization() {
-                    @Override
-                    public void afterCompletion(int status) {
-                        if (file.exists()) {
-                            if (file.delete()) {
-                                log.debug("Deleted temp compressed file after transaction {}: {}",
-                                        status == STATUS_COMMITTED ? "commit" : "rollback",
-                                        file.getAbsolutePath());
-                            } else {
-                                log.warn("Failed to delete temp compressed file: {}", file.getAbsolutePath());
-                            }
-                        }
-                    }
-                }
-        );
     }
 
     private FileInfo findByChecksumInternal(UUID checksum) { // Changed Long to UUID
@@ -216,7 +168,7 @@ public class FileInfoPersistenceService {
                 fi.setProcessingStatus(FileInfo.ProcessingStatus.IN_PROGRESS);
                 entityManager.merge(fi);
             }
-            
+
             return files;
         } catch (Exception e) {
             log.error("Error locking pending files", e);
@@ -237,39 +189,30 @@ public class FileInfoPersistenceService {
         return updatedCount;
     }
 
-    /**
-     * Retrieves the file content as a decompressed InputStream.
-     * The caller is responsible for closing the stream.
-     *
-     * @param fileInfoId The ID of the FileInfo record
-     * @return Optional containing FileInfoData with filename and decompressed content stream, or empty if not found
-     */
     @Transactional(readOnly = true)
     public Optional<FileInfoData> getOriginalFileData(Long fileInfoId) {
         FileInfo fileInfo = findById(fileInfoId);
-        if (fileInfo == null || fileInfo.getFileContent() == null) {
-            log.warn("Could not find FileInfo or its content for ID: {}", fileInfoId);
+        if (fileInfo == null || fileInfo.getStorageObjectName() == null) {
             return Optional.empty();
         }
 
         try {
-            // Get the compressed data stream from the Blob
-            InputStream compressedStream = fileInfo.getFileContent().getBinaryStream();
+            // Use stored bucket name directly
+            InputStream compressedStream = minioStorageService.downloadFile(
+                    fileInfo.getStorageBucket(),
+                    fileInfo.getStorageObjectName()
+            );
 
-            // CHANGED: Wrap it in a GZIP decompression stream
             InputStream decompressedStream = new GZIPInputStream(compressedStream);
 
-            // Create FileInfoData with the stream and the original uncompressed size
-            FileInfoData fileInfoData = new FileInfoData(
+            return Optional.of(new FileInfoData(
                     fileInfo.getFilename(),
                     decompressedStream,
                     fileInfo.getSize()
-            );
+            ));
 
-            return Optional.of(fileInfoData);
-
-        } catch (SQLException | IOException e) {
-            log.error("Failed to create decompression stream for FileInfo ID: {}", fileInfoId, e);
+        } catch (Exception e) {
+            log.error("Failed to retrieve file from MinIO for ID: {}", fileInfoId, e);
             return Optional.empty();
         }
     }
@@ -299,25 +242,32 @@ public class FileInfoPersistenceService {
     @Transactional(readOnly = true, propagation = Propagation.REQUIRED)
     public void streamFileContent(Long fileInfoId, OutputStream outputStream) {
         FileInfo fileInfo = findById(fileInfoId);
-        if (fileInfo == null || fileInfo.getFileContent() == null) {
-            throw new RuntimeException("File content not found for ID: " + fileInfoId);
+        if (fileInfo == null) {
+            throw new RuntimeException("File info not found for ID: " + fileInfoId);
         }
 
-        try (InputStream blobStream = fileInfo.getFileContent().getBinaryStream();
-             InputStream gzipStream = new GZIPInputStream(blobStream)) {
+        try {
+            String tenantId = TenantContext.getTenant();
 
-            // Efficiently copy the decompressed stream to the HTTP output stream
-            StreamUtils.copy(gzipStream, outputStream);
+            // Get from MinIO
+            InputStream minioStream = minioStorageService.downloadFile(tenantId, StorageKey.CDR, fileInfo.getStorageObjectName());
 
-            // Flush ensures data is sent before transaction closes
-            outputStream.flush();
+            // Decompress and copy to HTTP output
+            try (InputStream gzipStream = new GZIPInputStream(minioStream)) {
+                StreamUtils.copy(gzipStream, outputStream);
+                outputStream.flush();
+            }
+            // minioStream closed by try-with-resources of gzipStream (usually)
+            // or explicitly close minioStream if GZIPInputStream doesn't close inner stream
+            // (it does in standard Java).
 
-        } catch (SQLException | IOException e) {
+        } catch (Exception e) {
             log.error("Error streaming content for file ID: {}", fileInfoId, e);
             throw new RuntimeException("Failed to stream file content", e);
         }
     }
 
     // Helper record for metadata
-    public record FileInfoMetadata(String filename, long size) {}
+    public record FileInfoMetadata(String filename, long size) {
+    }
 }

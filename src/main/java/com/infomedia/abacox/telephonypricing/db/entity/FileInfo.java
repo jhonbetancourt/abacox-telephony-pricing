@@ -82,15 +82,11 @@ public class FileInfo {
     @ColumnDefault("''")
     private String type;
 
-    /**
-     * The LZMA-compressed content of the file stored as a BLOB.
-     * Stored as a Large Object (LOB) in the database.
-     * Using Blob allows for streaming access without loading entire content into memory.
-     */
-    @ToString.Exclude
-    @Lob
-    @Column(name = "file_content")
-    private Blob fileContent;
+    @Column(name = "storage_bucket", length = 100)
+    private String storageBucket;
+
+    @Column(name = "storage_object_name", length = 100)
+    private String storageObjectName;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "processing_status", nullable = false, length = 20)

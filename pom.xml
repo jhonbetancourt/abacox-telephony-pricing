@@ -168,6 +168,12 @@
 			<artifactId>liquibase-hibernate6</artifactId>
 			<version>${liquibase-version}</version>
 		</dependency>
+
+		<dependency>
+			<groupId>io.minio</groupId>
+			<artifactId>minio</artifactId>
+			<version>8.6.0</version>
+		</dependency>
 	</dependencies>
 
 	<build>
