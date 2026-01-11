@@ -1,5 +1,6 @@
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
+import com.infomedia.abacox.telephonypricing.component.utils.XXHash128Util;
 import com.infomedia.abacox.telephonypricing.component.utils.XXHash64Util;
 import com.infomedia.abacox.telephonypricing.db.entity.FileInfo;
 import jakarta.persistence.EntityManager;
@@ -18,6 +19,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.util.StreamUtils;
 
 // CHANGED: Standard Java ZIP imports
+import java.util.UUID;
 import java.util.zip.Deflater;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
@@ -52,9 +54,9 @@ public class FileInfoPersistenceService {
         log.debug("Attempting to create/get FileInfo. Filename: {}, File size: {}", filename, file.length());
 
         // Calculate checksum using streaming approach
-        Long checksum;
+        UUID checksum; // Changed Long to UUID
         try (InputStream fileInputStream = new FileInputStream(file)) {
-            checksum = XXHash64Util.hash(fileInputStream);
+            checksum = XXHash128Util.hash(fileInputStream); // Changed to XXHash128Util
         }
 
         log.debug("Calculated checksum: {}", checksum);
@@ -180,7 +182,7 @@ public class FileInfoPersistenceService {
         );
     }
 
-    private FileInfo findByChecksumInternal(Long checksum) {
+    private FileInfo findByChecksumInternal(UUID checksum) { // Changed Long to UUID
         try {
             return entityManager.createQuery("SELECT fi FROM FileInfo fi WHERE fi.checksum = :checksum", FileInfo.class)
                     .setParameter("checksum", checksum)

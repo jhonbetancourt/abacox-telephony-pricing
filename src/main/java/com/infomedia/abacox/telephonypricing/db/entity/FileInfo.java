@@ -6,6 +6,7 @@ import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.ColumnDefault;
 import java.sql.Blob;
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 /**
  * Entity representing file information/metadata.
@@ -71,7 +72,7 @@ public class FileInfo {
      * Original field: FILEINFO_CTL
      */
     @Column(name = "checksum", nullable = false, unique = true)
-    private Long checksum;
+    private UUID checksum;
 
     /**
      * Type or MIME type of the file.

@@ -5,6 +5,8 @@ import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
 
+import java.util.UUID;
+
 @Entity
 @Table(
     name = "failed_call_record",
@@ -35,10 +37,6 @@ public class FailedCallRecord extends AuditedEntity {
 
     @Column(name = "employee_extension", length = 50)
     private String employeeExtension;
-
-    @ToString.Exclude
-    @Column(name = "cdr_string", columnDefinition = "BYTEA")
-    private byte[] cdrString;
 
     @Column(name = "error_type", length = 50)
     private String errorType;
@@ -78,5 +76,5 @@ public class FailedCallRecord extends AuditedEntity {
 
     @ToString.Exclude
     @Column(name = "ctl_hash", unique = true)
-    private Long ctlHash;
+    private UUID ctlHash;
 }

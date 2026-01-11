@@ -18,10 +18,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 @Service
 @Log4j2
@@ -40,11 +37,11 @@ public class CallRecordPersistenceService {
      * Efficiently checks if a list of hashes exists in the DB using a single query.
      */
     @Transactional(readOnly = true)
-    public Set<Long> findExistingHashes(List<Long> hashes) {
+    public Set<UUID> findExistingHashes(List<UUID> hashes) { // Changed List<Long> to List<UUID>
         if (hashes == null || hashes.isEmpty()) return Collections.emptySet();
 
-        List<Long> found = entityManager.createQuery(
-                        "SELECT cr.ctlHash FROM CallRecord cr WHERE cr.ctlHash IN :hashes", Long.class)
+        List<UUID> found = entityManager.createQuery(
+                        "SELECT cr.ctlHash FROM CallRecord cr WHERE cr.ctlHash IN :hashes", UUID.class) // Changed Long.class to UUID.class
                 .setParameter("hashes", hashes)
                 .getResultList();
 
@@ -74,13 +71,12 @@ public class CallRecordPersistenceService {
             return null;
         }
 
-        Long cdrHash = cdrData.getCtlHash();
+        UUID cdrHash = cdrData.getCtlHash(); // Changed Long to UUID
 
         TransactionTemplate txTemplate = new TransactionTemplate(transactionManager);
         txTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
 
         try {
-            // BLOCK A: Try to insert in an isolated transaction
             return txTemplate.execute(status -> {
                 // 1. Quick duplicate check
                 List<Long> existingIds = entityManager.createQuery("SELECT cr.id FROM CallRecord cr WHERE cr.ctlHash = :hash", Long.class)
@@ -92,23 +88,16 @@ public class CallRecordPersistenceService {
                     return entityManager.find(CallRecord.class, existingIds.get(0));
                 }
 
-                // 2. Prepare Entity
                 CallRecord callRecord = createEntityFromDto(cdrData, commLocation);
-
-                // 3. Persist and Flush
-                // Flush is critical here to trigger ConstraintViolation immediately inside this block
                 entityManager.persist(callRecord);
-                entityManager.flush(); 
-                
+                entityManager.flush();
+
                 return callRecord;
             });
 
         } catch (Exception e) {
-            // BLOCK B: Handle race condition outside the aborted transaction
             if (isDuplicateKeyException(e)) {
                 log.debug("Race condition detected for CallRecord hash {}. Fetching existing.", cdrHash);
-                
-                // Retrieve the record that won the race
                 return txTemplate.execute(retryStatus -> findByCtlHash(cdrHash));
             } else {
                 log.error("Database error while saving CallRecord during sync process: {}", e.getMessage());
@@ -118,7 +107,7 @@ public class CallRecordPersistenceService {
     }
 
     @Transactional(readOnly = true)
-    public CallRecord findByCtlHash(Long ctlHash) {
+    public CallRecord findByCtlHash(UUID ctlHash) { // Changed Long to UUID
         try {
             return entityManager.createQuery("SELECT cr FROM CallRecord cr WHERE cr.ctlHash = :hash", CallRecord.class)
                     .setParameter("hash", ctlHash)
@@ -177,21 +166,7 @@ public class CallRecordPersistenceService {
         callRecord.setDestinationEmployeeId(cdrData.getDestinationEmployeeId());
         
         if (cdrData.getFileInfo() != null) {
-            callRecord.setFileInfoId(cdrData.getFileInfo().getId().longValue());
-        }
-
-        // BINARY DATA HANDLING
-        // Priority 1: Use batch-compressed data (CPU heavy work done in parallel worker)
-        if (cdrData.getPreCompressedData() != null) {
-            callRecord.setCdrString(cdrData.getPreCompressedData());
-        } else {
-            // Priority 2: Fallback for synchronous reprocessing flows
-            try {
-                byte[] compressedCdr = CompressionZipUtil.compressString(cdrData.getRawCdrLine());
-                callRecord.setCdrString(compressedCdr);
-            } catch (IOException e) {
-                log.warn("Failed to compress CDR string inline for hash {}: {}", cdrData.getCtlHash(), e.getMessage());
-            }
+            callRecord.setFileInfoId(cdrData.getFileInfo().getId());
         }
 
         callRecord.setCtlHash(cdrData.getCtlHash());

@@ -35,7 +35,7 @@ public class MultitenantRunner {
         }
     }
 
-    public void runForALlTenants(Runnable task) {
+    public void runForAllTenants(Runnable task) {
         List<String> tenants = tenantProvider.getAllTenants();
 
         for (String tenant : tenants) {

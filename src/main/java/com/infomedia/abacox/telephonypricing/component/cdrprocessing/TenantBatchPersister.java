@@ -13,11 +13,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -40,10 +36,10 @@ public class TenantBatchPersister {
         // 1. Separate Success vs Failed
         List<ProcessedCdrResult> successResults = tenantBatch.stream()
                 .filter(r -> r.getOutcome() == ProcessingOutcome.SUCCESS)
-                .collect(Collectors.toList());
+                .toList();
         List<ProcessedCdrResult> failedResults = tenantBatch.stream()
                 .filter(r -> r.getOutcome() != ProcessingOutcome.SUCCESS)
-                .collect(Collectors.toList());
+                .toList();
 
         if (!successResults.isEmpty()) {
             processSuccessfulBatch(successResults);
@@ -67,18 +63,18 @@ public class TenantBatchPersister {
     }
 
     private void processSuccessfulBatch(List<ProcessedCdrResult> results) {
-        Map<Long, ProcessedCdrResult> uniqueBatch = new HashMap<>();
+        // Changed Map Key to UUID
+        Map<UUID, ProcessedCdrResult> uniqueBatch = new HashMap<>();
         for (ProcessedCdrResult res : results) {
             uniqueBatch.put(res.getCdrData().getCtlHash(), res);
         }
 
-        List<Long> hashesToCheck = new ArrayList<>(uniqueBatch.keySet());
-        Set<Long> existingInDb = callRecordService.findExistingHashes(hashesToCheck);
+        // Changed List<Long> to List<UUID>
+        List<UUID> hashesToCheck = new ArrayList<>(uniqueBatch.keySet());
+        Set<UUID> existingInDb = callRecordService.findExistingHashes(hashesToCheck);
 
         existingInDb.forEach(uniqueBatch::remove);
         if (uniqueBatch.isEmpty()) return;
-
-        uniqueBatch.values().parallelStream().forEach(this::compressResultData);
 
         for (ProcessedCdrResult res : uniqueBatch.values()) {
             CallRecord entity = callRecordService.createEntityFromDto(res.getCdrData(), res.getCommLocation());
@@ -89,21 +85,22 @@ public class TenantBatchPersister {
     }
 
     private void processFailedBatch(List<ProcessedCdrResult> results) {
-        Map<Long, ProcessedCdrResult> uniqueBatch = new HashMap<>();
+        // Changed Map Key to UUID
+        Map<UUID, ProcessedCdrResult> uniqueBatch = new HashMap<>();
         for (ProcessedCdrResult res : results) {
             uniqueBatch.put(res.getCdrData().getCtlHash(), res);
         }
 
-        List<Long> hashesToCheck = new ArrayList<>(uniqueBatch.keySet());
+        // Changed List<Long> to List<UUID>
+        List<UUID> hashesToCheck = new ArrayList<>(uniqueBatch.keySet());
         List<FailedCallRecord> existingRecords = failedRecordService.findExistingRecordsByHashes(hashesToCheck);
-        
-        Map<Long, FailedCallRecord> existingMap = existingRecords.stream()
+
+        // Changed Map Key to UUID
+        Map<UUID, FailedCallRecord> existingMap = existingRecords.stream()
                 .collect(Collectors.toMap(FailedCallRecord::getCtlHash, r -> r));
 
-        uniqueBatch.values().parallelStream().forEach(this::compressResultData);
-
         for (ProcessedCdrResult res : uniqueBatch.values()) {
-            Long hash = res.getCdrData().getCtlHash();
+            UUID hash = res.getCdrData().getCtlHash(); // Changed Long to UUID
             FailedCallRecord existing = existingMap.get(hash);
 
             if (existing != null) {
@@ -125,17 +122,5 @@ public class TenantBatchPersister {
             }
         }
         processedCounts.forEach(trackerService::decrementPendingCount);
-    }
-
-    private void compressResultData(ProcessedCdrResult result) {
-        CdrData cdrData = result.getCdrData();
-        if (cdrData.getPreCompressedData() == null && cdrData.getRawCdrLine() != null) {
-            try {
-                byte[] compressed = CompressionZipUtil.compressString(cdrData.getRawCdrLine());
-                cdrData.setPreCompressedData(compressed);
-            } catch (IOException e) {
-                log.error("Failed to compress CDR data for hash {}", cdrData.getCtlHash(), e);
-            }
-        }
     }
 }

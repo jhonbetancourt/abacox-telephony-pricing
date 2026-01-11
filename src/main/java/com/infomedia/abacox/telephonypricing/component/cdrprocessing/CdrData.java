@@ -1,6 +1,6 @@
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
-import com.infomedia.abacox.telephonypricing.component.utils.XXHash64Util;
+import com.infomedia.abacox.telephonypricing.component.utils.XXHash128Util;
 import com.infomedia.abacox.telephonypricing.db.entity.Employee;
 import com.infomedia.abacox.telephonypricing.db.entity.FileInfo;
 import lombok.Data;
@@ -12,6 +12,7 @@ import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.UUID;
 
 @Data
 @NoArgsConstructor
@@ -21,11 +22,7 @@ public class CdrData {
     @ToString.Exclude
     private String rawCdrLine;
     
-    // NEW FIELD: Stores the compressed byte array generated during processing
-    @ToString.Exclude
-    private byte[] preCompressedData;
-    
-    private Long ctlHash;
+    private UUID ctlHash;
     private LocalDateTime dateTimeOrigination; 
     private String callingPartyNumber; 
     private String finalCalledPartyNumber; 
@@ -122,6 +119,7 @@ public class CdrData {
 
     public void setRawCdrLine(String rawCdrLine) {
         this.rawCdrLine = rawCdrLine;
-        this.ctlHash = XXHash64Util.hash(rawCdrLine.getBytes(StandardCharsets.UTF_8));
+        // Changed to use XXHash128Util
+        this.ctlHash = XXHash128Util.hash(rawCdrLine.getBytes(StandardCharsets.UTF_8));
     }
 }

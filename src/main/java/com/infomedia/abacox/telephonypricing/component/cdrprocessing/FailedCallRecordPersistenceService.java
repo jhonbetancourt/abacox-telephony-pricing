@@ -17,6 +17,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
 
 @Service
 @Log4j2
@@ -34,7 +35,7 @@ public class FailedCallRecordPersistenceService {
      * Used by BatchPersistenceWorker to determine Insert vs Update.
      */
     @Transactional(readOnly = true)
-    public List<FailedCallRecord> findExistingRecordsByHashes(List<Long> hashes) {
+    public List<FailedCallRecord> findExistingRecordsByHashes(List<UUID> hashes) { // Changed Long to UUID
         if (hashes == null || hashes.isEmpty()) return Collections.emptyList();
 
         return entityManager.createQuery(
@@ -53,23 +54,12 @@ public class FailedCallRecordPersistenceService {
 
         record.setCtlHash(cdrData.getCtlHash());
 
-        // Binary Data Handling (Prioritize pre-compressed)
-        if (cdrData.getPreCompressedData() != null) {
-            record.setCdrString(cdrData.getPreCompressedData());
-        } else {
-            try {
-                record.setCdrString(CompressionZipUtil.compressString(cdrData.getRawCdrLine()));
-            } catch (Exception e) {
-                log.warn("Compression failed for new failed record", e);
-            }
-        }
-
         record.setCommLocationId(cdrData.getCommLocationId());
         record.setEmployeeExtension(truncate(cdrData.getCallingPartyNumber(), 50));
 
         record.setOriginalCallRecordId(result.getOriginalCallRecordId());
         if (cdrData.getFileInfo() != null) {
-            record.setFileInfoId(cdrData.getFileInfo().getId().longValue());
+            record.setFileInfoId(cdrData.getFileInfo().getId());
         }
 
         record.setErrorType(result.getErrorType() != null ? result.getErrorType().name() : "UNKNOWN");
@@ -91,10 +81,7 @@ public class FailedCallRecordPersistenceService {
         CdrData cdrData = result.getCdrData();
         record.setEmployeeExtension(truncate(cdrData.getCallingPartyNumber(), 50));
 
-        // If the batch worker managed to compress (or re-compress) the data, update it.
-        if (result.getCdrData().getPreCompressedData() != null) {
-            record.setCdrString(result.getCdrData().getPreCompressedData());
-        }
+        // REMOVED: Compression update logic
 
         if (result.getOriginalCallRecordId() != null) {
             record.setOriginalCallRecordId(result.getOriginalCallRecordId());
@@ -115,7 +102,7 @@ public class FailedCallRecordPersistenceService {
             return null;
         }
 
-        Long ctlHash = cdrData.getCtlHash();
+        UUID ctlHash = cdrData.getCtlHash();
 
         // Configure a template for REQUIRES_NEW behavior
         TransactionTemplate txTemplate = new TransactionTemplate(transactionManager);
@@ -124,32 +111,20 @@ public class FailedCallRecordPersistenceService {
         try {
             // BLOCK A: Attempt Execution in an isolated transaction
             return txTemplate.execute(status -> {
-                // 1. Try to find existing record
                 FailedCallRecord recordToSave = findByCtlHash(ctlHash);
 
                 if (recordToSave != null) {
-                    // Path A: Record exists -> Update it
                     updateQuarantineDetails(recordToSave, cdrData, errorType, errorMessage, processingStep, originalCallRecordId);
-                    // Merge ensures changes to detached entities are saved, though strictly findByCtlHash returns managed
                     return entityManager.merge(recordToSave);
                 } else {
-                    // Path B: New Record -> Prepare & Insert
                     recordToSave = new FailedCallRecord();
                     recordToSave.setCtlHash(ctlHash);
-
-                    try {
-                        byte[] compressed = CompressionZipUtil.compressString(cdrData.getRawCdrLine());
-                        recordToSave.setCdrString(compressed);
-                    } catch (IOException e) {
-                        log.warn("Failed to compress quarantined CDR for hash {}", ctlHash);
-                    }
 
                     recordToSave.setCommLocationId(cdrData.getCommLocationId());
                     updateQuarantineDetails(recordToSave, cdrData, errorType, errorMessage, processingStep, originalCallRecordId);
 
                     entityManager.persist(recordToSave);
-                    // Explicit flush required to trigger the ConstraintViolation immediately within this block
-                    entityManager.flush(); 
+                    entityManager.flush();
                     return recordToSave;
                 }
             });
@@ -205,7 +180,7 @@ public class FailedCallRecordPersistenceService {
     }
 
     @Transactional(readOnly = true)
-    public FailedCallRecord findByCtlHash(Long ctlHash) {
+    public FailedCallRecord findByCtlHash(UUID ctlHash) { // Changed Long to UUID
         try {
             return entityManager.createQuery("SELECT fr FROM FailedCallRecord fr WHERE fr.ctlHash = :hash", FailedCallRecord.class)
                     .setParameter("hash", ctlHash)

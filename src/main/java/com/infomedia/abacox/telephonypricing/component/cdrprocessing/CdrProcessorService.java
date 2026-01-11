@@ -2,6 +2,7 @@
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
 import com.infomedia.abacox.telephonypricing.component.utils.CompressionZipUtil;
+import com.infomedia.abacox.telephonypricing.component.utils.XXHash128Util;
 import com.infomedia.abacox.telephonypricing.db.entity.*;
 import com.infomedia.abacox.telephonypricing.multitenancy.TenantContext;
 import jakarta.persistence.EntityManager;
@@ -16,10 +17,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 
 @Service
 @Log4j2
@@ -194,17 +192,18 @@ public class CdrProcessorService {
             return false;
         }
 
-        // VALIDATION ADDED: Check if CDR content exists
-        if (callRecord.getCdrString() == null || callRecord.getCdrString().length == 0) {
-            log.error("Reprocessing request for CallRecord ID {} failed: Stored CDR content is empty or null.", callRecordId);
+        // 1. Retrieve Raw String via File Scan
+        String cdrString;
+        try {
+            cdrString = findRawCdrLineInFile(callRecord.getFileInfoId(), callRecord.getCtlHash());
+        } catch (Exception e) {
+            log.error("Failed to retrieve raw CDR line for CallRecord ID {}", callRecordId, e);
             return false;
         }
 
-        String cdrString;
-        try {
-            cdrString = CompressionZipUtil.decompressToString(callRecord.getCdrString());
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to decompress CDR string for CallRecord ID " + callRecordId, e);
+        if (cdrString == null) {
+            log.error("Original CDR line not found in file for CallRecord ID {} (Hash: {})", callRecordId, callRecord.getCtlHash());
+            return false;
         }
 
         Optional<LineProcessingContext> contextOpt = buildReprocessingContext(
@@ -244,17 +243,18 @@ public class CdrProcessorService {
             return false;
         }
 
-        // VALIDATION ADDED: Check if CDR content exists
-        if (failedCallRecord.getCdrString() == null || failedCallRecord.getCdrString().length == 0) {
-            log.error("Reprocessing request for FailedCallRecord ID {} failed: Stored CDR content is empty or null.", failedCallRecordId);
+        // 1. Retrieve Raw String via File Scan
+        String cdrString;
+        try {
+            cdrString = findRawCdrLineInFile(failedCallRecord.getFileInfoId(), failedCallRecord.getCtlHash());
+        } catch (Exception e) {
+            log.error("Failed to retrieve raw CDR line for FailedCallRecord ID {}", failedCallRecordId, e);
             return false;
         }
 
-        String cdrString;
-        try {
-            cdrString = CompressionZipUtil.decompressToString(failedCallRecord.getCdrString());
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to decompress CDR string for FailedCallRecord ID " + failedCallRecordId, e);
+        if (cdrString == null) {
+            log.error("Original CDR line not found in file for FailedCallRecord ID {} (Hash: {})", failedCallRecordId, failedCallRecord.getCtlHash());
+            return false;
         }
 
         Optional<LineProcessingContext> contextOpt = buildReprocessingContext(
@@ -335,6 +335,36 @@ public class CdrProcessorService {
                 .build();
 
         return Optional.of(context);
+    }
+
+    /**
+     * Reads the associated file stream and scans for the line matching the specific hash.
+     * This replaces the need to store the string in the DB.
+     */
+    private String findRawCdrLineInFile(Long fileInfoId, UUID targetHash) throws IOException {
+        if (fileInfoId == null || targetHash == null) return null;
+
+        Optional<FileInfoData> fileDataOpt = fileInfoPersistenceService.getOriginalFileData(fileInfoId);
+        if (fileDataOpt.isEmpty()) return null;
+
+        try (InputStream is = fileDataOpt.get().content();
+             InputStreamReader reader = new InputStreamReader(is, StandardCharsets.UTF_8);
+             BufferedReader br = new BufferedReader(reader)) {
+
+            String line;
+            while ((line = br.readLine()) != null) {
+                String trimmed = line.trim();
+                if (trimmed.isEmpty()) continue;
+
+                // Re-calculate hash exactly as CdrData does it
+                UUID lineHash = XXHash128Util.hash(trimmed.getBytes(StandardCharsets.UTF_8));
+
+                if (lineHash.equals(targetHash)) {
+                    return trimmed;
+                }
+            }
+        }
+        return null;
     }
 
     private CdrData executeReprocessingLogic(LineProcessingContext context) {

@@ -23,7 +23,7 @@ public class CdrFileProcessorWorker {
 
     @Scheduled(fixedDelay = 2000, initialDelay = 5000)
     public void processPendingFilesForAllTenants() { // <-- RENAME for clarity
-        multitenantRunner.runForALlTenants(this::processPendingFilesForCurrentTenant);
+        multitenantRunner.runForAllTenants(this::processPendingFilesForCurrentTenant);
     }
 
     private void processPendingFilesForCurrentTenant() { // <-- NEW METHOD with original logic
@@ -69,7 +69,7 @@ public class CdrFileProcessorWorker {
         @EventListener(ContextRefreshedEvent.class)
         public void onApplicationEvent() {
             log.info("Application started. Recovering stalled files...");
-            multitenantRunner.runForALlTenants(fileInfoPersistenceService::resetInProgressToPending);
+            multitenantRunner.runForAllTenants(fileInfoPersistenceService::resetInProgressToPending);
         }
     }
 }

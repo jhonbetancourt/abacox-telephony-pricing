@@ -7,6 +7,7 @@ import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.ColumnDefault;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Entity
 @Table(
@@ -166,9 +167,5 @@ public class CallRecord extends AuditedEntity {
 
     @ToString.Exclude
     @Column(name = "ctl_hash", unique = true)
-    private Long ctlHash;
-
-    @ToString.Exclude
-    @Column(name = "cdr_string", columnDefinition = "BYTEA")
-    private byte[] cdrString;
+    private UUID ctlHash;
 }
