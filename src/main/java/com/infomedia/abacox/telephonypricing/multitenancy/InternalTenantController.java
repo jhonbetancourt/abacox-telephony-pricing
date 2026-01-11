@@ -16,7 +16,6 @@ import org.springframework.web.bind.annotation.*;
 public class InternalTenantController {
 
     private final TenantProvisioningService provisioningService;
-    private final SchemaMigrationService migrationService;
     private final TenantProvider tenantProvider;
 
     @Operation(summary = "Check if a tenant schema exists")
@@ -56,7 +55,7 @@ public class InternalTenantController {
     @GetMapping(value = "/{tenantId}/preview", produces = MediaType.TEXT_PLAIN_VALUE)
     public ResponseEntity<String> previewChanges(@PathVariable String tenantId) {
         try {
-            String changelog = migrationService.previewMigration(tenantId);
+            String changelog = provisioningService.previewMigrationTenant(tenantId);
             return ResponseEntity.ok(changelog);
         } catch (Exception e) {
             return ResponseEntity.internalServerError().body("Error generating diff: " + e.getMessage());
@@ -69,7 +68,7 @@ public class InternalTenantController {
             @PathVariable String tenantId,
             @RequestBody String changelogContent) {
         try {
-            migrationService.applyMigration(tenantId, changelogContent);
+            provisioningService.applyMigrationTenant(tenantId, changelogContent);
             return ResponseEntity.ok("Migration applied successfully.");
         } catch (Exception e) {
             return ResponseEntity.internalServerError().body("Error applying migration: " + e.getMessage());
