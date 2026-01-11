@@ -43,6 +43,9 @@ public class SchemaMigrationService {
     @Value("${abacox.multitenancy.hibernate-dialect:org.hibernate.dialect.PostgreSQLDialect}")
     private String hibernateDialect;
 
+    @Value("${abacox.multitenancy.ignored-objects:}")
+    private String ignoredObjects;
+
     /**
      * 1. Creates Schema (if missing).
      * 2. Compares JPA Entities vs Schema.
@@ -73,6 +76,11 @@ public class SchemaMigrationService {
             diffCmd.addArgumentValue(DiffOutputControlCommandStep.INCLUDE_CATALOG_ARG, false);
             diffCmd.addArgumentValue(DiffOutputControlCommandStep.INCLUDE_SCHEMA_ARG, false);
             diffCmd.addArgumentValue(DiffOutputControlCommandStep.INCLUDE_TABLESPACE_ARG, false);
+
+            if (ignoredObjects != null && !ignoredObjects.isBlank()) {
+                // The format expected is "table:name,view:name"
+                diffCmd.addArgumentValue("excludeObjects", ignoredObjects);
+            }
             
             diffCmd.execute();
 

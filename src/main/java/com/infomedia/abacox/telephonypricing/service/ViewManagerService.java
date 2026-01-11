@@ -33,16 +33,14 @@ public class ViewManagerService implements TenantInitializer {
             return;
         }
 
-        log.info("Starting database views initialization for tenant '{}'...", tenantId);
+        log.info("Starting database views update/initialization for tenant '{}'...", tenantId);
 
         try {
-            // *** THE FINAL, CORRECT FIX ***
-            // Use the flexible `execute` method with a PreparedStatementCallback.
-            // This allows us to run a statement that returns a result set without processing it.
+            // Set the search path for the current transaction
             jdbcTemplate.execute("SELECT set_config('search_path', ?, false)", (PreparedStatement ps) -> {
                 ps.setString(1, tenantId);
-                ps.execute(); // This just executes the statement.
-                return null;  // We return null because we don't need any result from the callback.
+                ps.execute();
+                return null;
             });
 
             List<String> requiredViews = List.of(
@@ -50,7 +48,8 @@ public class ViewManagerService implements TenantInitializer {
                     "v_conference_calls_report"
             );
 
-            requiredViews.forEach(this::createViewIfNotExists);
+            // Changed method reference to the new logic
+            requiredViews.forEach(this::createOrReplaceView);
 
             log.info("Database views initialization tasks complete for tenant '{}'.", tenantId);
         } catch (Exception e) {
@@ -59,14 +58,19 @@ public class ViewManagerService implements TenantInitializer {
         }
     }
 
-    public void createViewIfNotExists(String viewName) {
-        if (viewExists(viewName)) {
-            log.info("View '{}' already exists in current tenant schema. Skipping creation.", viewName);
-            return;
-        }
+    public void createOrReplaceView(String viewName) {
+        log.info("Processing view '{}' for current tenant schema.", viewName);
 
-        log.info("View '{}' does not exist in current tenant schema. Attempting to create from SQL file.", viewName);
         try {
+            // 1. Drop the view if it exists. 
+            // We use CASCADE to ensure that if a view has been modified in a way 
+            // that breaks dependencies, the old version is cleared out entirely.
+            // Note: Ensure your 'requiredViews' list is ordered by dependency (independent views first).
+            String dropSql = "DROP VIEW IF EXISTS " + viewName + " CASCADE";
+            jdbcTemplate.execute(dropSql);
+            log.debug("Dropped view '{}' (if it existed).", viewName);
+
+            // 2. Load the SQL definition
             String sqlFilePath = "db/views/" + viewName + ".sql";
             Resource resource = new ClassPathResource(sqlFilePath);
 
@@ -75,20 +79,18 @@ public class ViewManagerService implements TenantInitializer {
                 return;
             }
 
-            String sql = resourceAsString(resource);
-            jdbcTemplate.execute(sql);
-            log.info("Successfully created view '{}' in current tenant schema.", viewName);
+            // 3. Create the view
+            String createSql = resourceAsString(resource);
+            jdbcTemplate.execute(createSql);
+            log.info("Successfully created/updated view '{}' in current tenant schema.", viewName);
 
         } catch (Exception e) {
-            throw new RuntimeException("Failed to create view '" + viewName + "'", e);
+            throw new RuntimeException("Failed to update view '" + viewName + "'", e);
         }
     }
-    
-    private boolean viewExists(String viewName) {
-        String sql = "SELECT EXISTS (SELECT FROM pg_views WHERE schemaname = current_schema() AND viewname = ?)";
-        Boolean exists = jdbcTemplate.queryForObject(sql, Boolean.class, viewName);
-        return exists != null && exists;
-    }
+
+    // The 'viewExists' method was removed as it is no longer needed 
+    // because we are using 'DROP VIEW IF EXISTS'.
 
     private String resourceAsString(Resource resource) {
         try (Reader reader = new InputStreamReader(resource.getInputStream(), StandardCharsets.UTF_8)) {
