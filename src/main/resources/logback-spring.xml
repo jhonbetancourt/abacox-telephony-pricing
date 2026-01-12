@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <!-- 1. Load Application Name -->
+    <springProperty scope="context" name="appName" source="spring.application.name" defaultValue="users"/>
+
+    <springProperty scope="context" name="logPath" source="app.log.dir" defaultValue="logs"/>
+
+    <appender name="TENANT-SIFT" class="ch.qos.logback.classic.sift.SiftingAppender">
+        <discriminator>
+            <key>tenant</key>
+            <defaultValue>system</defaultValue>
+        </discriminator>
+
+        <sift>
+            <appender name="FILE-${tenant}" class="ch.qos.logback.core.rolling.RollingFileAppender">
+
+                <!-- 3. Use ${logPath} and ${appName} variables -->
+                <file>${logPath}/${appName}-${tenant}.log</file>
+
+                <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+                    <fileNamePattern>${logPath}/archived/${appName}-${tenant}-%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+                    <maxFileSize>10MB</maxFileSize>
+                    <maxHistory>30</maxHistory>
+                    <totalSizeCap>2GB</totalSizeCap>
+                </rollingPolicy>
+
+                <encoder>
+                    <pattern>%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n</pattern>
+                </encoder>
+            </appender>
+        </sift>
+    </appender>
+
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss} [%thread] [%X{tenant}] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="TENANT-SIFT" />
+        <appender-ref ref="CONSOLE" />
+    </root>
+
+</configuration>
