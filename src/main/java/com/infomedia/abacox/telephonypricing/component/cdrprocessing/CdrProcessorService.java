@@ -18,6 +18,8 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ForkJoinPool;
 
 @Service
 @Log4j2
@@ -38,15 +40,15 @@ public class CdrProcessorService {
     private EntityManager entityManager;
 
     public CdrProcessorService(CdrEnrichmentService cdrEnrichmentService,
-                               CdrValidationService cdrValidationService,
-                               List<CdrProcessor> cdrProcessors,
-                               CommunicationLocationLookupService commLocationLookupService,
-                               EmployeeLookupService employeeLookupService,
-                               FileInfoPersistenceService fileInfoPersistenceService,
-                               CallRecordPersistenceService callRecordPersistenceService,
-                               FailedCallRecordPersistenceService failedCallRecordPersistenceService,
-                               PersistenceQueueService persistenceQueueService,
-                               FileProcessingTrackerService trackerService) {
+            CdrValidationService cdrValidationService,
+            List<CdrProcessor> cdrProcessors,
+            CommunicationLocationLookupService commLocationLookupService,
+            EmployeeLookupService employeeLookupService,
+            FileInfoPersistenceService fileInfoPersistenceService,
+            CallRecordPersistenceService callRecordPersistenceService,
+            FailedCallRecordPersistenceService failedCallRecordPersistenceService,
+            PersistenceQueueService persistenceQueueService,
+            FileProcessingTrackerService trackerService) {
         this.cdrEnrichmentService = cdrEnrichmentService;
         this.cdrValidationService = cdrValidationService;
         this.cdrProcessors = cdrProcessors;
@@ -70,8 +72,29 @@ public class CdrProcessorService {
         }
         countsByFile.forEach(trackerService::incrementPendingCount);
 
-        // Process Parallel (CPU bound tasks: Parse, Validate, Enrich)
-        batch.parallelStream().forEach(this::processSingleCdrLineInternal);
+        // Capture TenantContext to propagate to parallel threads
+        String tenantId = TenantContext.getTenant();
+
+        // Use custom ForkJoinPool to prevent current thread (with transaction) from
+        // participating
+        try (ForkJoinPool customPool = new ForkJoinPool(
+                Math.min(batch.size(), Runtime.getRuntime().availableProcessors()))) {
+            customPool.submit(() -> {
+                batch.parallelStream().forEach(ctx -> {
+                    try {
+                        TenantContext.setTenant(tenantId);
+                        processSingleCdrLineInternal(ctx);
+                    } finally {
+                        TenantContext.clear();
+                    }
+                });
+            }).get(); // Wait for completion
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("Processing interrupted", e);
+        } catch (ExecutionException e) {
+            throw new RuntimeException("Processing failed", e.getCause());
+        }
     }
 
     public ProcessingOutcome processSingleCdrLineSync(LineProcessingContext lineProcessingContext) {
@@ -86,13 +109,12 @@ public class CdrProcessorService {
         try {
             FileInfo currentFileInfo = lineProcessingContext.getFileInfo();
             CdrProcessor processor = lineProcessingContext.getCdrProcessor();
-            
+
             cdrData = processor.evaluateFormat(
-                    cdrLine, 
-                    targetCommLocation, 
-                    lineProcessingContext.getCommLocationExtensionLimits(), 
-                    lineProcessingContext.getHeaderPositions()
-            );
+                    cdrLine,
+                    targetCommLocation,
+                    lineProcessingContext.getCommLocationExtensionLimits(),
+                    lineProcessingContext.getHeaderPositions());
 
             if (cdrData == null) {
                 // If skipped, we must decrement the tracker immediately
@@ -123,7 +145,7 @@ public class CdrProcessorService {
 
         } catch (Exception e) {
             log.error("Unhandled exception processing CDR line: {}", cdrLine, e);
-            
+
             if (cdrData == null) {
                 cdrData = new CdrData();
                 cdrData.setRawCdrLine(cdrLine);
@@ -132,19 +154,20 @@ public class CdrProcessorService {
                 }
                 cdrData.setCommLocationId(targetCommLocation.getId());
             }
-            
+
             cdrData.setMarkedForQuarantine(true);
             cdrData.setQuarantineReason(e.getMessage());
             cdrData.setQuarantineStep("UNHANDLED_EXCEPTION");
-            
+
             submitToQueue(cdrData, null, ProcessingOutcome.QUARANTINED);
             return ProcessingOutcome.QUARANTINED;
         }
     }
 
     private void submitToQueue(CdrData cdrData, CommunicationLocation commLocation, ProcessingOutcome outcome) {
-        // NOTE: We do NOT compress here anymore. Compression happens in BatchPersistenceWorker.
-        
+        // NOTE: We do NOT compress here anymore. Compression happens in
+        // BatchPersistenceWorker.
+
         QuarantineErrorType errorType = null;
         String errorMessage = null;
         String errorStep = null;
@@ -169,7 +192,8 @@ public class CdrProcessorService {
     }
 
     private QuarantineErrorType resolveErrorType(String step) {
-        if (step == null) return QuarantineErrorType.INITIAL_VALIDATION_ERROR;
+        if (step == null)
+            return QuarantineErrorType.INITIAL_VALIDATION_ERROR;
         try {
             return QuarantineErrorType.valueOf(step);
         } catch (IllegalArgumentException e) {
@@ -181,7 +205,8 @@ public class CdrProcessorService {
         return cdrProcessors.stream()
                 .filter(p -> p.getPlantTypeIdentifiers().contains(plantTypeId))
                 .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("No CDR processor found for plant type ID: " + plantTypeId));
+                .orElseThrow(
+                        () -> new IllegalArgumentException("No CDR processor found for plant type ID: " + plantTypeId));
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -202,15 +227,15 @@ public class CdrProcessorService {
         }
 
         if (cdrString == null) {
-            log.error("Original CDR line not found in file for CallRecord ID {} (Hash: {})", callRecordId, callRecord.getCtlHash());
+            log.error("Original CDR line not found in file for CallRecord ID {} (Hash: {})", callRecordId,
+                    callRecord.getCtlHash());
             return false;
         }
 
         Optional<LineProcessingContext> contextOpt = buildReprocessingContext(
                 cdrString,
                 callRecord.getCommLocationId(),
-                callRecord.getFileInfoId()
-        );
+                callRecord.getFileInfoId());
 
         if (contextOpt.isEmpty()) {
             return false;
@@ -224,13 +249,13 @@ public class CdrProcessorService {
                     resolveErrorType(processedCdrData.getQuarantineStep()),
                     processedCdrData.getQuarantineReason(),
                     "reprocessCallRecord_" + processedCdrData.getQuarantineStep(),
-                    callRecordId
-            );
+                    callRecordId);
             entityManager.remove(callRecord);
             return false;
         } else {
             // Update using Sync method
-            callRecordPersistenceService.mapCdrDataToCallRecord(processedCdrData, callRecord, contextOpt.get().getCommLocation());
+            callRecordPersistenceService.mapCdrDataToCallRecord(processedCdrData, callRecord,
+                    contextOpt.get().getCommLocation());
             entityManager.merge(callRecord);
             return true;
         }
@@ -253,15 +278,15 @@ public class CdrProcessorService {
         }
 
         if (cdrString == null) {
-            log.error("Original CDR line not found in file for FailedCallRecord ID {} (Hash: {})", failedCallRecordId, failedCallRecord.getCtlHash());
+            log.error("Original CDR line not found in file for FailedCallRecord ID {} (Hash: {})", failedCallRecordId,
+                    failedCallRecord.getCtlHash());
             return false;
         }
 
         Optional<LineProcessingContext> contextOpt = buildReprocessingContext(
                 cdrString,
                 failedCallRecord.getCommLocationId(),
-                failedCallRecord.getFileInfoId()
-        );
+                failedCallRecord.getFileInfoId());
 
         if (contextOpt.isEmpty()) {
             return false;
@@ -271,14 +296,15 @@ public class CdrProcessorService {
 
         if (processedCdrData.isMarkedForQuarantine()) {
             QuarantineErrorType errorType = resolveErrorType(processedCdrData.getQuarantineStep());
-            
+
             failedCallRecord.setErrorType(errorType.name());
             failedCallRecord.setErrorMessage(processedCdrData.getQuarantineReason());
             failedCallRecord.setProcessingStep("reprocessFailedCallRecord_" + processedCdrData.getQuarantineStep());
             entityManager.merge(failedCallRecord);
             return false;
         } else {
-            CallRecord newCallRecord = callRecordPersistenceService.saveOrUpdateCallRecord(processedCdrData, contextOpt.get().getCommLocation());
+            CallRecord newCallRecord = callRecordPersistenceService.saveOrUpdateCallRecord(processedCdrData,
+                    contextOpt.get().getCommLocation());
             if (newCallRecord != null) {
                 entityManager.remove(failedCallRecord);
                 return true;
@@ -287,12 +313,15 @@ public class CdrProcessorService {
         }
     }
 
-    private Optional<LineProcessingContext> buildReprocessingContext(String cdrLine, Long commLocationId, Long fileInfoId) {
-        if (commLocationId == null) return Optional.empty();
+    private Optional<LineProcessingContext> buildReprocessingContext(String cdrLine, Long commLocationId,
+            Long fileInfoId) {
+        if (commLocationId == null)
+            return Optional.empty();
 
         Optional<CommunicationLocation> commLocationOpt = commLocationLookupService.findById(commLocationId);
-        if (commLocationOpt.isEmpty()) return Optional.empty();
-        
+        if (commLocationOpt.isEmpty())
+            return Optional.empty();
+
         CommunicationLocation commLocation = commLocationOpt.get();
         FileInfo fileInfo = fileInfoPersistenceService.findById(fileInfoId);
 
@@ -305,9 +334,9 @@ public class CdrProcessorService {
             Optional<FileInfoData> fileDataOpt = fileInfoPersistenceService.getOriginalFileData(fileInfoId);
             if (fileDataOpt.isPresent()) {
                 try (InputStream is = fileDataOpt.get().content();
-                     InputStreamReader reader = new InputStreamReader(is, StandardCharsets.UTF_8);
-                     BufferedReader br = new BufferedReader(reader)) {
-                    
+                        InputStreamReader reader = new InputStreamReader(is, StandardCharsets.UTF_8);
+                        BufferedReader br = new BufferedReader(reader)) {
+
                     String line;
                     int linesChecked = 0;
                     while ((line = br.readLine()) != null && linesChecked < 5) {
@@ -338,23 +367,27 @@ public class CdrProcessorService {
     }
 
     /**
-     * Reads the associated file stream and scans for the line matching the specific hash.
+     * Reads the associated file stream and scans for the line matching the specific
+     * hash.
      * This replaces the need to store the string in the DB.
      */
     private String findRawCdrLineInFile(Long fileInfoId, UUID targetHash) throws IOException {
-        if (fileInfoId == null || targetHash == null) return null;
+        if (fileInfoId == null || targetHash == null)
+            return null;
 
         Optional<FileInfoData> fileDataOpt = fileInfoPersistenceService.getOriginalFileData(fileInfoId);
-        if (fileDataOpt.isEmpty()) return null;
+        if (fileDataOpt.isEmpty())
+            return null;
 
         try (InputStream is = fileDataOpt.get().content();
-             InputStreamReader reader = new InputStreamReader(is, StandardCharsets.UTF_8);
-             BufferedReader br = new BufferedReader(reader)) {
+                InputStreamReader reader = new InputStreamReader(is, StandardCharsets.UTF_8);
+                BufferedReader br = new BufferedReader(reader)) {
 
             String line;
             while ((line = br.readLine()) != null) {
                 String trimmed = line.trim();
-                if (trimmed.isEmpty()) continue;
+                if (trimmed.isEmpty())
+                    continue;
 
                 // Re-calculate hash exactly as CdrData does it
                 UUID lineHash = XXHash128Util.hash(trimmed.getBytes(StandardCharsets.UTF_8));
@@ -369,11 +402,10 @@ public class CdrProcessorService {
 
     private CdrData executeReprocessingLogic(LineProcessingContext context) {
         CdrData cdrData = context.getCdrProcessor().evaluateFormat(
-                context.getCdrLine(), 
-                context.getCommLocation(), 
-                context.getCommLocationExtensionLimits(), 
-                context.getHeaderPositions()
-        );
+                context.getCdrLine(),
+                context.getCommLocation(),
+                context.getCommLocationExtensionLimits(),
+                context.getHeaderPositions());
 
         if (cdrData == null) {
             cdrData = new CdrData();

@@ -785,18 +785,6 @@ public class MigrationService {
                         .orderByClause("ACUMTOTAL_ID DESC")
                 .build());
 
-        Map<String, Function<Object, Object>> customTransformers = new HashMap<>();
-
-        //String to gzip compressed byte[] transformer
-        customTransformers.put("cdrString", sourceValue -> {
-            if (sourceValue == null) return null;
-            try {
-                return CompressionZipUtil.compressString(sourceValue.toString());
-            } catch (IOException e) {
-                log.error("Error compressing CDR string during migration: {}", e.getMessage());
-            }
-            return null;
-        });
 
         configs.add(TableMigrationConfig.builder()
                 .sourceTableName("acumfallido")
@@ -806,7 +794,6 @@ public class MigrationService {
                 .columnMapping(Map.ofEntries(
                         entry("ACUMFALLIDO_ID", "id"),
                         entry("ACUMFALLIDO_EXTENSION", "employeeExtension"),
-                        entry("ACUMFALLIDO_CDR", "cdrString"),
                         entry("ACUMFALLIDO_TIPO", "errorType"), // Note: smallint to String conversion will be attempted by the migrator
                         entry("ACUMFALLIDO_MENSAJE", "errorMessage"),
                         entry("ACUMFALLIDO_ACUMTOTAL_ID", "originalCallRecordId"),
@@ -815,7 +802,6 @@ public class MigrationService {
                         entry("ACUMFALLIDO_FCREACION", "createdDate"),
                         entry("ACUMFALLIDO_FMODIFICADO", "lastModifiedDate")
                 ))
-                .customValueTransformers(customTransformers)
                 .maxEntriesToMigrate(runRequest.getMaxFailedCallRecordEntries()) // Limit for performance, similar to CallRecord
                 .orderByClause("ACUMFALLIDO_ID DESC") // Get the most recent failures first
                 .build());

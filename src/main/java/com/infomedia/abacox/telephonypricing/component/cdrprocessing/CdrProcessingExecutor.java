@@ -32,24 +32,24 @@ public class CdrProcessingExecutor {
     // It's co-located here for organizational purposes.
     @Configuration
     public static class CdrExecutorConfig {
-        
+
         // This method creates the Spring bean.
         @Bean("cdrTaskExecutor") // Give the bean a specific name
         public ThreadPoolTaskExecutor cdrTaskExecutor(
                 // Inject the property directly into the bean creation method
                 @Value("${app.cdr.processing.max-threads:4}") int maxThreads) {
-            
+
             ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-            
+
             // Use the configured value to set pool sizes
             executor.setCorePoolSize(maxThreads);
             executor.setMaxPoolSize(maxThreads);
             executor.setQueueCapacity(200);
             executor.setThreadNamePrefix("cdr-exec-");
-            
+
             // IMPORTANT: Apply the tenant-aware decorator
             executor.setTaskDecorator(new TenantAwareTaskDecorator());
-            
+
             executor.initialize();
             return executor;
         }
@@ -67,7 +67,7 @@ public class CdrProcessingExecutor {
         if (queued > 0) {
             return 0;
         }
-        
+
         int maxThreads = taskExecutor.getMaxPoolSize();
         int available = maxThreads - active;
         return Math.max(0, available);
@@ -102,7 +102,8 @@ public class CdrProcessingExecutor {
             try {
                 cdrProcessorService.reprocessFailedCallRecord(failedCallRecordId);
             } catch (Exception e) {
-                log.error("Uncaught exception during execution of reprocessFailedCallRecord for ID: {}", failedCallRecordId, e);
+                log.error("Uncaught exception during execution of reprocessFailedCallRecord for ID: {}",
+                        failedCallRecordId, e);
             }
         });
     }
