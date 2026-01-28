@@ -4,6 +4,7 @@ import com.infomedia.abacox.telephonypricing.component.cdrprocessing.*;
 import com.infomedia.abacox.telephonypricing.component.configmanager.ConfigKey;
 import com.infomedia.abacox.telephonypricing.component.configmanager.ConfigService;
 import com.infomedia.abacox.telephonypricing.dto.generic.MessageResponse;
+import com.infomedia.abacox.telephonypricing.multitenancy.TenantContext;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -42,16 +43,14 @@ public class CdrController {
     private final ConfigService configService;
     private final List<CdrProcessor> cdrProcessors;
 
-
     @PostMapping(value = "/process", consumes = MediaType.MULTIPART_FORM_DATA_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
-    @Operation(summary = "Queue a CDR file for processing",
-            description = "Submits a CDR file for a specific plant type. The file is saved and queued for reliable, asynchronous processing.")
+    @Operation(summary = "Queue a CDR file for processing", description = "Submits a CDR file for a specific plant type. The file is saved and queued for reliable, asynchronous processing.")
     public MessageResponse processCdr(
             @Parameter(description = "The CDR file to upload") @RequestParam("file") MultipartFile file,
             @Parameter(description = "The unique identifier for the plant type (e.g., PBX model)") @RequestParam("plantTypeId") Long plantTypeId,
-            @RequestHeader (value = "X-API-KEY") String apiKey) {
+            @RequestHeader(value = "X-API-KEY") String apiKey) {
 
-        if(!apiKey.equals(configService.getValue(ConfigKey.CDR_UPLOAD_API_KEY).asString())) {
+        if (!apiKey.equals(configService.getValue(ConfigKey.CDR_UPLOAD_API_KEY).asString())) {
             throw new SecurityException("Invalid API Key");
         }
 
@@ -63,8 +62,7 @@ public class CdrController {
     }
 
     @PostMapping(value = "/processSingle", consumes = MediaType.MULTIPART_FORM_DATA_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
-    @Operation(summary = "Process a single CDR file synchronously",
-            description = "Submits a single CDR file for immediate, synchronous processing for a specific plant type. The result summary is returned in the response. Fails if the file has been processed before.")
+    @Operation(summary = "Process a single CDR file synchronously", description = "Submits a single CDR file for immediate, synchronous processing for a specific plant type. The result summary is returned in the response. Fails if the file has been processed before.")
     public ResponseEntity<CdrProcessingResultDto> processCdrSync(
             @Parameter(description = "The single CDR file to process") @RequestParam("file") MultipartFile file,
             @Parameter(description = "The unique identifier for the plant type (e.g., PBX model)") @RequestParam("plantTypeId") Long plantTypeId) {
@@ -94,13 +92,12 @@ public class CdrController {
             }
 
             // Create or get FileInfo
-            FileInfoPersistenceService.FileInfoCreationResult fileInfoResult =
-                    fileInfoPersistenceService.createOrGetFileInfo(
+            FileInfoPersistenceService.FileInfoCreationResult fileInfoResult = fileInfoPersistenceService
+                    .createOrGetFileInfo(
                             file.getOriginalFilename(),
                             plantTypeId,
                             "SYNC_STREAM",
-                            tempFile
-                    );
+                            tempFile);
 
             if (!fileInfoResult.isNew()) {
                 throw new ValidationException(
@@ -110,8 +107,7 @@ public class CdrController {
 
             // Process the file synchronously
             CdrProcessingResultDto result = cdrRoutingService.routeAndProcessCdrStreamSync(
-                    fileInfoResult.getFileInfo()
-            );
+                    fileInfoResult.getFileInfo());
 
             return ResponseEntity.ok(result);
 
@@ -167,8 +163,7 @@ public class CdrController {
                     filename,
                     plantTypeId,
                     "ROUTED_STREAM",
-                    tempFile
-            );
+                    tempFile);
 
             log.info("Successfully queued single file: {}", filename);
             return 1;
@@ -203,8 +198,7 @@ public class CdrController {
     }
 
     @PostMapping("/reprocess/files")
-    @Operation(summary = "Reprocess one or more previously processed files",
-            description = "Submits a task to reprocess files based on their FileInfo IDs.")
+    @Operation(summary = "Reprocess one or more previously processed files", description = "Submits a task to reprocess files based on their FileInfo IDs.")
     public MessageResponse reprocessFiles(@RequestBody List<Long> fileInfoIds) {
         if (fileInfoIds == null || fileInfoIds.isEmpty()) {
             return new MessageResponse("No FileInfo IDs provided for reprocessing.");
@@ -218,8 +212,7 @@ public class CdrController {
     }
 
     @PostMapping("/reprocess/callRecords")
-    @Operation(summary = "Reprocess one or more existing call records",
-            description = "Submits a task to reprocess individual call records based on their IDs.")
+    @Operation(summary = "Reprocess one or more existing call records", description = "Submits a task to reprocess individual call records based on their IDs.")
     public MessageResponse reprocessCallRecords(@RequestBody List<Long> callRecordIds) {
         if (callRecordIds == null || callRecordIds.isEmpty()) {
             return new MessageResponse("No CallRecord IDs provided for reprocessing.");
@@ -228,12 +221,12 @@ public class CdrController {
         for (Long callRecordId : callRecordIds) {
             cdrProcessingExecutor.submitCallRecordReprocessing(callRecordId);
         }
-        return new MessageResponse(String.format("Reprocessing task submitted for %d call record(s).", callRecordIds.size()));
+        return new MessageResponse(
+                String.format("Reprocessing task submitted for %d call record(s).", callRecordIds.size()));
     }
 
     @PostMapping("/reprocess/failedCallRecords")
-    @Operation(summary = "Reprocess one or more failed/quarantined call records",
-            description = "Submits a task to reprocess individual failed call records based on their IDs.")
+    @Operation(summary = "Reprocess one or more failed/quarantined call records", description = "Submits a task to reprocess individual failed call records based on their IDs.")
     public MessageResponse reprocessFailedCallRecords(@RequestBody List<Long> failedCallRecordIds) {
         if (failedCallRecordIds == null || failedCallRecordIds.isEmpty()) {
             return new MessageResponse("No FailedCallRecord IDs provided for reprocessing.");
@@ -242,12 +235,12 @@ public class CdrController {
         for (Long failedCallRecordId : failedCallRecordIds) {
             cdrProcessingExecutor.submitFailedCallRecordReprocessing(failedCallRecordId);
         }
-        return new MessageResponse(String.format("Reprocessing task submitted for %d failed call record(s).", failedCallRecordIds.size()));
+        return new MessageResponse(
+                String.format("Reprocessing task submitted for %d failed call record(s).", failedCallRecordIds.size()));
     }
 
     @GetMapping("/download/{fileInfoId}")
-    @Operation(summary = "Download the original CDR file",
-            description = "Retrieves the original, unprocessed CDR file content based on its FileInfo ID.")
+    @Operation(summary = "Download the original CDR file", description = "Retrieves the original, unprocessed CDR file content based on its FileInfo ID.")
     public ResponseEntity<StreamingResponseBody> downloadCdrFile(@PathVariable Long fileInfoId) {
         log.info("Request to download original file for FileInfo ID: {}", fileInfoId);
 
@@ -266,15 +259,26 @@ public class CdrController {
 
         // 3. Create Streaming Response
         // The lambda passed here will be executed by a Spring TaskExecutor.
-        // Inside this lambda, we call the SERVICE method which starts its own Transaction.
+        // Inside this lambda, we call the SERVICE method which starts its own
+        // Transaction.
+
+        // Capture tenant ID from valid context
+        String currentTenant = TenantContext.getTenant();
+
         StreamingResponseBody responseBody = outputStream -> {
             try {
+                // Propagate tenant context to async thread
+                TenantContext.setTenant(currentTenant);
+
                 fileInfoPersistenceService.streamFileContent(fileInfoId, outputStream);
                 log.info("Successfully streamed file '{}' ({} bytes)", metadata.filename(), metadata.size());
             } catch (Exception e) {
-                // Log and rethrow. Note: Client might see a broken stream if headers were already sent.
+                // Log and rethrow. Note: Client might see a broken stream if headers were
+                // already sent.
                 log.error("Failed to stream file content for ID: {}", fileInfoId, e);
                 throw new IOException("Error streaming file", e);
+            } finally {
+                TenantContext.clear();
             }
         };
 

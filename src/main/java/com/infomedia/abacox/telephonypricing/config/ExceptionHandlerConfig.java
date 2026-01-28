@@ -1,6 +1,5 @@
 package com.infomedia.abacox.telephonypricing.config;
 
-
 import com.infomedia.abacox.telephonypricing.exception.*;
 import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.ValidationException;
@@ -50,7 +49,8 @@ public class ExceptionHandlerConfig extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(RemoteServiceException.class)
     public ProblemDetail handleRemoteServiceException(RemoteServiceException ex) {
-        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR, ex.getMessage());
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR,
+                ex.getMessage());
         problemDetail.setTitle("Remote Service Error");
         problemDetail.setType(URI.create("remote-service-error"));
         problemDetail.setProperty("timestamp", LocalDateTime.now());
@@ -90,7 +90,8 @@ public class ExceptionHandlerConfig extends ResponseEntityExceptionHandler {
     protected ResponseEntity<Object> handleHttpMediaTypeNotSupported(
             org.springframework.web.HttpMediaTypeNotSupportedException ex,
             HttpHeaders headers, HttpStatusCode status, WebRequest request) {
-        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.UNSUPPORTED_MEDIA_TYPE, ex.getMessage());
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+                ex.getMessage());
         problemDetail.setTitle("Unsupported Media Type");
         problemDetail.setType(URI.create("unsupported-media-type"));
         problemDetail.setProperty("timestamp", LocalDateTime.now());
@@ -174,11 +175,11 @@ public class ExceptionHandlerConfig extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ProblemDetail handleDataIntegrityViolationException(DataIntegrityViolationException ex) {
-        if(NestedExceptionUtils.getRootCause(ex) instanceof PSQLException psqlException){
+        if (NestedExceptionUtils.getRootCause(ex) instanceof PSQLException psqlException) {
             ServerErrorMessage serverErrorMessage = psqlException.getServerErrorMessage();
-            if(serverErrorMessage!=null){
-                ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT
-                        , serverErrorMessage.getDetail());
+            if (serverErrorMessage != null) {
+                ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT,
+                        serverErrorMessage.getDetail());
                 problemDetail.setTitle("Data Integrity Violation");
                 problemDetail.setType(URI.create("data-integrity-violation"));
                 problemDetail.setProperty("timestamp", LocalDateTime.now());
@@ -193,8 +194,8 @@ public class ExceptionHandlerConfig extends ResponseEntityExceptionHandler {
     }
 
     @Override
-    protected ResponseEntity<Object> handleHttpMessageNotReadable(HttpMessageNotReadableException ex, HttpHeaders headers
-            , HttpStatusCode status, WebRequest request) {
+    protected ResponseEntity<Object> handleHttpMessageNotReadable(HttpMessageNotReadableException ex,
+            HttpHeaders headers, HttpStatusCode status, WebRequest request) {
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
         problemDetail.setTitle("Message Not Readable");
         problemDetail.setType(URI.create("message-not-readable"));
@@ -206,9 +207,9 @@ public class ExceptionHandlerConfig extends ResponseEntityExceptionHandler {
     protected ResponseEntity<Object> handleExceptionInternal(
             Exception ex, Object body, HttpHeaders headers,
             HttpStatusCode statusCode, WebRequest request) {
-        log.error(ex);
-        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR
-                , "An unexpected error occurred");
+        log.error("Internal Exception caught: ", ex);
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR,
+                "An unexpected error occurred");
         problemDetail.setTitle("Internal Server Error");
         problemDetail.setType(URI.create("internal-error"));
         problemDetail.setProperty("timestamp", LocalDateTime.now());
@@ -216,5 +217,15 @@ public class ExceptionHandlerConfig extends ResponseEntityExceptionHandler {
         return new ResponseEntity<>(problemDetail, headers, statusCode);
     }
 
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<Object> handleAllUncaughtException(Exception ex, WebRequest request) {
+        log.error("Uncaught exception caught by global handler: ", ex);
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR,
+                "An internal error occurred.");
+        problemDetail.setTitle("Internal Server Error");
+        problemDetail.setType(URI.create("internal-server-error"));
+        problemDetail.setProperty("timestamp", LocalDateTime.now());
+        return new ResponseEntity<>(problemDetail, HttpStatus.INTERNAL_SERVER_ERROR);
+    }
 
 }

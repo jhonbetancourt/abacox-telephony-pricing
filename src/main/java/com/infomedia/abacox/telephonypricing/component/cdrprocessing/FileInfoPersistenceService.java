@@ -49,7 +49,8 @@ public class FileInfoPersistenceService {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public FileInfoCreationResult createOrGetFileInfo(String filename, Long parentId, String type, File file) throws IOException {
+    public FileInfoCreationResult createOrGetFileInfo(String filename, Long parentId, String type, File file)
+            throws IOException {
 
         // 1. Calculate Hash
         UUID checksum;
@@ -69,7 +70,7 @@ public class FileInfoPersistenceService {
             // 3. Compress to Temp
             File tempCompressedFile = File.createTempFile("minio_up_", ".gz");
             try (InputStream in = new FileInputStream(file);
-                 OutputStream out = new FileOutputStream(tempCompressedFile)) {
+                    OutputStream out = new FileOutputStream(tempCompressedFile)) {
                 compressStream(in, out);
             }
 
@@ -82,8 +83,7 @@ public class FileInfoPersistenceService {
                         objectKey,
                         uploadStream,
                         tempCompressedFile.length(),
-                        "application/gzip"
-                );
+                        "application/gzip");
             } catch (Exception e) {
                 tempCompressedFile.delete();
                 throw new IOException("Failed to upload to MinIO", e);
@@ -112,13 +112,15 @@ public class FileInfoPersistenceService {
         return new FileInfoCreationResult(fileInfo, isNew);
     }
 
-
     /**
-     * Compresses data from an InputStream to an OutputStream using GZIP with maximum compression.
-     * The GZIPOutputStream is closed automatically, which writes the trailer and finishes compression.
+     * Compresses data from an InputStream to an OutputStream using GZIP with
+     * maximum compression.
+     * The GZIPOutputStream is closed automatically, which writes the trailer and
+     * finishes compression.
      */
     public static void compressStream(InputStream inputStream, OutputStream outputStream) throws IOException {
-        // CHANGED: Use GZIPOutputStream with anonymous subclass to set Best Compression (Level 9)
+        // CHANGED: Use GZIPOutputStream with anonymous subclass to set Best Compression
+        // (Level 9)
         try (GZIPOutputStream gzipOutputStream = new GZIPOutputStream(outputStream) {
             {
                 def.setLevel(Deflater.BEST_COMPRESSION);
@@ -146,7 +148,8 @@ public class FileInfoPersistenceService {
 
     @Transactional(readOnly = true)
     public FileInfo findById(Long fileInfoId) {
-        if (fileInfoId == null) return null;
+        if (fileInfoId == null)
+            return null;
         return entityManager.find(FileInfo.class, fileInfoId.intValue());
     }
 
@@ -157,7 +160,8 @@ public class FileInfoPersistenceService {
     public List<FileInfo> findAndLockPendingFiles(int limit) {
         try {
             List<FileInfo> files = entityManager.createQuery(
-                            "SELECT fi FROM FileInfo fi WHERE fi.processingStatus = :status ORDER BY fi.date ASC", FileInfo.class)
+                    "SELECT fi FROM FileInfo fi WHERE fi.processingStatus = :status ORDER BY fi.date ASC",
+                    FileInfo.class)
                     .setParameter("status", FileInfo.ProcessingStatus.PENDING)
                     .setMaxResults(limit)
                     .setLockMode(LockModeType.PESSIMISTIC_WRITE)
@@ -179,7 +183,7 @@ public class FileInfoPersistenceService {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public int resetInProgressToPending() {
         int updatedCount = entityManager.createQuery(
-                        "UPDATE FileInfo fi SET fi.processingStatus = :pendingStatus WHERE fi.processingStatus = :inProgressStatus")
+                "UPDATE FileInfo fi SET fi.processingStatus = :pendingStatus WHERE fi.processingStatus = :inProgressStatus")
                 .setParameter("pendingStatus", FileInfo.ProcessingStatus.PENDING)
                 .setParameter("inProgressStatus", FileInfo.ProcessingStatus.IN_PROGRESS)
                 .executeUpdate();
@@ -200,16 +204,14 @@ public class FileInfoPersistenceService {
             // Use stored bucket name directly
             InputStream compressedStream = minioStorageService.downloadFile(
                     fileInfo.getStorageBucket(),
-                    fileInfo.getStorageObjectName()
-            );
+                    fileInfo.getStorageObjectName());
 
             InputStream decompressedStream = new GZIPInputStream(compressedStream);
 
             return Optional.of(new FileInfoData(
                     fileInfo.getFilename(),
                     decompressedStream,
-                    fileInfo.getSize()
-            ));
+                    fileInfo.getSize()));
 
         } catch (Exception e) {
             log.error("Failed to retrieve file from MinIO for ID: {}", fileInfoId, e);
@@ -232,11 +234,16 @@ public class FileInfoPersistenceService {
         if (fileInfo == null) {
             return null;
         }
-        return new FileInfoMetadata(fileInfo.getFilename(), fileInfo.getSize());
+        // Handle potential nulls safely to prevent unboxing NPEs
+        String safeFilename = fileInfo.getFilename() != null ? fileInfo.getFilename() : "unknown_file_" + fileInfoId;
+        long safeSize = fileInfo.getSize() != null ? fileInfo.getSize() : 0L;
+
+        return new FileInfoMetadata(safeFilename, safeSize);
     }
 
     /**
-     * Streams the content directly to the provided OutputStream within a Transaction.
+     * Streams the content directly to the provided OutputStream within a
+     * Transaction.
      * This keeps the PostgreSQL Large Object descriptor open while reading.
      */
     @Transactional(readOnly = true, propagation = Propagation.REQUIRED)
@@ -247,10 +254,25 @@ public class FileInfoPersistenceService {
         }
 
         try {
-            String tenantId = TenantContext.getTenant();
-
-            // Get from MinIO
-            InputStream minioStream = minioStorageService.downloadFile(tenantId, StorageKey.CDR, fileInfo.getStorageObjectName());
+            // Use stored bucket details directly if available.
+            // This avoids relying on TenantContext which might not be propagated to this
+            // async thread.
+            InputStream minioStream;
+            if (fileInfo.getStorageBucket() != null && !fileInfo.getStorageBucket().isEmpty()) {
+                minioStream = minioStorageService.downloadFile(fileInfo.getStorageBucket(),
+                        fileInfo.getStorageObjectName());
+            } else {
+                // Fallback for legacy records
+                String tenantId = TenantContext.getTenant();
+                if (tenantId == null) {
+                    // Start of fallback if tenant is missing in async context (could default or
+                    // error)
+                    log.warn(
+                            "TenantContext is null in async streamFileContent. Attempting to proceed but this may fail if bucket needs resolution.");
+                }
+                minioStream = minioStorageService.downloadFile(tenantId, StorageKey.CDR,
+                        fileInfo.getStorageObjectName());
+            }
 
             // Decompress and copy to HTTP output
             try (InputStream gzipStream = new GZIPInputStream(minioStream)) {
