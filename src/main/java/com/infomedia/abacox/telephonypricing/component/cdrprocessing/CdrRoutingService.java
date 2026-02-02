@@ -162,7 +162,6 @@ public class CdrRoutingService {
         }
     }
 
-    @Transactional
     public void processFileInfo(Long fileInfoId) {
         log.info("Starting processing for FileInfo ID: {}", fileInfoId);
         FileInfo fileInfo = fileInfoPersistenceService.findById(fileInfoId);
