@@ -120,7 +120,9 @@ public class ReportService {
         dto.setProcessingStep(entity.getProcessingStep());
         dto.setFileInfoId(entity.getFileInfoId());
         dto.setCommLocationId(entity.getCommLocation() != null ? entity.getCommLocation().getId() : null);
-        dto.setCommLocation(modelConverter.map(entity.getCommLocation(), CommLocationDto.class));
+        dto.setCommLocation(entity.getCommLocation() != null 
+                ? modelConverter.map(entity.getCommLocation(), CommLocationDto.class) 
+                : null);
         return dto;
     }
 
