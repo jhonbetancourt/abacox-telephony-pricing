@@ -36,12 +36,13 @@ public class CdrRoutingService {
         return cdrProcessors.stream()
                 .filter(p -> p.getPlantTypeIdentifiers().contains(plantTypeId))
                 .findFirst()
-                .orElseThrow(() -> new IllegalArgumentException("No CDR processor found for plant type ID: " + plantTypeId));
+                .orElseThrow(
+                        () -> new IllegalArgumentException("No CDR processor found for plant type ID: " + plantTypeId));
     }
 
     private void processStreamContent(FileInfo fileInfo, InputStream contentStream,
-                                      Map<Long, ExtensionLimits> extensionLimits,
-                                      Map<Long, List<ExtensionRange>> extensionRanges) {
+            Map<Long, ExtensionLimits> extensionLimits,
+            Map<Long, List<ExtensionRange>> extensionRanges) {
 
         // METRICS: Start Timer
         long startTime = System.currentTimeMillis();
@@ -60,13 +61,14 @@ public class CdrRoutingService {
         List<LineProcessingContext> batch = new ArrayList<>(CdrConfigService.CDR_PROCESSING_BATCH_SIZE);
 
         try (InputStreamReader reader = new InputStreamReader(contentStream, StandardCharsets.UTF_8);
-             BufferedReader bufferedReader = new BufferedReader(reader)) {
+                BufferedReader bufferedReader = new BufferedReader(reader)) {
 
             String line;
             while ((line = bufferedReader.readLine()) != null) {
                 lineCount++;
                 String trimmedLine = line.trim();
-                if (trimmedLine.isEmpty()) continue;
+                if (trimmedLine.isEmpty())
+                    continue;
 
                 if (currentFileHeaderMap == null && initialParser.isHeaderLine(trimmedLine)) {
                     currentFileHeaderMap = initialParser.parseHeader(trimmedLine);
@@ -85,14 +87,16 @@ public class CdrRoutingService {
                     continue;
                 }
 
-                CdrData preliminaryCdrData = initialParser.evaluateFormat(trimmedLine, null, null, currentFileHeaderMap);
-                if (preliminaryCdrData == null) continue;
+                CdrData preliminaryCdrData = initialParser.evaluateFormat(trimmedLine, null, null,
+                        currentFileHeaderMap);
+                if (preliminaryCdrData == null)
+                    continue;
 
                 preliminaryCdrData.setRawCdrLine(trimmedLine);
                 preliminaryCdrData.setFileInfo(fileInfo);
 
-                Optional<CommunicationLocation> targetCommLocationOpt =
-                        commLocationLookupService.findBestCommunicationLocation(
+                Optional<CommunicationLocation> targetCommLocationOpt = commLocationLookupService
+                        .findBestCommunicationLocation(
                                 plantTypeId,
                                 preliminaryCdrData.getCallingPartyNumber(),
                                 preliminaryCdrData.getCallingPartyNumberPartition(),
@@ -100,8 +104,7 @@ public class CdrRoutingService {
                                 preliminaryCdrData.getFinalCalledPartyNumberPartition(),
                                 preliminaryCdrData.getLastRedirectDn(),
                                 preliminaryCdrData.getLastRedirectDnPartition(),
-                                preliminaryCdrData.getDateTimeOrigination()
-                        );
+                                preliminaryCdrData.getDateTimeOrigination());
 
                 if (targetCommLocationOpt.isPresent()) {
                     CommunicationLocation targetCommLocation = targetCommLocationOpt.get();
@@ -147,7 +150,8 @@ public class CdrRoutingService {
             double seconds = durationMs / 1000.0;
             double linesPerSecond = (seconds > 0) ? (lineCount / seconds) : 0.0;
 
-            log.info("Outcome for file [{}]: SUCCESS. Time: {}ms. Speed: {} lines/sec. Read: {}, Routed: {}, Unroutable: {}",
+            log.info(
+                    "Outcome for file [{}]: SUCCESS. Time: {}ms. Speed: {} lines/sec. Read: {}, Routed: {}, Unroutable: {}",
                     fileInfo.getFilename(),
                     durationMs,
                     String.format("%.2f", linesPerSecond),
@@ -194,7 +198,6 @@ public class CdrRoutingService {
                 fileInfoId, deletedCallRecords, deletedFailedRecords);
     }
 
-    @Transactional
     public void reprocessFileInfo(Long fileInfoId, boolean cleanupExistingRecords) {
         log.info("Starting reprocessing for FileInfo ID: {}", fileInfoId);
         if (cleanupExistingRecords) {
@@ -232,14 +235,15 @@ public class CdrRoutingService {
             Map<String, Integer> currentHeaderMap = null;
 
             try (InputStream inputStream = fileDataOpt.get().content();
-                 InputStreamReader reader = new InputStreamReader(inputStream, StandardCharsets.UTF_8);
-                 BufferedReader bufferedReader = new BufferedReader(reader)) {
+                    InputStreamReader reader = new InputStreamReader(inputStream, StandardCharsets.UTF_8);
+                    BufferedReader bufferedReader = new BufferedReader(reader)) {
 
                 String line;
                 while ((line = bufferedReader.readLine()) != null) {
                     lineCount++;
                     String trimmedLine = line.trim();
-                    if (trimmedLine.isEmpty()) continue;
+                    if (trimmedLine.isEmpty())
+                        continue;
 
                     if (currentHeaderMap == null && initialParser.isHeaderLine(trimmedLine)) {
                         currentHeaderMap = initialParser.parseHeader(trimmedLine);
@@ -260,14 +264,15 @@ public class CdrRoutingService {
                         continue;
                     }
 
-                    CdrData preliminaryCdrData = initialParser.evaluateFormat(trimmedLine, null, null, currentHeaderMap);
+                    CdrData preliminaryCdrData = initialParser.evaluateFormat(trimmedLine, null, null,
+                            currentHeaderMap);
                     if (preliminaryCdrData == null) {
                         skippedLines++;
                         continue;
                     }
 
-                    Optional<CommunicationLocation> targetCommLocationOpt =
-                            commLocationLookupService.findBestCommunicationLocation(
+                    Optional<CommunicationLocation> targetCommLocationOpt = commLocationLookupService
+                            .findBestCommunicationLocation(
                                     fileInfo.getParentId().longValue(),
                                     preliminaryCdrData.getCallingPartyNumber(),
                                     preliminaryCdrData.getCallingPartyNumberPartition(),
@@ -314,11 +319,12 @@ public class CdrRoutingService {
 
             finalStatus = FileInfo.ProcessingStatus.COMPLETED;
             finalMessage = "File processed successfully.";
-            
+
             long endTime = System.currentTimeMillis();
             long durationMs = endTime - startTime;
-            
-            log.info("Sync processing completed for FileInfo ID {}: {} lines. Time: {}ms. {} successful, {} quarantined, {} skipped",
+
+            log.info(
+                    "Sync processing completed for FileInfo ID {}: {} lines. Time: {}ms. {} successful, {} quarantined, {} skipped",
                     fileInfo.getId(), lineCount, durationMs, successfulRecords, quarantinedRecords, skippedLines);
 
         } catch (Exception e) {
