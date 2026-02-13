@@ -23,12 +23,13 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
 
     // Stateless mapping for key normalization
     private final Map<String, String> conceptualToActualHeaderMap = new HashMap<>();
-    
+
     // REMOVED stateful field 'currentHeaderPositions'
 
     private String conferenceIdentifierActual = DEFAULT_CONFERENCE_IDENTIFIER_PREFIX;
 
-    private static final List<String> IGNORED_AUTH_CODES = List.of("Invalid Authorization Code", "Invalid Authorization Level");
+    private static final List<String> IGNORED_AUTH_CODES = List.of("Invalid Authorization Code",
+            "Invalid Authorization Level");
     private final CdrConfigService cdrConfigService;
 
     // --- List of fields that indicate a CMR file, not a CDR file ---
@@ -37,19 +38,24 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
             "numberOctetsSent",
             "jitter",
             "latency",
-            "varVQMetrics"
-    );
+            "varVQMetrics");
 
     @Override
-    public CdrData evaluateFormat(String cdrLine, CommunicationLocation commLocation, ExtensionLimits extensionLimits, Map<String, Integer> headerPositions) {
-        // log.trace("Evaluating Cisco CM 6.0 CDR line: {}", cdrLine); // Reduce log noise
-        
+    public CdrData evaluateFormat(String cdrLine, CommunicationLocation commLocation, ExtensionLimits extensionLimits,
+            Map<String, Integer> headerPositions) {
+        // log.trace("Evaluating Cisco CM 6.0 CDR line: {}", cdrLine); // Reduce log
+        // noise
+
         // 1. Validate Header Context
-        if (headerPositions == null || headerPositions.isEmpty() || !headerPositions.containsKey("_max_mapped_header_index_")) {
+        if (headerPositions == null || headerPositions.isEmpty()
+                || !headerPositions.containsKey("_max_mapped_header_index_")) {
             log.debug("Cisco CM 6.0 Headers not provided in context. Cannot process line: {}", cdrLine);
-            CdrData errorData = new CdrData(); errorData.setRawCdrLine(cdrLine);
-            errorData.setMarkedForQuarantine(true); errorData.setQuarantineReason("Header map missing in processing context (reprocessing error?)");
-            errorData.setQuarantineStep(QuarantineErrorType.MISSING_HEADER.name()); return errorData;
+            CdrData errorData = new CdrData();
+            errorData.setRawCdrLine(cdrLine);
+            errorData.setMarkedForQuarantine(true);
+            errorData.setQuarantineReason("Header map missing in processing context (reprocessing error?)");
+            errorData.setQuarantineStep(QuarantineErrorType.MISSING_HEADER.name());
+            return errorData;
         }
 
         List<String> fields = CdrUtil.parseCsvLine(cdrLine, CDR_SEPARATOR);
@@ -73,40 +79,53 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
         int minExpectedFieldsForValidCdr = headerPositions.get("_max_mapped_header_index_") + 1;
 
         if (fields.size() < minExpectedFieldsForValidCdr) {
-            log.debug("Cisco CM 6.0 CDR line has insufficient fields ({}). Expected at least {}. Line: {}", fields.size(), minExpectedFieldsForValidCdr, cdrLine);
+            log.debug("Cisco CM 6.0 CDR line has insufficient fields ({}). Expected at least {}. Line: {}",
+                    fields.size(), minExpectedFieldsForValidCdr, cdrLine);
             cdrData.setMarkedForQuarantine(true);
-            cdrData.setQuarantineReason("Insufficient fields. Found " + fields.size() + ", expected " + minExpectedFieldsForValidCdr);
-            cdrData.setQuarantineStep(QuarantineErrorType.PARSER_ERROR.name()); return cdrData;
+            cdrData.setQuarantineReason(
+                    "Insufficient fields. Found " + fields.size() + ", expected " + minExpectedFieldsForValidCdr);
+            cdrData.setQuarantineStep(QuarantineErrorType.PARSER_ERROR.name());
+            return cdrData;
         }
 
         // --- Start of field extraction using headerPositions ---
-        cdrData.setDateTimeOrigination(parseEpochToLocalDateTime(getFieldValue(fields, "dateTimeOrigination", headerPositions)));
-        LocalDateTime dateTimeConnect = parseEpochToLocalDateTime(getFieldValue(fields, "dateTimeConnect", headerPositions));
-        LocalDateTime dateTimeDisconnect = parseEpochToLocalDateTime(getFieldValue(fields, "dateTimeDisconnect", headerPositions));
+        cdrData.setDateTimeOrigination(
+                parseEpochToLocalDateTime(getFieldValue(fields, "dateTimeOrigination", headerPositions)));
+        LocalDateTime dateTimeConnect = parseEpochToLocalDateTime(
+                getFieldValue(fields, "dateTimeConnect", headerPositions));
+        LocalDateTime dateTimeDisconnect = parseEpochToLocalDateTime(
+                getFieldValue(fields, "dateTimeDisconnect", headerPositions));
         cdrData.setDurationSeconds(parseIntField(getFieldValue(fields, "durationSeconds", headerPositions)));
 
         int ringingTime = 0;
         if (dateTimeConnect != null && cdrData.getDateTimeOrigination() != null) {
-            ringingTime = (int) java.time.Duration.between(cdrData.getDateTimeOrigination(), dateTimeConnect).getSeconds();
+            ringingTime = (int) java.time.Duration.between(cdrData.getDateTimeOrigination(), dateTimeConnect)
+                    .getSeconds();
         } else if (dateTimeDisconnect != null && cdrData.getDateTimeOrigination() != null) {
-            ringingTime = (int) java.time.Duration.between(cdrData.getDateTimeOrigination(), dateTimeDisconnect).getSeconds();
-            if (cdrData.getDurationSeconds() == null || cdrData.getDurationSeconds() > 0) cdrData.setDurationSeconds(0);
+            ringingTime = (int) java.time.Duration.between(cdrData.getDateTimeOrigination(), dateTimeDisconnect)
+                    .getSeconds();
+            if (cdrData.getDurationSeconds() == null || cdrData.getDurationSeconds() > 0)
+                cdrData.setDurationSeconds(0);
         }
         cdrData.setRingingTimeSeconds(Math.max(0, ringingTime));
-        if (cdrData.getDurationSeconds() == null) cdrData.setDurationSeconds(0);
+        if (cdrData.getDurationSeconds() == null)
+            cdrData.setDurationSeconds(0);
 
         // --- Apply _NN_VALIDA logic during extraction ---
         String callingNumber = getFieldValue(fields, "callingPartyNumber", headerPositions);
         String callingPartition = getFieldValue(fields, "callingPartyNumberPartition", headerPositions).toUpperCase();
-        if (callingPartition.isEmpty() && extensionLimits!=null && CdrUtil.isPossibleExtension(callingNumber, extensionLimits)) {
+        if (callingPartition.isEmpty() && extensionLimits != null
+                && CdrUtil.isPossibleExtension(callingNumber, extensionLimits)) {
             callingPartition = cdrConfigService.getNoPartitionPlaceholder();
         }
         cdrData.setCallingPartyNumber(callingNumber);
         cdrData.setCallingPartyNumberPartition(callingPartition);
 
         String finalCalledNumber = getFieldValue(fields, "finalCalledPartyNumber", headerPositions);
-        String finalCalledPartition = getFieldValue(fields, "finalCalledPartyNumberPartition", headerPositions).toUpperCase();
-        if (finalCalledPartition.isEmpty() && extensionLimits!=null && CdrUtil.isPossibleExtension(finalCalledNumber, extensionLimits)) {
+        String finalCalledPartition = getFieldValue(fields, "finalCalledPartyNumberPartition", headerPositions)
+                .toUpperCase();
+        if (finalCalledPartition.isEmpty() && extensionLimits != null
+                && CdrUtil.isPossibleExtension(finalCalledNumber, extensionLimits)) {
             finalCalledPartition = cdrConfigService.getNoPartitionPlaceholder();
         }
         cdrData.setFinalCalledPartyNumber(finalCalledNumber);
@@ -122,7 +141,8 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
 
         // --- Continue with other fields ---
         cdrData.setOriginalCalledPartyNumber(getFieldValue(fields, "originalCalledPartyNumber", headerPositions));
-        cdrData.setOriginalCalledPartyNumberPartition(getFieldValue(fields, "originalCalledPartyNumberPartition", headerPositions).toUpperCase());
+        cdrData.setOriginalCalledPartyNumberPartition(
+                getFieldValue(fields, "originalCalledPartyNumberPartition", headerPositions).toUpperCase());
         cdrData.setDestMobileDeviceName(getFieldValue(fields, "destMobileDeviceName", headerPositions).toUpperCase());
         cdrData.setFinalMobileCalledPartyNumber(getFieldValue(fields, "finalMobileCalledPartyNumber", headerPositions));
 
@@ -131,7 +151,8 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
         cdrData.setOriginalLastRedirectDn(cdrData.getLastRedirectDn());
 
         cdrData.setAuthCodeDescription(getFieldValue(fields, "authCodeDescription", headerPositions));
-        cdrData.setLastRedirectRedirectReason(parseIntField(getFieldValue(fields, "lastRedirectRedirectReason", headerPositions)));
+        cdrData.setLastRedirectRedirectReason(
+                parseIntField(getFieldValue(fields, "lastRedirectRedirectReason", headerPositions)));
         cdrData.setOrigDeviceName(getFieldValue(fields, "origDeviceName", headerPositions));
         cdrData.setDestDeviceName(getFieldValue(fields, "destDeviceName", headerPositions));
         cdrData.setOrigVideoCodec(getFieldValue(fields, "origVideoCodec", headerPositions));
@@ -141,7 +162,8 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
         cdrData.setDestVideoBandwidth(parseIntField(getFieldValue(fields, "destVideoBandwidth", headerPositions)));
         cdrData.setDestVideoResolution(getFieldValue(fields, "destVideoResolution", headerPositions));
         cdrData.setJoinOnBehalfOf(parseIntField(getFieldValue(fields, "joinOnBehalfOf", headerPositions)));
-        cdrData.setDestCallTerminationOnBehalfOf(parseIntField(getFieldValue(fields, "destCallTerminationOnBehalfOf", headerPositions)));
+        cdrData.setDestCallTerminationOnBehalfOf(
+                parseIntField(getFieldValue(fields, "destCallTerminationOnBehalfOf", headerPositions)));
         cdrData.setDestConversationId(parseLongField(getFieldValue(fields, "destConversationId", headerPositions)));
         cdrData.setGlobalCallIDCallId(parseLongField(getFieldValue(fields, "globalCallIDCallId", headerPositions)));
 
@@ -154,7 +176,8 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
             cdrData.setFinalCalledPartyNumber(cdrData.getOriginalCalledPartyNumber());
             cdrData.setFinalCalledPartyNumberPartition(cdrData.getOriginalCalledPartyNumberPartition());
         }
-        // Handle case where finalCalled differs from originalCalled (potential redirect)
+        // Handle case where finalCalled differs from originalCalled (potential
+        // redirect)
         else if (!Objects.equals(cdrData.getFinalCalledPartyNumber(), cdrData.getOriginalCalledPartyNumber()) &&
                 cdrData.getOriginalCalledPartyNumber() != null && !cdrData.getOriginalCalledPartyNumber().isEmpty()) {
             if (!isConferenceIdentifier(cdrData.getLastRedirectDn())) {
@@ -167,22 +190,32 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
         boolean invertTrunksForConference = true;
 
         if (isConferenceByFinalCalled) {
-            TransferCause confTransferCause = (cdrData.getJoinOnBehalfOf() != null && cdrData.getJoinOnBehalfOf() == 7) ?
-                    TransferCause.CONFERENCE_NOW : TransferCause.CONFERENCE;
+            TransferCause confTransferCause = (cdrData.getJoinOnBehalfOf() != null && cdrData.getJoinOnBehalfOf() == 7)
+                    ? TransferCause.CONFERENCE_NOW
+                    : TransferCause.CONFERENCE;
             setTransferCauseIfUnset(cdrData, confTransferCause);
             cdrData.setConferenceIdentifierUsed(cdrData.getFinalCalledPartyNumber());
 
-            // *** REFACTORED CONFERENCE LOGIC ***
-            // PHP: InvertirLlamada logic for conferences
-            if (cdrData.getJoinOnBehalfOf() == null || cdrData.getJoinOnBehalfOf() != 7) {
-                // The initiator is in 'ext', the conference bridge is in 'dial_number'. Swap them.
-                CdrUtil.swapFull(cdrData, false); // Swap parties/partitions, but not trunks yet.
-            }
-            // Now, the real destination is in 'lastRedirectDn'. Set it as the new finalCalledParty.
-            cdrData.setFinalCalledPartyNumber(cdrData.getLastRedirectDn());
-            cdrData.setFinalCalledPartyNumberPartition(cdrData.getLastRedirectDnPartition());
-            // The conference bridge ID is now stored in lastRedirectDn for reference.
-            cdrData.setLastRedirectDn(cdrData.getConferenceIdentifierUsed());
+            // *** LEGACY ALIGNMENT ***
+            // Legacy system format:
+            // - Participant = Ext (callingPartyNumber) -> Matches FUN_EXTENSION
+            // - Bridge = Transfer (lastRedirectDn) -> Matches FUN_TRANSFER (key)
+            // - Controller = Dial (finalCalledPartyNumber) -> Matches TELEFONO_DESTINO
+
+            // 1. Store Bridge ID (current finalCalled) in Transfer
+            String bridgeId = cdrData.getFinalCalledPartyNumber();
+            String controllerDn = cdrData.getLastRedirectDn();
+            String controllerPartition = cdrData.getLastRedirectDnPartition();
+
+            cdrData.setLastRedirectDn(bridgeId);
+            cdrData.setLastRedirectDnPartition(cdrData.getFinalCalledPartyNumberPartition());
+
+            // 2. Move Controller (original Redirect) to Dial (FinalCalled)
+            cdrData.setFinalCalledPartyNumber(controllerDn);
+            cdrData.setFinalCalledPartyNumberPartition(controllerPartition);
+
+            // 3. Keep Calling (Extension) as Participant - NO SWAP
+            // This ensures employee lookup finds the participant directly.
 
         } else {
             if (isConferenceIdentifier(cdrData.getLastRedirectDn())) {
@@ -195,7 +228,8 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
 
         // Determine call direction after potential conference swaps
         if (isConferenceByFinalCalled) {
-            boolean isConferenceEffectivelyIncoming = (!isPartitionPresent(cdrData.getFinalCalledPartyNumberPartition())) &&
+            boolean isConferenceEffectivelyIncoming = (!isPartitionPresent(
+                    cdrData.getFinalCalledPartyNumberPartition())) &&
                     (cdrData.getCallingPartyNumber() == null || cdrData.getCallingPartyNumber().isEmpty() ||
                             !CdrUtil.isPossibleExtension(cdrData.getCallingPartyNumber(), extensionLimits));
             if (isConferenceEffectivelyIncoming) {
@@ -211,16 +245,19 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
             // Non-conference incoming detection
             boolean isCallingPartyEffectivelyExternal = !isPartitionPresent(cdrData.getCallingPartyNumberPartition()) ||
                     !CdrUtil.isPossibleExtension(cdrData.getCallingPartyNumber(), extensionLimits);
-            boolean isFinalCalledPartyInternalFormat = isPartitionPresent(cdrData.getFinalCalledPartyNumberPartition()) &&
+            boolean isFinalCalledPartyInternalFormat = isPartitionPresent(cdrData.getFinalCalledPartyNumberPartition())
+                    &&
                     CdrUtil.isPossibleExtension(cdrData.getFinalCalledPartyNumber(), extensionLimits);
             boolean isRedirectPartyInternalFormat = isPartitionPresent(cdrData.getLastRedirectDnPartition()) &&
                     CdrUtil.isPossibleExtension(cdrData.getLastRedirectDn(), extensionLimits);
 
-            if (isCallingPartyEffectivelyExternal && (isFinalCalledPartyInternalFormat || isRedirectPartyInternalFormat)) {
+            if (isCallingPartyEffectivelyExternal
+                    && (isFinalCalledPartyInternalFormat || isRedirectPartyInternalFormat)) {
                 cdrData.setCallDirection(CallDirection.INCOMING);
                 // PHP: _invertir($info_arr['dial_number'], $info_arr['ext']); (No trunk swap)
                 CdrUtil.swapPartyNumbersOnly(cdrData);
-                // log.trace("Non-conference incoming detected. Swapped calling/called numbers ONLY.");
+                // log.trace("Non-conference incoming detected. Swapped calling/called numbers
+                // ONLY.");
             }
         }
 
@@ -239,9 +276,11 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
         // Final transfer cause assignment
         boolean numberChangedByRedirect = false;
         if (cdrData.getLastRedirectDn() != null && !cdrData.getLastRedirectDn().isEmpty()) {
-            if (cdrData.getCallDirection() == CallDirection.OUTGOING && !Objects.equals(cdrData.getFinalCalledPartyNumber(), cdrData.getLastRedirectDn())) {
+            if (cdrData.getCallDirection() == CallDirection.OUTGOING
+                    && !Objects.equals(cdrData.getFinalCalledPartyNumber(), cdrData.getLastRedirectDn())) {
                 numberChangedByRedirect = true;
-            } else if (cdrData.getCallDirection() == CallDirection.INCOMING && !Objects.equals(cdrData.getCallingPartyNumber(), cdrData.getLastRedirectDn())) {
+            } else if (cdrData.getCallDirection() == CallDirection.INCOMING
+                    && !Objects.equals(cdrData.getCallingPartyNumber(), cdrData.getLastRedirectDn())) {
                 numberChangedByRedirect = true;
             }
         }
@@ -252,19 +291,22 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
                 if (lastRedirectReason != null && lastRedirectReason > 0 && lastRedirectReason <= 16) {
                     cdrData.setTransferCause(TransferCause.NORMAL);
                 } else {
-                    TransferCause autoTransferCause = (cdrData.getDestCallTerminationOnBehalfOf() != null && cdrData.getDestCallTerminationOnBehalfOf() == 7) ?
-                            TransferCause.PRE_CONFERENCE_NOW : TransferCause.AUTO;
+                    TransferCause autoTransferCause = (cdrData.getDestCallTerminationOnBehalfOf() != null
+                            && cdrData.getDestCallTerminationOnBehalfOf() == 7) ? TransferCause.PRE_CONFERENCE_NOW
+                                    : TransferCause.AUTO;
                     cdrData.setTransferCause(autoTransferCause);
                 }
             }
-        } else if (cdrData.getFinalMobileCalledPartyNumber() != null && !cdrData.getFinalMobileCalledPartyNumber().isEmpty()) {
+        } else if (cdrData.getFinalMobileCalledPartyNumber() != null
+                && !cdrData.getFinalMobileCalledPartyNumber().isEmpty()) {
             boolean numberChangedByMobileRedirect = false;
             if (cdrData.getCallDirection() == CallDirection.OUTGOING) {
                 if (!Objects.equals(cdrData.getFinalCalledPartyNumber(), cdrData.getFinalMobileCalledPartyNumber())) {
                     numberChangedByMobileRedirect = true;
                     cdrData.setFinalCalledPartyNumber(cdrData.getFinalMobileCalledPartyNumber());
                     cdrData.setFinalCalledPartyNumberPartition(cdrData.getDestMobileDeviceName());
-                    if (cdrData.isInternalCall() && !CdrUtil.isPossibleExtension(cdrData.getFinalCalledPartyNumber(), extensionLimits)) {
+                    if (cdrData.isInternalCall()
+                            && !CdrUtil.isPossibleExtension(cdrData.getFinalCalledPartyNumber(), extensionLimits)) {
                         cdrData.setInternalCall(false);
                     }
                 }
@@ -284,7 +326,8 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
         if (isConferenceByFinalCalled &&
                 cdrData.getCallingPartyNumber() != null &&
                 Objects.equals(cdrData.getCallingPartyNumber(), cdrData.getFinalCalledPartyNumber())) {
-            log.debug("Conference call where caller and callee are the same after all processing. Discarding CDR: {}", cdrLine);
+            log.debug("Conference call where caller and callee are the same after all processing. Discarding CDR: {}",
+                    cdrLine);
             return null;
         }
         cdrData.setEffectiveDestinationNumber(cdrData.getFinalCalledPartyNumber());
@@ -297,9 +340,11 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
     public void initDefaultHeaderMappings() {
         conceptualToActualHeaderMap.put("callingPartyNumberPartition", "callingPartyNumberPartition".toLowerCase());
         conceptualToActualHeaderMap.put("callingPartyNumber", "callingPartyNumber".toLowerCase());
-        conceptualToActualHeaderMap.put("finalCalledPartyNumberPartition", "finalCalledPartyNumberPartition".toLowerCase());
+        conceptualToActualHeaderMap.put("finalCalledPartyNumberPartition",
+                "finalCalledPartyNumberPartition".toLowerCase());
         conceptualToActualHeaderMap.put("finalCalledPartyNumber", "finalCalledPartyNumber".toLowerCase());
-        conceptualToActualHeaderMap.put("originalCalledPartyNumberPartition", "originalCalledPartyNumberPartition".toLowerCase());
+        conceptualToActualHeaderMap.put("originalCalledPartyNumberPartition",
+                "originalCalledPartyNumberPartition".toLowerCase());
         conceptualToActualHeaderMap.put("originalCalledPartyNumber", "originalCalledPartyNumber".toLowerCase());
         conceptualToActualHeaderMap.put("lastRedirectDnPartition", "lastRedirectDnPartition".toLowerCase());
         conceptualToActualHeaderMap.put("lastRedirectDn", "lastRedirectDn".toLowerCase());
@@ -328,7 +373,8 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
 
     @Override
     public boolean isHeaderLine(String line) {
-        if (line == null || line.isEmpty()) return false;
+        if (line == null || line.isEmpty())
+            return false;
         List<String> fields = CdrUtil.parseCsvLine(line, CDR_SEPARATOR);
         return !fields.isEmpty() && INTERNAL_CDR_RECORD_TYPE_HEADER_KEY.equalsIgnoreCase(fields.get(0));
     }
@@ -342,22 +388,28 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
             String actualHeaderFromFile = headers.get(i).toLowerCase();
             map.put(actualHeaderFromFile, i);
             if (conceptualToActualHeaderMap.containsValue(actualHeaderFromFile)) {
-                if (i > maxIndex) maxIndex = i;
+                if (i > maxIndex)
+                    maxIndex = i;
             }
         }
         map.put("_max_mapped_header_index_", maxIndex);
-        log.debug("Parsed Cisco CM 6.0 headers. Mapped positions count: {}. Min expected fields: {}", map.size(), maxIndex + 1);
+        log.debug("Parsed Cisco CM 6.0 headers. Mapped positions count: {}. Min expected fields: {}", map.size(),
+                maxIndex + 1);
         return map;
     }
 
-    private String getFieldValue(List<String> fields, String conceptualFieldName, Map<String, Integer> headerPositions) {
-        String actualHeaderName = conceptualToActualHeaderMap.getOrDefault(conceptualFieldName, conceptualFieldName.toLowerCase());
+    private String getFieldValue(List<String> fields, String conceptualFieldName,
+            Map<String, Integer> headerPositions) {
+        String actualHeaderName = conceptualToActualHeaderMap.getOrDefault(conceptualFieldName,
+                conceptualFieldName.toLowerCase());
         Integer position = headerPositions.get(actualHeaderName);
-        if (position == null) position = headerPositions.get(conceptualFieldName.toLowerCase());
+        if (position == null)
+            position = headerPositions.get(conceptualFieldName.toLowerCase());
 
         if (position != null && position >= 0 && position < fields.size()) {
             String rawValue = fields.get(position);
-            if (rawValue == null) return "";
+            if (rawValue == null)
+                return "";
             if (actualHeaderName.contains("ipaddr") || actualHeaderName.contains("address_ip")) {
                 try {
                     if (!rawValue.isEmpty() && !rawValue.equals("0") && !rawValue.equals("-1")) {
@@ -375,7 +427,8 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
     }
 
     private LocalDateTime parseEpochToLocalDateTime(String epochSecondsStr) {
-        if (epochSecondsStr == null || epochSecondsStr.isEmpty() || "0".equals(epochSecondsStr)) return null;
+        if (epochSecondsStr == null || epochSecondsStr.isEmpty() || "0".equals(epochSecondsStr))
+            return null;
         try {
             long epochSeconds = Long.parseLong(epochSecondsStr);
             return epochSeconds > 0 ? DateTimeUtil.epochSecondsToLocalDateTime(epochSeconds) : null;
@@ -386,15 +439,25 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
     }
 
     private Integer parseIntField(String valueStr) {
-        if (valueStr == null || valueStr.isEmpty()) return 0;
-        try { return Integer.parseInt(valueStr); }
-        catch (NumberFormatException e) { log.trace("Failed to parse integer: {}", valueStr); return 0; }
+        if (valueStr == null || valueStr.isEmpty())
+            return 0;
+        try {
+            return Integer.parseInt(valueStr);
+        } catch (NumberFormatException e) {
+            log.trace("Failed to parse integer: {}", valueStr);
+            return 0;
+        }
     }
 
     private Long parseLongField(String valueStr) {
-        if (valueStr == null || valueStr.isEmpty()) return 0L;
-        try { return Long.parseLong(valueStr); }
-        catch (NumberFormatException e) { log.trace("Failed to parse long: {}", valueStr); return 0L; }
+        if (valueStr == null || valueStr.isEmpty())
+            return 0L;
+        try {
+            return Long.parseLong(valueStr);
+        } catch (NumberFormatException e) {
+            log.trace("Failed to parse long: {}", valueStr);
+            return 0L;
+        }
     }
 
     private boolean isPartitionPresent(String partition) {
@@ -415,7 +478,8 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
     }
 
     private boolean isConferenceIdentifier(String number) {
-        if (number == null || number.isEmpty() || conferenceIdentifierActual == null || conferenceIdentifierActual.isEmpty()) {
+        if (number == null || number.isEmpty() || conferenceIdentifierActual == null
+                || conferenceIdentifierActual.isEmpty()) {
             return false;
         }
         String prefix = conferenceIdentifierActual;
@@ -445,14 +509,16 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
                 boolean isCmr = headers.stream()
                         .anyMatch(h -> CMR_SPECIFIC_FIELDS.stream().anyMatch(cmrField -> cmrField.equalsIgnoreCase(h)));
                 if (isCmr) {
-                    log.warn("Detected CMR format based on presence of CMR-specific fields. This file will be rejected by this processor.");
+                    log.warn(
+                            "Detected CMR format based on presence of CMR-specific fields. This file will be rejected by this processor.");
                     return false; // This is a CMR file, reject it.
                 }
                 // If it's a header and not a CMR, it's a valid CDR file for this processor.
                 return true;
             }
         }
-        // No header line was found in the initial lines, so we cannot validate the format.
+        // No header line was found in the initial lines, so we cannot validate the
+        // format.
         return false;
     }
 }
