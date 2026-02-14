@@ -323,13 +323,6 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
             }
         }
 
-        if (isConferenceByFinalCalled &&
-                cdrData.getCallingPartyNumber() != null &&
-                Objects.equals(cdrData.getCallingPartyNumber(), cdrData.getFinalCalledPartyNumber())) {
-            log.debug("Conference call where caller and callee are the same after all processing. Discarding CDR: {}",
-                    cdrLine);
-            return null;
-        }
         cdrData.setEffectiveDestinationNumber(cdrData.getFinalCalledPartyNumber());
         cdrData.setOriginalFinalCalledPartyNumber(cdrData.getFinalCalledPartyNumber());
 
