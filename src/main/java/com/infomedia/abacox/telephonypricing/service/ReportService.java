@@ -5,8 +5,9 @@ import com.infomedia.abacox.telephonypricing.component.modeltools.ModelConverter
 import com.infomedia.abacox.telephonypricing.component.utils.CompressionZipUtil;
 import com.infomedia.abacox.telephonypricing.db.entity.CallRecord;
 import com.infomedia.abacox.telephonypricing.db.entity.FailedCallRecord;
+import com.infomedia.abacox.telephonypricing.db.projection.ConferenceCallGroupReport;
 import com.infomedia.abacox.telephonypricing.db.repository.*;
-import com.infomedia.abacox.telephonypricing.db.view.ConferenceCallsReportView;
+import com.infomedia.abacox.telephonypricing.db.repository.query.ConferenceCallsReportQueries;
 import com.infomedia.abacox.telephonypricing.db.view.CorporateReportView;
 import com.infomedia.abacox.telephonypricing.dto.callrecord.CallRecordDto;
 import com.infomedia.abacox.telephonypricing.dto.commlocation.CommLocationDto;
@@ -16,6 +17,8 @@ import com.infomedia.abacox.telephonypricing.dto.indicator.IndicatorDto;
 import com.infomedia.abacox.telephonypricing.dto.operator.OperatorDto;
 import com.infomedia.abacox.telephonypricing.dto.report.*;
 import com.infomedia.abacox.telephonypricing.dto.telephonytype.TelephonyTypeDto;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.Query;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.data.domain.Page;
@@ -28,20 +31,20 @@ import org.springframework.transaction.annotation.Transactional;
 import java.io.IOException;
 import java.io.InputStream;
 import java.time.LocalDateTime;
-import java.util.List;
+import java.math.BigDecimal;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
 @Service
 public class ReportService {
 
-
     private final ReportRepository reportRepository;
     private final CorporateReportViewRepository corporateReportViewRepository;
-    private final ConferenceCallsReportViewRepository conferenceCallsReportViewRepository;
     private final FailedCallRecordRepository failedCallRecordRepository;
     private final CallRecordRepository callRecordRepository;
     private final ModelConverter modelConverter;
+    private final EntityManager entityManager;
 
     private CallRecordDto callRecordDtoFromEntity(CallRecord entity) {
         if (entity == null) {
@@ -96,8 +99,8 @@ public class ReportService {
     }
 
     @Transactional(readOnly = true)
-    public ByteArrayResource exportExcelCallRecordsReport(Specification<CallRecord> specification
-            , Pageable pageable, ExcelGeneratorBuilder builder) {
+    public ByteArrayResource exportExcelCallRecordsReport(Specification<CallRecord> specification, Pageable pageable,
+            ExcelGeneratorBuilder builder) {
         Page<CallRecordDto> collection = generateCallRecordsReport(specification, pageable);
         try {
             InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
@@ -120,14 +123,15 @@ public class ReportService {
         dto.setProcessingStep(entity.getProcessingStep());
         dto.setFileInfoId(entity.getFileInfoId());
         dto.setCommLocationId(entity.getCommLocation() != null ? entity.getCommLocation().getId() : null);
-        dto.setCommLocation(entity.getCommLocation() != null 
-                ? modelConverter.map(entity.getCommLocation(), CommLocationDto.class) 
+        dto.setCommLocation(entity.getCommLocation() != null
+                ? modelConverter.map(entity.getCommLocation(), CommLocationDto.class)
                 : null);
         return dto;
     }
 
     @Transactional(readOnly = true)
-    public Page<FailedCallRecordDto> generateFailedCallRecordsReport(Specification<FailedCallRecord> specification, Pageable pageable) {
+    public Page<FailedCallRecordDto> generateFailedCallRecordsReport(Specification<FailedCallRecord> specification,
+            Pageable pageable) {
         Page<FailedCallRecord> failedCallRecords = failedCallRecordRepository.findAll(specification, pageable);
 
         // Map entities to DTOs while preserving order
@@ -139,8 +143,8 @@ public class ReportService {
         return new PageImpl<>(dtos, pageable, failedCallRecords.getTotalElements());
     }
 
-    public ByteArrayResource exportExcelFailedCallRecordsReport(Specification<FailedCallRecord> specification
-            , Pageable pageable, ExcelGeneratorBuilder builder) {
+    public ByteArrayResource exportExcelFailedCallRecordsReport(Specification<FailedCallRecord> specification,
+            Pageable pageable, ExcelGeneratorBuilder builder) {
         Page<FailedCallRecordDto> collection = generateFailedCallRecordsReport(specification, pageable);
         try {
             InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
@@ -151,13 +155,15 @@ public class ReportService {
     }
 
     @Transactional(readOnly = true)
-    public Page<CorporateReportDto> generateCorporateReport(Specification<CorporateReportView> specification, Pageable pageable) {
-        return modelConverter.mapPage(corporateReportViewRepository.findAll(specification, pageable), CorporateReportDto.class);
+    public Page<CorporateReportDto> generateCorporateReport(Specification<CorporateReportView> specification,
+            Pageable pageable) {
+        return modelConverter.mapPage(corporateReportViewRepository.findAll(specification, pageable),
+                CorporateReportDto.class);
     }
 
     @Transactional(readOnly = true)
-    public ByteArrayResource exportExcelCorporateReport(Specification<CorporateReportView> specification
-            , Pageable pageable, ExcelGeneratorBuilder builder) {
+    public ByteArrayResource exportExcelCorporateReport(Specification<CorporateReportView> specification,
+            Pageable pageable, ExcelGeneratorBuilder builder) {
         Page<CorporateReportDto> collection = generateCorporateReport(specification, pageable);
         try {
             InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
@@ -168,17 +174,17 @@ public class ReportService {
     }
 
     @Transactional(readOnly = true)
-    public Page<EmployeeActivityReportDto> generateEmployeeActivityReport(String employeeName, String employeeExtension
-            , LocalDateTime startDate, LocalDateTime endDate, Pageable pageable) {
-        return modelConverter.mapPage(reportRepository.getEmployeeActivityReport(startDate, endDate, employeeName
-                , employeeExtension, pageable), EmployeeActivityReportDto.class);
+    public Page<EmployeeActivityReportDto> generateEmployeeActivityReport(String employeeName, String employeeExtension,
+            LocalDateTime startDate, LocalDateTime endDate, Pageable pageable) {
+        return modelConverter.mapPage(reportRepository.getEmployeeActivityReport(startDate, endDate, employeeName,
+                employeeExtension, pageable), EmployeeActivityReportDto.class);
     }
 
     @Transactional(readOnly = true)
-    public ByteArrayResource exportExcelEmployeeActivityReport(String employeeName, String employeeExtension
-            , LocalDateTime startDate, LocalDateTime endDate, Pageable pageable, ExcelGeneratorBuilder builder) {
-        Page<EmployeeActivityReportDto> collection = generateEmployeeActivityReport(employeeName, employeeExtension
-                , startDate, endDate, pageable);
+    public ByteArrayResource exportExcelEmployeeActivityReport(String employeeName, String employeeExtension,
+            LocalDateTime startDate, LocalDateTime endDate, Pageable pageable, ExcelGeneratorBuilder builder) {
+        Page<EmployeeActivityReportDto> collection = generateEmployeeActivityReport(employeeName, employeeExtension,
+                startDate, endDate, pageable);
         try {
             InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
             return new ByteArrayResource(inputStream.readAllBytes());
@@ -188,17 +194,18 @@ public class ReportService {
     }
 
     @Transactional(readOnly = true)
-    public Page<EmployeeCallReportDto> generateEmployeeCallReport(String employeeName, String employeeExtension
-            , LocalDateTime startDate, LocalDateTime endDate, Pageable pageable) {
-        return modelConverter.mapPage(reportRepository.getEmployeeCallReport(startDate, endDate
-                , employeeName, employeeExtension, pageable), EmployeeCallReportDto.class);
+    public Page<EmployeeCallReportDto> generateEmployeeCallReport(String employeeName, String employeeExtension,
+            LocalDateTime startDate, LocalDateTime endDate, Pageable pageable) {
+        return modelConverter.mapPage(
+                reportRepository.getEmployeeCallReport(startDate, endDate, employeeName, employeeExtension, pageable),
+                EmployeeCallReportDto.class);
     }
 
     @Transactional(readOnly = true)
-    public ByteArrayResource exportExcelEmployeeCallReport(String employeeName, String employeeExtension
-            , LocalDateTime startDate, LocalDateTime endDate, Pageable pageable, ExcelGeneratorBuilder builder) {
-        Page<EmployeeCallReportDto> collection = generateEmployeeCallReport(employeeName, employeeExtension
-                , startDate, endDate, pageable);
+    public ByteArrayResource exportExcelEmployeeCallReport(String employeeName, String employeeExtension,
+            LocalDateTime startDate, LocalDateTime endDate, Pageable pageable, ExcelGeneratorBuilder builder) {
+        Page<EmployeeCallReportDto> collection = generateEmployeeCallReport(employeeName, employeeExtension, startDate,
+                endDate, pageable);
         try {
             InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
             return new ByteArrayResource(inputStream.readAllBytes());
@@ -208,16 +215,17 @@ public class ReportService {
     }
 
     @Transactional(readOnly = true)
-    public Page<UnassignedCallReportDto> generateUnassignedCallReport(String extension, LocalDateTime startDate
-            , LocalDateTime endDate, Pageable pageable) {
-        return modelConverter.mapPage(reportRepository.getUnassignedCallReport(startDate, endDate, extension, pageable)
-                , UnassignedCallReportDto.class);
+    public Page<UnassignedCallReportDto> generateUnassignedCallReport(String extension, LocalDateTime startDate,
+            LocalDateTime endDate, Pageable pageable) {
+        return modelConverter.mapPage(reportRepository.getUnassignedCallReport(startDate, endDate, extension, pageable),
+                UnassignedCallReportDto.class);
     }
 
     @Transactional(readOnly = true)
-    public ByteArrayResource exportExcelUnassignedCallReport(String extension, LocalDateTime startDate
-            , LocalDateTime endDate, Pageable pageable, ExcelGeneratorBuilder builder) {
-        Page<UnassignedCallReportDto> collection = generateUnassignedCallReport(extension, startDate, endDate, pageable);
+    public ByteArrayResource exportExcelUnassignedCallReport(String extension, LocalDateTime startDate,
+            LocalDateTime endDate, Pageable pageable, ExcelGeneratorBuilder builder) {
+        Page<UnassignedCallReportDto> collection = generateUnassignedCallReport(extension, startDate, endDate,
+                pageable);
         try {
             InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
             return new ByteArrayResource(inputStream.readAllBytes());
@@ -227,17 +235,18 @@ public class ReportService {
     }
 
     @Transactional(readOnly = true)
-    public Page<ProcessingFailureReportDto> generateProcessingFailureReport(String directory, String errorType
-            , LocalDateTime startDate, LocalDateTime endDate, Pageable pageable) {
-        return modelConverter.mapPage(reportRepository.getProcessingFailureReport(startDate, endDate, directory
-                , errorType, pageable), ProcessingFailureReportDto.class);
+    public Page<ProcessingFailureReportDto> generateProcessingFailureReport(String directory, String errorType,
+            LocalDateTime startDate, LocalDateTime endDate, Pageable pageable) {
+        return modelConverter.mapPage(
+                reportRepository.getProcessingFailureReport(startDate, endDate, directory, errorType, pageable),
+                ProcessingFailureReportDto.class);
     }
 
     @Transactional(readOnly = true)
-    public ByteArrayResource exportExcelProcessingFailureReport(String directory, String errorType
-            , LocalDateTime startDate, LocalDateTime endDate, Pageable pageable, ExcelGeneratorBuilder builder) {
-        Page<ProcessingFailureReportDto> collection = generateProcessingFailureReport(directory, errorType
-                , startDate, endDate, pageable);
+    public ByteArrayResource exportExcelProcessingFailureReport(String directory, String errorType,
+            LocalDateTime startDate, LocalDateTime endDate, Pageable pageable, ExcelGeneratorBuilder builder) {
+        Page<ProcessingFailureReportDto> collection = generateProcessingFailureReport(directory, errorType, startDate,
+                endDate, pageable);
         try {
             InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
             return new ByteArrayResource(inputStream.readAllBytes());
@@ -247,17 +256,20 @@ public class ReportService {
     }
 
     @Transactional(readOnly = true)
-    public Page<MissedCallEmployeeReportDto> generateMissedCallEmployeeReport(String employeeName, LocalDateTime startDate,
-                                                                              LocalDateTime endDate, Pageable pageable) {
-        return modelConverter.mapPage(reportRepository.getMissedCallEmployeeReport(startDate, endDate, employeeName, pageable),
+    public Page<MissedCallEmployeeReportDto> generateMissedCallEmployeeReport(String employeeName,
+            LocalDateTime startDate,
+            LocalDateTime endDate, Pageable pageable) {
+        return modelConverter.mapPage(
+                reportRepository.getMissedCallEmployeeReport(startDate, endDate, employeeName, pageable),
                 MissedCallEmployeeReportDto.class);
     }
 
     @Transactional(readOnly = true)
     public ByteArrayResource exportExcelMissedCallEmployeeReport(String employeeName, LocalDateTime startDate,
-                                                                 LocalDateTime endDate, Pageable pageable,
-                                                                 ExcelGeneratorBuilder builder) {
-        Page<MissedCallEmployeeReportDto> collection = generateMissedCallEmployeeReport(employeeName, startDate, endDate, pageable);
+            LocalDateTime endDate, Pageable pageable,
+            ExcelGeneratorBuilder builder) {
+        Page<MissedCallEmployeeReportDto> collection = generateMissedCallEmployeeReport(employeeName, startDate,
+                endDate, pageable);
         try {
             InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
             return new ByteArrayResource(inputStream.readAllBytes());
@@ -268,16 +280,16 @@ public class ReportService {
 
     @Transactional(readOnly = true)
     public Page<UnusedExtensionReportDto> generateUnusedExtensionReport(String employeeName, String extension,
-                                                                        LocalDateTime startDate, LocalDateTime endDate,
-                                                                        Pageable pageable) {
+            LocalDateTime startDate, LocalDateTime endDate,
+            Pageable pageable) {
         return modelConverter.mapPage(reportRepository.getUnusedExtensionReport(startDate, endDate, employeeName,
                 extension, pageable), UnusedExtensionReportDto.class);
     }
 
     @Transactional(readOnly = true)
     public ByteArrayResource exportExcelUnusedExtensionReport(String employeeName, String extension,
-                                                              LocalDateTime startDate, LocalDateTime endDate,
-                                                              Pageable pageable, ExcelGeneratorBuilder builder) {
+            LocalDateTime startDate, LocalDateTime endDate,
+            Pageable pageable, ExcelGeneratorBuilder builder) {
         Page<UnusedExtensionReportDto> collection = generateUnusedExtensionReport(employeeName, extension, startDate,
                 endDate, pageable);
         try {
@@ -290,17 +302,17 @@ public class ReportService {
 
     @Transactional(readOnly = true)
     public Page<ExtensionGroupReportDto> generateExtensionGroupReport(LocalDateTime startDate, LocalDateTime endDate,
-                                                                      List<String> extensions, List<Long> operatorIds,
-                                                                      String voicemailNumber, Pageable pageable) {
+            List<String> extensions, List<Long> operatorIds,
+            String voicemailNumber, Pageable pageable) {
         return modelConverter.mapPage(reportRepository.getExtensionGroupReport(startDate, endDate, extensions,
                 operatorIds, voicemailNumber, pageable), ExtensionGroupReportDto.class);
     }
 
     @Transactional(readOnly = true)
     public ByteArrayResource exportExcelExtensionGroupReport(LocalDateTime startDate, LocalDateTime endDate,
-                                                             List<String> extensions, List<Long> operatorIds,
-                                                             String voicemailNumber, Pageable pageable,
-                                                             ExcelGeneratorBuilder builder) {
+            List<String> extensions, List<Long> operatorIds,
+            String voicemailNumber, Pageable pageable,
+            ExcelGeneratorBuilder builder) {
         Page<ExtensionGroupReportDto> collection = generateExtensionGroupReport(startDate, endDate, extensions,
                 operatorIds, voicemailNumber, pageable);
         try {
@@ -314,14 +326,17 @@ public class ReportService {
     @Transactional(readOnly = true)
     public Page<SubdivisionUsageReportDto> generateSubdivisionUsageReport(
             LocalDateTime startDate, LocalDateTime endDate, List<Long> subdivisionIds, Pageable pageable) {
-        return modelConverter.mapPage(reportRepository.getSubdivisionUsageReport(startDate, endDate, subdivisionIds, pageable),
+        return modelConverter.mapPage(
+                reportRepository.getSubdivisionUsageReport(startDate, endDate, subdivisionIds, pageable),
                 SubdivisionUsageReportDto.class);
     }
 
     @Transactional(readOnly = true)
     public ByteArrayResource exportExcelSubdivisionUsageReport(
-            LocalDateTime startDate, LocalDateTime endDate, List<Long> subdivisionIds, Pageable pageable, ExcelGeneratorBuilder builder) {
-        Page<SubdivisionUsageReportDto> collection = generateSubdivisionUsageReport(startDate, endDate, subdivisionIds, pageable);
+            LocalDateTime startDate, LocalDateTime endDate, List<Long> subdivisionIds, Pageable pageable,
+            ExcelGeneratorBuilder builder) {
+        Page<SubdivisionUsageReportDto> collection = generateSubdivisionUsageReport(startDate, endDate, subdivisionIds,
+                pageable);
         try {
             InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
             return new ByteArrayResource(inputStream.readAllBytes());
@@ -333,14 +348,17 @@ public class ReportService {
     @Transactional(readOnly = true)
     public Page<SubdivisionUsageByTypeReportDto> generateSubdivisionUsageByTypeReport(
             LocalDateTime startDate, LocalDateTime endDate, List<Long> subdivisionIds, Pageable pageable) {
-        return modelConverter.mapPage(reportRepository.getSubdivisionUsageByTypeReport(startDate, endDate, subdivisionIds, pageable),
+        return modelConverter.mapPage(
+                reportRepository.getSubdivisionUsageByTypeReport(startDate, endDate, subdivisionIds, pageable),
                 SubdivisionUsageByTypeReportDto.class);
     }
 
     @Transactional(readOnly = true)
     public ByteArrayResource exportExcelSubdivisionUsageByTypeReport(
-            LocalDateTime startDate, LocalDateTime endDate, List<Long> subdivisionIds, Pageable pageable, ExcelGeneratorBuilder builder) {
-        Page<SubdivisionUsageByTypeReportDto> collection = generateSubdivisionUsageByTypeReport(startDate, endDate, subdivisionIds, pageable);
+            LocalDateTime startDate, LocalDateTime endDate, List<Long> subdivisionIds, Pageable pageable,
+            ExcelGeneratorBuilder builder) {
+        Page<SubdivisionUsageByTypeReportDto> collection = generateSubdivisionUsageByTypeReport(startDate, endDate,
+                subdivisionIds, pageable);
         try {
             InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
             return new ByteArrayResource(inputStream.readAllBytes());
@@ -348,7 +366,6 @@ public class ReportService {
             throw new RuntimeException(e);
         }
     }
-
 
     @Transactional(readOnly = true)
     public Page<TelephonyTypeUsageReportDto> generateTelephonyTypeUsageReport(
@@ -379,7 +396,8 @@ public class ReportService {
     @Transactional(readOnly = true)
     public ByteArrayResource exportExcelMonthlyTelephonyTypeUsageReport(
             LocalDateTime startDate, LocalDateTime endDate, Pageable pageable, ExcelGeneratorBuilder builder) {
-        Page<MonthlyTelephonyTypeUsageReportDto> collection = generateMonthlyTelephonyTypeUsageReport(startDate, endDate, pageable);
+        Page<MonthlyTelephonyTypeUsageReportDto> collection = generateMonthlyTelephonyTypeUsageReport(startDate,
+                endDate, pageable);
         try {
             InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
             return new ByteArrayResource(inputStream.readAllBytes());
@@ -417,7 +435,8 @@ public class ReportService {
     @Transactional(readOnly = true)
     public ByteArrayResource exportExcelEmployeeAuthCodeUsageReport(
             LocalDateTime startDate, LocalDateTime endDate, Pageable pageable, ExcelGeneratorBuilder builder) {
-        Page<EmployeeAuthCodeUsageReportDto> collection = generateEmployeeAuthCodeUsageReport(startDate, endDate, pageable);
+        Page<EmployeeAuthCodeUsageReportDto> collection = generateEmployeeAuthCodeUsageReport(startDate, endDate,
+                pageable);
         try {
             InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
             return new ByteArrayResource(inputStream.readAllBytes());
@@ -429,14 +448,17 @@ public class ReportService {
     @Transactional(readOnly = true)
     public Page<MonthlySubdivisionUsageReportDto> generateMonthlySubdivisionUsageReport(
             LocalDateTime startDate, LocalDateTime endDate, List<Long> subdivisionIds, Pageable pageable) {
-        return modelConverter.mapPage(reportRepository.getMonthlySubdivisionUsageReport(startDate, endDate, subdivisionIds, pageable),
+        return modelConverter.mapPage(
+                reportRepository.getMonthlySubdivisionUsageReport(startDate, endDate, subdivisionIds, pageable),
                 MonthlySubdivisionUsageReportDto.class);
     }
 
     @Transactional(readOnly = true)
     public ByteArrayResource exportExcelMonthlySubdivisionUsageReport(
-            LocalDateTime startDate, LocalDateTime endDate, List<Long> subdivisionIds, Pageable pageable, ExcelGeneratorBuilder builder) {
-        Page<MonthlySubdivisionUsageReportDto> collection = generateMonthlySubdivisionUsageReport(startDate, endDate, subdivisionIds, pageable);
+            LocalDateTime startDate, LocalDateTime endDate, List<Long> subdivisionIds, Pageable pageable,
+            ExcelGeneratorBuilder builder) {
+        Page<MonthlySubdivisionUsageReportDto> collection = generateMonthlySubdivisionUsageReport(startDate, endDate,
+                subdivisionIds, pageable);
         try {
             InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
             return new ByteArrayResource(inputStream.readAllBytes());
@@ -488,14 +510,16 @@ public class ReportService {
     @Transactional(readOnly = true)
     public Page<HighestConsumptionEmployeeReportDto> generateHighestConsumptionEmployeeReport(
             LocalDateTime startDate, LocalDateTime endDate, Pageable pageable) {
-        return modelConverter.mapPage(reportRepository.getHighestConsumptionEmployeeReport(startDate, endDate, pageable),
+        return modelConverter.mapPage(
+                reportRepository.getHighestConsumptionEmployeeReport(startDate, endDate, pageable),
                 HighestConsumptionEmployeeReportDto.class);
     }
 
     @Transactional(readOnly = true)
     public ByteArrayResource exportExcelHighestConsumptionEmployeeReport(
             LocalDateTime startDate, LocalDateTime endDate, Pageable pageable, ExcelGeneratorBuilder builder) {
-        Page<HighestConsumptionEmployeeReportDto> collection = generateHighestConsumptionEmployeeReport(startDate, endDate, pageable);
+        Page<HighestConsumptionEmployeeReportDto> collection = generateHighestConsumptionEmployeeReport(startDate,
+                endDate, pageable);
         try {
             InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
             return new ByteArrayResource(inputStream.readAllBytes());
@@ -504,17 +528,130 @@ public class ReportService {
         }
     }
 
-    // In class ReportService
+    // --- Conference Calls Report (Two-Phase Grouped Approach) ---
 
     @Transactional(readOnly = true)
-    public Page<ConferenceCallsReportDto> generateConferenceCallsReport(Specification<ConferenceCallsReportView> specification, Pageable pageable) {
-        return modelConverter.mapPage(conferenceCallsReportViewRepository.findAll(specification, pageable), ConferenceCallsReportDto.class);
+    public Page<ConferenceGroupDto> generateConferenceCallsReport(
+            LocalDateTime startDate, LocalDateTime endDate,
+            String extension, String employeeName,
+            Pageable pageable) {
+
+        // Phase 1: Get paginated conference groups
+        Page<ConferenceCallGroupReport> groupsPage = reportRepository.getConferenceCallGroups(
+                startDate, endDate, extension, employeeName, pageable);
+
+        List<ConferenceCallGroupReport> groups = groupsPage.getContent();
+        if (groups.isEmpty()) {
+            return new PageImpl<>(Collections.emptyList(), pageable, 0);
+        }
+
+        // Phase 2: Fetch participants for these groups using dynamic tuple IN clause
+        List<Object[]> participantRows = fetchParticipantRows(groups, startDate, endDate);
+
+        // Group participant rows by (transferKey, dialedNumber, conferenceNumber)
+        Map<String, List<Object[]>> participantsByConference = new LinkedHashMap<>();
+        for (Object[] row : participantRows) {
+            String transferKey = (String) row[9]; // transferKey column index
+            String dial = (String) row[5]; // dialedNumber column index
+            Long confNum = row[22] != null ? ((Number) row[22]).longValue() : 0L; // conferenceNumber
+            String key = transferKey + "|" + dial + "|" + confNum;
+            participantsByConference.computeIfAbsent(key, k -> new ArrayList<>()).add(row);
+        }
+
+        // Build ConferenceGroupDto list preserving group page order
+        List<ConferenceGroupDto> result = new ArrayList<>();
+        for (ConferenceCallGroupReport group : groups) {
+            String conferenceId = group.getTransferKey() + "|" + group.getDialedNumber()
+                    + "|" + group.getConferenceNumber();
+            List<Object[]> rows = participantsByConference.getOrDefault(conferenceId, Collections.emptyList());
+
+            List<ConferenceCallsReportDto> participantDtos = new ArrayList<>();
+            for (Object[] row : rows) {
+                participantDtos.add(mapRowToConferenceDto(row));
+            }
+
+            ConferenceGroupDto groupDto = new ConferenceGroupDto();
+            groupDto.setConferenceId(conferenceId);
+            groupDto.setConferenceServiceDate(group.getConferenceServiceDate());
+            groupDto.setParticipantCount(group.getParticipantCount());
+            groupDto.setTotalBilled(group.getTotalBilled());
+
+            // Organizer from employee table (matched by dial = extension)
+            groupDto.setOrganizerId(group.getOrganizerId());
+            groupDto.setOrganizerName(group.getOrganizerName());
+            groupDto.setOrganizerExtension(group.getDialedNumber());
+            groupDto.setOrganizerSubdivisionId(group.getOrganizerSubdivisionId());
+            groupDto.setOrganizerSubdivisionName(group.getOrganizerSubdivisionName());
+
+            groupDto.setParticipants(participantDtos);
+            result.add(groupDto);
+        }
+
+        return new PageImpl<>(result, pageable, groupsPage.getTotalElements());
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Object[]> fetchParticipantRows(List<ConferenceCallGroupReport> groups,
+            LocalDateTime startDate, LocalDateTime endDate) {
+        // Build dynamic triple tuple IN clause:
+        // (cn.employee_transfer, cn.dial, cn.conf_num) IN ((:tk0, :dn0, :cn0), ...)
+        StringBuilder sql = new StringBuilder(ConferenceCallsReportQueries.PARTICIPANTS_QUERY);
+        sql.append(" AND (cn.employee_transfer, cn.dial, cn.conf_num) IN (");
+
+        for (int i = 0; i < groups.size(); i++) {
+            if (i > 0)
+                sql.append(", ");
+            sql.append("(:tk").append(i).append(", :dn").append(i).append(", :cn").append(i).append(")");
+        }
+        sql.append(") ORDER BY cn.employee_transfer, cn.dial, cn.conf_num, cn.service_date");
+
+        Query query = entityManager.createNativeQuery(sql.toString());
+        query.setParameter("startDate", startDate);
+        query.setParameter("endDate", endDate);
+        for (int i = 0; i < groups.size(); i++) {
+            query.setParameter("tk" + i, groups.get(i).getTransferKey());
+            query.setParameter("dn" + i, groups.get(i).getDialedNumber());
+            query.setParameter("cn" + i, groups.get(i).getConferenceNumber());
+        }
+
+        return query.getResultList();
+    }
+
+    private ConferenceCallsReportDto mapRowToConferenceDto(Object[] row) {
+        ConferenceCallsReportDto dto = new ConferenceCallsReportDto();
+        dto.setCallRecordId(row[0] != null ? ((Number) row[0]).longValue() : null);
+        dto.setServiceDate(row[1] != null ? ((java.sql.Timestamp) row[1]).toLocalDateTime() : null);
+        dto.setEmployeeExtension((String) row[2]);
+        dto.setDuration(row[3] != null ? ((Number) row[3]).intValue() : null);
+        dto.setIsIncoming(row[4] != null ? (Boolean) row[4] : null);
+        dto.setDialedNumber((String) row[5]);
+        dto.setBilledAmount(row[6] != null ? new BigDecimal(row[6].toString()) : null);
+        dto.setEmployeeAuthCode((String) row[7]);
+        dto.setTransferCause(row[8] != null ? ((Number) row[8]).intValue() : null);
+        dto.setTransferKey((String) row[9]);
+        dto.setEmployeeId(row[10] != null ? ((Number) row[10]).longValue() : null);
+        dto.setEmployeeName((String) row[11]);
+        dto.setSubdivisionId(row[12] != null ? ((Number) row[12]).longValue() : null);
+        dto.setSubdivisionName((String) row[13]);
+        dto.setOperatorId(row[14] != null ? ((Number) row[14]).longValue() : null);
+        dto.setOperatorName((String) row[15]);
+        dto.setTelephonyTypeId(row[16] != null ? ((Number) row[16]).longValue() : null);
+        dto.setTelephonyTypeName((String) row[17]);
+        dto.setCompanyName((String) row[18]);
+        dto.setContactType(row[19] != null ? (Boolean) row[19] : null);
+        dto.setContactName((String) row[20]);
+        dto.setContactOwnerId(row[21] != null ? ((Number) row[21]).longValue() : null);
+
+        return dto;
     }
 
     @Transactional(readOnly = true)
-    public ByteArrayResource exportExcelConferenceCallsReport(Specification<ConferenceCallsReportView> specification
-            , Pageable pageable, ExcelGeneratorBuilder builder) {
-        Page<ConferenceCallsReportDto> collection = generateConferenceCallsReport(specification, pageable);
+    public ByteArrayResource exportExcelConferenceCallsReport(
+            LocalDateTime startDate, LocalDateTime endDate,
+            String extension, String employeeName,
+            Pageable pageable, ExcelGeneratorBuilder builder) {
+        Page<ConferenceGroupDto> collection = generateConferenceCallsReport(
+                startDate, endDate, extension, employeeName, pageable);
         try {
             InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
             return new ByteArrayResource(inputStream.readAllBytes());

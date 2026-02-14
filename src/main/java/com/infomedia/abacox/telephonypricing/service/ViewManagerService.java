@@ -44,9 +44,7 @@ public class ViewManagerService implements TenantInitializer {
             });
 
             List<String> requiredViews = List.of(
-                    "v_corporate_report",
-                    "v_conference_calls_report"
-            );
+                    "v_corporate_report");
 
             // Changed method reference to the new logic
             requiredViews.forEach(this::createOrReplaceView);
@@ -62,10 +60,11 @@ public class ViewManagerService implements TenantInitializer {
         log.info("Processing view '{}' for current tenant schema.", viewName);
 
         try {
-            // 1. Drop the view if it exists. 
-            // We use CASCADE to ensure that if a view has been modified in a way 
+            // 1. Drop the view if it exists.
+            // We use CASCADE to ensure that if a view has been modified in a way
             // that breaks dependencies, the old version is cleared out entirely.
-            // Note: Ensure your 'requiredViews' list is ordered by dependency (independent views first).
+            // Note: Ensure your 'requiredViews' list is ordered by dependency (independent
+            // views first).
             String dropSql = "DROP VIEW IF EXISTS " + viewName + " CASCADE";
             jdbcTemplate.execute(dropSql);
             log.debug("Dropped view '{}' (if it existed).", viewName);
@@ -89,7 +88,7 @@ public class ViewManagerService implements TenantInitializer {
         }
     }
 
-    // The 'viewExists' method was removed as it is no longer needed 
+    // The 'viewExists' method was removed as it is no longer needed
     // because we are using 'DROP VIEW IF EXISTS'.
 
     private String resourceAsString(Resource resource) {

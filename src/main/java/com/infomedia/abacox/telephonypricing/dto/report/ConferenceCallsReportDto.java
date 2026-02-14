@@ -1,13 +1,19 @@
 package com.infomedia.abacox.telephonypricing.dto.report;
 
+import com.fasterxml.jackson.annotation.JsonFormat;
+import com.infomedia.abacox.telephonypricing.constants.DateTimePattern;
 import lombok.Data;
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Data
 public class ConferenceCallsReportDto {
     private Long callRecordId;
+
+    @JsonFormat(pattern = DateTimePattern.DATE_TIME)
     private LocalDateTime serviceDate;
+
     private String employeeExtension;
     private Integer duration;
     private Boolean isIncoming;
