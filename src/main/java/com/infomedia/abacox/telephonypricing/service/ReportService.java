@@ -661,10 +661,18 @@ public class ReportService {
         try {
             InputStream inputStream = builder
                     .withEntities(collection.toList())
-                    .withCollectionAsString("participants",
-                            "serviceDate", "employeeExtension", "duration",
-                            "billedAmount", "employeeAuthCode", "employeeName", "subdivisionName",
-                            "telephonyTypeName", "contactName", "companyName")
+                    .withFlattenedCollection("participants")
+                    .withIncludedFields(
+                            // Parent fields
+                            "transferKey", "conferenceServiceDate", "participantCount", "totalBilled",
+                            "organizerId", "organizerName", "organizerExtension", "organizerSubdivisionId",
+                            "organizerSubdivisionName",
+                            // Child fields
+                            "participants.serviceDate", "participants.employeeExtension", "participants.duration",
+                            "participants.billedAmount", "participants.employeeAuthCode", "participants.employeeName",
+                            "participants.subdivisionName", "participants.telephonyTypeName",
+                            "participants.contactName",
+                            "participants.companyName")
                     .generateAsInputStream();
             return new ByteArrayResource(inputStream.readAllBytes());
         } catch (IOException e) {

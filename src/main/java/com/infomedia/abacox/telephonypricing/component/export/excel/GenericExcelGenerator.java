@@ -166,7 +166,17 @@ public class GenericExcelGenerator {
 
     private static void setFieldValue(Cell cell, Object entity, FieldInfo fieldInfo, GeneratorContext context) {
         try {
-            Object rawValue = getFieldValue(entity, fieldInfo.fieldPath);
+            Object rawValue;
+            if (fieldInfo.isFlattenedChildField) {
+                Field[] path = fieldInfo.fieldPath;
+                String collectionName = context.getFlattenedCollectionFieldName();
+                if (path.length > 0 && collectionName != null && path[0].getName().equals(collectionName)) {
+                    path = Arrays.copyOfRange(path, 1, path.length);
+                }
+                rawValue = getFieldValue(entity, path);
+            } else {
+                rawValue = getFieldValue(entity, fieldInfo.fieldPath);
+            }
 
             if (rawValue == null) {
                 cell.setBlank();
@@ -458,8 +468,9 @@ public class GenericExcelGenerator {
         // Use a prefix for child fields to avoid collision and improve clarity.
         // We use the collection field name as prefix base.
         String childPrefix = formatFieldName(collectionFieldName) + " - ";
-        List<FieldInfo> childFields = getFieldsInDeclarationOrder(childClass, childPrefix, null, context,
-                new HashSet<>());
+        List<FieldInfo> childFields = getFieldsInDeclarationOrder(childClass, childPrefix,
+                new Field[] { collectionField },
+                context, new HashSet<>());
 
         // Mark child fields
         childFields.forEach(f -> f.isFlattenedChildField = true);
@@ -484,10 +495,14 @@ public class GenericExcelGenerator {
 
     private static void createFlattenedDataRows(Sheet sheet, List<?> entities, List<FieldInfo> fields,
             GeneratorContext context) {
-        int rowNum = 1;
+        int rowNum = 2; // Start data at row 2 because we now have 2 header rows (0 and 1)
         CellStyle dataStyle = createDataStyle(sheet.getWorkbook(), context.getDataStyleCustomizer());
         CellStyle wrappedDataStyle = createDataStyle(sheet.getWorkbook(), context.getDataStyleCustomizer());
         wrappedDataStyle.setWrapText(true);
+        wrappedDataStyle.setVerticalAlignment(VerticalAlignment.TOP); // Align top for better readability in merged
+                                                                      // cells
+        dataStyle.setVerticalAlignment(VerticalAlignment.TOP);
+
         String collectionFieldName = context.getFlattenedCollectionFieldName();
         // pre-fetch collection field
         Field collectionField;
@@ -499,7 +514,16 @@ public class GenericExcelGenerator {
             return;
         }
 
+        // Identify parent fields indices for merging
+        List<Integer> parentFieldIndices = new ArrayList<>();
+        for (int i = 0; i < fields.size(); i++) {
+            if (!fields.get(i).isFlattenedChildField) {
+                parentFieldIndices.add(i);
+            }
+        }
+
         for (Object rootEntity : entities) {
+            int startRow = rowNum;
             Collection<?> children = null;
             try {
                 if (collectionField != null) {
@@ -510,9 +534,6 @@ public class GenericExcelGenerator {
             }
 
             if (children == null || children.isEmpty()) {
-                // Option 1: Skip root if no children?
-                // Option 2: Print root with empty child columns?
-                // Usually for "flatten" usage, we want at least one row.
                 // Let's print one row with null child.
                 createSingleFlattenedRow(sheet, rowNum++, rootEntity, null, fields, context, dataStyle,
                         wrappedDataStyle);
@@ -520,6 +541,15 @@ public class GenericExcelGenerator {
                 for (Object childEntity : children) {
                     createSingleFlattenedRow(sheet, rowNum++, rootEntity, childEntity, fields, context, dataStyle,
                             wrappedDataStyle);
+                }
+
+                // Merge parent cells if there were multiple children (multiple rows generated)
+                int endRow = rowNum - 1;
+                if (endRow > startRow) {
+                    for (Integer colIndex : parentFieldIndices) {
+                        sheet.addMergedRegion(
+                                new org.apache.poi.ss.util.CellRangeAddress(startRow, endRow, colIndex, colIndex));
+                    }
                 }
             }
         }
@@ -566,17 +596,69 @@ public class GenericExcelGenerator {
 
     private static void createHeaderRow(Workbook workbook, Sheet sheet, List<FieldInfo> fields,
             GeneratorContext context) {
-        Row headerRow = sheet.createRow(0);
-        CellStyle headerStyle = createHeaderStyle(workbook, context.getHeaderStyleCustomizer());
-        List<String> alternativeHeaders = context.getAlternativeHeaders();
-        for (int i = 0; i < fields.size(); i++) {
-            Cell cell = headerRow.createCell(i);
-            String headerValue = (alternativeHeaders != null && i < alternativeHeaders.size()
-                    && alternativeHeaders.get(i) != null)
-                            ? alternativeHeaders.get(i)
-                            : fields.get(i).displayName;
-            cell.setCellValue(headerValue);
-            cell.setCellStyle(headerStyle);
+
+        if (context.getFlattenedCollectionFieldName() == null) {
+            // Standard single-row header
+            Row headerRow = sheet.createRow(0);
+            CellStyle headerStyle = createHeaderStyle(workbook, context.getHeaderStyleCustomizer());
+            List<String> alternativeHeaders = context.getAlternativeHeaders();
+            for (int i = 0; i < fields.size(); i++) {
+                Cell cell = headerRow.createCell(i);
+                String headerValue = (alternativeHeaders != null && i < alternativeHeaders.size()
+                        && alternativeHeaders.get(i) != null)
+                                ? alternativeHeaders.get(i)
+                                : fields.get(i).displayName;
+                cell.setCellValue(headerValue);
+                cell.setCellStyle(headerStyle);
+            }
+        } else {
+            // 2-row flattened header
+            Row row0 = sheet.createRow(0);
+            Row row1 = sheet.createRow(1);
+            CellStyle headerStyle = createHeaderStyle(workbook, context.getHeaderStyleCustomizer());
+            headerStyle.setVerticalAlignment(VerticalAlignment.CENTER);
+            headerStyle.setAlignment(HorizontalAlignment.CENTER);
+
+            int childStartIndex = -1;
+            int childEndIndex = -1;
+
+            for (int i = 0; i < fields.size(); i++) {
+                FieldInfo field = fields.get(i);
+                Cell cell0 = row0.createCell(i);
+                Cell cell1 = row1.createCell(i);
+                cell0.setCellStyle(headerStyle);
+                cell1.setCellStyle(headerStyle);
+
+                if (!field.isFlattenedChildField) {
+                    // Parent Field: Put name in Row 0, Merge Row 0-1
+                    cell0.setCellValue(field.displayName);
+                    sheet.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(0, 1, i, i));
+                } else {
+                    // Child Field: Put name in Row 1. Row 0 will be merged later.
+                    if (childStartIndex == -1)
+                        childStartIndex = i;
+                    childEndIndex = i;
+
+                    // Remove prefix from child display name for cleaner header
+                    // displayName is like "CollectionName - FieldName". We just want "FieldName"
+                    String childHeader = field.displayName;
+                    String prefix = formatFieldName(context.getFlattenedCollectionFieldName()) + " - ";
+                    if (childHeader.startsWith(prefix)) {
+                        childHeader = childHeader.substring(prefix.length());
+                    }
+                    cell1.setCellValue(childHeader);
+                }
+            }
+
+            // Merge Collection Name in Row 0
+            if (childStartIndex != -1 && childEndIndex != -1) {
+                Cell collectionNameCell = row0.getCell(childStartIndex);
+                collectionNameCell.setCellValue(formatFieldName(context.getFlattenedCollectionFieldName()));
+                if (childEndIndex > childStartIndex) {
+                    sheet.addMergedRegion(
+                            new org.apache.poi.ss.util.CellRangeAddress(0, 0, childStartIndex, childEndIndex));
+                }
+            }
         }
     }
 
