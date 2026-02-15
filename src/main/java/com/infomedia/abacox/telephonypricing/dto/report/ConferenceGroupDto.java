@@ -14,7 +14,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ConferenceGroupDto {
-    private String conferenceId;
+    private String transferKey;
 
     @JsonFormat(pattern = DateTimePattern.DATE_TIME)
     private LocalDateTime conferenceServiceDate;

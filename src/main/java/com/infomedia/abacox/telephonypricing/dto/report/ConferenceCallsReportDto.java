@@ -16,7 +16,6 @@ public class ConferenceCallsReportDto {
 
     private String employeeExtension;
     private Integer duration;
-    private Boolean isIncoming;
     private String dialedNumber;
     private BigDecimal billedAmount;
     private Long employeeId;
@@ -32,6 +31,4 @@ public class ConferenceCallsReportDto {
     private Boolean contactType;
     private String contactName;
     private Long contactOwnerId;
-    private Integer transferCause;
-    private String transferKey;
 }

@@ -8,12 +8,14 @@ import java.util.*;
 import java.util.function.Consumer;
 
 /**
- * A builder for configuring and creating an Excel file via {@link GenericExcelGenerator}.
+ * A builder for configuring and creating an Excel file via
+ * {@link GenericExcelGenerator}.
  * <p>
  * This class collects all configuration options, such as the data source,
  * field inclusions/exclusions, header renaming, and styling.
  * <p>
- * Obtain an instance of this builder by calling {@link GenericExcelGenerator#builder()}.
+ * Obtain an instance of this builder by calling
+ * {@link GenericExcelGenerator#builder()}.
  */
 public class ExcelGeneratorBuilder {
     List<?> entities;
@@ -31,8 +33,12 @@ public class ExcelGeneratorBuilder {
     Consumer<CellStyle> headerStyleCustomizer;
     Consumer<CellStyle> dataStyleCustomizer;
 
+    String flattenedCollectionFieldName;
+    Map<String, List<String>> collectionsAsStringFields = new HashMap<>();
+
     /**
-     * Package-private constructor. Instances should be created via GenericExcelGenerator.builder().
+     * Package-private constructor. Instances should be created via
+     * GenericExcelGenerator.builder().
      */
     ExcelGeneratorBuilder() {
         this.entities = Collections.emptyList();
@@ -120,7 +126,8 @@ public class ExcelGeneratorBuilder {
         return this;
     }
 
-    public ExcelGeneratorBuilder withValueReplacement(String columnName, String originalValue, String replacementValue) {
+    public ExcelGeneratorBuilder withValueReplacement(String columnName, String originalValue,
+            String replacementValue) {
         this.valueReplacements.computeIfAbsent(columnName, k -> new HashMap<>()).put(originalValue, replacementValue);
         return this;
     }
@@ -147,6 +154,34 @@ public class ExcelGeneratorBuilder {
 
     public ExcelGeneratorBuilder withDataStyle(Consumer<CellStyle> dataStyleCustomizer) {
         this.dataStyleCustomizer = dataStyleCustomizer;
+        return this;
+    }
+
+    /**
+     * Configures the generator to flatten a specific collection field.
+     * When set, each element in the collection will generate a new row,
+     * duplicating the root entity's fields.
+     *
+     * @param fieldName The name of the collection field in the root entity.
+     * @return this builder instance.
+     */
+    public ExcelGeneratorBuilder withFlattenedCollection(String fieldName) {
+        this.flattenedCollectionFieldName = fieldName;
+        return this;
+    }
+
+    /**
+     * Configures a collection field to be exported as a single string cell.
+     * The string will be formatted as a vertical block of items, with each item
+     * displaying the specified attributes.
+     *
+     * @param fieldName  The name of the collection field in the root entity.
+     * @param attributes The names of the attributes within the collection elements
+     *                   to include.
+     * @return this builder instance.
+     */
+    public ExcelGeneratorBuilder withCollectionAsString(String fieldName, String... attributes) {
+        this.collectionsAsStringFields.put(fieldName, Arrays.asList(attributes));
         return this;
     }
 

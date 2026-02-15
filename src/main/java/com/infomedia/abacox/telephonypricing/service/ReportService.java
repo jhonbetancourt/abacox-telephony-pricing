@@ -551,9 +551,9 @@ public class ReportService {
         // Group participant rows by (transferKey, dialedNumber, conferenceNumber)
         Map<String, List<Object[]>> participantsByConference = new LinkedHashMap<>();
         for (Object[] row : participantRows) {
-            String transferKey = (String) row[9]; // transferKey column index
-            String dial = (String) row[5]; // dialedNumber column index
-            Long confNum = row[22] != null ? ((Number) row[22]).longValue() : 0L; // conferenceNumber
+            String transferKey = (String) row[20]; // transferKey column index (added at end)
+            String dial = (String) row[4]; // dialedNumber column index (index 4)
+            Long confNum = row[19] != null ? ((Number) row[19]).longValue() : 0L; // conferenceNumber (index 19)
             String key = transferKey + "|" + dial + "|" + confNum;
             participantsByConference.computeIfAbsent(key, k -> new ArrayList<>()).add(row);
         }
@@ -571,7 +571,7 @@ public class ReportService {
             }
 
             ConferenceGroupDto groupDto = new ConferenceGroupDto();
-            groupDto.setConferenceId(conferenceId);
+            groupDto.setTransferKey(group.getTransferKey());
             groupDto.setConferenceServiceDate(group.getConferenceServiceDate());
             groupDto.setParticipantCount(group.getParticipantCount());
             groupDto.setTotalBilled(group.getTotalBilled());
@@ -619,28 +619,34 @@ public class ReportService {
 
     private ConferenceCallsReportDto mapRowToConferenceDto(Object[] row) {
         ConferenceCallsReportDto dto = new ConferenceCallsReportDto();
+        // query index shift due to removal of isIncoming(4), transferCause(8),
+        // transferKey(9)
+        // new mapping:
+        // 0: callRecordId, 1: serviceDate, 2: ext, 3: dur
+        // 4: dialedNumber (was 5)
+        // 5: billedAmount (was 6)
+        // 6: authCode (was 7)
+        // 7: empId (was 10)
+        // ...
         dto.setCallRecordId(row[0] != null ? ((Number) row[0]).longValue() : null);
         dto.setServiceDate(row[1] != null ? ((java.sql.Timestamp) row[1]).toLocalDateTime() : null);
         dto.setEmployeeExtension((String) row[2]);
         dto.setDuration(row[3] != null ? ((Number) row[3]).intValue() : null);
-        dto.setIsIncoming(row[4] != null ? (Boolean) row[4] : null);
-        dto.setDialedNumber((String) row[5]);
-        dto.setBilledAmount(row[6] != null ? new BigDecimal(row[6].toString()) : null);
-        dto.setEmployeeAuthCode((String) row[7]);
-        dto.setTransferCause(row[8] != null ? ((Number) row[8]).intValue() : null);
-        dto.setTransferKey((String) row[9]);
-        dto.setEmployeeId(row[10] != null ? ((Number) row[10]).longValue() : null);
-        dto.setEmployeeName((String) row[11]);
-        dto.setSubdivisionId(row[12] != null ? ((Number) row[12]).longValue() : null);
-        dto.setSubdivisionName((String) row[13]);
-        dto.setOperatorId(row[14] != null ? ((Number) row[14]).longValue() : null);
-        dto.setOperatorName((String) row[15]);
-        dto.setTelephonyTypeId(row[16] != null ? ((Number) row[16]).longValue() : null);
-        dto.setTelephonyTypeName((String) row[17]);
-        dto.setCompanyName((String) row[18]);
-        dto.setContactType(row[19] != null ? (Boolean) row[19] : null);
-        dto.setContactName((String) row[20]);
-        dto.setContactOwnerId(row[21] != null ? ((Number) row[21]).longValue() : null);
+        dto.setDialedNumber((String) row[4]);
+        dto.setBilledAmount(row[5] != null ? new BigDecimal(row[5].toString()) : null);
+        dto.setEmployeeAuthCode((String) row[6]);
+        dto.setEmployeeId(row[7] != null ? ((Number) row[7]).longValue() : null);
+        dto.setEmployeeName((String) row[8]);
+        dto.setSubdivisionId(row[9] != null ? ((Number) row[9]).longValue() : null);
+        dto.setSubdivisionName((String) row[10]);
+        dto.setOperatorId(row[11] != null ? ((Number) row[11]).longValue() : null);
+        dto.setOperatorName((String) row[12]);
+        dto.setTelephonyTypeId(row[13] != null ? ((Number) row[13]).longValue() : null);
+        dto.setTelephonyTypeName((String) row[14]);
+        dto.setCompanyName((String) row[15]);
+        dto.setContactType(row[16] != null ? (Boolean) row[16] : null);
+        dto.setContactName((String) row[17]);
+        dto.setContactOwnerId(row[18] != null ? ((Number) row[18]).longValue() : null);
 
         return dto;
     }
@@ -653,7 +659,13 @@ public class ReportService {
         Page<ConferenceGroupDto> collection = generateConferenceCallsReport(
                 startDate, endDate, extension, employeeName, pageable);
         try {
-            InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
+            InputStream inputStream = builder
+                    .withEntities(collection.toList())
+                    .withCollectionAsString("participants",
+                            "serviceDate", "employeeExtension", "duration",
+                            "billedAmount", "employeeAuthCode", "employeeName", "subdivisionName",
+                            "telephonyTypeName", "contactName", "companyName")
+                    .generateAsInputStream();
             return new ByteArrayResource(inputStream.readAllBytes());
         } catch (IOException e) {
             throw new RuntimeException(e);
