@@ -120,7 +120,7 @@ public class InternalCallProcessorService {
         List<String> ignoredAuthCodes = processingContext.getCdrProcessor().getIgnoredAuthCodeDescriptions();
         log.debug("Determining specific internal call type for Calling: {}, Destination: {}", cdrData.getCallingPartyNumber(), cdrData.getEffectiveDestinationNumber());
         InternalCallTypeInfo result = new InternalCallTypeInfo();
-        result.setTelephonyTypeId(appConfigService.getDefaultInternalCallTypeId());
+        result.setTelephonyTypeId(appConfigService.getDefaultTelephonyTypeForUnresolvedInternalCalls());
         result.setTelephonyTypeName(telephonyTypeLookupService.getTelephonyTypeName(result.getTelephonyTypeId()));
         result.setDestinationIndicatorId(currentCommLocation.getIndicatorId());
         result.setOriginIndicatorId(currentCommLocation.getIndicatorId());
@@ -181,12 +181,7 @@ public class InternalCallProcessorService {
             }
             if (!prefixMatched) {
                 Long defaultUnresolvedType = appConfigService.getDefaultTelephonyTypeForUnresolvedInternalCalls();
-                List<Long> validInternalTypes = telephonyTypeLookupService.getInternalTypeIds();
-                if (defaultUnresolvedType != null && defaultUnresolvedType > 0 && validInternalTypes.contains(defaultUnresolvedType)) {
-                    result.setTelephonyTypeId(defaultUnresolvedType);
-                } else {
-                    result.setTelephonyTypeId(appConfigService.getDefaultInternalCallTypeId());
-                }
+                result.setTelephonyTypeId(defaultUnresolvedType);
                 result.setTelephonyTypeName(telephonyTypeLookupService.getTelephonyTypeName(result.getTelephonyTypeId()));
                 result.setAdditionalInfo(appConfigService.getAssumedText());
             }
@@ -215,7 +210,7 @@ public class InternalCallProcessorService {
                 result.setAdditionalInfo(appConfigService.getAssumedText() + "/" + appConfigService.getOriginText());
             }
         } else {
-             result.setTelephonyTypeId(appConfigService.getDefaultInternalCallTypeId());
+             result.setTelephonyTypeId(appConfigService.getDefaultTelephonyTypeForUnresolvedInternalCalls());
              result.setTelephonyTypeName(telephonyTypeLookupService.getTelephonyTypeName(result.getTelephonyTypeId()));
              result.setAdditionalInfo(appConfigService.getAssumedText());
              if (originCommLoc != null && originCommLoc.getIndicator() != null) result.setOriginIndicatorId(originCommLoc.getIndicator().getId());

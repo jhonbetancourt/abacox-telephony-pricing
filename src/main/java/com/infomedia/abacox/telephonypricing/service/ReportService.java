@@ -2,12 +2,11 @@ package com.infomedia.abacox.telephonypricing.service;
 
 import com.infomedia.abacox.telephonypricing.component.export.excel.ExcelGeneratorBuilder;
 import com.infomedia.abacox.telephonypricing.component.modeltools.ModelConverter;
-import com.infomedia.abacox.telephonypricing.component.utils.CompressionZipUtil;
 import com.infomedia.abacox.telephonypricing.db.entity.CallRecord;
 import com.infomedia.abacox.telephonypricing.db.entity.FailedCallRecord;
-import com.infomedia.abacox.telephonypricing.db.projection.ConferenceCallGroupReport;
+
+import com.infomedia.abacox.telephonypricing.db.projection.ConferenceCandidateProjection;
 import com.infomedia.abacox.telephonypricing.db.repository.*;
-import com.infomedia.abacox.telephonypricing.db.repository.query.ConferenceCallsReportQueries;
 import com.infomedia.abacox.telephonypricing.db.view.CorporateReportView;
 import com.infomedia.abacox.telephonypricing.dto.callrecord.CallRecordDto;
 import com.infomedia.abacox.telephonypricing.dto.commlocation.CommLocationDto;
@@ -18,7 +17,6 @@ import com.infomedia.abacox.telephonypricing.dto.operator.OperatorDto;
 import com.infomedia.abacox.telephonypricing.dto.report.*;
 import com.infomedia.abacox.telephonypricing.dto.telephonytype.TelephonyTypeDto;
 import jakarta.persistence.EntityManager;
-import jakarta.persistence.Query;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.data.domain.Page;
@@ -44,7 +42,6 @@ public class ReportService {
     private final FailedCallRecordRepository failedCallRecordRepository;
     private final CallRecordRepository callRecordRepository;
     private final ModelConverter modelConverter;
-    private final EntityManager entityManager;
 
     private CallRecordDto callRecordDtoFromEntity(CallRecord entity) {
         if (entity == null) {
@@ -530,125 +527,141 @@ public class ReportService {
 
     // --- Conference Calls Report (Two-Phase Grouped Approach) ---
 
+    // --- Conference Calls Report (Java Grouping Approach) ---
+
     @Transactional(readOnly = true)
     public Page<ConferenceGroupDto> generateConferenceCallsReport(
             LocalDateTime startDate, LocalDateTime endDate,
             String extension, String employeeName,
             Pageable pageable) {
 
-        // Phase 1: Get paginated conference groups
-        Page<ConferenceCallGroupReport> groupsPage = reportRepository.getConferenceCallGroups(
-                startDate, endDate, extension, employeeName, pageable);
+        // 1. Fetch ALL candidates sorted by TransferKey, Dial, Date
+        List<ConferenceCandidateProjection> rows = fetchConferenceCandidates(startDate, endDate, extension,
+                employeeName);
 
-        List<ConferenceCallGroupReport> groups = groupsPage.getContent();
-        if (groups.isEmpty()) {
-            return new PageImpl<>(Collections.emptyList(), pageable, 0);
+        // 2. Group candidates in Java using Active Window logic
+        List<ConferenceGroupDto> allGroups = groupCandidates(rows);
+
+        // Sort groups by service date descending (newest first)
+        allGroups.sort(Comparator.comparing(ConferenceGroupDto::getConferenceServiceDate).reversed());
+
+        // 3. Paginate the resulting groups list
+        int start = (int) pageable.getOffset();
+        int end = Math.min((start + pageable.getPageSize()), allGroups.size());
+
+        List<ConferenceGroupDto> pageContent;
+        if (start > allGroups.size()) {
+            pageContent = Collections.emptyList();
+        } else {
+            pageContent = allGroups.subList(start, end);
         }
 
-        // Phase 2: Fetch participants for these groups using dynamic tuple IN clause
-        List<Object[]> participantRows = fetchParticipantRows(groups, startDate, endDate);
+        return new PageImpl<>(pageContent, pageable, allGroups.size());
+    }
 
-        // Group participant rows by (transferKey, dialedNumber, conferenceNumber)
-        Map<String, List<Object[]>> participantsByConference = new LinkedHashMap<>();
-        for (Object[] row : participantRows) {
-            String transferKey = (String) row[20]; // transferKey column index (added at end)
-            String dial = (String) row[4]; // dialedNumber column index (index 4)
-            Long confNum = row[19] != null ? ((Number) row[19]).longValue() : 0L; // conferenceNumber (index 19)
-            String key = transferKey + "|" + dial + "|" + confNum;
-            participantsByConference.computeIfAbsent(key, k -> new ArrayList<>()).add(row);
+    private List<ConferenceCandidateProjection> fetchConferenceCandidates(LocalDateTime startDate,
+            LocalDateTime endDate,
+            String extension, String employeeName) {
+        return reportRepository.findConferenceCandidates(startDate, endDate, extension, employeeName);
+    }
+
+    private List<ConferenceGroupDto> groupCandidates(List<ConferenceCandidateProjection> rows) {
+        List<ConferenceGroupDto> groups = new ArrayList<>();
+        if (rows == null || rows.isEmpty()) {
+            return groups;
         }
 
-        // Build ConferenceGroupDto list preserving group page order
-        List<ConferenceGroupDto> result = new ArrayList<>();
-        for (ConferenceCallGroupReport group : groups) {
-            String conferenceId = group.getTransferKey() + "|" + group.getDialedNumber()
-                    + "|" + group.getConferenceNumber();
-            List<Object[]> rows = participantsByConference.getOrDefault(conferenceId, Collections.emptyList());
+        ConferenceGroupDto currentGroup = null;
+        LocalDateTime windowEnd = null;
 
-            List<ConferenceCallsReportDto> participantDtos = new ArrayList<>();
-            for (Object[] row : rows) {
-                participantDtos.add(mapRowToConferenceDto(row));
+        for (ConferenceCandidateProjection row : rows) {
+            String transferKey = row.getTransferKey();
+            String dial = row.getDialedNumber();
+            LocalDateTime serviceDate = row.getServiceDate();
+            Integer duration = row.getDuration() != null ? row.getDuration() : 0;
+
+            boolean startNew = false;
+
+            if (currentGroup == null) {
+                startNew = true;
+            } else {
+                // Check if same grouping key (TransferKey + Organizer/Dial)
+                if (!Objects.equals(transferKey, currentGroup.getTransferKey()) ||
+                        !Objects.equals(dial, currentGroup.getOrganizerExtension())) {
+                    startNew = true;
+                } else {
+                    // Check Overlap: If Starts BEFORE or ON Window End
+                    if (!serviceDate.isAfter(windowEnd)) {
+                        // Add to current group
+                        addParticipantToGroup(currentGroup, row);
+
+                        // Extend window if needed
+                        LocalDateTime rowEnd = serviceDate.plusSeconds(duration);
+                        if (rowEnd.isAfter(windowEnd)) {
+                            windowEnd = rowEnd;
+                        }
+                    } else {
+                        // Gap found
+                        startNew = true;
+                    }
+                }
             }
 
-            ConferenceGroupDto groupDto = new ConferenceGroupDto();
-            groupDto.setTransferKey(group.getTransferKey());
-            groupDto.setConferenceServiceDate(group.getConferenceServiceDate());
-            groupDto.setParticipantCount(group.getParticipantCount());
-            groupDto.setTotalBilled(group.getTotalBilled());
+            if (startNew) {
+                // Finalize previous
+                if (currentGroup != null) {
+                    // Filter: Only groups with > 1 participant are valid conferences
+                    if (currentGroup.getParticipants().size() > 1) {
+                        groups.add(currentGroup);
+                    }
+                }
 
-            // Organizer from employee table (matched by dial = extension)
-            groupDto.setOrganizerId(group.getOrganizerId());
-            groupDto.setOrganizerName(group.getOrganizerName());
-            groupDto.setOrganizerExtension(group.getDialedNumber());
-            groupDto.setOrganizerSubdivisionId(group.getOrganizerSubdivisionId());
-            groupDto.setOrganizerSubdivisionName(group.getOrganizerSubdivisionName());
-
-            groupDto.setParticipants(participantDtos);
-            result.add(groupDto);
+                // Start new
+                currentGroup = createGroupFromRow(row);
+                addParticipantToGroup(currentGroup, row);
+                windowEnd = serviceDate.plusSeconds(duration);
+            }
         }
 
-        return new PageImpl<>(result, pageable, groupsPage.getTotalElements());
+        // Add last group
+        if (currentGroup != null && currentGroup.getParticipants().size() > 1) {
+            groups.add(currentGroup);
+        }
+
+        return groups;
     }
 
-    @SuppressWarnings("unchecked")
-    private List<Object[]> fetchParticipantRows(List<ConferenceCallGroupReport> groups,
-            LocalDateTime startDate, LocalDateTime endDate) {
-        // Build dynamic triple tuple IN clause:
-        // (cn.employee_transfer, cn.dial, cn.conf_num) IN ((:tk0, :dn0, :cn0), ...)
-        StringBuilder sql = new StringBuilder(ConferenceCallsReportQueries.PARTICIPANTS_QUERY);
-        sql.append(" AND (cn.employee_transfer, cn.dial, cn.conf_num) IN (");
+    private ConferenceGroupDto createGroupFromRow(ConferenceCandidateProjection row) {
+        ConferenceGroupDto group = new ConferenceGroupDto();
+        group.setTransferKey(row.getTransferKey());
 
-        for (int i = 0; i < groups.size(); i++) {
-            if (i > 0)
-                sql.append(", ");
-            sql.append("(:tk").append(i).append(", :dn").append(i).append(", :cn").append(i).append(")");
-        }
-        sql.append(") ORDER BY cn.employee_transfer, cn.dial, cn.conf_num, cn.service_date");
+        // Organizer info
+        group.setOrganizerExtension(row.getDialedNumber()); // The 'dial' is the organizer extension in this context
+        group.setOrganizerId(row.getOrganizerId());
+        group.setOrganizerName(row.getOrganizerName());
+        group.setOrganizerSubdivisionId(row.getOrganizerSubdivisionId());
+        group.setOrganizerSubdivisionName(row.getOrganizerSubdivisionName());
 
-        Query query = entityManager.createNativeQuery(sql.toString());
-        query.setParameter("startDate", startDate);
-        query.setParameter("endDate", endDate);
-        for (int i = 0; i < groups.size(); i++) {
-            query.setParameter("tk" + i, groups.get(i).getTransferKey());
-            query.setParameter("dn" + i, groups.get(i).getDialedNumber());
-            query.setParameter("cn" + i, groups.get(i).getConferenceNumber());
-        }
+        // Init aggregates
+        group.setParticipantCount(0L);
+        group.setTotalBilled(BigDecimal.ZERO);
 
-        return query.getResultList();
+        // Service Date of group is the date of the FIRST record (which this is, due to
+        // sort)
+        LocalDateTime serviceDate = row.getServiceDate();
+        group.setConferenceServiceDate(serviceDate);
+
+        group.setParticipants(new ArrayList<>());
+        return group;
     }
 
-    private ConferenceCallsReportDto mapRowToConferenceDto(Object[] row) {
-        ConferenceCallsReportDto dto = new ConferenceCallsReportDto();
-        // query index shift due to removal of isIncoming(4), transferCause(8),
-        // transferKey(9)
-        // new mapping:
-        // 0: callRecordId, 1: serviceDate, 2: ext, 3: dur
-        // 4: dialedNumber (was 5)
-        // 5: billedAmount (was 6)
-        // 6: authCode (was 7)
-        // 7: empId (was 10)
-        // ...
-        dto.setCallRecordId(row[0] != null ? ((Number) row[0]).longValue() : null);
-        dto.setServiceDate(row[1] != null ? ((java.sql.Timestamp) row[1]).toLocalDateTime() : null);
-        dto.setEmployeeExtension((String) row[2]);
-        dto.setDuration(row[3] != null ? ((Number) row[3]).intValue() : null);
-        dto.setDialedNumber((String) row[4]);
-        dto.setBilledAmount(row[5] != null ? new BigDecimal(row[5].toString()) : null);
-        dto.setEmployeeAuthCode((String) row[6]);
-        dto.setEmployeeId(row[7] != null ? ((Number) row[7]).longValue() : null);
-        dto.setEmployeeName((String) row[8]);
-        dto.setSubdivisionId(row[9] != null ? ((Number) row[9]).longValue() : null);
-        dto.setSubdivisionName((String) row[10]);
-        dto.setOperatorId(row[11] != null ? ((Number) row[11]).longValue() : null);
-        dto.setOperatorName((String) row[12]);
-        dto.setTelephonyTypeId(row[13] != null ? ((Number) row[13]).longValue() : null);
-        dto.setTelephonyTypeName((String) row[14]);
-        dto.setCompanyName((String) row[15]);
-        dto.setContactType(row[16] != null ? (Boolean) row[16] : null);
-        dto.setContactName((String) row[17]);
-        dto.setContactOwnerId(row[18] != null ? ((Number) row[18]).longValue() : null);
-
-        return dto;
+    private void addParticipantToGroup(ConferenceGroupDto group, ConferenceCandidateProjection row) {
+        ConferenceCallsReportDto dto = modelConverter.map(row, ConferenceCallsReportDto.class);
+        group.getParticipants().add(dto);
+        group.setParticipantCount(group.getParticipantCount() + 1L);
+        if (dto.getBilledAmount() != null) {
+            group.setTotalBilled(group.getTotalBilled().add(dto.getBilledAmount()));
+        }
     }
 
     @Transactional(readOnly = true)

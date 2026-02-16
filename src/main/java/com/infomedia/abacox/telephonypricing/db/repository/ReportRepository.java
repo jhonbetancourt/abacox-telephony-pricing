@@ -14,13 +14,12 @@ import java.util.List;
 
 public interface ReportRepository extends JpaRepository<VirtualEntity, Long> {
 
-        @Query(value = ConferenceCallsReportQueries.GROUPS_QUERY, countQuery = ConferenceCallsReportQueries.GROUPS_COUNT_QUERY, nativeQuery = true)
-        Page<ConferenceCallGroupReport> getConferenceCallGroups(
+        @Query(value = ConferenceCallsReportQueries.CONFERENCE_CANDIDATES_QUERY, nativeQuery = true)
+        List<ConferenceCandidateProjection> findConferenceCandidates(
                         @Param("startDate") LocalDateTime startDate,
                         @Param("endDate") LocalDateTime endDate,
                         @Param("extension") String extension,
-                        @Param("employeeName") String employeeName,
-                        Pageable pageable);
+                        @Param("employeeName") String employeeName);
 
         @Query(value = EmployeeActivityReportQueries.QUERY, countQuery = EmployeeActivityReportQueries.COUNT_QUERY, nativeQuery = true)
         Page<EmployeeActivityReport> getEmployeeActivityReport(

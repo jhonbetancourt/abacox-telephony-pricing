@@ -62,10 +62,6 @@ public class UpdateConfigurationDto {
     private JsonNullable<Long> defaultUnresolvedInternalCallTypeId = JsonNullable.undefined();
 
     @NotNull
-    @Schema(description = "Default Telephony Type ID for internal calls")
-    private JsonNullable<Long> defaultInternalCallTypeId = JsonNullable.undefined();
-
-    @NotNull
     @Schema(description = "Whether extensions are considered global across all communication locations")
     private JsonNullable<Boolean> extensionsGlobal = JsonNullable.undefined();
 

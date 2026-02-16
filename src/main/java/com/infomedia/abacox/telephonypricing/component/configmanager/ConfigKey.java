@@ -21,7 +21,6 @@ public enum ConfigKey {
     MAX_ALLOWED_CAPTURE_DATE_DAYS_IN_FUTURE(ConfigGroup.CDR, "90"),
     CREATE_EMPLOYEES_AUTOMATICALLY_FROM_RANGE(ConfigGroup.CDR, "false"),
     DEFAULT_UNRESOLVED_INTERNAL_CALL_TYPE_ID(ConfigGroup.CDR, TelephonyTypeEnum.NATIONAL_IP.getValue().toString()), // Corresponds to TelephonyTypeEnum.NATIONAL_IP
-    DEFAULT_INTERNAL_CALL_TYPE_ID(ConfigGroup.CDR, TelephonyTypeEnum.INTERNAL_SIMPLE.getValue().toString()), // Corresponds to TelephonyTypeEnum.INTERNAL_SIMPLE
     EXTENSIONS_GLOBAL(ConfigGroup.CDR, "false"),
     AUTH_CODES_GLOBAL(ConfigGroup.CDR, "false"),
 

@@ -23,7 +23,6 @@ public class ConfigurationDto {
     private Integer maxAllowedCaptureDateDaysInFuture;
     private Boolean createEmployeesAutomaticallyFromRange;
     private Long defaultUnresolvedInternalCallTypeId;
-    private Long defaultInternalCallTypeId;
     private Boolean extensionsGlobal;
     private Boolean authCodesGlobal;
     private String assumedText;

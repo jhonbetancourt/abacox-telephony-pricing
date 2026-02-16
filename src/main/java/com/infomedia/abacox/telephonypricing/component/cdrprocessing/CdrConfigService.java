@@ -122,16 +122,4 @@ public class CdrConfigService {
         // Original PHP: define('_NN_VALIDA', 'NN-VALIDA');
         return configService.getValue(ConfigKey.NO_PARTITION_PLACEHOLDER).asString();
     }
-
-    public Long getDefaultInternalCallTypeId() {
-        // Original PHP: Hardcoded value 7 for "Interna"
-        String valStr = configService.getValue(ConfigKey.DEFAULT_INTERNAL_CALL_TYPE_ID).asString();
-        try {
-            long val = Long.parseLong(valStr);
-            return val > 0 ? val : null;
-        } catch (NumberFormatException e) {
-            log.debug("NFE for DEFAULT_INTERNAL_CALL_TYPE_ID, using default {}", ConfigKey.DEFAULT_INTERNAL_CALL_TYPE_ID.getDefaultValue());
-            return Long.parseLong(ConfigKey.DEFAULT_INTERNAL_CALL_TYPE_ID.getDefaultValue());
-        }
-    }
 }

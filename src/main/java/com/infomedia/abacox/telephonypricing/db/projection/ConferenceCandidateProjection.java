@@ -3,10 +3,7 @@ package com.infomedia.abacox.telephonypricing.db.projection;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
-/**
- * Projection interface for conference call participant detail rows.
- */
-public interface ConferenceCallParticipantReport {
+public interface ConferenceCandidateProjection {
     Long getCallRecordId();
 
     LocalDateTime getServiceDate();
@@ -15,17 +12,11 @@ public interface ConferenceCallParticipantReport {
 
     Integer getDuration();
 
-    Boolean getIsIncoming();
-
     String getDialedNumber();
 
     BigDecimal getBilledAmount();
 
     String getEmployeeAuthCode();
-
-    Integer getTransferCause();
-
-    String getTransferKey();
 
     Long getEmployeeId();
 
@@ -50,4 +41,14 @@ public interface ConferenceCallParticipantReport {
     String getContactName();
 
     Long getContactOwnerId();
+
+    String getTransferKey();
+
+    Long getOrganizerId();
+
+    String getOrganizerName();
+
+    Long getOrganizerSubdivisionId();
+
+    String getOrganizerSubdivisionName();
 }
