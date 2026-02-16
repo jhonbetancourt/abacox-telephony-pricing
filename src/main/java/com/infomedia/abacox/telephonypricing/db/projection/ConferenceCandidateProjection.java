@@ -51,4 +51,6 @@ public interface ConferenceCandidateProjection {
     Long getOrganizerSubdivisionId();
 
     String getOrganizerSubdivisionName();
+
+    Integer getTransferCause();
 }

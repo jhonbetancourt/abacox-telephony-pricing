@@ -566,101 +566,136 @@ public class ReportService {
     }
 
     private List<ConferenceGroupDto> groupCandidates(List<ConferenceCandidateProjection> rows) {
-        List<ConferenceGroupDto> groups = new ArrayList<>();
+        List<ConferenceGroupDto> completedGroups = new ArrayList<>();
         if (rows == null || rows.isEmpty()) {
-            return groups;
+            return completedGroups;
         }
 
-        ConferenceGroupDto currentGroup = null;
-        LocalDateTime windowEnd = null;
+        // Active groups mapped by: TransferKey -> List of active GroupContext
+        Map<String, List<GroupContext>> activeGroups = new HashMap<>();
+        // Keep track of all created groups to return them later
+        List<GroupContext> allContexts = new ArrayList<>();
 
         for (ConferenceCandidateProjection row : rows) {
             String transferKey = row.getTransferKey();
-            String dial = row.getDialedNumber();
-            LocalDateTime serviceDate = row.getServiceDate();
+            Integer transferCause = row.getTransferCause();
+            LocalDateTime serviceDate = row.getServiceDate(); // Start Time
             Integer duration = row.getDuration() != null ? row.getDuration() : 0;
+            LocalDateTime rowEnd = serviceDate.plusSeconds(duration);
 
-            boolean startNew = false;
-
-            if (currentGroup == null) {
-                startNew = true;
+            // Determine Grouping Identity
+            // Type 10 (ConfNow): Group by Room (Dial)
+            // Type 3 (Conference): Group by Initiator (Extension)
+            String groupingIdentity;
+            if (transferCause != null && transferCause == 10) {
+                groupingIdentity = row.getDialedNumber();
             } else {
-                // Check if same grouping key (TransferKey + Organizer/Dial)
-                if (!Objects.equals(transferKey, currentGroup.getTransferKey()) ||
-                        !Objects.equals(dial, currentGroup.getOrganizerExtension())) {
-                    startNew = true;
-                } else {
-                    // Check Overlap: If Starts BEFORE or ON Window End
-                    if (!serviceDate.isAfter(windowEnd)) {
-                        // Add to current group
-                        addParticipantToGroup(currentGroup, row);
+                groupingIdentity = row.getEmployeeExtension();
+            }
 
-                        // Extend window if needed
-                        LocalDateTime rowEnd = serviceDate.plusSeconds(duration);
-                        if (rowEnd.isAfter(windowEnd)) {
-                            windowEnd = rowEnd;
-                        }
-                    } else {
-                        // Gap found
-                        startNew = true;
+            // Find matching active group
+            GroupContext matchedContext = null;
+            List<GroupContext> candidates = activeGroups.computeIfAbsent(transferKey, k -> new ArrayList<>());
+
+            for (GroupContext context : candidates) {
+                // Check Identity Match
+                if (Objects.equals(groupingIdentity, context.groupingIdentity)) {
+                    // Check Time Overlap (Active Window)
+                    // If Row starts before Context ends, it belongs to this group.
+                    if (!serviceDate.isAfter(context.lastActiveTime)) {
+                        matchedContext = context;
+                        break;
                     }
                 }
             }
 
-            if (startNew) {
-                // Finalize previous
-                if (currentGroup != null) {
-                    // Filter: Only groups with > 1 participant are valid conferences
-                    if (currentGroup.getParticipants().size() > 1) {
-                        groups.add(currentGroup);
-                    }
+            if (matchedContext != null) {
+                // Add to existing group
+                addParticipantToGroup(matchedContext.group, row, transferCause);
+                // Extend window if needed
+                if (rowEnd.isAfter(matchedContext.lastActiveTime)) {
+                    matchedContext.lastActiveTime = rowEnd;
                 }
+            } else {
+                // Start new group
+                ConferenceGroupDto newGroup = createGroupFromRow(row, groupingIdentity, transferCause);
+                GroupContext newContext = new GroupContext(newGroup, rowEnd, groupingIdentity);
 
-                // Start new
-                currentGroup = createGroupFromRow(row);
-                addParticipantToGroup(currentGroup, row);
-                windowEnd = serviceDate.plusSeconds(duration);
+                addParticipantToGroup(newGroup, row, transferCause);
+
+                candidates.add(newContext);
+                allContexts.add(newContext);
             }
         }
 
-        // Add last group
-        if (currentGroup != null && currentGroup.getParticipants().size() > 1) {
-            groups.add(currentGroup);
-        }
-
-        return groups;
+        // Filter valid conferences (more than 1 participant) and extract DTOs
+        return allContexts.stream()
+                .map(ctx -> ctx.group)
+                .filter(g -> g.getParticipantCount() > 1)
+                .sorted(Comparator.comparing(ConferenceGroupDto::getConferenceServiceDate).reversed())
+                .collect(Collectors.toList());
     }
 
-    private ConferenceGroupDto createGroupFromRow(ConferenceCandidateProjection row) {
+    private ConferenceGroupDto createGroupFromRow(ConferenceCandidateProjection row, String groupingIdentity,
+            Integer transferCause) {
         ConferenceGroupDto group = new ConferenceGroupDto();
         group.setTransferKey(row.getTransferKey());
 
-        // Organizer info
-        group.setOrganizerExtension(row.getDialedNumber()); // The 'dial' is the organizer extension in this context
-        group.setOrganizerId(row.getOrganizerId());
-        group.setOrganizerName(row.getOrganizerName());
-        group.setOrganizerSubdivisionId(row.getOrganizerSubdivisionId());
-        group.setOrganizerSubdivisionName(row.getOrganizerSubdivisionName());
+        // Organizer Mapping
+        if (transferCause != null && transferCause == 10) {
+            // Type 10: Organizer is the Room (Dialed)
+            // The Query joins 'org' on 'dial', so we use Organizer fields from projection
+            group.setOrganizerExtension(row.getDialedNumber());
+            group.setOrganizerId(row.getOrganizerId());
+            group.setOrganizerName(row.getOrganizerName());
+            group.setOrganizerSubdivisionId(row.getOrganizerSubdivisionId());
+            group.setOrganizerSubdivisionName(row.getOrganizerSubdivisionName());
+        } else {
+            // Type 3: Organizer is the Initiator (Extension)
+            // The Initiator is the internal employee, so we use Employee fields from
+            // projection
+            group.setOrganizerExtension(row.getEmployeeExtension());
+            group.setOrganizerId(row.getEmployeeId());
+            group.setOrganizerName(row.getEmployeeName());
+            group.setOrganizerSubdivisionId(row.getSubdivisionId());
+            group.setOrganizerSubdivisionName(row.getSubdivisionName());
+        }
 
-        // Init aggregates
         group.setParticipantCount(0L);
         group.setTotalBilled(BigDecimal.ZERO);
-
-        // Service Date of group is the date of the FIRST record (which this is, due to
-        // sort)
-        LocalDateTime serviceDate = row.getServiceDate();
-        group.setConferenceServiceDate(serviceDate);
-
+        group.setConferenceServiceDate(row.getServiceDate());
         group.setParticipants(new ArrayList<>());
         return group;
     }
 
-    private void addParticipantToGroup(ConferenceGroupDto group, ConferenceCandidateProjection row) {
+    private void addParticipantToGroup(ConferenceGroupDto group, ConferenceCandidateProjection row,
+            Integer transferCause) {
         ConferenceCallsReportDto dto = modelConverter.map(row, ConferenceCallsReportDto.class);
+
+        if (transferCause != null && transferCause == 10) {
+            String originalExt = dto.getEmployeeExtension();
+            String originalDial = dto.getDialedNumber();
+
+            dto.setEmployeeExtension(originalDial); // Room
+            dto.setDialedNumber(originalExt); // Participant
+        }
+
         group.getParticipants().add(dto);
         group.setParticipantCount(group.getParticipantCount() + 1L);
         if (dto.getBilledAmount() != null) {
             group.setTotalBilled(group.getTotalBilled().add(dto.getBilledAmount()));
+        }
+    }
+
+    private static class GroupContext {
+        ConferenceGroupDto group;
+        LocalDateTime lastActiveTime;
+        String groupingIdentity;
+
+        GroupContext(ConferenceGroupDto group, LocalDateTime lastActiveTime, String groupingIdentity) {
+            this.group = group;
+            this.lastActiveTime = lastActiveTime;
+            this.groupingIdentity = groupingIdentity;
         }
     }
 
