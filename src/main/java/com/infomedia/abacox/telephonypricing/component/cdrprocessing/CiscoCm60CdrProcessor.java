@@ -42,7 +42,7 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
 
     @Override
     public CdrData evaluateFormat(String cdrLine, CommunicationLocation commLocation, ExtensionLimits extensionLimits,
-            Map<String, Integer> headerPositions) {
+                                  Map<String, Integer> headerPositions) {
         // log.trace("Evaluating Cisco CM 6.0 CDR line: {}", cdrLine); // Reduce log
         // noise
 
@@ -187,7 +187,6 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
         }
 
         boolean isConferenceByFinalCalled = isConferenceIdentifier(cdrData.getFinalCalledPartyNumber());
-        boolean invertTrunksForConference = true;
 
         if (isConferenceByFinalCalled) {
             TransferCause confTransferCause = (cdrData.getJoinOnBehalfOf() != null && cdrData.getJoinOnBehalfOf() == 7)
@@ -196,68 +195,56 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
             setTransferCauseIfUnset(cdrData, confTransferCause);
             cdrData.setConferenceIdentifierUsed(cdrData.getFinalCalledPartyNumber());
 
-            // *** LEGACY ALIGNMENT ***
-            // Legacy system format:
-            // - Participant = Ext (callingPartyNumber) -> Matches FUN_EXTENSION
-            // - Bridge = Transfer (lastRedirectDn) -> Matches FUN_TRANSFER (key)
-            // - Controller = Dial (finalCalledPartyNumber) -> Matches TELEFONO_DESTINO
+            // *** UPDATED LEGACY ALIGNMENT (Matching PHP include_cm.php) ***
 
-            // 1. Store Bridge ID (current finalCalled) in Transfer
+            // Raw state from Cisco: Calling=Participant, FinalCalled=Bridge, LastRedirect=Controller
+            String participant = cdrData.getCallingPartyNumber();
+            String participantPartition = cdrData.getCallingPartyNumberPartition();
+
             String bridgeId = cdrData.getFinalCalledPartyNumber();
-            String controllerDn = cdrData.getLastRedirectDn();
+            String bridgePartition = cdrData.getFinalCalledPartyNumberPartition();
+
+            String controller = cdrData.getLastRedirectDn();
             String controllerPartition = cdrData.getLastRedirectDnPartition();
 
+            // 1. The Controller (Responsible Local Party) MUST be the Calling Party (Origin)
+            // This ensures InternalCallProcessor find the local employee in 'originEmpOpt'
+            cdrData.setCallingPartyNumber(controller);
+            cdrData.setCallingPartyNumberPartition(controllerPartition);
+
+            // 2. The Participant (The party being joined) becomes the Final Called Party (Destination)
+            cdrData.setFinalCalledPartyNumber(participant);
+            cdrData.setFinalCalledPartyNumberPartition(participantPartition);
+
+            // 3. Store the Bridge ID in LastRedirect (Maps to FUN_TRANSFER / ACUMTOTAL_FUN_TRANSFER)
             cdrData.setLastRedirectDn(bridgeId);
-            cdrData.setLastRedirectDnPartition(cdrData.getFinalCalledPartyNumberPartition());
+            cdrData.setLastRedirectDnPartition(bridgePartition);
 
-            // 2. Move Controller (original Redirect) to Dial (FinalCalled)
-            cdrData.setFinalCalledPartyNumber(controllerDn);
-            cdrData.setFinalCalledPartyNumberPartition(controllerPartition);
+            CdrUtil.swapTrunks(cdrData);
 
-            // 3. Keep Calling (Extension) as Participant - NO SWAP
-            // This ensures employee lookup finds the participant directly.
+            // 4. Set Direction to OUTGOING.
+            // The local initiator is calling out to a participant via the bridge.
+            cdrData.setCallDirection(CallDirection.OUTGOING);
 
         } else {
-            if (isConferenceIdentifier(cdrData.getLastRedirectDn())) {
-                if (setTransferCauseIfUnset(cdrData, TransferCause.CONFERENCE_END)) {
-                    cdrData.setConferenceIdentifierUsed(cdrData.getLastRedirectDn());
-                    invertTrunksForConference = false; // PHP: Do not swap trunks for conference end leg
-                }
+            if (isConferenceIdentifier(cdrData.getLastRedirectDn()) && setTransferCauseIfUnset(cdrData, TransferCause.CONFERENCE_END)) {
+                cdrData.setConferenceIdentifierUsed(cdrData.getLastRedirectDn());
             }
         }
 
         // Determine call direction after potential conference swaps
-        if (isConferenceByFinalCalled) {
-            boolean isConferenceEffectivelyIncoming = (!isPartitionPresent(
-                    cdrData.getFinalCalledPartyNumberPartition())) &&
-                    (cdrData.getCallingPartyNumber() == null || cdrData.getCallingPartyNumber().isEmpty() ||
-                            !CdrUtil.isPossibleExtension(cdrData.getCallingPartyNumber(), extensionLimits));
-            if (isConferenceEffectivelyIncoming) {
-                cdrData.setCallDirection(CallDirection.INCOMING);
-            }
-            // Conditionally swap trunks for outgoing conferences
-            else if (invertTrunksForConference && cdrData.getCallDirection() != CallDirection.INCOMING) {
-                if (cdrData.getJoinOnBehalfOf() == null || cdrData.getJoinOnBehalfOf() != 7) {
-                    CdrUtil.swapTrunks(cdrData);
-                }
-            }
-        } else {
-            // Non-conference incoming detection
+        if (!isConferenceByFinalCalled) {
+            // Non-conference incoming detection (External to Internal)
             boolean isCallingPartyEffectivelyExternal = !isPartitionPresent(cdrData.getCallingPartyNumberPartition()) ||
                     !CdrUtil.isPossibleExtension(cdrData.getCallingPartyNumber(), extensionLimits);
             boolean isFinalCalledPartyInternalFormat = isPartitionPresent(cdrData.getFinalCalledPartyNumberPartition())
-                    &&
-                    CdrUtil.isPossibleExtension(cdrData.getFinalCalledPartyNumber(), extensionLimits);
+                    && CdrUtil.isPossibleExtension(cdrData.getFinalCalledPartyNumber(), extensionLimits);
             boolean isRedirectPartyInternalFormat = isPartitionPresent(cdrData.getLastRedirectDnPartition()) &&
                     CdrUtil.isPossibleExtension(cdrData.getLastRedirectDn(), extensionLimits);
 
-            if (isCallingPartyEffectivelyExternal
-                    && (isFinalCalledPartyInternalFormat || isRedirectPartyInternalFormat)) {
+            if (isCallingPartyEffectivelyExternal && (isFinalCalledPartyInternalFormat || isRedirectPartyInternalFormat)) {
                 cdrData.setCallDirection(CallDirection.INCOMING);
-                // PHP: _invertir($info_arr['dial_number'], $info_arr['ext']); (No trunk swap)
                 CdrUtil.swapPartyNumbersOnly(cdrData);
-                // log.trace("Non-conference incoming detected. Swapped calling/called numbers
-                // ONLY.");
             }
         }
 
@@ -293,7 +280,7 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
                 } else {
                     TransferCause autoTransferCause = (cdrData.getDestCallTerminationOnBehalfOf() != null
                             && cdrData.getDestCallTerminationOnBehalfOf() == 7) ? TransferCause.PRE_CONFERENCE_NOW
-                                    : TransferCause.AUTO;
+                            : TransferCause.AUTO;
                     cdrData.setTransferCause(autoTransferCause);
                 }
             }
@@ -399,7 +386,7 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
     }
 
     private String getFieldValue(List<String> fields, String conceptualFieldName,
-            Map<String, Integer> headerPositions) {
+                                 Map<String, Integer> headerPositions) {
         String actualHeaderName = conceptualToActualHeaderMap.getOrDefault(conceptualFieldName,
                 conceptualFieldName.toLowerCase());
         Integer position = headerPositions.get(actualHeaderName);

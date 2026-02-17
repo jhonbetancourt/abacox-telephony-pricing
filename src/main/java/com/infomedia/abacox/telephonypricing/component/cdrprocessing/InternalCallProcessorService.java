@@ -219,12 +219,14 @@ public class InternalCallProcessorService {
 
         // PHP: if (!ExtensionEncontrada($info['funcionario_funid']) && ExtensionEncontrada($info['funcionario_fundes']) ... )
         if (originEmpOpt.isEmpty() && destEmpOpt.isPresent() &&
-            cdrData.getCallDirection() == CallDirection.OUTGOING &&
-            destCommLoc != null && Objects.equals(destCommLoc.getId(), currentCommLocation.getId())) {
-            result.setEffectivelyIncoming(true);
-            // The indicator IDs are swapped here to reflect the new direction
-            if (originCommLoc != null && originCommLoc.getIndicator() != null) result.setDestinationIndicatorId(originCommLoc.getIndicator().getId());
-            if (destCommLoc != null && destCommLoc.getIndicator() != null) result.setOriginIndicatorId(destCommLoc.getIndicator().getId());
+                cdrData.getCallDirection() == CallDirection.OUTGOING &&
+                destCommLoc != null && Objects.equals(destCommLoc.getId(), currentCommLocation.getId())) {
+
+            // Check if destination is a Bridge. If it is, we usually want to keep it Outgoing.
+            boolean isBridge = cdrData.getConferenceIdentifierUsed() != null;
+            if (!isBridge) {
+                result.setEffectivelyIncoming(true);
+            }
         }
         return result;
     }

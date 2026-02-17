@@ -23,8 +23,15 @@ public class CdrFileProcessorWorker {
     private final MultitenantRunner multitenantRunner;
     private final MinioStorageService minioStorageService;
 
+    @org.springframework.beans.factory.annotation.Value("${app.cdr.processing.enabled:true}")
+    private boolean cdrProcessingEnabled;
+
     @Scheduled(fixedDelay = 2000, initialDelay = 5000)
     public void processPendingFilesForAllTenants() {
+        if (!cdrProcessingEnabled) {
+            return;
+        }
+
         // 1. Guard Clause: Check if MinIO is up before doing anything
         if (!minioStorageService.isReady()) {
             log.trace("Skipping CDR processing cycle: MinIO is unavailable.");
@@ -51,16 +58,20 @@ public class CdrFileProcessorWorker {
             return;
         }
 
-        log.info("Worker fetched batch of {} files for current tenant. Submitting to executor...", filesToProcess.size());
+        log.info("Worker fetched batch of {} files for current tenant. Submitting to executor...",
+                filesToProcess.size());
 
         for (FileInfo fileInfo : filesToProcess) {
             // Because this Runnable is created while TenantContext is set,
-            // the TenantAwareTaskDecorator will correctly propagate the context to the execution thread.
+            // the TenantAwareTaskDecorator will correctly propagate the context to the
+            // execution thread.
             cdrProcessingExecutor.submitTask(() -> {
-                log.info("Worker starting processing for file ID={}, Name={}", fileInfo.getId(), fileInfo.getFilename());
+                log.info("Worker starting processing for file ID={}, Name={}", fileInfo.getId(),
+                        fileInfo.getFilename());
                 try {
                     cdrRoutingService.processFileInfo(fileInfo.getId());
-                    // The 'updateStatus' call inside markParsingComplete will also be in the correct tenant context
+                    // The 'updateStatus' call inside markParsingComplete will also be in the
+                    // correct tenant context
                 } catch (Exception e) {
                     log.error("Critical failure processing file ID: {}. Marking FAILED.", fileInfo.getId(), e);
                     fileInfoPersistenceService.updateStatus(fileInfo.getId(), FileInfo.ProcessingStatus.FAILED);
@@ -75,8 +86,15 @@ public class CdrFileProcessorWorker {
         private final FileInfoPersistenceService fileInfoPersistenceService;
         private final MultitenantRunner multitenantRunner;
 
+        @org.springframework.beans.factory.annotation.Value("${app.cdr.processing.enabled:true}")
+        private boolean cdrProcessingEnabled;
+
         @EventListener(ContextRefreshedEvent.class)
         public void onApplicationEvent() {
+            if (!cdrProcessingEnabled) {
+                log.info("Startup recovery disabled by configuration.");
+                return;
+            }
             log.info("Application started. Recovering stalled files...");
             multitenantRunner.runForAllTenants(fileInfoPersistenceService::resetInProgressToPending);
         }

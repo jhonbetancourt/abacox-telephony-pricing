@@ -101,7 +101,11 @@ public class CdrProcessorService {
         return processSingleCdrLineInternal(lineProcessingContext);
     }
 
-    private ProcessingOutcome processSingleCdrLineInternal(LineProcessingContext lineProcessingContext) {
+    /**
+     * Processes a single CDR line context and returns the result.
+     * Does NOT persist or queue anything.
+     */
+    public ProcessedCdrResult processCdrData(LineProcessingContext lineProcessingContext) {
         String cdrLine = lineProcessingContext.getCdrLine();
         CommunicationLocation targetCommLocation = lineProcessingContext.getCommLocation();
         CdrData cdrData = null;
@@ -117,11 +121,9 @@ public class CdrProcessorService {
                     lineProcessingContext.getHeaderPositions());
 
             if (cdrData == null) {
-                // If skipped, we must decrement the tracker immediately
-                if (currentFileInfo != null) {
-                    trackerService.decrementPendingCount(currentFileInfo.getId(), 1);
-                }
-                return ProcessingOutcome.SKIPPED;
+                return ProcessedCdrResult.builder()
+                        .outcome(ProcessingOutcome.SKIPPED)
+                        .build();
             }
 
             cdrData.setFileInfo(currentFileInfo);
@@ -129,18 +131,15 @@ public class CdrProcessorService {
 
             boolean isValid = cdrValidationService.validateInitialCdrData(cdrData);
             if (!isValid || cdrData.isMarkedForQuarantine()) {
-                submitToQueue(cdrData, null, ProcessingOutcome.QUARANTINED);
-                return ProcessingOutcome.QUARANTINED;
+                return buildResult(cdrData, null, ProcessingOutcome.QUARANTINED);
             }
 
             cdrData = cdrEnrichmentService.enrichCdr(cdrData, lineProcessingContext);
 
             if (cdrData.isMarkedForQuarantine()) {
-                submitToQueue(cdrData, null, ProcessingOutcome.QUARANTINED);
-                return ProcessingOutcome.QUARANTINED;
+                return buildResult(cdrData, null, ProcessingOutcome.QUARANTINED);
             } else {
-                submitToQueue(cdrData, targetCommLocation, ProcessingOutcome.SUCCESS);
-                return ProcessingOutcome.SUCCESS;
+                return buildResult(cdrData, targetCommLocation, ProcessingOutcome.SUCCESS);
             }
 
         } catch (Exception e) {
@@ -159,15 +158,12 @@ public class CdrProcessorService {
             cdrData.setQuarantineReason(e.getMessage());
             cdrData.setQuarantineStep("UNHANDLED_EXCEPTION");
 
-            submitToQueue(cdrData, null, ProcessingOutcome.QUARANTINED);
-            return ProcessingOutcome.QUARANTINED;
+            return buildResult(cdrData, null, ProcessingOutcome.QUARANTINED);
         }
     }
 
-    private void submitToQueue(CdrData cdrData, CommunicationLocation commLocation, ProcessingOutcome outcome) {
-        // NOTE: We do NOT compress here anymore. Compression happens in
-        // BatchPersistenceWorker.
-
+    private ProcessedCdrResult buildResult(CdrData cdrData, CommunicationLocation commLocation,
+            ProcessingOutcome outcome) {
         QuarantineErrorType errorType = null;
         String errorMessage = null;
         String errorStep = null;
@@ -178,8 +174,8 @@ public class CdrProcessorService {
             errorStep = cdrData.getQuarantineStep();
         }
 
-        ProcessedCdrResult result = ProcessedCdrResult.builder()
-                .tenantId(TenantContext.getTenant()) // <-- CAPTURE THE TENANT ID
+        return ProcessedCdrResult.builder()
+                .tenantId(TenantContext.getTenant())
                 .cdrData(cdrData)
                 .commLocation(commLocation)
                 .outcome(outcome)
@@ -187,8 +183,23 @@ public class CdrProcessorService {
                 .errorMessage(errorMessage)
                 .errorStep(errorStep)
                 .build();
+    }
 
+    private ProcessingOutcome processSingleCdrLineInternal(LineProcessingContext lineProcessingContext) {
+        ProcessedCdrResult result = processCdrData(lineProcessingContext);
+
+        if (result.getOutcome() == ProcessingOutcome.SKIPPED) {
+            // If skipped, we must decrement the tracker immediately
+            if (lineProcessingContext.getFileInfo() != null) {
+                trackerService.decrementPendingCount(lineProcessingContext.getFileInfo().getId(), 1);
+            }
+            return ProcessingOutcome.SKIPPED;
+        }
+
+        // Submit to persistence queue
         persistenceQueueService.submit(result);
+
+        return result.getOutcome();
     }
 
     private QuarantineErrorType resolveErrorType(String step) {

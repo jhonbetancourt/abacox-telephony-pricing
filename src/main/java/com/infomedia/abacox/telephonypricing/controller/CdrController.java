@@ -42,6 +42,7 @@ public class CdrController {
     private final CdrRoutingService cdrRoutingService;
     private final ConfigService configService;
     private final List<CdrProcessor> cdrProcessors;
+    private final TestCdrProcessingService testCdrProcessingService;
 
     @PostMapping(value = "/process", consumes = MediaType.MULTIPART_FORM_DATA_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     @Operation(summary = "Queue a CDR file for processing", description = "Submits a CDR file for a specific plant type. The file is saved and queued for reliable, asynchronous processing.")
@@ -283,6 +284,27 @@ public class CdrController {
         };
 
         return new ResponseEntity<>(responseBody, headers, HttpStatus.OK);
+    }
+
+    @PostMapping(value = "/test", consumes = MediaType.MULTIPART_FORM_DATA_VALUE, produces = "application/zip")
+    @Operation(summary = "Test process a CDR file (No Persistence)", description = "Processes a CDR file and returns a ZIP containing successful and failed records in CSV format. Does NOT save to database.")
+    public ResponseEntity<StreamingResponseBody> testProcessCdr(
+            @Parameter(description = "The CDR file to test") @RequestParam("file") MultipartFile file,
+            @Parameter(description = "The unique identifier for the plant type") @RequestParam("plantTypeId") Long plantTypeId,
+            @RequestHeader(value = "X-API-KEY") String apiKey) {
+
+        if (!apiKey.equals(configService.getValue(ConfigKey.CDR_UPLOAD_API_KEY).asString())) {
+            throw new SecurityException("Invalid API Key");
+        }
+
+        log.info("Received request for TEST processing: {}, PlantTypeID: {}", file.getOriginalFilename(), plantTypeId);
+
+        if (file.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Uploaded file cannot be empty.");
+        }
+
+        // Delegate to the test service
+        return testCdrProcessingService.processTestCdr(file, plantTypeId);
     }
 
 }

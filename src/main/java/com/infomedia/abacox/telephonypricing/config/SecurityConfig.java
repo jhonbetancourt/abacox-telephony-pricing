@@ -39,14 +39,13 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        http.authorizeHttpRequests(auth ->
-                        auth.requestMatchers(publicPaths()).permitAll()
+        http.authorizeHttpRequests(auth -> auth.requestMatchers(publicPaths()).permitAll()
                 .anyRequest().authenticated())
                 .sessionManagement(manager -> manager.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .addFilterBefore(internalApiKeyFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(tenantFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(new UsernameAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class)
-            .csrf(AbstractHttpConfigurer::disable);
+                .csrf(AbstractHttpConfigurer::disable);
         return http.build();
     }
 
@@ -58,19 +57,13 @@ public class SecurityConfig {
     }
 
     @Bean
-    public PasswordEncoder passwordEncoder(){
+    public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
 
     private String[] publicPaths() {
-        return new String[] {"/v3/api-docs/**"
-                , "/swagger-ui/**"
-                , "/swagger-ui.html"
-                , "/error"
-                , "/api/module/*"
-                , "/api/health/**"
-                , "/websocket/module"
-                , "/api/cdr/process"};
+        return new String[] { "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html", "/error", "/api/module/*",
+                "/api/health/**", "/websocket/module", "/api/cdr/process", "/api/cdr/test" };
     }
 
     public boolean isPublicPath(String path) {
@@ -86,20 +79,21 @@ public class SecurityConfig {
     public class UsernameAuthenticationFilter extends OncePerRequestFilter {
 
         @Override
-        protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+        protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
+                FilterChain filterChain)
                 throws ServletException, IOException {
 
             String headerUsername = request.getHeader("X-Username");
             String username = "anonymousUser";
 
-            if(headerUsername != null){
+            if (headerUsername != null) {
                 username = headerUsername;
             }
 
             if (!username.equals("anonymousUser")) {
                 SecurityContext context = SecurityContextHolder.createEmptyContext();
-                UsernamePasswordAuthenticationToken authToken
-                        = new UsernamePasswordAuthenticationToken(username, null, null);
+                UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(username, null,
+                        null);
                 authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                 context.setAuthentication(authToken);
                 SecurityContextHolder.setContext(context);
