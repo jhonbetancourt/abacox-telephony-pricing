@@ -15,10 +15,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
 
-import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
@@ -27,7 +25,6 @@ import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Function;
 
 import static java.util.Map.entry;
 
@@ -328,7 +325,7 @@ public class MigrationService {
                 .columnMapping(Map.ofEntries(
                         entry("PREFIJO_ID", "id"),
                         entry("PREFIJO_OPERADOR_ID", "operatorId"),
-                        entry("PREFIJO_TIPOTELE_ID", "telephoneTypeId"), // Renamed in entity
+                        entry("PREFIJO_TIPOTELE_ID", "telephonyTypeId"), // Renamed in entity
                         entry("PREFIJO_PREFIJO", "code"),
                         entry("PREFIJO_VALORBASE", "baseValue"),
                         entry("PREFIJO_BANDAOK", "bandOk"),
