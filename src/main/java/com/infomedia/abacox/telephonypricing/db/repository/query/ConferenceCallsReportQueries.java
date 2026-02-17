@@ -45,6 +45,6 @@ public final class ConferenceCallsReportQueries {
         AND cr.service_date BETWEEN :startDate AND :endDate
         AND (:extension IS NULL OR cr.employee_extension ILIKE CONCAT('%', :extension, '%') OR cr.dial ILIKE CONCAT('%', :extension, '%'))
         AND (:employeeName IS NULL OR e.name ILIKE CONCAT('%', :employeeName, '%') OR org.name ILIKE CONCAT('%', :employeeName, '%'))
-      ORDER BY cr.employee_transfer, cr.service_date
+      ORDER BY cr.employee_transfer, cr.service_date, cr.transfer_cause
       """;
 }

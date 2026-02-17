@@ -16,7 +16,6 @@ import com.infomedia.abacox.telephonypricing.dto.indicator.IndicatorDto;
 import com.infomedia.abacox.telephonypricing.dto.operator.OperatorDto;
 import com.infomedia.abacox.telephonypricing.dto.report.*;
 import com.infomedia.abacox.telephonypricing.dto.telephonytype.TelephonyTypeDto;
-import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.data.domain.Page;
@@ -611,7 +610,17 @@ public class ReportService {
 
             if (matchedContext != null) {
                 // Add to existing group
-                addParticipantToGroup(matchedContext.group, row, transferCause);
+
+                // FILTER TYPE 10: If it's a "Conference Now" call, and the participant
+                // extension
+                // matches the room (organizer), skip adding it to avoid duplication.
+                if (transferCause != null && transferCause == 10 &&
+                        Objects.equals(row.getEmployeeExtension(), matchedContext.group.getOrganizerExtension())) {
+                    // Do nothing, just update window if needed
+                } else {
+                    addParticipantToGroup(matchedContext.group, row, transferCause);
+                }
+
                 // Extend window if needed
                 if (rowEnd.isAfter(matchedContext.lastActiveTime)) {
                     matchedContext.lastActiveTime = rowEnd;
@@ -621,7 +630,15 @@ public class ReportService {
                 ConferenceGroupDto newGroup = createGroupFromRow(row, groupingIdentity, transferCause);
                 GroupContext newContext = new GroupContext(newGroup, rowEnd, groupingIdentity);
 
-                addParticipantToGroup(newGroup, row, transferCause);
+                // For the very first record (Organizer), we might want to add it as a
+                // participant
+                // unless it is Type 10 and it's self-referential
+                if (transferCause != null && transferCause == 10 &&
+                        Objects.equals(row.getEmployeeExtension(), groupingIdentity)) {
+                    // Type 10 Organizer record (Room calling itself?) -> Don't add as participant
+                } else {
+                    addParticipantToGroup(newGroup, row, transferCause);
+                }
 
                 candidates.add(newContext);
                 allContexts.add(newContext);
@@ -629,6 +646,10 @@ public class ReportService {
         }
 
         // Filter valid conferences (more than 1 participant) and extract DTOs
+        // Note: For display purposes, we might want to show even single-participant
+        // "conferences"
+        // if that's what the data suggests, but PHP filtered count > 1.
+        // PHP logic: if (count($info_row) > 1)
         return allContexts.stream()
                 .map(ctx -> ctx.group)
                 .filter(g -> g.getParticipantCount() > 1)
@@ -673,11 +694,28 @@ public class ReportService {
         ConferenceCallsReportDto dto = modelConverter.map(row, ConferenceCallsReportDto.class);
 
         if (transferCause != null && transferCause == 10) {
-            String originalExt = dto.getEmployeeExtension();
-            String originalDial = dto.getDialedNumber();
+            // Type 10 (Conference Now):
+            // Organizer is the Room (Dial). Participant is the Caller (Extension).
+            String originalExt = row.getEmployeeExtension();
+            String originalDial = row.getDialedNumber();
 
-            dto.setEmployeeExtension(originalDial); // Room
-            dto.setDialedNumber(originalExt); // Participant
+            dto.setEmployeeExtension(originalDial); // Show Room as "Extension/Phone" column?
+                                                    // No, based on PHP _invertir:
+                                                    // room becomes the "base", caller becomes the "target"
+            dto.setEmployeeExtension(originalExt); // Participant Extension
+            dto.setDialedNumber(originalDial); // Room
+        } else {
+            // Type 3 (Standard Conference):
+            // Organizer is the Initator (Extension). Participant is the Recipient (Dial).
+            // We need to overwrite the DTO fields because modelConverter maps
+            // getEmployeeName()
+            // which is the initiator. For the Arrow row, we want the Recipient.
+
+            dto.setEmployeeExtension(row.getDialedNumber());
+            dto.setEmployeeId(row.getOrganizerId());
+            dto.setEmployeeName(row.getOrganizerName());
+            dto.setSubdivisionId(row.getOrganizerSubdivisionId());
+            dto.setSubdivisionName(row.getOrganizerSubdivisionName());
         }
 
         group.getParticipants().add(dto);

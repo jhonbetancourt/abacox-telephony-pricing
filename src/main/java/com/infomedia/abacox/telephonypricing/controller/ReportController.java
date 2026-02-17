@@ -552,6 +552,7 @@ public class ReportController {
 
         @GetMapping(value = "conferenceCalls", produces = MediaType.APPLICATION_JSON_VALUE)
         public Page<ConferenceGroupDto> getConferenceCallReport(@Parameter(hidden = true) Pageable pageable,
+                        @ParameterObject PageableRequest pageableRequest,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate,
                         @RequestParam(required = false) String extension,
@@ -566,6 +567,7 @@ public class ReportController {
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate,
                         @RequestParam(required = false) String extension,
                         @RequestParam(required = false) String employeeName,
+                        @ParameterObject PageableRequest pageableRequest,
                         @ParameterObject ExcelRequest excelRequest) {
                 ByteArrayResource resource = reportService.exportExcelConferenceCallsReport(startDate, endDate,
                                 extension, employeeName,

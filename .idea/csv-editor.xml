@@ -3,20 +3,6 @@
   <component name="CsvFileAttributes">
     <option name="attributeMap">
       <map>
-        <entry key="\Colsanitas_conferencia_BD.csv">
-          <value>
-            <Attribute>
-              <option name="separator" value="," />
-            </Attribute>
-          </value>
-        </entry>
-        <entry key="\call_record_202602161630.csv">
-          <value>
-            <Attribute>
-              <option name="separator" value="," />
-            </Attribute>
-          </value>
-        </entry>
         <entry key="\src\main\resources\csv\call_category.csv">
           <value>
             <Attribute>
@@ -67,6 +53,13 @@
           </value>
         </entry>
         <entry key="\src\main\resources\csv\telephony_type.csv">
+          <value>
+            <Attribute>
+              <option name="separator" value="," />
+            </Attribute>
+          </value>
+        </entry>
+        <entry key="\testfiles\Colsanitas_conferencia_BD.csv">
           <value>
             <Attribute>
               <option name="separator" value="," />

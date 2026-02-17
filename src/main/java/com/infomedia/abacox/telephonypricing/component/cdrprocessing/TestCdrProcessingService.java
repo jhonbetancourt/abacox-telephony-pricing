@@ -33,6 +33,7 @@ public class TestCdrProcessingService {
     private final CdrProcessorService cdrProcessorService;
     private final CommunicationLocationLookupService commLocationLookupService;
     private final EmployeeLookupService employeeLookupService;
+    private final CdrConfigService cdrConfigService;
     private final List<CdrProcessor> cdrProcessors;
 
     private static final AtomicLong DUMMY_FILE_ID_GENERATOR = new AtomicLong(-1);
@@ -186,7 +187,7 @@ public class TestCdrProcessingService {
                     "employee_extension", "employee_auth_code", "indicator_id", "destination_phone",
                     "duration", "ring_count", "telephony_type_id", "billed_amount",
                     "price_per_minute", "initial_price", "is_incoming", "trunk",
-                    "initial_trunk", "employee_id", "destination_employee_id",
+                    "initial_trunk", "employee_id", "destination_employee_id", "employee_transfer",
                     "transfer_cause", "assignment_cause", "file_info_id", "ctl_hash"
             });
 
@@ -203,7 +204,8 @@ public class TestCdrProcessingService {
                             "", // id (auto-generated)
                             data.getEffectiveDestinationNumber(),
                             commLocationId,
-                            String.valueOf(data.getDateTimeOrigination()),
+                            String.valueOf(DateTimeUtil.convertToZone(data.getDateTimeOrigination(),
+                                    cdrConfigService.getTargetDatabaseZoneId())),
                             String.valueOf(data.getOperatorId()),
                             data.getCallingPartyNumber(),
                             data.getAuthCodeDescription(),
@@ -220,6 +222,7 @@ public class TestCdrProcessingService {
                             data.getOrigDeviceName(),
                             String.valueOf(data.getEmployeeId()),
                             String.valueOf(data.getDestinationEmployeeId()),
+                            data.getEmployeeTransferExtension(),
                             data.getTransferCause() != null ? String.valueOf(data.getTransferCause().getValue()) : "",
                             data.getAssignmentCause() != null ? String.valueOf(data.getAssignmentCause().getValue())
                                     : "",
