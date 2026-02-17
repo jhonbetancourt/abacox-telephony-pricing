@@ -33,7 +33,7 @@ public class ViewManagerService implements TenantInitializer {
             return;
         }
 
-        log.info("Starting database views update/initialization for tenant '{}'...", tenantId);
+        log.debug("Starting database views update/initialization for tenant '{}'...", tenantId);
 
         try {
             // Set the search path for the current transaction
@@ -49,7 +49,7 @@ public class ViewManagerService implements TenantInitializer {
             // Changed method reference to the new logic
             requiredViews.forEach(this::createOrReplaceView);
 
-            log.info("Database views initialization tasks complete for tenant '{}'.", tenantId);
+            log.debug("Database views initialization tasks complete for tenant '{}'.", tenantId);
         } catch (Exception e) {
             log.error("A critical error occurred during view initialization for tenant '{}'.", tenantId, e);
             throw new RuntimeException("View initialization failed for tenant: " + tenantId, e);
@@ -57,7 +57,7 @@ public class ViewManagerService implements TenantInitializer {
     }
 
     public void createOrReplaceView(String viewName) {
-        log.info("Processing view '{}' for current tenant schema.", viewName);
+        log.debug("Processing view '{}' for current tenant schema.", viewName);
 
         try {
             // 1. Drop the view if it exists.
@@ -81,7 +81,7 @@ public class ViewManagerService implements TenantInitializer {
             // 3. Create the view
             String createSql = resourceAsString(resource);
             jdbcTemplate.execute(createSql);
-            log.info("Successfully created/updated view '{}' in current tenant schema.", viewName);
+            log.debug("Successfully created/updated view '{}' in current tenant schema.", viewName);
 
         } catch (Exception e) {
             throw new RuntimeException("Failed to update view '" + viewName + "'", e);

@@ -34,42 +34,45 @@ public class MigrationRowProcessor {
 
     /**
      * Helper to determine if a custom transformer should be used.
-     * Uses reflection on targetEntityClass to find the field type for default conversion.
+     * Uses reflection on targetEntityClass to find the field type for default
+     * conversion.
      */
-    private Object convertValueByFieldLookup(Object sourceValue, 
-                                             String targetFieldName, 
-                                             Class<?> targetEntityClass, 
-                                             TableMigrationConfig config) throws Exception {
-        
+    private Object convertValueByFieldLookup(Object sourceValue,
+            String targetFieldName,
+            Class<?> targetEntityClass,
+            TableMigrationConfig config) throws Exception {
+
         // 1. Check for Custom Transformer
-        if (config.getCustomValueTransformers() != null && 
-            config.getCustomValueTransformers().containsKey(targetFieldName)) {
+        if (config.getCustomValueTransformers() != null &&
+                config.getCustomValueTransformers().containsKey(targetFieldName)) {
             try {
                 return config.getCustomValueTransformers().get(targetFieldName).apply(sourceValue);
             } catch (Exception e) {
-                throw new RuntimeException("Custom value transformation failed for field '" + targetFieldName + "': " + e.getMessage(), e);
+                throw new RuntimeException(
+                        "Custom value transformation failed for field '" + targetFieldName + "': " + e.getMessage(), e);
             }
         }
 
         // 2. Default Fallback (Look up field type inside MigrationUtils)
         return MigrationUtils.convertToFieldType(sourceValue, targetEntityClass, targetFieldName);
     }
-    
+
     /**
      * Helper to determine if a custom transformer should be used.
      * Uses the provided explicit Class type for default conversion.
      */
-    private Object convertValueByType(Object sourceValue, 
-                                      String targetFieldName, 
-                                      Class<?> targetType, 
-                                      TableMigrationConfig config) throws Exception {
+    private Object convertValueByType(Object sourceValue,
+            String targetFieldName,
+            Class<?> targetType,
+            TableMigrationConfig config) throws Exception {
         // 1. Check for Custom Transformer
-        if (config.getCustomValueTransformers() != null && 
-            config.getCustomValueTransformers().containsKey(targetFieldName)) {
+        if (config.getCustomValueTransformers() != null &&
+                config.getCustomValueTransformers().containsKey(targetFieldName)) {
             try {
                 return config.getCustomValueTransformers().get(targetFieldName).apply(sourceValue);
             } catch (Exception e) {
-                throw new RuntimeException("Custom value transformation failed for field '" + targetFieldName + "': " + e.getMessage(), e);
+                throw new RuntimeException(
+                        "Custom value transformation failed for field '" + targetFieldName + "': " + e.getMessage(), e);
             }
         }
 
@@ -79,15 +82,15 @@ public class MigrationRowProcessor {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
     public boolean processSingleRowInsert(Map<String, Object> sourceRow,
-                                          TableMigrationConfig tableConfig,
-                                          Class<?> targetEntityClass,
-                                          Field idField,
-                                          String idFieldName,
-                                          String idColumnName,
-                                          String tableName,
-                                          boolean isGeneratedId,
-                                          Map<String, ForeignKeyInfo> foreignKeyInfoMap,
-                                          ForeignKeyInfo selfReferenceFkInfo) {
+            TableMigrationConfig tableConfig,
+            Class<?> targetEntityClass,
+            Field idField,
+            String idFieldName,
+            String idColumnName,
+            String tableName,
+            boolean isGeneratedId,
+            Map<String, ForeignKeyInfo> foreignKeyInfoMap,
+            ForeignKeyInfo selfReferenceFkInfo) {
 
         Object targetIdValue = null;
         Object sourceIdValue = sourceRow.get(tableConfig.getSourceIdColumnName());
@@ -103,8 +106,8 @@ public class MigrationRowProcessor {
 
             boolean exists = checkEntityExistsInternal(tableName, idColumnName, targetIdValue);
             if (exists) {
-                log.trace("Skipping existing row in table {} with ID: {}", tableName, targetIdValue);
-                return true; // Skipped existing successfully
+                log.trace("Updating existing row in table {} with ID: {}", tableName, targetIdValue);
+                // Fall through to update logic
             }
 
             Object targetEntity = targetEntityClass.getDeclaredConstructor().newInstance();
@@ -115,12 +118,14 @@ public class MigrationRowProcessor {
                 String sourceCol = entry.getKey();
                 String targetField = entry.getValue();
 
-                if (targetField.equals(idFieldName)) continue;
+                if (targetField.equals(idFieldName))
+                    continue;
 
                 ForeignKeyInfo fkInfo = foreignKeyInfoMap.get(targetField);
 
                 if (fkInfo != null && fkInfo.isSelfReference()) {
-                    log.trace("Skipping self-ref FK field '{}' population in Pass 1 for ID {}", targetField, targetIdValue);
+                    log.trace("Skipping self-ref FK field '{}' population in Pass 1 for ID {}", targetField,
+                            targetIdValue);
                     continue;
                 }
 
@@ -132,30 +137,33 @@ public class MigrationRowProcessor {
                     if (fkInfo != null
                             && tableConfig.isTreatZeroIdAsNullForForeignKeys()
                             && sourceValue instanceof Number
-                            && ((Number) sourceValue).longValue() == 0L)
-                    {
+                            && ((Number) sourceValue).longValue() == 0L) {
                         log.trace("Treating source value 0 as NULL for FK field '{}' (Source Col: {}) for ID {}",
-                                  targetField, sourceCol, targetIdValue);
+                                targetField, sourceCol, targetIdValue);
                         treatAsNull = true;
                     }
 
                     if (!treatAsNull && sourceValue != null) {
                         try {
                             // Convert Field Value using override logic (field lookup)
-                            convertedTargetValue = convertValueByFieldLookup(sourceValue, targetField, targetEntityClass, tableConfig);
+                            convertedTargetValue = convertValueByFieldLookup(sourceValue, targetField,
+                                    targetEntityClass, tableConfig);
                         } catch (Exception e) {
-                            log.warn("Skipping field '{}' for row with ID {} due to conversion error: {}. Source Col: {}, Source type: {}, Value: '{}'",
-                                     targetField, targetIdValue, e.getMessage(), sourceCol,
-                                     (sourceValue != null ? sourceValue.getClass().getName() : "null"), sourceValue);
+                            log.warn(
+                                    "Skipping field '{}' for row with ID {} due to conversion error: {}. Source Col: {}, Source type: {}, Value: '{}'",
+                                    targetField, targetIdValue, e.getMessage(), sourceCol,
+                                    (sourceValue != null ? sourceValue.getClass().getName() : "null"), sourceValue);
                             continue;
                         }
                     }
 
                     try {
-                         MigrationUtils.setProperty(targetEntity, targetField, convertedTargetValue);
+                        MigrationUtils.setProperty(targetEntity, targetField, convertedTargetValue);
                     } catch (Exception e) {
-                        log.warn("Skipping field '{}' for row with ID {} due to setting error: {}. Target Value: {}, Target Type: {}",
-                                 targetField, targetIdValue, e.getMessage(), convertedTargetValue, (convertedTargetValue != null ? convertedTargetValue.getClass().getName() : "null"));
+                        log.warn(
+                                "Skipping field '{}' for row with ID {} due to setting error: {}. Target Value: {}, Target Type: {}",
+                                targetField, targetIdValue, e.getMessage(), convertedTargetValue,
+                                (convertedTargetValue != null ? convertedTargetValue.getClass().getName() : "null"));
                     }
                 }
             }
@@ -165,32 +173,31 @@ public class MigrationRowProcessor {
                     idField,
                     targetIdValue,
                     isGeneratedId,
+                    exists, // isUpdate
                     tableName,
-                    (selfReferenceFkInfo != null) ? selfReferenceFkInfo.getDbColumnName() : null
-            );
+                    (selfReferenceFkInfo != null) ? selfReferenceFkInfo.getDbColumnName() : null);
 
             log.trace("Successfully inserted row in table {} with ID: {}", tableName, targetIdValue);
             return true;
 
         } catch (Exception e) {
             log.error("Error processing row for table {} (Source ID: {}, Target ID: {}): {}",
-                      tableName, sourceIdValue,
-                      targetIdValue != null ? targetIdValue : "UNKNOWN",
-                      e.getMessage(), e);
+                    tableName, sourceIdValue,
+                    targetIdValue != null ? targetIdValue : "UNKNOWN",
+                    e.getMessage(), e);
             return false;
         }
     }
 
-
     @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = SQLException.class)
     public int processSelfRefUpdateBatch(List<Map<String, Object>> batchData,
-                                         TableMigrationConfig tableConfig,
-                                         Class<?> targetEntityClass,
-                                         String tableName,
-                                         String idColumnName,
-                                         String idFieldName,
-                                         ForeignKeyInfo selfReferenceFkInfo,
-                                         int updateBatchSize) throws SQLException {
+            TableMigrationConfig tableConfig,
+            Class<?> targetEntityClass,
+            String tableName,
+            String idColumnName,
+            String idFieldName,
+            ForeignKeyInfo selfReferenceFkInfo,
+            int updateBatchSize) throws SQLException {
         if (selfReferenceFkInfo == null || batchData == null || batchData.isEmpty()) {
             return 0;
         }
@@ -199,11 +206,12 @@ public class MigrationRowProcessor {
         Field selfRefFkField = selfReferenceFkInfo.getForeignKeyField();
         Class<?> selfRefFkType = selfReferenceFkInfo.getTargetTypeId();
 
-        String updateSql = "UPDATE \"" + tableName + "\" SET \"" + selfRefDbColumn + "\" = ? WHERE \"" + idColumnName + "\" = ?";
+        String updateSql = "UPDATE \"" + tableName + "\" SET \"" + selfRefDbColumn + "\" = ? WHERE \"" + idColumnName
+                + "\" = ?";
         log.debug("Executing Self-Ref Update Batch (max size: {}) using SQL: {}", batchData.size(), updateSql);
 
         Session session = entityManager.unwrap(Session.class);
-        final int[] totalUpdatedInBatch = {0};
+        final int[] totalUpdatedInBatch = { 0 };
 
         try {
             session.doWork(connection -> {
@@ -216,7 +224,8 @@ public class MigrationRowProcessor {
                                 .map(Map.Entry::getKey)
                                 .findFirst().orElse(null);
 
-                        if (sourceIdValue == null || sourceParentCol == null || !sourceRow.containsKey(sourceParentCol)) {
+                        if (sourceIdValue == null || sourceParentCol == null
+                                || !sourceRow.containsKey(sourceParentCol)) {
                             continue;
                         }
 
@@ -226,7 +235,8 @@ public class MigrationRowProcessor {
 
                         try {
                             // Ensure ID conversion logic matches Insert Pass
-                            targetId = convertValueByFieldLookup(sourceIdValue, idFieldName, targetEntityClass, tableConfig);
+                            targetId = convertValueByFieldLookup(sourceIdValue, idFieldName, targetEntityClass,
+                                    tableConfig);
 
                             boolean treatParentAsNull = false;
                             if (tableConfig.isTreatZeroIdAsNullForForeignKeys()
@@ -237,49 +247,62 @@ public class MigrationRowProcessor {
 
                             if (!treatParentAsNull && sourceParentIdValue != null) {
                                 // Apply conversion override for the Parent FK field using explicit type
-                                targetParentId = convertValueByType(sourceParentIdValue, selfRefFkField.getName(), selfRefFkType, tableConfig);
+                                targetParentId = convertValueByType(sourceParentIdValue, selfRefFkField.getName(),
+                                        selfRefFkType, tableConfig);
                             }
 
                             if (targetParentId != null) {
-                                MigrationUtils.setPreparedStatementParameters(updateStmt, List.of(targetParentId, targetId));
+                                MigrationUtils.setPreparedStatementParameters(updateStmt,
+                                        List.of(targetParentId, targetId));
                                 updateStmt.addBatch();
                                 currentBatchCount++;
 
                                 if (currentBatchCount % updateBatchSize == 0) {
-                                    log.trace("Executing intermediate self-ref update batch ({} statements)", currentBatchCount);
+                                    log.trace("Executing intermediate self-ref update batch ({} statements)",
+                                            currentBatchCount);
                                     int[] batchResult = updateStmt.executeBatch();
-                                    totalUpdatedInBatch[0] += Arrays.stream(batchResult).filter(i -> i >= 0 || i == Statement.SUCCESS_NO_INFO).count();
+                                    totalUpdatedInBatch[0] += Arrays.stream(batchResult)
+                                            .filter(i -> i >= 0 || i == Statement.SUCCESS_NO_INFO).count();
                                     updateStmt.clearBatch();
                                     currentBatchCount = 0;
                                 }
                             }
                         } catch (Exception e) {
-                             log.error("Error preparing self-ref update for table {} (Target ID: {}, Source Parent Col: {}, Source Parent Val: {}): {}",
-                                     tableName, targetId != null ? targetId : sourceIdValue, sourceParentCol, sourceParentIdValue, e.getMessage(), e);
+                            log.error(
+                                    "Error preparing self-ref update for table {} (Target ID: {}, Source Parent Col: {}, Source Parent Val: {}): {}",
+                                    tableName, targetId != null ? targetId : sourceIdValue, sourceParentCol,
+                                    sourceParentIdValue, e.getMessage(), e);
                         }
                     }
 
                     if (currentBatchCount > 0) {
                         log.trace("Executing final self-ref update batch ({} statements)", currentBatchCount);
                         int[] batchResult = updateStmt.executeBatch();
-                        totalUpdatedInBatch[0] += Arrays.stream(batchResult).filter(i -> i >= 0 || i == Statement.SUCCESS_NO_INFO).count();
+                        totalUpdatedInBatch[0] += Arrays.stream(batchResult)
+                                .filter(i -> i >= 0 || i == Statement.SUCCESS_NO_INFO).count();
                     }
-                    log.debug("Self-ref update batch executed for table {}. Statements processed reported by driver: {}", tableName, totalUpdatedInBatch[0]);
+                    log.debug(
+                            "Self-ref update batch executed for table {}. Statements processed reported by driver: {}",
+                            tableName, totalUpdatedInBatch[0]);
 
                 } catch (SQLException e) {
-                    log.error("SQLException during batch update execution for table {}: SQLState: {}, ErrorCode: {}, Message: {}",
-                              tableName, e.getSQLState(), e.getErrorCode(), e.getMessage());
-                    throw new SQLException("Batch update failed for table " + tableName + ": " + e.getMessage(), e.getSQLState(), e.getErrorCode(), e);
-                 } catch (Exception e) {
-                    log.error("Unexpected error during batch update work for table {}: {}", tableName, e.getMessage(), e);
+                    log.error(
+                            "SQLException during batch update execution for table {}: SQLState: {}, ErrorCode: {}, Message: {}",
+                            tableName, e.getSQLState(), e.getErrorCode(), e.getMessage());
+                    throw new SQLException("Batch update failed for table " + tableName + ": " + e.getMessage(),
+                            e.getSQLState(), e.getErrorCode(), e);
+                } catch (Exception e) {
+                    log.error("Unexpected error during batch update work for table {}: {}", tableName, e.getMessage(),
+                            e);
                     throw new RuntimeException("Unexpected error during batch update: " + e.getMessage(), e);
-                 }
+                }
             });
         } catch (RuntimeException e) {
             if (e.getCause() instanceof SQLException) {
                 throw (SQLException) e.getCause();
             } else {
-                 log.error("Runtime exception during self-ref update processing for table {}: {}", tableName, e.getMessage(), e);
+                log.error("Runtime exception during self-ref update processing for table {}: {}", tableName,
+                        e.getMessage(), e);
                 throw e;
             }
         }
@@ -288,18 +311,19 @@ public class MigrationRowProcessor {
 
     @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = SQLException.class)
     public int processHistoricalActivenessUpdateBatch(List<Map<String, Object>> batchData,
-                                                      TableMigrationConfig tableConfig,
-                                                      Class<?> targetEntityClass,
-                                                      String targetTableName,
-                                                      String targetIdColumnName,
-                                                      String targetIdFieldName,
-                                                      String sourceHistoricalControlIdColumn,
-                                                      String sourceValidFromDateColumn,
-                                                      int updateBatchSize) throws SQLException {
+            TableMigrationConfig tableConfig,
+            Class<?> targetEntityClass,
+            String targetTableName,
+            String targetIdColumnName,
+            String targetIdFieldName,
+            String sourceHistoricalControlIdColumn,
+            String sourceValidFromDateColumn,
+            int updateBatchSize) throws SQLException {
         if (batchData == null || batchData.isEmpty()) {
             return 0;
         }
-        log.debug("Processing historical activeness for batch of size {} for table {}", batchData.size(), targetTableName);
+        log.debug("Processing historical activeness for batch of size {} for table {}", batchData.size(),
+                targetTableName);
 
         // Group all rows in the current batch by their historical control ID.
         Map<Object, List<Map<String, Object>>> groupedByHistoricalControlId = batchData.stream()
@@ -318,16 +342,19 @@ public class MigrationRowProcessor {
             historicalChain.sort(Comparator.comparing((Map<String, Object> row) -> {
                 Object dateVal = row.get(sourceValidFromDateColumn);
                 try {
-                    // We don't support custom mapping for validFrom date logic here currently (unless passed via map), 
+                    // We don't support custom mapping for validFrom date logic here currently
+                    // (unless passed via map),
                     // relying on standard conversion for sorting
-                    LocalDateTime ldt = (LocalDateTime) MigrationUtils.convertToFieldType(dateVal, LocalDateTime.class, null);
+                    LocalDateTime ldt = (LocalDateTime) MigrationUtils.convertToFieldType(dateVal, LocalDateTime.class,
+                            null);
                     return ldt != null ? ldt : LocalDateTime.MIN;
                 } catch (Exception e) {
-                    log.warn("Unparseable date for sorting historical chain: {} for histCtlId {}. Error: {}. Using MIN_DATE.",
-                             dateVal, histCtlId, e.getMessage());
+                    log.warn(
+                            "Unparseable date for sorting historical chain: {} for histCtlId {}. Error: {}. Using MIN_DATE.",
+                            dateVal, histCtlId, e.getMessage());
                     return LocalDateTime.MIN;
                 }
-            }).reversed()); 
+            }).reversed());
 
             // The first record in the sorted list is the most recent one
             Map<String, Object> mostRecentRecord = historicalChain.get(0);
@@ -336,20 +363,24 @@ public class MigrationRowProcessor {
                 Object validFromRaw = mostRecentRecord.get(sourceValidFromDateColumn);
                 validFrom = (LocalDateTime) MigrationUtils.convertToFieldType(validFromRaw, LocalDateTime.class, null);
             } catch (Exception e) {
-                log.error("Could not convert validFrom date for most recent record of histCtlId {}: {}", histCtlId, e.getMessage());
+                log.error("Could not convert validFrom date for most recent record of histCtlId {}: {}", histCtlId,
+                        e.getMessage());
             }
 
             // Determine if the conceptual employee is active
             boolean isEmployeeActive = (validFrom != null && !validFrom.isAfter(now));
-            log.trace("Determined active status for histCtlId {}: {}. (Most recent date: {})", histCtlId, isEmployeeActive, validFrom);
+            log.trace("Determined active status for histCtlId {}: {}. (Most recent date: {})", histCtlId,
+                    isEmployeeActive, validFrom);
 
             // Create an update instruction for every record in this chain
             for (Map<String, Object> recordInChain : historicalChain) {
                 Object sourceId = recordInChain.get(tableConfig.getSourceIdColumnName());
-                if (sourceId == null) continue;
+                if (sourceId == null)
+                    continue;
                 try {
                     // Ensure ID conversion uses overrides
-                    Object targetId = convertValueByFieldLookup(sourceId, targetIdFieldName, targetEntityClass, tableConfig);
+                    Object targetId = convertValueByFieldLookup(sourceId, targetIdFieldName, targetEntityClass,
+                            tableConfig);
                     updatesToPerform.add(new HistoricalRecordUpdate(targetId, isEmployeeActive));
                 } catch (Exception e) {
                     log.error("Could not convert source ID {} for historical update.", sourceId, e);
@@ -359,37 +390,48 @@ public class MigrationRowProcessor {
 
         // Process standalone records (those not in a historical group)
         batchData.stream()
-            .filter(row -> {
-                Object histCtlIdRaw = row.get(sourceHistoricalControlIdColumn);
-                if (histCtlIdRaw == null) return true;
-                if (histCtlIdRaw instanceof Number) return ((Number) histCtlIdRaw).longValue() <= 0;
-                if (histCtlIdRaw instanceof String) {
-                    try { return Long.parseLong(((String) histCtlIdRaw).trim()) <= 0; } catch (Exception e) { return true; }
-                }
-                return true;
-            })
-            .forEach(sourceRow -> {
-                Object sourceId = sourceRow.get(tableConfig.getSourceIdColumnName());
-                if (sourceId == null) return;
-                try {
-                    // Ensure ID conversion uses overrides
-                    Object targetId = convertValueByFieldLookup(sourceId, targetIdFieldName, targetEntityClass, tableConfig);
-                    Object validFromRaw = sourceRow.get(sourceValidFromDateColumn);
-                    LocalDateTime validFrom = (LocalDateTime) MigrationUtils.convertToFieldType(validFromRaw, LocalDateTime.class, null);
-                    boolean isActive = (validFrom != null && !validFrom.isAfter(now));
-                    updatesToPerform.add(new HistoricalRecordUpdate(targetId, isActive));
-                } catch (Exception e) {
-                    log.error("Error processing standalone record for active status (Source ID: {}): {}", sourceId, e.getMessage());
-                }
-            });
-
+                .filter(row -> {
+                    Object histCtlIdRaw = row.get(sourceHistoricalControlIdColumn);
+                    if (histCtlIdRaw == null)
+                        return true;
+                    if (histCtlIdRaw instanceof Number)
+                        return ((Number) histCtlIdRaw).longValue() <= 0;
+                    if (histCtlIdRaw instanceof String) {
+                        try {
+                            return Long.parseLong(((String) histCtlIdRaw).trim()) <= 0;
+                        } catch (Exception e) {
+                            return true;
+                        }
+                    }
+                    return true;
+                })
+                .forEach(sourceRow -> {
+                    Object sourceId = sourceRow.get(tableConfig.getSourceIdColumnName());
+                    if (sourceId == null)
+                        return;
+                    try {
+                        // Ensure ID conversion uses overrides
+                        Object targetId = convertValueByFieldLookup(sourceId, targetIdFieldName, targetEntityClass,
+                                tableConfig);
+                        Object validFromRaw = sourceRow.get(sourceValidFromDateColumn);
+                        LocalDateTime validFrom = (LocalDateTime) MigrationUtils.convertToFieldType(validFromRaw,
+                                LocalDateTime.class, null);
+                        boolean isActive = (validFrom != null && !validFrom.isAfter(now));
+                        updatesToPerform.add(new HistoricalRecordUpdate(targetId, isActive));
+                    } catch (Exception e) {
+                        log.error("Error processing standalone record for active status (Source ID: {}): {}", sourceId,
+                                e.getMessage());
+                    }
+                });
 
         // Now, execute the batch update
-        String updateActiveSql = "UPDATE \"" + targetTableName + "\" SET active = ? WHERE \"" + targetIdColumnName + "\" = ?";
-        log.debug("Executing 'active' flag Update Batch ({} potential updates) using SQL: {}", updatesToPerform.size(), updateActiveSql);
+        String updateActiveSql = "UPDATE \"" + targetTableName + "\" SET active = ? WHERE \"" + targetIdColumnName
+                + "\" = ?";
+        log.debug("Executing 'active' flag Update Batch ({} potential updates) using SQL: {}", updatesToPerform.size(),
+                updateActiveSql);
 
         Session session = entityManager.unwrap(Session.class);
-        final int[] totalUpdatedInThisBatchCall = {0};
+        final int[] totalUpdatedInThisBatchCall = { 0 };
 
         try {
             session.doWork(connection -> {
@@ -400,40 +442,54 @@ public class MigrationRowProcessor {
                             log.warn("Skipping historical update due to null targetId.");
                             continue;
                         }
-                        log.trace("Adding 'active' update batch: SET active = {} WHERE {} = {}", update.isActive, targetIdColumnName, update.targetId);
-                        MigrationUtils.setPreparedStatementParameters(updateStmt, List.of(update.isActive, update.targetId));
+                        log.trace("Adding 'active' update batch: SET active = {} WHERE {} = {}", update.isActive,
+                                targetIdColumnName, update.targetId);
+                        MigrationUtils.setPreparedStatementParameters(updateStmt,
+                                List.of(update.isActive, update.targetId));
                         updateStmt.addBatch();
                         currentStatementsInJdbcBatch++;
 
                         if (currentStatementsInJdbcBatch >= updateBatchSize) {
-                            log.trace("Executing intermediate 'active' update batch ({} statements)", currentStatementsInJdbcBatch);
+                            log.trace("Executing intermediate 'active' update batch ({} statements)",
+                                    currentStatementsInJdbcBatch);
                             int[] batchResult = updateStmt.executeBatch();
-                            totalUpdatedInThisBatchCall[0] += Arrays.stream(batchResult).filter(i -> i >= 0 || i == Statement.SUCCESS_NO_INFO).count();
+                            totalUpdatedInThisBatchCall[0] += Arrays.stream(batchResult)
+                                    .filter(i -> i >= 0 || i == Statement.SUCCESS_NO_INFO).count();
                             updateStmt.clearBatch();
                             currentStatementsInJdbcBatch = 0;
                         }
                     }
                     // Execute any remaining statements in the batch
                     if (currentStatementsInJdbcBatch > 0) {
-                        log.trace("Executing final 'active' update batch ({} statements)", currentStatementsInJdbcBatch);
+                        log.trace("Executing final 'active' update batch ({} statements)",
+                                currentStatementsInJdbcBatch);
                         int[] batchResult = updateStmt.executeBatch();
-                        totalUpdatedInThisBatchCall[0] += Arrays.stream(batchResult).filter(i -> i >= 0 || i == Statement.SUCCESS_NO_INFO).count();
+                        totalUpdatedInThisBatchCall[0] += Arrays.stream(batchResult)
+                                .filter(i -> i >= 0 || i == Statement.SUCCESS_NO_INFO).count();
                     }
-                    log.debug("'active' flag update batch executed for table {}. Statements processed reported by driver: {}", targetTableName, totalUpdatedInThisBatchCall[0]);
+                    log.debug(
+                            "'active' flag update batch executed for table {}. Statements processed reported by driver: {}",
+                            targetTableName, totalUpdatedInThisBatchCall[0]);
                 } catch (SQLException e) {
-                    log.error("SQLException during 'active' flag batch update execution for table {}: SQLState: {}, ErrorCode: {}, Message: {}",
-                              targetTableName, e.getSQLState(), e.getErrorCode(), e.getMessage());
-                    throw new SQLException("Batch 'active' update failed for table " + targetTableName + ": " + e.getMessage(), e.getSQLState(), e.getErrorCode(), e);
+                    log.error(
+                            "SQLException during 'active' flag batch update execution for table {}: SQLState: {}, ErrorCode: {}, Message: {}",
+                            targetTableName, e.getSQLState(), e.getErrorCode(), e.getMessage());
+                    throw new SQLException(
+                            "Batch 'active' update failed for table " + targetTableName + ": " + e.getMessage(),
+                            e.getSQLState(), e.getErrorCode(), e);
                 } catch (Exception e) {
-                    log.error("Unexpected error during 'active' flag batch update work for table {}: {}", targetTableName, e.getMessage(), e);
-                    throw new RuntimeException("Unexpected error during 'active' flag batch update: " + e.getMessage(), e);
+                    log.error("Unexpected error during 'active' flag batch update work for table {}: {}",
+                            targetTableName, e.getMessage(), e);
+                    throw new RuntimeException("Unexpected error during 'active' flag batch update: " + e.getMessage(),
+                            e);
                 }
             });
         } catch (RuntimeException e) {
             if (e.getCause() instanceof SQLException) {
                 throw (SQLException) e.getCause();
             } else {
-                log.error("Runtime exception during 'active' flag update processing for table {}: {}", targetTableName, e.getMessage(), e);
+                log.error("Runtime exception during 'active' flag update processing for table {}: {}", targetTableName,
+                        e.getMessage(), e);
                 throw e;
             }
         }
@@ -444,17 +500,20 @@ public class MigrationRowProcessor {
     private static class HistoricalRecordUpdate {
         final Object targetId;
         final boolean isActive;
+
         HistoricalRecordUpdate(Object targetId, boolean isActive) {
             this.targetId = targetId;
             this.isActive = isActive;
         }
     }
 
-    private boolean checkEntityExistsInternal(String tableName, String idColumnName, Object idValue) throws SQLException {
-        if (idValue == null) return false;
+    private boolean checkEntityExistsInternal(String tableName, String idColumnName, Object idValue)
+            throws SQLException {
+        if (idValue == null)
+            return false;
         String sql = "SELECT 1 FROM \"" + tableName + "\" WHERE \"" + idColumnName + "\" = ? LIMIT 1";
         Session session = entityManager.unwrap(Session.class);
-        final boolean[] exists = {false};
+        final boolean[] exists = { false };
         try {
             session.doWork(connection -> {
                 try (PreparedStatement stmt = connection.prepareStatement(sql)) {
@@ -463,27 +522,36 @@ public class MigrationRowProcessor {
                         exists[0] = rs.next();
                     }
                 } catch (SQLException e) {
-                    throw new SQLException("Existence check failed for table " + tableName + ": " + e.getMessage(), e.getSQLState(), e.getErrorCode(), e);
+                    throw new SQLException("Existence check failed for table " + tableName + ": " + e.getMessage(),
+                            e.getSQLState(), e.getErrorCode(), e);
                 }
             });
         } catch (RuntimeException e) {
-             if (e.getCause() instanceof SQLException) throw (SQLException) e.getCause();
-             else throw e;
+            if (e.getCause() instanceof SQLException)
+                throw (SQLException) e.getCause();
+            else
+                throw e;
         }
         return exists[0];
     }
 
-    private <T> void saveEntityWithForcedIdInternal(T entity, Field idField, Object idValue, boolean isGeneratedId, String tableName, String selfRefForeignKeyColumnNameToNull) throws Exception {
+    private <T> void saveEntityWithForcedIdInternal(T entity, Field idField, Object idValue, boolean isGeneratedId,
+            boolean isUpdate,
+            String tableName, String selfRefForeignKeyColumnNameToNull) throws Exception {
         Class<?> entityClass = entity.getClass();
-        if (idValue == null) throw new IllegalArgumentException("ID value cannot be null for saving entity");
+        if (idValue == null)
+            throw new IllegalArgumentException("ID value cannot be null for saving entity");
 
         if (isGeneratedId) {
-            log.trace("Entity {} has @GeneratedValue, using native SQL INSERT for ID: {}", entityClass.getSimpleName(), idValue);
+            log.trace("Entity {} has @GeneratedValue, using native SQL {} for ID: {}", entityClass.getSimpleName(),
+                    isUpdate ? "UPDATE" : "INSERT", idValue);
             StringBuilder columns = new StringBuilder();
             StringBuilder placeholders = new StringBuilder();
+            StringBuilder updateSetClause = new StringBuilder();
             List<Object> values = new ArrayList<>();
             List<Field> allFields = MigrationUtils.getAllFields(entityClass);
             Set<String> processedColumnNames = new HashSet<>();
+            String idColumnName = MigrationUtils.getIdColumnName(idField);
 
             for (Field field : allFields) {
                 field.setAccessible(true);
@@ -491,14 +559,22 @@ public class MigrationRowProcessor {
                         java.lang.reflect.Modifier.isTransient(field.getModifiers()) ||
                         field.isAnnotationPresent(jakarta.persistence.Transient.class) ||
                         field.isAnnotationPresent(OneToMany.class) ||
-                        field.isAnnotationPresent(ManyToMany.class) ) {
+                        field.isAnnotationPresent(ManyToMany.class)) {
                     continue;
                 }
 
                 String columnName = MigrationUtils.getColumnNameForField(field);
                 String columnNameKey = columnName.toLowerCase();
 
-                if (processedColumnNames.contains(columnNameKey)) continue;
+                if (processedColumnNames.contains(columnNameKey))
+                    continue;
+
+                // Skip ID column in the set list for UPDATE, or VALUES list for INSERT (if
+                // purely identity, but here we forced insert ID so we included it, but for
+                // update we filter it)
+                if (columnName.equalsIgnoreCase(idColumnName) && isUpdate) {
+                    continue;
+                }
 
                 Object value = field.get(entity);
                 JoinColumn joinColumn = field.getAnnotation(JoinColumn.class);
@@ -517,19 +593,37 @@ public class MigrationRowProcessor {
                     }
                 }
 
-                if (columns.length() > 0) {
-                    columns.append(", ");
-                    placeholders.append(", ");
+                if (isUpdate) {
+                    if (updateSetClause.length() > 0) {
+                        updateSetClause.append(", ");
+                    }
+                    updateSetClause.append("\"").append(columnName).append("\" = ?");
+                } else {
+                    if (columns.length() > 0) {
+                        columns.append(", ");
+                        placeholders.append(", ");
+                    }
+                    columns.append("\"").append(columnName).append("\"");
+                    placeholders.append("?");
                 }
-                columns.append("\"").append(columnName).append("\"");
-                placeholders.append("?");
+
                 values.add(value);
                 processedColumnNames.add(columnNameKey);
             }
 
-            if (columns.length() == 0) return;
+            if (!isUpdate && columns.length() == 0)
+                return;
+            if (isUpdate && updateSetClause.length() == 0)
+                return;
 
-            String sql = "INSERT INTO \"" + tableName + "\" (" + columns + ") VALUES (" + placeholders + ")";
+            String sql;
+            if (isUpdate) {
+                sql = "UPDATE \"" + tableName + "\" SET " + updateSetClause + " WHERE \"" + idColumnName + "\" = ?";
+                values.add(idValue);
+            } else {
+                sql = "INSERT INTO \"" + tableName + "\" (" + columns + ") VALUES (" + placeholders + ")";
+            }
+
             log.trace("Executing native SQL: {}", sql);
             log.trace("With values: {}", values);
 
@@ -540,22 +634,27 @@ public class MigrationRowProcessor {
                         MigrationUtils.setPreparedStatementParameters(stmt, values);
                         stmt.executeUpdate();
                     } catch (SQLException e) {
-                        throw new SQLException("Native SQL insert failed: " + e.getMessage(), e.getSQLState(), e.getErrorCode(), e);
+                        throw new SQLException(
+                                "Native SQL " + (isUpdate ? "update" : "insert") + " failed: " + e.getMessage(),
+                                e.getSQLState(), e.getErrorCode(), e);
                     }
                 });
             } catch (RuntimeException e) {
-                if (e.getCause() instanceof SQLException) throw (SQLException) e.getCause();
-                else throw e;
+                if (e.getCause() instanceof SQLException)
+                    throw (SQLException) e.getCause();
+                else
+                    throw e;
             }
         } else {
-            log.trace("Entity {} does not have @GeneratedValue, using entityManager.merge() for ID: {}", entityClass.getSimpleName(), idValue);
+            log.trace("Entity {} does not have @GeneratedValue, using entityManager.merge() for ID: {}",
+                    entityClass.getSimpleName(), idValue);
             if (selfRefForeignKeyColumnNameToNull != null) {
                 Field fkField = MigrationUtils.findFieldByColumnName(entityClass, selfRefForeignKeyColumnNameToNull);
                 if (fkField != null) {
                     fkField.setAccessible(true);
                     if (!fkField.getType().isPrimitive()) {
                         if (fkField.get(entity) != null) {
-                             fkField.set(entity, null);
+                            fkField.set(entity, null);
                         }
                     }
                 }

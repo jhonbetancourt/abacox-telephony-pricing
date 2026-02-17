@@ -18,6 +18,10 @@ public final class DestinationUsageReportQueries {
             indicator ind_dest ON cr.indicator_id = ind_dest.id
         LEFT JOIN
             telephony_type tt ON ind_dest.telephony_type_id = tt.id
+        INNER JOIN
+            employee e ON cr.employee_id = e.id
+        INNER JOIN
+            location l ON cr.location_id = l.id
         WHERE
             (cr.service_date BETWEEN :startDate AND :endDate)
         GROUP BY
@@ -47,6 +51,10 @@ public final class DestinationUsageReportQueries {
             indicator ind_dest ON cr.indicator_id = ind_dest.id
         LEFT JOIN
             telephony_type tt ON ind_dest.telephony_type_id = tt.id
+        INNER JOIN
+            employee e ON cr.employee_id = e.id
+        INNER JOIN
+            location l ON cr.location_id = l.id
         WHERE
             (cr.service_date BETWEEN :startDate AND :endDate)
         GROUP BY
