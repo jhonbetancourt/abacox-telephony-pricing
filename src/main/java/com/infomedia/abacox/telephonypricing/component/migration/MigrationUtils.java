@@ -47,16 +47,19 @@ public class MigrationUtils {
     }
 
     /**
-     * Gets the database column name for a given field, respecting @Column and @JoinColumn.
+     * Gets the database column name for a given field, respecting @Column
+     * and @JoinColumn.
      */
     public static String getColumnNameForField(Field field) {
         if (field.isAnnotationPresent(jakarta.persistence.Column.class)) {
             jakarta.persistence.Column columnAnn = field.getAnnotation(jakarta.persistence.Column.class);
-            if (columnAnn != null && !columnAnn.name().isEmpty()) return columnAnn.name();
+            if (columnAnn != null && !columnAnn.name().isEmpty())
+                return columnAnn.name();
         }
         if (field.isAnnotationPresent(jakarta.persistence.JoinColumn.class)) {
             jakarta.persistence.JoinColumn joinColumnAnn = field.getAnnotation(jakarta.persistence.JoinColumn.class);
-            if (joinColumnAnn != null && !joinColumnAnn.name().isEmpty()) return joinColumnAnn.name();
+            if (joinColumnAnn != null && !joinColumnAnn.name().isEmpty())
+                return joinColumnAnn.name();
         }
         // Fallback to field name (consider naming strategy if needed)
         return field.getName();
@@ -68,7 +71,6 @@ public class MigrationUtils {
     public static String getIdColumnName(Field idField) {
         return getColumnNameForField(idField);
     }
-
 
     /**
      * Gets all declared fields from a class and its superclasses.
@@ -86,29 +88,30 @@ public class MigrationUtils {
     /**
      * Finds a field by name in a class or its superclasses.
      */
-     public static Field findField(Class<?> entityClass, String fieldName) {
-         Class<?> currentClass = entityClass;
-         while (currentClass != null && currentClass != Object.class) {
-             try {
-                 return currentClass.getDeclaredField(fieldName);
-             } catch (NoSuchFieldException e) { /* ignore and check superclass */ }
-             currentClass = currentClass.getSuperclass();
-         }
-         return null;
-     }
+    public static Field findField(Class<?> entityClass, String fieldName) {
+        Class<?> currentClass = entityClass;
+        while (currentClass != null && currentClass != Object.class) {
+            try {
+                return currentClass.getDeclaredField(fieldName);
+            } catch (NoSuchFieldException e) {
+                /* ignore and check superclass */ }
+            currentClass = currentClass.getSuperclass();
+        }
+        return null;
+    }
 
     /**
      * Finds a field by its mapped database column name.
      */
-     public static Field findFieldByColumnName(Class<?> entityClass, String columnName) {
-         List<Field> allFields = getAllFields(entityClass);
-         for (Field field : allFields) {
-             if (getColumnNameForField(field).equalsIgnoreCase(columnName)) {
-                 return field;
-             }
-         }
-         return null;
-     }
+    public static Field findFieldByColumnName(Class<?> entityClass, String columnName) {
+        List<Field> allFields = getAllFields(entityClass);
+        for (Field field : allFields) {
+            if (getColumnNameForField(field).equalsIgnoreCase(columnName)) {
+                return field;
+            }
+        }
+        return null;
+    }
 
     /**
      * Sets parameters on a PreparedStatement based on their types.
@@ -120,7 +123,7 @@ public class MigrationUtils {
             if (value == null) {
                 // Try to determine SQL type if possible, otherwise use generic NULL
                 // For simplicity, using generic NULL here. Might need refinement based on DB.
-                 stmt.setNull(paramIndex, java.sql.Types.OTHER); // Or Types.NULL / Types.VARCHAR
+                stmt.setNull(paramIndex, java.sql.Types.OTHER); // Or Types.NULL / Types.VARCHAR
             } else if (value instanceof String) {
                 stmt.setString(paramIndex, (String) value);
             } else if (value instanceof Integer) {
@@ -150,7 +153,7 @@ public class MigrationUtils {
             } else if (value instanceof java.time.LocalTime) {
                 stmt.setTime(paramIndex, java.sql.Time.valueOf((java.time.LocalTime) value));
             } else if (value instanceof java.time.OffsetDateTime) {
-                 // JDBC 4.2+ standard mapping
+                // JDBC 4.2+ standard mapping
                 stmt.setObject(paramIndex, value);
             } else if (value instanceof java.util.Date) { // Generic Date -> Timestamp
                 stmt.setTimestamp(paramIndex, new java.sql.Timestamp(((java.util.Date) value).getTime()));
@@ -161,7 +164,8 @@ public class MigrationUtils {
             } else if (value instanceof Enum) {
                 stmt.setString(paramIndex, ((Enum<?>) value).name()); // Store as string by default
             } else {
-                log.warn("Setting parameter {} using setObject as default for unknown type: {}", paramIndex, value.getClass().getName());
+                log.warn("Setting parameter {} using setObject as default for unknown type: {}", paramIndex,
+                        value.getClass().getName());
                 stmt.setObject(paramIndex, value);
             }
         }
@@ -170,13 +174,17 @@ public class MigrationUtils {
     /**
      * Converts a source value to the type required by a target field.
      */
-    public static Object convertToFieldType(Object sourceValue, Class<?> targetTypeOrEntityClass, String targetFieldNameOrNull) throws Exception {
-        if (sourceValue == null) return null;
+    public static Object convertToFieldType(Object sourceValue, Class<?> targetTypeOrEntityClass,
+            String targetFieldNameOrNull) throws Exception {
+        if (sourceValue == null)
+            return null;
 
         Class<?> targetType;
         if (targetFieldNameOrNull != null) {
             Field field = findField(targetTypeOrEntityClass, targetFieldNameOrNull);
-            if (field == null) throw new NoSuchFieldException("Cannot find field '" + targetFieldNameOrNull + "' in class " + targetTypeOrEntityClass.getName());
+            if (field == null)
+                throw new NoSuchFieldException("Cannot find field '" + targetFieldNameOrNull + "' in class "
+                        + targetTypeOrEntityClass.getName());
             targetType = field.getType();
         } else {
             // If field name is null, assume targetTypeOrEntityClass *is* the target type
@@ -192,15 +200,22 @@ public class MigrationUtils {
 
         try {
             // --- Numeric Conversions ---
-            if (Number.class.isAssignableFrom(targetType) || (targetType.isPrimitive() && targetType != boolean.class && targetType != char.class)) {
+            if (Number.class.isAssignableFrom(targetType)
+                    || (targetType.isPrimitive() && targetType != boolean.class && targetType != char.class)) {
                 if (sourceValue instanceof Number) {
                     Number sn = (Number) sourceValue;
-                    if (targetType == Long.class || targetType == long.class) return sn.longValue();
-                    if (targetType == Integer.class || targetType == int.class) return sn.intValue();
-                    if (targetType == Double.class || targetType == double.class) return sn.doubleValue();
-                    if (targetType == Float.class || targetType == float.class) return sn.floatValue();
-                    if (targetType == Short.class || targetType == short.class) return sn.shortValue();
-                    if (targetType == Byte.class || targetType == byte.class) return sn.byteValue();
+                    if (targetType == Long.class || targetType == long.class)
+                        return sn.longValue();
+                    if (targetType == Integer.class || targetType == int.class)
+                        return sn.intValue();
+                    if (targetType == Double.class || targetType == double.class)
+                        return sn.doubleValue();
+                    if (targetType == Float.class || targetType == float.class)
+                        return sn.floatValue();
+                    if (targetType == Short.class || targetType == short.class)
+                        return sn.shortValue();
+                    if (targetType == Byte.class || targetType == byte.class)
+                        return sn.byteValue();
                     if (targetType == java.math.BigDecimal.class) {
                         return new java.math.BigDecimal(sn.toString()); // Use string constructor for precision
                     }
@@ -213,15 +228,24 @@ public class MigrationUtils {
                     }
                 } else { // Try conversion from String if source wasn't a number
                     String s = sourceValue.toString().trim();
-                    if (s.isEmpty()) return null; // Treat empty string as null for numeric types
-                    if (targetType == Long.class || targetType == long.class) return Long.parseLong(s);
-                    if (targetType == Integer.class || targetType == int.class) return Integer.parseInt(s);
-                    if (targetType == Double.class || targetType == double.class) return Double.parseDouble(s);
-                    if (targetType == Float.class || targetType == float.class) return Float.parseFloat(s);
-                    if (targetType == Short.class || targetType == short.class) return Short.parseShort(s);
-                    if (targetType == Byte.class || targetType == byte.class) return Byte.parseByte(s);
-                    if (targetType == java.math.BigDecimal.class) return new java.math.BigDecimal(s);
-                    if (targetType == java.math.BigInteger.class) return new java.math.BigInteger(s);
+                    if (s.isEmpty())
+                        return null; // Treat empty string as null for numeric types
+                    if (targetType == Long.class || targetType == long.class)
+                        return Long.parseLong(s);
+                    if (targetType == Integer.class || targetType == int.class)
+                        return Integer.parseInt(s);
+                    if (targetType == Double.class || targetType == double.class)
+                        return Double.parseDouble(s);
+                    if (targetType == Float.class || targetType == float.class)
+                        return Float.parseFloat(s);
+                    if (targetType == Short.class || targetType == short.class)
+                        return Short.parseShort(s);
+                    if (targetType == Byte.class || targetType == byte.class)
+                        return Byte.parseByte(s);
+                    if (targetType == java.math.BigDecimal.class)
+                        return new java.math.BigDecimal(s);
+                    if (targetType == java.math.BigInteger.class)
+                        return new java.math.BigInteger(s);
                 }
             }
             // --- String Conversion ---
@@ -234,7 +258,8 @@ public class MigrationUtils {
                     return sourceValue;
                 } else if (sourceValue instanceof Number) {
                     // Treat 0 as false, non-zero as true
-                    if (sourceValue instanceof Double || sourceValue instanceof Float || sourceValue instanceof java.math.BigDecimal) {
+                    if (sourceValue instanceof Double || sourceValue instanceof Float
+                            || sourceValue instanceof java.math.BigDecimal) {
                         return ((Number) sourceValue).doubleValue() != 0.0;
                     } else {
                         return ((Number) sourceValue).longValue() != 0L;
@@ -261,39 +286,47 @@ public class MigrationUtils {
                 } // Add String parsing if necessary
             }
             // --- UUID Conversion ---
-             else if (targetType == java.util.UUID.class && sourceValue instanceof String) {
-                 try {
-                     return java.util.UUID.fromString((String) sourceValue);
-                 } catch (IllegalArgumentException e) {
-                     throw new RuntimeException("Invalid UUID format for field " + (targetFieldNameOrNull != null ? targetFieldNameOrNull : targetType.getSimpleName()) + ": " + sourceValue, e);
-                 }
-             }
-             // --- Enum Conversion (assuming source is String name) ---
-              else if (targetType.isEnum() && sourceValue instanceof String) {
-                 try {
-                     @SuppressWarnings({"unchecked", "rawtypes"}) // Necessary for Enum.valueOf
-                     Enum val = Enum.valueOf((Class<Enum>) targetType, (String) sourceValue);
-                     return val;
-                 } catch (IllegalArgumentException e) {
-                     log.warn("Could not find enum constant '{}' in enum {} for field {}. Returning null.",
-                              sourceValue, targetType.getSimpleName(), targetFieldNameOrNull);
-                     return null; // Or throw error depending on requirements
-                 }
-              }
-             // --- byte[] ---
-              else if (targetType == byte[].class && sourceValue instanceof byte[]) {
-                 return sourceValue;
-             }
+            else if (targetType == java.util.UUID.class && sourceValue instanceof String) {
+                try {
+                    return java.util.UUID.fromString((String) sourceValue);
+                } catch (IllegalArgumentException e) {
+                    throw new RuntimeException("Invalid UUID format for field "
+                            + (targetFieldNameOrNull != null ? targetFieldNameOrNull : targetType.getSimpleName())
+                            + ": " + sourceValue, e);
+                }
+            }
+            // --- Enum Conversion (assuming source is String name) ---
+            else if (targetType.isEnum() && sourceValue instanceof String) {
+                try {
+                    @SuppressWarnings({ "unchecked", "rawtypes" }) // Necessary for Enum.valueOf
+                    Enum val = Enum.valueOf((Class<Enum>) targetType, (String) sourceValue);
+                    return val;
+                } catch (IllegalArgumentException e) {
+                    log.warn("Could not find enum constant '{}' in enum {} for field {}. Returning null.",
+                            sourceValue, targetType.getSimpleName(), targetFieldNameOrNull);
+                    return null; // Or throw error depending on requirements
+                }
+            }
+            // --- byte[] ---
+            else if (targetType == byte[].class && sourceValue instanceof byte[]) {
+                return sourceValue;
+            }
 
         } catch (NumberFormatException nfe) {
-             throw new RuntimeException("Cannot convert value '" + sourceValue + "' to numeric type " + targetType.getSimpleName() + " for field " + (targetFieldNameOrNull != null ? targetFieldNameOrNull : "") + ": " + nfe.getMessage(), nfe);
+            throw new RuntimeException("Cannot convert value '" + sourceValue + "' to numeric type "
+                    + targetType.getSimpleName() + " for field "
+                    + (targetFieldNameOrNull != null ? targetFieldNameOrNull : "") + ": " + nfe.getMessage(), nfe);
         } catch (Exception e) {
             // Catch-all for other conversion issues
-            throw new RuntimeException("Cannot convert value for field " + (targetFieldNameOrNull != null ? targetFieldNameOrNull : targetType.getSimpleName()) + ": " + e.getMessage(), e);
+            throw new RuntimeException("Cannot convert value for field "
+                    + (targetFieldNameOrNull != null ? targetFieldNameOrNull : targetType.getSimpleName()) + ": "
+                    + e.getMessage(), e);
         }
 
         // If no conversion path found
-        throw new IllegalArgumentException("Unsupported type conversion required for field " + (targetFieldNameOrNull != null ? targetFieldNameOrNull : targetType.getSimpleName()) + ": from " + sourceValueType.getName() + " to " + targetType.getName() + ". Value: '" + sourceValue + "'");
+        throw new IllegalArgumentException("Unsupported type conversion required for field "
+                + (targetFieldNameOrNull != null ? targetFieldNameOrNull : targetType.getSimpleName()) + ": from "
+                + sourceValueType.getName() + " to " + targetType.getName() + ". Value: '" + sourceValue + "'");
     }
 
     /**
@@ -305,13 +338,12 @@ public class MigrationUtils {
             PropertyUtils.setProperty(bean, fieldName, value);
         } catch (Exception e) {
             log.error("Failed to set property '{}' on bean {} with value '{}' (type {}): {}",
-                      fieldName, bean.getClass().getSimpleName(), value,
-                      (value != null ? value.getClass().getName() : "null"), e.getMessage());
+                    fieldName, bean.getClass().getSimpleName(), value,
+                    (value != null ? value.getClass().getName() : "null"), e.getMessage());
             // Rethrow to indicate failure
             throw e;
         }
     }
-
 
     // --- Foreign Key Inference Logic ---
 
@@ -328,21 +360,29 @@ public class MigrationUtils {
             ManyToOne manyToOne = field.getAnnotation(ManyToOne.class);
             OneToOne oneToOne = field.getAnnotation(OneToOne.class);
 
-            Field relationshipField = null; // The field holding the actual entity relationship (e.g., parentSubdivision)
+            Field relationshipField = null; // The field holding the actual entity relationship (e.g.,
+                                            // parentSubdivision)
             Field foreignKeyIdField = null; // The field holding the FK value (e.g., parentSubdivisionId)
 
-            // Scenario 1: Field has @JoinColumn and is a relationship type (@ManyToOne/@OneToOne)
+            // Scenario 1: Field has @JoinColumn and is a relationship type
+            // (@ManyToOne/@OneToOne)
             if (joinColumn != null && (manyToOne != null || oneToOne != null)) {
                 relationshipField = field;
                 String potentialIdFieldName = derivePotentialIdFieldName(field.getName());
                 foreignKeyIdField = findField(entityClass, potentialIdFieldName); // Use own utility
-                if (foreignKeyIdField == null && (field.getType() == Long.class || field.getType() == long.class || field.getType() == Integer.class || field.getType() == int.class /* add other ID types */)) {
-                   // Maybe JoinColumn is on a simple ID field that ALSO has @ManyToOne (less common)
-                   // Or maybe the convention failed. For now, we prioritise finding a separate ID field.
-                   log.trace("FK Inference: Relationship field '{}' has @JoinColumn but couldn't find separate ID field '{}'. Assuming FK ID is managed implicitly by JPA or mapped elsewhere.", field.getName(), potentialIdFieldName);
-                   continue; // Skip this relationship field for explicit FK ID mapping
+                if (foreignKeyIdField == null && (field.getType() == Long.class || field.getType() == long.class
+                        || field.getType() == Integer.class || field.getType() == int.class /* add other ID types */)) {
+                    // Maybe JoinColumn is on a simple ID field that ALSO has @ManyToOne (less
+                    // common)
+                    // Or maybe the convention failed. For now, we prioritise finding a separate ID
+                    // field.
+                    log.trace(
+                            "FK Inference: Relationship field '{}' has @JoinColumn but couldn't find separate ID field '{}'. Assuming FK ID is managed implicitly by JPA or mapped elsewhere.",
+                            field.getName(), potentialIdFieldName);
+                    continue; // Skip this relationship field for explicit FK ID mapping
                 }
-                // If we found a separate ID field, proceed. If not, we don't have the FK ID field here.
+                // If we found a separate ID field, proceed. If not, we don't have the FK ID
+                // field here.
             }
             // Scenario 2: Field is likely the FK ID field itself and has @JoinColumn
             else if (joinColumn != null && !(manyToOne != null || oneToOne != null)) {
@@ -350,15 +390,19 @@ public class MigrationUtils {
                 String potentialRelationshipFieldName = derivePotentialRelationshipFieldName(field.getName());
                 relationshipField = findField(entityClass, potentialRelationshipFieldName); // Use own utility
             }
-            // Scenario 3: Field might be the FK ID field without @JoinColumn, relying on relationship field's @JoinColumn
+            // Scenario 3: Field might be the FK ID field without @JoinColumn, relying on
+            // relationship field's @JoinColumn
             else if (joinColumn == null && !(manyToOne != null || oneToOne != null)) {
                 for (Field otherField : allFields) {
-                    if (otherField != field && otherField.isAnnotationPresent(JoinColumn.class) && (otherField.isAnnotationPresent(ManyToOne.class) || otherField.isAnnotationPresent(OneToOne.class))) {
+                    if (otherField != field && otherField.isAnnotationPresent(JoinColumn.class)
+                            && (otherField.isAnnotationPresent(ManyToOne.class)
+                                    || otherField.isAnnotationPresent(OneToOne.class))) {
                         String potentialIdFieldName = derivePotentialIdFieldName(otherField.getName());
                         if (field.getName().equals(potentialIdFieldName)) {
                             foreignKeyIdField = field;
                             relationshipField = otherField;
-                            joinColumn = otherField.getAnnotation(JoinColumn.class); // Get JoinColumn from relationship field
+                            joinColumn = otherField.getAnnotation(JoinColumn.class); // Get JoinColumn from relationship
+                                                                                     // field
                             break;
                         }
                     }
@@ -369,9 +413,11 @@ public class MigrationUtils {
             if (foreignKeyIdField != null && joinColumn != null) {
                 String dbColumnName = joinColumn.name();
                 if (dbColumnName == null || dbColumnName.isEmpty()) {
-                    // If name is missing in @JoinColumn, try getting it from @Column on the ID field
+                    // If name is missing in @JoinColumn, try getting it from @Column on the ID
+                    // field
                     dbColumnName = getColumnNameForField(foreignKeyIdField); // Use own utility
-                    log.trace("Using inferred/default column name '{}' for FK field '{}'. Explicit name in @JoinColumn is recommended.",
+                    log.trace(
+                            "Using inferred/default column name '{}' for FK field '{}'. Explicit name in @JoinColumn is recommended.",
                             dbColumnName, foreignKeyIdField.getName());
                 }
 
@@ -380,28 +426,33 @@ public class MigrationUtils {
 
                 if (relationshipField != null) {
                     targetEntityType = relationshipField.getType(); // Type of the @ManyToOne/OneToOne field
-                } else if (manyToOne != null && field == foreignKeyIdField) { // If @JoinColumn and @ManyToOne are on the same field
+                } else if (manyToOne != null && field == foreignKeyIdField) { // If @JoinColumn and @ManyToOne are on
+                                                                              // the same field
                     targetEntityType = field.getType(); // The type of the field itself must be the target entity
-                } else if (oneToOne != null && field == foreignKeyIdField) { // If @JoinColumn and @OneToOne are on the same field
-                     targetEntityType = field.getType();
+                } else if (oneToOne != null && field == foreignKeyIdField) { // If @JoinColumn and @OneToOne are on the
+                                                                             // same field
+                    targetEntityType = field.getType();
                 } else {
-                     // Attempt to get targetEntity from @ManyToOne/@OneToOne even if relationshipField wasn't found above
-                     if(manyToOne != null && manyToOne.targetEntity() != void.class) {
-                         targetEntityType = manyToOne.targetEntity();
-                     } else if (oneToOne != null && oneToOne.targetEntity() != void.class) {
-                         targetEntityType = oneToOne.targetEntity();
-                     } else {
-                         log.warn("Could not determine target entity type for FK field '{}' (Column: {}). Self-reference check may be inaccurate.",
-                                  foreignKeyIdField.getName(), dbColumnName);
-                     }
+                    // Attempt to get targetEntity from @ManyToOne/@OneToOne even if
+                    // relationshipField wasn't found above
+                    if (manyToOne != null && manyToOne.targetEntity() != void.class) {
+                        targetEntityType = manyToOne.targetEntity();
+                    } else if (oneToOne != null && oneToOne.targetEntity() != void.class) {
+                        targetEntityType = oneToOne.targetEntity();
+                    } else {
+                        log.warn(
+                                "Could not determine target entity type for FK field '{}' (Column: {}). Self-reference check may be inaccurate.",
+                                foreignKeyIdField.getName(), dbColumnName);
+                    }
                 }
-
 
                 boolean isSelfRef = targetEntityType != null && targetEntityType == entityClass;
 
-                ForeignKeyInfo info = new ForeignKeyInfo(foreignKeyIdField, dbColumnName, fkFieldType, isSelfRef, relationshipField);
+                ForeignKeyInfo info = new ForeignKeyInfo(foreignKeyIdField, dbColumnName, fkFieldType, isSelfRef,
+                        relationshipField);
                 fkMap.put(foreignKeyIdField.getName(), info); // Map by the FK *ID* field name
-                log.trace("Inferred FK: Field='{}', Column='{}', Type='{}', SelfRef={}, RelField='{}', TargetEntity='{}'",
+                log.trace(
+                        "Inferred FK: Field='{}', Column='{}', Type='{}', SelfRef={}, RelField='{}', TargetEntity='{}'",
                         foreignKeyIdField.getName(), dbColumnName, fkFieldType.getSimpleName(), isSelfRef,
                         relationshipField != null ? relationshipField.getName() : "N/A",
                         targetEntityType != null ? targetEntityType.getSimpleName() : "UNKNOWN");
@@ -414,11 +465,13 @@ public class MigrationUtils {
     private static String derivePotentialIdFieldName(String relationshipFieldName) {
         // Simple convention: append "Id"
         if (relationshipFieldName != null && !relationshipFieldName.isEmpty()) {
-            // Handle common patterns like ending in "s" for collections (though less common for ToOne)
-             if (relationshipFieldName.endsWith("s")) {
+            // Handle common patterns like ending in "s" for collections (though less common
+            // for ToOne)
+            if (relationshipFieldName.endsWith("s")) {
                 // Crude plural removal - might need improvement
-                // return relationshipFieldName.substring(0, relationshipFieldName.length() - 1) + "Id";
-             }
+                // return relationshipFieldName.substring(0, relationshipFieldName.length() - 1)
+                // + "Id";
+            }
             return relationshipFieldName + "Id";
         }
         return null;
@@ -441,5 +494,37 @@ public class MigrationUtils {
                 .filter(ForeignKeyInfo::isSelfReference)
                 .findFirst()
                 .orElse(null);
+    }
+
+    /**
+     * Batch-checks which IDs already exist in the target table.
+     * Returns a Set of IDs that already exist.
+     * Splits into sub-batches if the ID list is very large to avoid SQL limits.
+     */
+    public static Set<Object> checkExistingIds(java.sql.Connection connection, String tableName, String idColumnName,
+            List<Object> ids) throws SQLException {
+        Set<Object> existingIds = new HashSet<>();
+        if (ids == null || ids.isEmpty())
+            return existingIds;
+
+        // Sub-batch to avoid exceeding SQL parameter limits (typically 2100 for SQL
+        // Server)
+        int subBatchSize = 1000;
+        for (int i = 0; i < ids.size(); i += subBatchSize) {
+            List<Object> subBatch = ids.subList(i, Math.min(i + subBatchSize, ids.size()));
+            String placeholders = String.join(",", java.util.Collections.nCopies(subBatch.size(), "?"));
+            String sql = "SELECT \"" + idColumnName + "\" FROM \"" + tableName + "\" WHERE \"" + idColumnName
+                    + "\" IN (" + placeholders + ")";
+
+            try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+                setPreparedStatementParameters(stmt, subBatch);
+                try (java.sql.ResultSet rs = stmt.executeQuery()) {
+                    while (rs.next()) {
+                        existingIds.add(rs.getObject(1));
+                    }
+                }
+            }
+        }
+        return existingIds;
     }
 }

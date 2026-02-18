@@ -80,6 +80,330 @@ public class MigrationRowProcessor {
         return MigrationUtils.convertToFieldType(sourceValue, targetType, null);
     }
 
+    /**
+     * Represents a prepared row for batch SQL execution.
+     */
+    private static class PreparedRow {
+        final Object targetIdValue;
+        final Object targetEntity;
+
+        PreparedRow(Object targetIdValue, Object targetEntity) {
+            this.targetIdValue = targetIdValue;
+            this.targetEntity = targetEntity;
+        }
+    }
+
+    /**
+     * Metadata about the columns/fields for batch SQL execution.
+     * Computed once per batch and reused for all rows.
+     */
+    private static class BatchSqlMetadata {
+        final String insertSql;
+        final String updateSql;
+        final List<Field> orderedFields; // Fields in column order (excluding ID for update)
+        final List<String> orderedColumnNames; // Column names matching orderedFields
+        final String idColumnName;
+        final String selfRefForeignKeyColumnNameToNull;
+
+        BatchSqlMetadata(String insertSql, String updateSql, List<Field> orderedFields,
+                List<String> orderedColumnNames, String idColumnName,
+                String selfRefForeignKeyColumnNameToNull) {
+            this.insertSql = insertSql;
+            this.updateSql = updateSql;
+            this.orderedFields = orderedFields;
+            this.orderedColumnNames = orderedColumnNames;
+            this.idColumnName = idColumnName;
+            this.selfRefForeignKeyColumnNameToNull = selfRefForeignKeyColumnNameToNull;
+        }
+    }
+
+    /**
+     * Builds the SQL templates and field ordering metadata for batch INSERT and
+     * UPDATE.
+     * This is computed once and reused for all rows in a batch.
+     */
+    private BatchSqlMetadata buildBatchSqlMetadata(Class<?> targetEntityClass, Field idField, String tableName,
+            String selfRefForeignKeyColumnNameToNull) {
+        List<Field> allFields = MigrationUtils.getAllFields(targetEntityClass);
+        String idColumnName = MigrationUtils.getIdColumnName(idField);
+
+        List<Field> orderedFields = new ArrayList<>();
+        List<String> orderedColumnNames = new ArrayList<>();
+        Set<String> processedColumnNames = new HashSet<>();
+
+        StringBuilder insertColumns = new StringBuilder();
+        StringBuilder insertPlaceholders = new StringBuilder();
+        StringBuilder updateSetClause = new StringBuilder();
+
+        for (Field field : allFields) {
+            field.setAccessible(true);
+            if (java.lang.reflect.Modifier.isStatic(field.getModifiers()) ||
+                    java.lang.reflect.Modifier.isTransient(field.getModifiers()) ||
+                    field.isAnnotationPresent(jakarta.persistence.Transient.class) ||
+                    field.isAnnotationPresent(OneToMany.class) ||
+                    field.isAnnotationPresent(ManyToMany.class)) {
+                continue;
+            }
+
+            String columnName = MigrationUtils.getColumnNameForField(field);
+            String columnNameKey = columnName.toLowerCase();
+
+            if (processedColumnNames.contains(columnNameKey))
+                continue;
+
+            orderedFields.add(field);
+            orderedColumnNames.add(columnName);
+            processedColumnNames.add(columnNameKey);
+
+            // INSERT includes all columns (including ID)
+            if (insertColumns.length() > 0) {
+                insertColumns.append(", ");
+                insertPlaceholders.append(", ");
+            }
+            insertColumns.append("\"").append(columnName).append("\"");
+            insertPlaceholders.append("?");
+
+            // UPDATE excludes the ID column from SET
+            if (!columnName.equalsIgnoreCase(idColumnName)) {
+                if (updateSetClause.length() > 0) {
+                    updateSetClause.append(", ");
+                }
+                updateSetClause.append("\"").append(columnName).append("\" = ?");
+            }
+        }
+
+        String insertSql = "INSERT INTO \"" + tableName + "\" (" + insertColumns + ") VALUES (" + insertPlaceholders
+                + ")";
+        String updateSql = "UPDATE \"" + tableName + "\" SET " + updateSetClause + " WHERE \"" + idColumnName
+                + "\" = ?";
+
+        return new BatchSqlMetadata(insertSql, updateSql, orderedFields, orderedColumnNames,
+                idColumnName, selfRefForeignKeyColumnNameToNull);
+    }
+
+    /**
+     * Extracts the parameter values from an entity for a batch SQL operation.
+     * For INSERT: all fields in order.
+     * For UPDATE: all fields except ID, then ID at the end (for WHERE clause).
+     */
+    private List<Object> extractValuesForBatch(Object entity, BatchSqlMetadata metadata, Field idField,
+            Object idValue, boolean isUpdate) throws Exception {
+        List<Object> values = new ArrayList<>();
+
+        for (int i = 0; i < metadata.orderedFields.size(); i++) {
+            Field field = metadata.orderedFields.get(i);
+            String columnName = metadata.orderedColumnNames.get(i);
+
+            // For UPDATE, skip the ID column (it goes in the WHERE clause)
+            if (isUpdate && columnName.equalsIgnoreCase(metadata.idColumnName)) {
+                continue;
+            }
+
+            field.setAccessible(true);
+            Object value = field.get(entity);
+
+            JoinColumn joinColumn = field.getAnnotation(JoinColumn.class);
+            ManyToOne manyToOne = field.getAnnotation(ManyToOne.class);
+            OneToOne oneToOne = field.getAnnotation(OneToOne.class);
+
+            if (columnName.equalsIgnoreCase(metadata.selfRefForeignKeyColumnNameToNull)) {
+                value = null;
+            } else if (value != null && (manyToOne != null || oneToOne != null) && joinColumn != null) {
+                Field relatedIdField = MigrationUtils.findIdField(value.getClass());
+                if (relatedIdField != null) {
+                    relatedIdField.setAccessible(true);
+                    value = relatedIdField.get(value);
+                } else {
+                    value = null;
+                }
+            }
+
+            values.add(value);
+        }
+
+        // For UPDATE, append the ID value for the WHERE clause
+        if (isUpdate) {
+            values.add(idValue);
+        }
+
+        return values;
+    }
+
+    /**
+     * Processes a batch of source rows, performing batch INSERT and UPDATE
+     * operations.
+     * Returns the number of rows that FAILED processing.
+     * <p>
+     * This method runs in a single transaction. If the batch fails (e.g., due to a
+     * constraint
+     * violation on one row), the transaction rolls back and the caller should fall
+     * back to
+     * row-by-row processing.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
+    public int processBatchInsert(List<Map<String, Object>> batchRows,
+            TableMigrationConfig tableConfig,
+            Class<?> targetEntityClass,
+            Field idField,
+            String idFieldName,
+            String idColumnName,
+            String tableName,
+            boolean isGeneratedId,
+            Map<String, ForeignKeyInfo> foreignKeyInfoMap,
+            ForeignKeyInfo selfReferenceFkInfo) throws Exception {
+
+        if (batchRows == null || batchRows.isEmpty())
+            return 0;
+
+        String selfRefColToNull = (selfReferenceFkInfo != null) ? selfReferenceFkInfo.getDbColumnName() : null;
+
+        // 1. Build entity objects and collect target IDs
+        List<PreparedRow> preparedRows = new ArrayList<>(batchRows.size());
+        List<Object> allTargetIds = new ArrayList<>(batchRows.size());
+        int skipCount = 0;
+
+        for (Map<String, Object> sourceRow : batchRows) {
+            Object sourceIdValue = sourceRow.get(tableConfig.getSourceIdColumnName());
+            if (sourceIdValue == null) {
+                log.warn("Skipping row in table {} due to null source ID.", tableName);
+                skipCount++;
+                continue;
+            }
+
+            Object targetIdValue;
+            try {
+                targetIdValue = convertValueByFieldLookup(sourceIdValue, idFieldName, targetEntityClass, tableConfig);
+            } catch (Exception e) {
+                log.warn("Skipping row in table {} due to ID conversion error: {}", tableName, e.getMessage());
+                skipCount++;
+                continue;
+            }
+
+            // Build entity
+            Object targetEntity = targetEntityClass.getDeclaredConstructor().newInstance();
+            idField.setAccessible(true);
+            idField.set(targetEntity, targetIdValue);
+
+            for (Map.Entry<String, String> entry : tableConfig.getColumnMapping().entrySet()) {
+                String sourceCol = entry.getKey();
+                String targetField = entry.getValue();
+
+                if (targetField.equals(idFieldName))
+                    continue;
+
+                ForeignKeyInfo fkInfo = foreignKeyInfoMap.get(targetField);
+                if (fkInfo != null && fkInfo.isSelfReference())
+                    continue;
+
+                if (sourceRow.containsKey(sourceCol)) {
+                    Object sourceValue = sourceRow.get(sourceCol);
+                    Object convertedTargetValue = null;
+
+                    boolean treatAsNull = false;
+                    if (fkInfo != null
+                            && tableConfig.isTreatZeroIdAsNullForForeignKeys()
+                            && sourceValue instanceof Number
+                            && ((Number) sourceValue).longValue() == 0L) {
+                        treatAsNull = true;
+                    }
+
+                    if (!treatAsNull && sourceValue != null) {
+                        try {
+                            convertedTargetValue = convertValueByFieldLookup(sourceValue, targetField,
+                                    targetEntityClass, tableConfig);
+                        } catch (Exception e) {
+                            log.warn("Skipping field '{}' for row with ID {} due to conversion error: {}",
+                                    targetField, targetIdValue, e.getMessage());
+                            continue;
+                        }
+                    }
+
+                    try {
+                        MigrationUtils.setProperty(targetEntity, targetField, convertedTargetValue);
+                    } catch (Exception e) {
+                        log.warn("Skipping field '{}' for row with ID {} due to setting error: {}",
+                                targetField, targetIdValue, e.getMessage());
+                    }
+                }
+            }
+
+            preparedRows.add(new PreparedRow(targetIdValue, targetEntity));
+            allTargetIds.add(targetIdValue);
+        }
+
+        if (preparedRows.isEmpty())
+            return skipCount;
+
+        // 2. Batch existence check & build SQL metadata
+        Session session = entityManager.unwrap(Session.class);
+        BatchSqlMetadata metadata = buildBatchSqlMetadata(targetEntityClass, idField, tableName, selfRefColToNull);
+
+        session.doWork(connection -> {
+            // Batch check which IDs already exist
+            Set<Object> existingIds = MigrationUtils.checkExistingIds(connection, tableName, idColumnName,
+                    allTargetIds);
+            log.debug("Batch existence check for table {}: {} of {} IDs already exist",
+                    tableName, existingIds.size(), allTargetIds.size());
+
+            // Build a string-based set for flexible comparison (DB might return Long while
+            // we have Integer, etc.)
+            Set<String> existingIdStrings = new HashSet<>();
+            for (Object eid : existingIds) {
+                if (eid != null)
+                    existingIdStrings.add(eid.toString());
+            }
+
+            // Separate into inserts and updates
+            List<PreparedRow> inserts = new ArrayList<>();
+            List<PreparedRow> updates = new ArrayList<>();
+            for (PreparedRow row : preparedRows) {
+                if (row.targetIdValue != null && existingIdStrings.contains(row.targetIdValue.toString())) {
+                    updates.add(row);
+                } else {
+                    inserts.add(row);
+                }
+            }
+
+            // 3. Execute batch INSERTs
+            if (!inserts.isEmpty()) {
+                log.debug("Executing batch INSERT for {} rows in table {}", inserts.size(), tableName);
+                try (PreparedStatement insertStmt = connection.prepareStatement(metadata.insertSql)) {
+                    for (PreparedRow row : inserts) {
+                        List<Object> values = extractValuesForBatch(row.targetEntity, metadata, idField,
+                                row.targetIdValue, false);
+                        MigrationUtils.setPreparedStatementParameters(insertStmt, values);
+                        insertStmt.addBatch();
+                    }
+                    insertStmt.executeBatch();
+                    log.debug("Batch INSERT completed for {} rows in table {}", inserts.size(), tableName);
+                } catch (Exception e) {
+                    throw new SQLException("Batch INSERT failed for table " + tableName + ": " + e.getMessage(), e);
+                }
+            }
+
+            // 4. Execute batch UPDATEs
+            if (!updates.isEmpty()) {
+                log.debug("Executing batch UPDATE for {} rows in table {}", updates.size(), tableName);
+                try (PreparedStatement updateStmt = connection.prepareStatement(metadata.updateSql)) {
+                    for (PreparedRow row : updates) {
+                        List<Object> values = extractValuesForBatch(row.targetEntity, metadata, idField,
+                                row.targetIdValue, true);
+                        MigrationUtils.setPreparedStatementParameters(updateStmt, values);
+                        updateStmt.addBatch();
+                    }
+                    updateStmt.executeBatch();
+                    log.debug("Batch UPDATE completed for {} rows in table {}", updates.size(), tableName);
+                } catch (Exception e) {
+                    throw new SQLException("Batch UPDATE failed for table " + tableName + ": " + e.getMessage(), e);
+                }
+            }
+        });
+
+        log.trace("Batch processed {} rows ({} inserts, {} updates) for table {}",
+                preparedRows.size(), preparedRows.size(), 0, tableName);
+        return skipCount;
+    }
+
     @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
     public boolean processSingleRowInsert(Map<String, Object> sourceRow,
             TableMigrationConfig tableConfig,
@@ -181,7 +505,7 @@ public class MigrationRowProcessor {
             return true;
 
         } catch (Exception e) {
-            log.error("Error processing row for table {} (Source ID: {}, Target ID: {}): {}",
+            log.debug("Error processing row for table {} (Source ID: {}, Target ID: {}): {}",
                     tableName, sourceIdValue,
                     targetIdValue != null ? targetIdValue : "UNKNOWN",
                     e.getMessage(), e);
