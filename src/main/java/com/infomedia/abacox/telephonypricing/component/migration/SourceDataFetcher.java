@@ -22,17 +22,19 @@ public class SourceDataFetcher {
         NONE,
         SQL_SERVER_2012, // OFFSET / FETCH
         SQL_SERVER_2005, // ROW_NUMBER()
-        POSTGRESQL,      // LIMIT / OFFSET
-        MYSQL,           // LIMIT / OFFSET (LIMIT offset, count)
-        ORACLE_12C,      // OFFSET / FETCH
-        ORACLE_PRE12C    // ROWNUM
+        POSTGRESQL, // LIMIT / OFFSET
+        MYSQL, // LIMIT / OFFSET (LIMIT offset, count)
+        ORACLE_12C, // OFFSET / FETCH
+        ORACLE_PRE12C // ROWNUM
     }
 
     /**
      * Fetches full row data for a specific list of source IDs.
-     * This is used in multi-pass strategies where you first discover IDs and then fetch details.
+     * This is used in multi-pass strategies where you first discover IDs and then
+     * fetch details.
      */
-    public List<Map<String, Object>> fetchFullDataForIds(SourceDbConfig config, String tableName, Set<String> columnsToSelect, String sourceIdColumn, List<Object> ids) throws SQLException {
+    public List<Map<String, Object>> fetchFullDataForIds(SourceDbConfig config, String tableName,
+            Set<String> columnsToSelect, String sourceIdColumn, List<Object> ids) throws SQLException {
         if (ids == null || ids.isEmpty()) {
             return Collections.emptyList();
         }
@@ -40,12 +42,14 @@ public class SourceDataFetcher {
         List<Map<String, Object>> results = new ArrayList<>();
         String columnsSql = buildColumnsSql(columnsToSelect, PagingDialect.NONE); // Quoting doesn't matter here as much
         String placeholders = String.join(",", Collections.nCopies(ids.size(), "?"));
-        String sql = String.format("SELECT %s FROM %s WHERE %s IN (%s)", columnsSql, tableName, sourceIdColumn, placeholders);
+        String sql = String.format("SELECT %s FROM %s WHERE %s IN (%s)", columnsSql, tableName, sourceIdColumn,
+                placeholders);
 
         log.debug("Fetching full data for {} IDs from table {}", ids.size(), tableName);
 
-        try (Connection connection = DriverManager.getConnection(config.getUrl(), config.getUsername(), config.getPassword());
-             PreparedStatement ps = connection.prepareStatement(sql)) {
+        try (Connection connection = DriverManager.getConnection(config.getUrl(), config.getUsername(),
+                config.getPassword());
+                PreparedStatement ps = connection.prepareStatement(sql)) {
 
             MigrationUtils.setPreparedStatementParameters(ps, ids);
 
@@ -65,23 +69,32 @@ public class SourceDataFetcher {
 
     // ... (all other existing methods like buildPagedQuery, etc.) ...
     /**
-     * Fetches data from the source table in batches and processes each batch using the provided consumer.
-     * Uses database-specific paging if possible, otherwise reads the full result set
+     * Fetches data from the source table in batches and processes each batch using
+     * the provided consumer.
+     * Uses database-specific paging if possible, otherwise reads the full result
+     * set
      * while still processing in batches on the application side.
      *
-     * @param config           Source database configuration.
-     * @param tableName        Name of the source table (can include schema like 'dbo.MyTable').
-     * @param requestedColumns Columns requested by the migration mapping.
-     * @param sourceIdColumn   The column used as the primary identifier in the source table (MUST be orderable for paging).
-     * @param orderByClause    Optional clause for ordering results, e.g., "creation_date DESC".
-     * @param maxEntriesToMigrate Optional limit on the total number of rows to fetch.
-     * @param batchSize        The desired number of rows per batch for processing.
-     * @param batchProcessor   A Consumer that will process each List (batch) of fetched rows.
-     * @throws SQLException If database access fails or the sourceIdColumn is missing when required for paging.
+     * @param config              Source database configuration.
+     * @param tableName           Name of the source table (can include schema like
+     *                            'dbo.MyTable').
+     * @param requestedColumns    Columns requested by the migration mapping.
+     * @param sourceIdColumn      The column used as the primary identifier in the
+     *                            source table (MUST be orderable for paging).
+     * @param orderByClause       Optional clause for ordering results, e.g.,
+     *                            "creation_date DESC".
+     * @param maxEntriesToMigrate Optional limit on the total number of rows to
+     *                            fetch.
+     * @param batchSize           The desired number of rows per batch for
+     *                            processing.
+     * @param batchProcessor      A Consumer that will process each List (batch) of
+     *                            fetched rows.
+     * @throws SQLException If database access fails or the sourceIdColumn is
+     *                      missing when required for paging.
      */
     public void fetchData(SourceDbConfig config, String tableName, Set<String> requestedColumns, String sourceIdColumn,
-                          String orderByClause, Integer maxEntriesToMigrate,
-                          int batchSize, Consumer<List<Map<String, Object>>> batchProcessor) throws SQLException {
+            String orderByClause, Integer maxEntriesToMigrate,
+            int batchSize, Consumer<List<Map<String, Object>>> batchProcessor) throws SQLException {
 
         long totalRowsFetched = 0;
 
@@ -94,7 +107,8 @@ public class SourceDataFetcher {
         }
 
         log.info("Connecting to source database: {}", config.getUrl());
-        try (Connection connection = DriverManager.getConnection(config.getUrl(), config.getUsername(), config.getPassword())) {
+        try (Connection connection = DriverManager.getConnection(config.getUrl(), config.getUsername(),
+                config.getPassword())) {
 
             // 1. Get Actual Columns & Metadata
             DatabaseMetaData dbMetaData = connection.getMetaData();
@@ -119,7 +133,8 @@ public class SourceDataFetcher {
                 actualSourceIdColumn = validateAndGetActualIdColumn(actualColumns, sourceIdColumn, tableName);
                 columnsToSelect.add(actualSourceIdColumn); // Ensure the ID column is always selected if provided
             } else {
-                log.debug("No sourceIdColumn provided for table '{}'. Paging will be disabled if attempted.", tableName);
+                log.debug("No sourceIdColumn provided for table '{}'. Paging will be disabled if attempted.",
+                        tableName);
             }
 
             // Also add any columns from a custom order by clause to the selection
@@ -130,21 +145,24 @@ public class SourceDataFetcher {
                     // Remove potential quotes to perform a case-insensitive match
                     String cleanCandidate = columnNameCandidate.replaceAll("[\\[\\]`\"]", "");
                     if (!cleanCandidate.isEmpty()) {
-                        // Find the actual case-sensitive column name from the list of columns we know exist
+                        // Find the actual case-sensitive column name from the list of columns we know
+                        // exist
                         String actualCol = actualColumns.stream()
                                 .filter(c -> c.equalsIgnoreCase(cleanCandidate))
                                 .findFirst()
                                 .orElse(null);
                         if (actualCol != null) {
                             columnsToSelect.add(actualCol);
-                            log.debug("Ensuring orderBy column '{}' (from clause '{}') is selected.", actualCol, columnNameCandidate);
+                            log.debug("Ensuring orderBy column '{}' (from clause '{}') is selected.", actualCol,
+                                    columnNameCandidate);
                         } else {
-                            log.warn("Column '{}' from orderBy clause not found in source table '{}' and will not be added to SELECT list. The ORDER BY may fail.", cleanCandidate, tableName);
+                            log.warn(
+                                    "Column '{}' from orderBy clause not found in source table '{}' and will not be added to SELECT list. The ORDER BY may fail.",
+                                    cleanCandidate, tableName);
                         }
                     }
                 }
             }
-
 
             // 5. Proceed only if columns exist
             if (columnsToSelect.isEmpty()) {
@@ -175,7 +193,9 @@ public class SourceDataFetcher {
                         usePaging = true;
                         log.info("Using SQL Server 2005-2008 (ROW_NUMBER) paging.");
                     } else {
-                        log.warn("Older SQL Server version ({}) detected. Server-side paging not supported, fetching all results.", dbMajorVersion);
+                        log.warn(
+                                "Older SQL Server version ({}) detected. Server-side paging not supported, fetching all results.",
+                                dbMajorVersion);
                     }
                 } else if (POSTGRESQL_PRODUCT_NAME.equalsIgnoreCase(dbProductName)) {
                     if (dbMajorVersion >= 8) { // LIMIT/OFFSET generally available from 8.x, standard in 9.x+
@@ -183,7 +203,9 @@ public class SourceDataFetcher {
                         usePaging = true;
                         log.info("Using PostgreSQL (LIMIT/OFFSET) paging.");
                     } else {
-                        log.warn("Older PostgreSQL version ({}) detected. Server-side paging might not be reliable, fetching all results.", dbMajorVersion);
+                        log.warn(
+                                "Older PostgreSQL version ({}) detected. Server-side paging might not be reliable, fetching all results.",
+                                dbMajorVersion);
                     }
                 } else if (MYSQL_PRODUCT_NAME.equalsIgnoreCase(dbProductName)) {
                     if (dbMajorVersion >= 4) { // LIMIT/OFFSET available in MySQL 4.x+, very standard in 5.x+
@@ -191,7 +213,9 @@ public class SourceDataFetcher {
                         usePaging = true;
                         log.info("Using MySQL (LIMIT/OFFSET) paging.");
                     } else {
-                        log.warn("Very old MySQL version ({}) detected. Server-side paging might not be reliable, fetching all results.", dbMajorVersion);
+                        log.warn(
+                                "Very old MySQL version ({}) detected. Server-side paging might not be reliable, fetching all results.",
+                                dbMajorVersion);
                     }
                 } else if (ORACLE_PRODUCT_NAME.equalsIgnoreCase(dbProductName)) {
                     // Oracle 12c (12.1) introduced standard OFFSET/FETCH
@@ -204,10 +228,14 @@ public class SourceDataFetcher {
                         usePaging = true;
                         log.info("Using Oracle 9i-11g (ROWNUM) paging.");
                     } else {
-                        log.warn("Older Oracle version ({}) detected. Server-side paging not supported, fetching all results.", dbMajorVersion);
+                        log.warn(
+                                "Older Oracle version ({}) detected. Server-side paging not supported, fetching all results.",
+                                dbMajorVersion);
                     }
                 } else {
-                    log.warn("Unknown database product: '{}'. Falling back to fetching all results (processing in batches). Consider adding specific paging support.", dbProductName);
+                    log.warn(
+                            "Unknown database product: '{}'. Falling back to fetching all results (processing in batches). Consider adding specific paging support.",
+                            dbProductName);
                     dialect = PagingDialect.NONE;
                     usePaging = false;
                 }
@@ -220,7 +248,9 @@ public class SourceDataFetcher {
 
             // Ensure sourceIdColumn is suitable for ORDER BY if paging is attempted
             if (usePaging && actualSourceIdColumn == null) {
-                log.error("CRITICAL: Server-side paging for dialect {} requires a valid 'sourceIdColumn' for ordering, but it's missing or empty in config for table '{}'. Disabling paging.", dialect, tableName);
+                log.error(
+                        "CRITICAL: Server-side paging for dialect {} requires a valid 'sourceIdColumn' for ordering, but it's missing or empty in config for table '{}'. Disabling paging.",
+                        dialect, tableName);
                 usePaging = false;
                 dialect = PagingDialect.NONE;
                 // DO NOT proceed with paging if order column is invalid.
@@ -232,10 +262,12 @@ public class SourceDataFetcher {
                 String quotedIdColumn = quoteIdentifier(actualSourceIdColumn, dialect);
                 if (orderByClause != null && !orderByClause.trim().isEmpty()) {
                     finalOrderByClause = orderByClause;
-                    // Append unique ID column as tie-breaker to ensure stable paging, if not already present
+                    // Append unique ID column as tie-breaker to ensure stable paging, if not
+                    // already present
                     if (!finalOrderByClause.toLowerCase().contains(actualSourceIdColumn.toLowerCase())) {
                         finalOrderByClause += ", " + quotedIdColumn + " ASC";
-                        log.debug("Appended unique ID column '{}' as tie-breaker to custom order by clause.", actualSourceIdColumn);
+                        log.debug("Appended unique ID column '{}' as tie-breaker to custom order by clause.",
+                                actualSourceIdColumn);
                     }
                 } else {
                     // Default ordering for paging
@@ -246,7 +278,6 @@ public class SourceDataFetcher {
                 finalOrderByClause = orderByClause;
             }
             log.info("Using effective ORDER BY clause: {}", finalOrderByClause != null ? finalOrderByClause : "[None]");
-
 
             final PagingDialect effectiveDialect = dialect; // Final variable for use in helpers
             final boolean effectivelyUsePaging = usePaging; // Final variable
@@ -259,7 +290,7 @@ public class SourceDataFetcher {
             while (moreData) {
                 // --- Enforce maxEntriesToMigrate limit ---
                 int currentBatchSize = batchSize;
-                if (maxEntriesToMigrate != null && maxEntriesToMigrate > 0) {
+                if (maxEntriesToMigrate != null) {
                     if (totalRowsFetched >= maxEntriesToMigrate) {
                         log.info("Reached max entries limit ({}). Stopping fetch.", maxEntriesToMigrate);
                         moreData = false;
@@ -269,7 +300,8 @@ public class SourceDataFetcher {
                     currentBatchSize = Math.min(batchSize, remaining);
                 }
 
-                String sql = buildPagedQuery(effectiveDialect, tableName, columnsSql, finalOrderByClause, offset, currentBatchSize);
+                String sql = buildPagedQuery(effectiveDialect, tableName, columnsSql, finalOrderByClause, offset,
+                        currentBatchSize);
                 log.debug("Executing query for batch (Dialect: {}): {}", effectiveDialect, sql);
 
                 List<Map<String, Object>> currentBatch = new ArrayList<>(currentBatchSize);
@@ -288,7 +320,8 @@ public class SourceDataFetcher {
                         Map<String, Integer> columnIndexMap = buildColumnIndexMap(metaData);
 
                         while (resultSet.next()) {
-                            Map<String, Object> row = extractRow(resultSet, columnsToSelect, columnIndexMap, effectiveDialect);
+                            Map<String, Object> row = extractRow(resultSet, columnsToSelect, columnIndexMap,
+                                    effectiveDialect);
                             currentBatch.add(row);
                             rowsInCurrentQuery++;
                             totalRowsFetched++;
@@ -305,7 +338,8 @@ public class SourceDataFetcher {
 
                 // Process the current batch (either full page or application-level batch)
                 if (!currentBatch.isEmpty()) {
-                    log.debug("Processing {} batch of size {}", effectivelyUsePaging ? "server-paged" : "final application", currentBatch.size());
+                    log.debug("Processing {} batch of size {}",
+                            effectivelyUsePaging ? "server-paged" : "final application", currentBatch.size());
                     batchProcessor.accept(new ArrayList<>(currentBatch)); // Process copy
                     currentBatch.clear(); // Good practice
                 }
@@ -314,17 +348,21 @@ public class SourceDataFetcher {
                 if (effectivelyUsePaging) {
                     if (rowsInCurrentQuery < currentBatchSize) {
                         moreData = false; // Fetched less than requested, must be the last page
-                        log.debug("Last page detected (fetched {} rows, requested {}).", rowsInCurrentQuery, currentBatchSize);
+                        log.debug("Last page detected (fetched {} rows, requested {}).", rowsInCurrentQuery,
+                                currentBatchSize);
                     } else {
                         offset += rowsInCurrentQuery; // Move to the next page
-                        log.debug("Fetched full page ({} rows), preparing for next offset {}.", rowsInCurrentQuery, offset);
+                        log.debug("Fetched full page ({} rows), preparing for next offset {}.", rowsInCurrentQuery,
+                                offset);
                     }
                 } else {
                     moreData = false; // If not using paging, we only execute the query once
                 }
 
                 // Log progress periodically based on total rows
-                if (totalRowsFetched > 0 && (totalRowsFetched % (batchSize * 10) == 0 || !moreData)) { // Log every 10 batches or at the end
+                if (totalRowsFetched > 0 && (totalRowsFetched % (batchSize * 10) == 0 || !moreData)) { // Log every 10
+                                                                                                       // batches or at
+                                                                                                       // the end
                     log.info("Fetched {} total rows from source table {}...", totalRowsFetched, tableName);
                 }
 
@@ -345,12 +383,13 @@ public class SourceDataFetcher {
     }
 
     private String buildPagedQuery(PagingDialect dialect, String tableName, String columnsSql,
-                                   String orderByClause, int offset, int limit) {
+            String orderByClause, int offset, int limit) {
 
         String safeTableName = quoteIdentifier(tableName, dialect);
 
         if (dialect != PagingDialect.NONE && (orderByClause == null || orderByClause.trim().isEmpty())) {
-            throw new IllegalStateException("ORDER BY clause is required for paging dialect " + dialect + " but was not provided or resolved.");
+            throw new IllegalStateException(
+                    "ORDER BY clause is required for paging dialect " + dialect + " but was not provided or resolved.");
         }
 
         switch (dialect) {
@@ -358,7 +397,8 @@ public class SourceDataFetcher {
                 return String.format("SELECT %s FROM %s ORDER BY %s OFFSET ? ROWS FETCH NEXT ? ROWS ONLY",
                         columnsSql, safeTableName, orderByClause);
             case SQL_SERVER_2005:
-                return String.format("WITH NumberedRows AS (SELECT %s, ROW_NUMBER() OVER (ORDER BY %s) AS rn FROM %s) " +
+                return String.format(
+                        "WITH NumberedRows AS (SELECT %s, ROW_NUMBER() OVER (ORDER BY %s) AS rn FROM %s) " +
                                 "SELECT %s FROM NumberedRows WHERE rn > ? AND rn <= ?",
                         columnsSql, orderByClause, safeTableName, columnsSql);
             case POSTGRESQL:
@@ -371,7 +411,8 @@ public class SourceDataFetcher {
                 return String.format("SELECT %s FROM %s ORDER BY %s OFFSET ? ROWS FETCH NEXT ? ROWS ONLY",
                         columnsSql, safeTableName, orderByClause);
             case ORACLE_PRE12C:
-                return String.format("SELECT %s FROM ( SELECT inner_.*, ROWNUM rnum FROM ( SELECT %s FROM %s ORDER BY %s ) inner_ WHERE ROWNUM <= ? ) WHERE rnum > ?",
+                return String.format(
+                        "SELECT %s FROM ( SELECT inner_.*, ROWNUM rnum FROM ( SELECT %s FROM %s ORDER BY %s ) inner_ WHERE ROWNUM <= ? ) WHERE rnum > ?",
                         columnsSql, columnsSql, safeTableName, orderByClause);
             case NONE:
             default:
@@ -383,10 +424,11 @@ public class SourceDataFetcher {
         }
     }
 
-    private void setPagingParameters(PreparedStatement ps, PagingDialect dialect, int offset, int limit) throws SQLException {
+    private void setPagingParameters(PreparedStatement ps, PagingDialect dialect, int offset, int limit)
+            throws SQLException {
         switch (dialect) {
             case SQL_SERVER_2012: // OFFSET ?, FETCH ?
-            case ORACLE_12C:      // OFFSET ?, FETCH NEXT ?
+            case ORACLE_12C: // OFFSET ?, FETCH NEXT ?
                 ps.setInt(1, offset);
                 ps.setInt(2, limit);
                 break;
@@ -394,17 +436,17 @@ public class SourceDataFetcher {
                 ps.setInt(1, offset);
                 ps.setInt(2, offset + limit);
                 break;
-            case POSTGRESQL:      // LIMIT ?, OFFSET ?
+            case POSTGRESQL: // LIMIT ?, OFFSET ?
                 ps.setInt(1, limit);
                 ps.setInt(2, offset);
                 break;
-            case MYSQL:           // LIMIT ?, ? (offset, count)
+            case MYSQL: // LIMIT ?, ? (offset, count)
                 ps.setInt(1, offset);
                 ps.setInt(2, limit);
                 break;
-            case ORACLE_PRE12C:   // WHERE ROWNUM <= ?, WHERE rnum > ?
+            case ORACLE_PRE12C: // WHERE ROWNUM <= ?, WHERE rnum > ?
                 ps.setInt(1, offset + limit); // Outer ROWNUM condition
-                ps.setInt(2, offset);         // Inner rnum condition
+                ps.setInt(2, offset); // Inner rnum condition
                 break;
             case NONE:
             default:
@@ -457,20 +499,26 @@ public class SourceDataFetcher {
         Set<String> selectedUpper = columnsToSelect.stream().map(String::toUpperCase).collect(Collectors.toSet());
         requestedColumns.forEach(requestedCol -> {
             if (!selectedUpper.contains(requestedCol.toUpperCase())) {
-                log.warn("Requested column '{}' not found in source table '{}' (case-insensitive check) and will be skipped.", requestedCol, tableName);
+                log.warn(
+                        "Requested column '{}' not found in source table '{}' (case-insensitive check) and will be skipped.",
+                        requestedCol, tableName);
             }
         });
     }
 
-    private String validateAndGetActualIdColumn(Set<String> actualColumns, String requestedSourceIdColumn, String tableName) throws SQLException {
+    private String validateAndGetActualIdColumn(Set<String> actualColumns, String requestedSourceIdColumn,
+            String tableName) throws SQLException {
         final String requestedUpper = requestedSourceIdColumn.toUpperCase();
         Optional<String> actualIdColumnOpt = actualColumns.stream()
                 .filter(col -> col.toUpperCase().equals(requestedUpper))
                 .findFirst();
 
         if (actualIdColumnOpt.isEmpty()) {
-            log.error("CRITICAL: Configured source ID column '{}' does not exist (case-insensitive) in source table '{}'. Cannot use for paging.", requestedSourceIdColumn, tableName);
-            throw new SQLException("Source ID column '" + requestedSourceIdColumn + "' not found in table '" + tableName + "'.");
+            log.error(
+                    "CRITICAL: Configured source ID column '{}' does not exist (case-insensitive) in source table '{}'. Cannot use for paging.",
+                    requestedSourceIdColumn, tableName);
+            throw new SQLException(
+                    "Source ID column '" + requestedSourceIdColumn + "' not found in table '" + tableName + "'.");
         }
         String actualCol = actualIdColumnOpt.get();
         log.debug("Validated source ID column: requested='{}', actual='{}'", requestedSourceIdColumn, actualCol);
@@ -491,7 +539,7 @@ public class SourceDataFetcher {
     }
 
     private Map<String, Object> extractRow(ResultSet resultSet, Set<String> columnsToSelect,
-                                           Map<String, Integer> columnIndexMap, PagingDialect dialect) throws SQLException {
+            Map<String, Integer> columnIndexMap, PagingDialect dialect) throws SQLException {
         Map<String, Object> row = new HashMap<>();
         for (String selectedColumn : columnsToSelect) {
             Integer index = columnIndexMap.get(selectedColumn.toUpperCase());
@@ -500,7 +548,9 @@ public class SourceDataFetcher {
                 value = convertSqlTypes(value, dialect);
                 row.put(selectedColumn, value);
             } else {
-                log.warn("Column '{}' was expected in ResultSet based on selection but not found by label/name in metadata mapping. Skipping column for this row.", selectedColumn);
+                log.warn(
+                        "Column '{}' was expected in ResultSet based on selection but not found by label/name in metadata mapping. Skipping column for this row.",
+                        selectedColumn);
             }
         }
         return row;
@@ -517,7 +567,8 @@ public class SourceDataFetcher {
         return value;
     }
 
-    private Set<String> getActualSourceColumns(Connection connection, DatabaseMetaData metaData, String tableName) throws SQLException {
+    private Set<String> getActualSourceColumns(Connection connection, DatabaseMetaData metaData, String tableName)
+            throws SQLException {
         Set<String> columnNames = new HashSet<>();
         String catalog = null;
         String schemaPattern = null;
@@ -535,7 +586,8 @@ public class SourceDataFetcher {
             actualTableName = parts[1];
             log.debug("Using explicit schema pattern '{}' and table name '{}'", schemaPattern, actualTableName);
         } else {
-            log.debug("No schema specified for table '{}', using driver default schema pattern (null).", actualTableName);
+            log.debug("No schema specified for table '{}', using driver default schema pattern (null).",
+                    actualTableName);
         }
 
         try (ResultSet rs = metaData.getColumns(catalog, schemaPattern, actualTableName, null)) {
@@ -545,7 +597,8 @@ public class SourceDataFetcher {
                     columnNames.add(columnName);
                 }
             }
-            log.debug("Found columns for table '{}' (Catalog: {}, Schema: '{}'): {}", tableName, catalog, schemaPattern != null ? schemaPattern : "default", columnNames);
+            log.debug("Found columns for table '{}' (Catalog: {}, Schema: '{}'): {}", tableName, catalog,
+                    schemaPattern != null ? schemaPattern : "default", columnNames);
         } catch (SQLException e) {
             log.error("Could not retrieve column metadata for table '{}' (Catalog: {}, Schema: {}, Table: {}): {}",
                     tableName, catalog, schemaPattern, actualTableName, e.getMessage());
@@ -553,7 +606,9 @@ public class SourceDataFetcher {
         }
 
         if (columnNames.isEmpty() && schemaPattern != null) {
-            log.warn("No columns found with schema pattern '{}' for table '{}'. Retrying without schema pattern (using default).", schemaPattern, actualTableName);
+            log.warn(
+                    "No columns found with schema pattern '{}' for table '{}'. Retrying without schema pattern (using default).",
+                    schemaPattern, actualTableName);
             try (ResultSet rs = metaData.getColumns(catalog, null, actualTableName, null)) {
                 while (rs.next()) {
                     String columnName = rs.getString("COLUMN_NAME");
@@ -568,7 +623,9 @@ public class SourceDataFetcher {
         }
 
         if (columnNames.isEmpty()) {
-            log.warn("No columns found for table '{}' using schema pattern '{}'. Ensure table exists and is accessible.", actualTableName, schemaPattern != null ? schemaPattern : "default/null");
+            log.warn(
+                    "No columns found for table '{}' using schema pattern '{}'. Ensure table exists and is accessible.",
+                    actualTableName, schemaPattern != null ? schemaPattern : "default/null");
         }
 
         return columnNames;
