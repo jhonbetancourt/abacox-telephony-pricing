@@ -110,10 +110,11 @@ public class MigrationService {
                 List<TableMigrationConfig> tablesToMigrate; // Initialize
                 try {
                         String url = "jdbc:sqlserver://" + runRequest.getHost() + ":" + runRequest.getPort()
-                                        + ";databaseName="
-                                        + runRequest.getDatabase() + ";encrypt=" + runRequest.getEncryption()
-                                        + ";trustServerCertificate="
-                                        + runRequest.getTrustServerCertificate() + ";";
+                + ";databaseName="
+                + runRequest.getDatabase() 
+                + ";encrypt=" + runRequest.getEncryption()
+                + ";trustServerCertificate=" + runRequest.getTrustServerCertificate()
+                + ";packetSize=32767;";
 
                         SourceDbConfig sourceDbConfig = SourceDbConfig.builder()
                                         .url(url)
