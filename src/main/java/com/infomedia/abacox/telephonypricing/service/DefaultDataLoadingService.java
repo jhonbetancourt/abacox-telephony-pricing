@@ -6,8 +6,6 @@ import com.infomedia.abacox.telephonypricing.db.repository.*;
 import com.infomedia.abacox.telephonypricing.multitenancy.TenantInitializer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
-import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.event.EventListener;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 
