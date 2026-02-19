@@ -22,6 +22,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
@@ -396,6 +397,9 @@ public class MigrationService {
                                                 entry("OPERADOR_FMODIFICADO", "lastModifiedDate")))
                                 .build());
 
+                Map<Object, Object> telephonyTypeReplacements = new HashMap<>();
+                telephonyTypeReplacements.put(99, null);
+
                 configs.add(TableMigrationConfig.builder()
                                 .sourceTableName("TIPOTELE")
                                 .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.TelephonyType")
@@ -427,6 +431,7 @@ public class MigrationService {
                                                 entry("INDICATIVO_ENUSO", "active"), // Assuming ENUSO maps to active
                                                 entry("INDICATIVO_FCREACION", "createdDate"),
                                                 entry("INDICATIVO_FMODIFICADO", "lastModifiedDate")))
+                                .specificValueReplacements(Map.of("telephonyTypeId", telephonyTypeReplacements))
                                 .build());
 
                 configs.add(TableMigrationConfig.builder()
@@ -446,6 +451,7 @@ public class MigrationService {
                                                 entry("PREFIJO_ACTIVO", "active"),
                                                 entry("PREFIJO_FCREACION", "createdDate"),
                                                 entry("PREFIJO_FMODIFICADO", "lastModifiedDate")))
+                                .specificValueReplacements(Map.of("telephonyTypeId", telephonyTypeReplacements))
                                 .build());
 
                 configs.add(TableMigrationConfig.builder()
@@ -465,6 +471,7 @@ public class MigrationService {
                                                 // If it has, add: entry("TIPOTELECFG_ACTIVO", "active"),
                                                 entry("TIPOTELECFG_FCREACION", "createdDate"),
                                                 entry("TIPOTELECFG_FMODIFICADO", "lastModifiedDate")))
+                                .specificValueReplacements(Map.of("telephonyTypeId", telephonyTypeReplacements))
                                 .build());
 
                 // Level 3: Depend on Level 2 or lower
@@ -638,6 +645,7 @@ public class MigrationService {
                                                 entry("VALORESPECIAL_ACTIVO", "active"),
                                                 entry("VALORESPECIAL_FCREACION", "createdDate"),
                                                 entry("VALORESPECIAL_FMODIFICADO", "lastModifiedDate")))
+                                .specificValueReplacements(Map.of("telephonyTypeId", telephonyTypeReplacements))
                                 .build());
 
                 configs.add(TableMigrationConfig.builder()
@@ -749,6 +757,7 @@ public class MigrationService {
                                                                                          // _ACTIVO
                                                 entry("TARIFATRONCAL_FCREACION", "createdDate"),
                                                 entry("TARIFATRONCAL_FMODIFICADO", "lastModifiedDate")))
+                                .specificValueReplacements(Map.of("telephonyTypeId", telephonyTypeReplacements))
                                 .build());
 
                 // ADDED: OfficeDetails (DATOSOFICINA) - Depends on Subdivision (L4) and
@@ -890,6 +899,7 @@ public class MigrationService {
                                                 entry("ACUMTOTAL_FMODIFICADO", "lastModifiedDate")))
                                 .maxEntriesToMigrate(runRequest.getMaxCallRecordEntries())
                                 .orderByClause("ACUMTOTAL_ID DESC")
+                                .specificValueReplacements(Map.of("telephonyTypeId", telephonyTypeReplacements))
                                 .build());
 
                 configs.add(TableMigrationConfig.builder()

@@ -42,6 +42,22 @@ public class MigrationRowProcessor {
             Class<?> targetEntityClass,
             TableMigrationConfig config) throws Exception {
 
+        // 0. Check for Specific Value Replacements
+        if (config.getSpecificValueReplacements() != null &&
+                config.getSpecificValueReplacements().containsKey(targetFieldName)) {
+            Map<Object, Object> replacements = config.getSpecificValueReplacements().get(targetFieldName);
+            // Try direct match first (handling type differences if possible)
+            if (replacements.containsKey(sourceValue)) {
+                return replacements.get(sourceValue);
+            }
+            // Fallback: Try string comparison if types don't match (e.g. Integer vs Long)
+            for (Map.Entry<Object, Object> entry : replacements.entrySet()) {
+                if (String.valueOf(entry.getKey()).equals(String.valueOf(sourceValue))) {
+                    return entry.getValue();
+                }
+            }
+        }
+
         // 1. Check for Custom Transformer
         if (config.getCustomValueTransformers() != null &&
                 config.getCustomValueTransformers().containsKey(targetFieldName)) {
@@ -65,6 +81,22 @@ public class MigrationRowProcessor {
             String targetFieldName,
             Class<?> targetType,
             TableMigrationConfig config) throws Exception {
+
+        // 0. Check for Specific Value Replacements
+        if (config.getSpecificValueReplacements() != null &&
+                config.getSpecificValueReplacements().containsKey(targetFieldName)) {
+            Map<Object, Object> replacements = config.getSpecificValueReplacements().get(targetFieldName);
+            if (replacements.containsKey(sourceValue)) {
+                return replacements.get(sourceValue);
+            }
+            // Fallback: Try string comparison
+            for (Map.Entry<Object, Object> entry : replacements.entrySet()) {
+                if (String.valueOf(entry.getKey()).equals(String.valueOf(sourceValue))) {
+                    return entry.getValue();
+                }
+            }
+        }
+
         // 1. Check for Custom Transformer
         if (config.getCustomValueTransformers() != null &&
                 config.getCustomValueTransformers().containsKey(targetFieldName)) {
