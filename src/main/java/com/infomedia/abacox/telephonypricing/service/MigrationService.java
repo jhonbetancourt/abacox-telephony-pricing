@@ -236,7 +236,7 @@ public class MigrationService {
                                 String entityName = entityClassName.substring(entityClassName.lastIndexOf('.') + 1);
 
                                 try {
-                                        // If self-referencing, break the cycle first
+                                        // If self-referencing, break the cycle first (needs JPQL for field names)
                                         if (config.isSelfReferencing()
                                                         && config.getSelfReferenceTargetForeignKeyFieldName() != null) {
                                                 log.info("Breaking self-reference for table {} (Entity: {})...",
@@ -247,16 +247,15 @@ public class MigrationService {
                                                 entityManager.createQuery(updateHql).executeUpdate();
                                         }
 
-                                        log.info("Cleaning up table {} (Entity: {})...", config.getSourceTableName(),
-                                                        entityName);
-                                        String deleteHql = String.format("DELETE FROM %s", entityName);
-                                        entityManager.createQuery(deleteHql).executeUpdate();
+                                        String physicalTable = getPhysicalTableName(entityClassName);
+                                        log.info("Truncating table [{}] (Entity: {})...", physicalTable, entityName);
+                                        entityManager.createNativeQuery("TRUNCATE TABLE " + physicalTable + " CASCADE")
+                                                        .executeUpdate();
+
                                 } catch (Exception e) {
                                         log.error("Failed to cleanup table {} (Entity: {}): {}",
                                                         config.getSourceTableName(),
                                                         entityName, e.getMessage());
-                                        // Depending on requirements, we might want to throw an exception to abort
-                                        // migration
                                         throw new RuntimeException(
                                                         "Failed to cleanup table " + config.getSourceTableName(), e);
                                 }
@@ -268,19 +267,38 @@ public class MigrationService {
         }
 
         private void cleanupFileInfo() {
-                log.info("Cleaning up file_info table (not in migration list, referenced by call records)...");
+                log.info("Truncating file_info table (not in migration list, referenced by call records)...");
                 currentStep.set("Cleaning up file_info table...");
                 TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
                 transactionTemplate.execute(status -> {
                         try {
-                                int deleted = entityManager.createQuery("DELETE FROM FileInfo").executeUpdate();
-                                log.info("Deleted {} rows from file_info table.", deleted);
+                                entityManager.createNativeQuery("TRUNCATE TABLE file_info CASCADE").executeUpdate();
+                                log.info("Truncated file_info table.");
                         } catch (Exception e) {
-                                log.error("Failed to cleanup file_info table: {}", e.getMessage());
-                                throw new RuntimeException("Failed to cleanup file_info table", e);
+                                log.error("Failed to truncate file_info table: {}", e.getMessage());
+                                throw new RuntimeException("Failed to truncate file_info table", e);
                         }
                         return null;
                 });
+        }
+
+        /**
+         * Resolves the physical database table name for a given JPA entity class name
+         * by inspecting Hibernate's metamodel.
+         */
+        private String getPhysicalTableName(String entityClassName) {
+                try {
+                        Class<?> entityClass = Class.forName(entityClassName);
+                        org.hibernate.metamodel.spi.MappingMetamodelImplementor metamodel = entityManager
+                                        .getEntityManagerFactory()
+                                        .unwrap(org.hibernate.engine.spi.SessionFactoryImplementor.class)
+                                        .getMappingMetamodel();
+                        org.hibernate.persister.entity.AbstractEntityPersister persister = (org.hibernate.persister.entity.AbstractEntityPersister) metamodel
+                                        .getEntityDescriptor(entityClass);
+                        return persister.getTableName();
+                } catch (ClassNotFoundException e) {
+                        throw new RuntimeException("Could not find entity class: " + entityClassName, e);
+                }
         }
 
         private List<TableMigrationConfig> defineMigrationOrderAndMappings(MigrationStart runRequest) {
