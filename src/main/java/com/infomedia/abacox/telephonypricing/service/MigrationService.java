@@ -5,6 +5,8 @@ import com.infomedia.abacox.telephonypricing.component.migration.DataMigrationEx
 import com.infomedia.abacox.telephonypricing.component.migration.MigrationParams;
 import com.infomedia.abacox.telephonypricing.component.migration.SourceDbConfig;
 import com.infomedia.abacox.telephonypricing.component.migration.TableMigrationConfig;
+import com.infomedia.abacox.telephonypricing.component.configmanager.ConfigKey;
+import com.infomedia.abacox.telephonypricing.component.configmanager.ConfigService;
 import com.infomedia.abacox.telephonypricing.dto.migration.MigrationStart;
 import com.infomedia.abacox.telephonypricing.dto.migration.MigrationStatus;
 import com.infomedia.abacox.telephonypricing.exception.MigrationAlreadyInProgressException;
@@ -40,6 +42,7 @@ public class MigrationService {
         private final EmployeeRepository employeeRepository;
         private final EntityManager entityManager;
         private final PlatformTransactionManager transactionManager;
+        private final ConfigService configService;
         private final ExecutorService migrationExecutorService = Executors.newSingleThreadExecutor();
 
         // --- State Tracking ---
@@ -108,13 +111,21 @@ public class MigrationService {
                 log.info("<<<<<<<<<< Starting Full Data Migration Execution >>>>>>>>>>");
                 currentState.set(MigrationState.RUNNING);
                 List<TableMigrationConfig> tablesToMigrate; // Initialize
+
+                // Snapshot the CDR processing flag so we can restore it after migration
+                boolean cdrWasEnabled = configService.getValue(ConfigKey.CDR_PROCESSING_ENABLED).asBoolean();
+                if (cdrWasEnabled) {
+                        log.info("Disabling CDR processing for the duration of the migration.");
+                        configService.updateValue(ConfigKey.CDR_PROCESSING_ENABLED, false);
+                }
+
                 try {
                         String url = "jdbc:sqlserver://" + runRequest.getHost() + ":" + runRequest.getPort()
-                + ";databaseName="
-                + runRequest.getDatabase() 
-                + ";encrypt=" + runRequest.getEncryption()
-                + ";trustServerCertificate=" + runRequest.getTrustServerCertificate()
-                + ";packetSize=32767;";
+                                        + ";databaseName="
+                                        + runRequest.getDatabase()
+                                        + ";encrypt=" + runRequest.getEncryption()
+                                        + ";trustServerCertificate=" + runRequest.getTrustServerCertificate()
+                                        + ";packetSize=32767;";
 
                         SourceDbConfig sourceDbConfig = SourceDbConfig.builder()
                                         .url(url)
@@ -133,6 +144,10 @@ public class MigrationService {
                         // Cleanup target tables (in reverse order) if requested
                         if (Boolean.TRUE.equals(runRequest.getCleanup())) {
                                 cleanupTargetTables(tablesToMigrate);
+                                // FileInfo is not in the migration list (populated by CDR processing),
+                                // but CallRecord and FailedCallRecord reference it via FK.
+                                // After those are deleted, clean up FileInfo as well.
+                                cleanupFileInfo();
                         } else {
                                 log.info("Skipping target table cleanup as per request.");
                         }
@@ -158,6 +173,11 @@ public class MigrationService {
                         }
                         log.error("Final migration status: FAILED. Error: {}", errorMessage.get());
                 } finally {
+                        // Restore CDR processing to whatever it was before migration
+                        if (cdrWasEnabled) {
+                                log.info("Restoring CDR processing enabled state after migration.");
+                                configService.updateValue(ConfigKey.CDR_PROCESSING_ENABLED, true);
+                        }
                         endTime.set(LocalDateTime.now());
                         isMigrationRunning.set(false);
                         migrationTaskFuture.set(null);
@@ -245,6 +265,22 @@ public class MigrationService {
                 });
 
                 log.info("Target table cleanup completed.");
+        }
+
+        private void cleanupFileInfo() {
+                log.info("Cleaning up file_info table (not in migration list, referenced by call records)...");
+                currentStep.set("Cleaning up file_info table...");
+                TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+                transactionTemplate.execute(status -> {
+                        try {
+                                int deleted = entityManager.createQuery("DELETE FROM FileInfo").executeUpdate();
+                                log.info("Deleted {} rows from file_info table.", deleted);
+                        } catch (Exception e) {
+                                log.error("Failed to cleanup file_info table: {}", e.getMessage());
+                                throw new RuntimeException("Failed to cleanup file_info table", e);
+                        }
+                        return null;
+                });
         }
 
         private List<TableMigrationConfig> defineMigrationOrderAndMappings(MigrationStart runRequest) {

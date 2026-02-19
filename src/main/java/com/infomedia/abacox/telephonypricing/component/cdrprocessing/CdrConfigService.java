@@ -4,6 +4,7 @@ import com.infomedia.abacox.telephonypricing.component.configmanager.ConfigKey;
 import com.infomedia.abacox.telephonypricing.component.configmanager.ConfigService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.ZoneId;
@@ -15,6 +16,9 @@ import java.time.ZoneOffset;
 public class CdrConfigService {
 
     private final ConfigService configService;
+
+    @Value("${app.cdr.processing.enabled:true}")
+    private boolean cdrProcessingEnabledProperty;
 
     // --- Constants based on PHP defines ---
     // Original PHP: define('_ACUMTOTAL_MAXEXT', 1000000);
@@ -49,7 +53,8 @@ public class CdrConfigService {
     }
 
     public int getMaxCallDurationSeconds() {
-        // Original PHP: $max_tiempo = defineParamCliente('CAPTURAS_TIEMPOMAX', $link); (in minutes)
+        // Original PHP: $max_tiempo = defineParamCliente('CAPTURAS_TIEMPOMAX', $link);
+        // (in minutes)
         int maxMinutes = configService.getValue(ConfigKey.MAX_CALL_DURATION_MINUTES).asInteger();
         return maxMinutes * 60; // Convert minutes to seconds
     }
@@ -71,13 +76,15 @@ public class CdrConfigService {
     }
 
     public Long getDefaultTelephonyTypeForUnresolvedInternalCalls() {
-        // Original PHP: $interna_defecto = defineParamCliente('CAPTURAS_INTERNADEF', $link);
+        // Original PHP: $interna_defecto = defineParamCliente('CAPTURAS_INTERNADEF',
+        // $link);
         String valStr = configService.getValue(ConfigKey.DEFAULT_UNRESOLVED_INTERNAL_CALL_TYPE_ID).asString();
         try {
             long val = Long.parseLong(valStr);
             return val > 0 ? val : null;
         } catch (NumberFormatException e) {
-            log.debug("NFE for DEFAULT_TELEPHONY_TYPE_FOR_UNRESOLVED_INTERNAL, using default {}", ConfigKey.DEFAULT_UNRESOLVED_INTERNAL_CALL_TYPE_ID.getDefaultValue());
+            log.debug("NFE for DEFAULT_TELEPHONY_TYPE_FOR_UNRESOLVED_INTERNAL, using default {}",
+                    ConfigKey.DEFAULT_UNRESOLVED_INTERNAL_CALL_TYPE_ID.getDefaultValue());
             return Long.parseLong(ConfigKey.DEFAULT_UNRESOLVED_INTERNAL_CALL_TYPE_ID.getDefaultValue());
         }
     }
@@ -96,10 +103,12 @@ public class CdrConfigService {
         // Original PHP: define('_ASUMIDO', ' (Asumido)');
         return configService.getValue(ConfigKey.ASSUMED_TEXT).asString();
     }
+
     public String getOriginText() {
         // Original PHP: define('_ORIGEN', 'Origen');
         return configService.getValue(ConfigKey.ORIGIN_TEXT).asString();
     }
+
     public String getPrefixText() {
         // Original PHP: define('_PREFIJO', 'Prefijo');
         return configService.getValue(ConfigKey.PREFIX_TEXT).asString();
@@ -107,19 +116,31 @@ public class CdrConfigService {
 
     /**
      * PHP equivalent: _FUNCIONARIO
+     * 
      * @return The default prefix for auto-created employee names from ranges.
      */
     public String getEmployeeNamePrefixFromRange() {
-        // Original PHP: $prefijo = trim($row["RANGOEXT_PREFIJO"]); if ($prefijo == '') { $prefijo = _FUNCIONARIO; }
+        // Original PHP: $prefijo = trim($row["RANGOEXT_PREFIJO"]); if ($prefijo == '')
+        // { $prefijo = _FUNCIONARIO; }
         return configService.getValue(ConfigKey.EMPLOYEE_NAME_PREFIX_FROM_RANGE).asString();
     }
 
     /**
      * PHP equivalent: _NN_VALIDA
+     * 
      * @return The placeholder string for an empty but valid partition.
      */
     public String getNoPartitionPlaceholder() {
         // Original PHP: define('_NN_VALIDA', 'NN-VALIDA');
         return configService.getValue(ConfigKey.NO_PARTITION_PLACEHOLDER).asString();
+    }
+
+    /**
+     * Returns whether CDR processing is fully enabled.
+     * Both the application property (app.cdr.processing.enabled) AND the
+     * per-tenant DB config key must be true for processing to run.
+     */
+    public boolean isCdrProcessingEnabled() {
+        return cdrProcessingEnabledProperty && configService.getValue(ConfigKey.CDR_PROCESSING_ENABLED).asBoolean();
     }
 }

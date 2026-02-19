@@ -14,6 +14,7 @@ import java.time.LocalDate;
 @AllArgsConstructor
 @NoArgsConstructor
 public class ConfigurationDto {
+    private Boolean cdrProcessingEnabled;
     private Integer serviceDateHourOffset;
     private Boolean specialValueTariffing;
     private Integer minCallDurationForTariffing;
@@ -32,4 +33,3 @@ public class ConfigurationDto {
     private String noPartitionPlaceholder;
     private String cdrUploadApiKey;
 }
-

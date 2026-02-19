@@ -31,6 +31,7 @@ public class CdrRoutingService {
     private final List<CdrProcessor> cdrProcessors;
     private final EmployeeLookupService employeeLookupService;
     private final FileProcessingTrackerService trackerService;
+    private final CdrConfigService cdrConfigService;
 
     private CdrProcessor getProcessorForPlantType(Long plantTypeId) {
         return cdrProcessors.stream()
@@ -167,6 +168,14 @@ public class CdrRoutingService {
     }
 
     public void processFileInfo(Long fileInfoId) {
+        // Guard: if CDR processing was disabled while this task was queued/running,
+        // reset the file back to PENDING so it's not orphaned as IN_PROGRESS.
+        if (!cdrConfigService.isCdrProcessingEnabled()) {
+            log.info("CDR processing disabled by configuration. Resetting FileInfo ID {} back to PENDING.", fileInfoId);
+            fileInfoPersistenceService.updateStatus(fileInfoId, FileInfo.ProcessingStatus.PENDING);
+            return;
+        }
+
         log.info("Starting processing for FileInfo ID: {}", fileInfoId);
         FileInfo fileInfo = fileInfoPersistenceService.findById(fileInfoId);
 

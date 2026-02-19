@@ -22,16 +22,10 @@ public class CdrFileProcessorWorker {
     private final CdrProcessingExecutor cdrProcessingExecutor;
     private final MultitenantRunner multitenantRunner;
     private final MinioStorageService minioStorageService;
-
-    @org.springframework.beans.factory.annotation.Value("${app.cdr.processing.enabled:true}")
-    private boolean cdrProcessingEnabled;
+    private final CdrConfigService cdrConfigService;
 
     @Scheduled(fixedDelay = 2000, initialDelay = 5000)
     public void processPendingFilesForAllTenants() {
-        if (!cdrProcessingEnabled) {
-            return;
-        }
-
         // 1. Guard Clause: Check if MinIO is up before doing anything
         if (!minioStorageService.isReady()) {
             log.trace("Skipping CDR processing cycle: MinIO is unavailable.");
@@ -43,6 +37,11 @@ public class CdrFileProcessorWorker {
     }
 
     private void processPendingFilesForCurrentTenant() { // <-- NEW METHOD with original logic
+        if (!cdrConfigService.isCdrProcessingEnabled()) {
+            log.trace("Skipping CDR processing cycle: disabled by configuration.");
+            return;
+        }
+
         int availableSlots = cdrProcessingExecutor.getAvailableSlots();
 
         if (availableSlots <= 0) {
@@ -85,18 +84,18 @@ public class CdrFileProcessorWorker {
     public static class StartupRecoveryService {
         private final FileInfoPersistenceService fileInfoPersistenceService;
         private final MultitenantRunner multitenantRunner;
-
-        @org.springframework.beans.factory.annotation.Value("${app.cdr.processing.enabled:true}")
-        private boolean cdrProcessingEnabled;
+        private final CdrConfigService cdrConfigService;
 
         @EventListener(ContextRefreshedEvent.class)
         public void onApplicationEvent() {
-            if (!cdrProcessingEnabled) {
-                log.info("Startup recovery disabled by configuration.");
-                return;
-            }
             log.info("Application started. Recovering stalled files...");
-            multitenantRunner.runForAllTenants(fileInfoPersistenceService::resetInProgressToPending);
+            multitenantRunner.runForAllTenants(tenant -> {
+                if (!cdrConfigService.isCdrProcessingEnabled()) {
+                    log.info("Startup recovery skipped for tenant: CDR processing disabled.");
+                    return;
+                }
+                fileInfoPersistenceService.resetInProgressToPending();
+            });
         }
     }
 }

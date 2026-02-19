@@ -20,7 +20,9 @@ public enum ConfigKey {
     MIN_ALLOWED_CAPTURE_DATE(ConfigGroup.CDR, "2000-01-01"),
     MAX_ALLOWED_CAPTURE_DATE_DAYS_IN_FUTURE(ConfigGroup.CDR, "90"),
     CREATE_EMPLOYEES_AUTOMATICALLY_FROM_RANGE(ConfigGroup.CDR, "false"),
-    DEFAULT_UNRESOLVED_INTERNAL_CALL_TYPE_ID(ConfigGroup.CDR, TelephonyTypeEnum.NATIONAL_IP.getValue().toString()), // Corresponds to TelephonyTypeEnum.NATIONAL_IP
+    DEFAULT_UNRESOLVED_INTERNAL_CALL_TYPE_ID(ConfigGroup.CDR, TelephonyTypeEnum.NATIONAL_IP.getValue().toString()), // Corresponds
+                                                                                                                    // to
+                                                                                                                    // TelephonyTypeEnum.NATIONAL_IP
     EXTENSIONS_GLOBAL(ConfigGroup.CDR, "false"),
     AUTH_CODES_GLOBAL(ConfigGroup.CDR, "false"),
 
@@ -30,6 +32,7 @@ public enum ConfigKey {
     PREFIX_TEXT(ConfigGroup.CDR, "(PREFIJO)"),
     EMPLOYEE_NAME_PREFIX_FROM_RANGE(ConfigGroup.CDR, "Funcionario"),
     NO_PARTITION_PLACEHOLDER(ConfigGroup.CDR, "NN-VALIDA"),
+    CDR_PROCESSING_ENABLED(ConfigGroup.CDR, "true"),
     CDR_UPLOAD_API_KEY(ConfigGroup.CDR, "024dc8fe-1d0d-41b2-8f96-dcf3ad9e4141");
 
     private final ConfigGroup group;
@@ -40,16 +43,15 @@ public enum ConfigKey {
         this.defaultValue = defaultValue;
     }
 
-
     public static List<ConfigKey> getKeys(ConfigGroup group) {
         return Stream.of(values())
-            .filter(key -> key.getGroup().equals(group))
+                .filter(key -> key.getGroup().equals(group))
                 .toList();
     }
 
     public static List<ConfigKey> getAllKeys() {
         return Stream.of(values())
-            .toList();
+                .toList();
     }
 
     /**

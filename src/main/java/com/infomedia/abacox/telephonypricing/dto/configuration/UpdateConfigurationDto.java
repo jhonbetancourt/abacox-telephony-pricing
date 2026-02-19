@@ -24,6 +24,10 @@ import java.time.LocalDate;
 public class UpdateConfigurationDto {
 
     @NotNull
+    @Schema(description = "Enable or disable CDR processing at the configuration level. Both this and the application property must be true for processing to run.")
+    private JsonNullable<Boolean> cdrProcessingEnabled = JsonNullable.undefined();
+
+    @NotNull
     @Min(-18)
     @Max(18)
     @Schema(description = "Offset in hours for the service date")
