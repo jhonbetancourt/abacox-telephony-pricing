@@ -322,28 +322,6 @@ public class MigrationService {
                                 .build());
 
                 configs.add(TableMigrationConfig.builder()
-                                .sourceTableName("CIUDADES")
-                                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.City")
-                                .sourceIdColumnName("CIUDADES_ID")
-                                .targetIdFieldName("id")
-                                .columnMapping(Map.ofEntries(
-                                                entry("CIUDADES_ID", "id"),
-                                                entry("CIUDADES_DEPARTAMENTO", "department"),
-                                                entry("CIUDADES_CLASIFICACION", "classification"),
-                                                entry("CIUDADES_MUNICIPIO", "municipality"),
-                                                entry("CIUDADES_CABMUNICIPAL", "municipalCapital"),
-                                                entry("CIUDADES_LATITUD", "latitude"),
-                                                entry("CIUDADES_LONGITUD", "longitude"),
-                                                entry("CIUDADES_ALTITUD", "altitude"),
-                                                entry("CIUDADES_NORTE", "northCoordinate"),
-                                                entry("CIUDADES_ESTE", "eastCoordinate"),
-                                                entry("CIUDADES_ORIGEN", "origin"),
-                                                entry("CIUDADES_ACTIVO", "active"),
-                                                entry("CIUDADES_FCREACION", "createdDate"),
-                                                entry("CIUDADES_FMODIFICADO", "lastModifiedDate")))
-                                .build());
-
-                configs.add(TableMigrationConfig.builder()
                                 .sourceTableName("tipoplanta")
                                 .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.PlantType")
                                 .sourceIdColumnName("TIPOPLANTA_ID")
