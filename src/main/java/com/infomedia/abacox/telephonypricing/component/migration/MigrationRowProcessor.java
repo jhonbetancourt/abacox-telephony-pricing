@@ -373,7 +373,7 @@ public class MigrationRowProcessor {
 
         session.doWork(connection -> {
             Set<Object> existingIds;
-            
+
             // --- OPTIMIZATION: SKIP EXISTENCE CHECK ---
             if (tableConfig.isAssumeTargetIsEmpty()) {
                 existingIds = Collections.emptySet();
@@ -381,7 +381,7 @@ public class MigrationRowProcessor {
                 // Standard behavior: Check DB for existing IDs
                 existingIds = MigrationUtils.checkExistingIds(connection, tableName, idColumnName, allTargetIds);
                 log.debug("Batch existence check for table {}: {} of {} IDs already exist",
-                    tableName, existingIds.size(), allTargetIds.size());
+                        tableName, existingIds.size(), allTargetIds.size());
             }
 
             // Build a string-based set for flexible comparison

@@ -26,7 +26,7 @@ public class TableMigrationExecutor {
 
     // --- CONFIGURATION ---
     // Increased batch size for high-speed streaming
-    private static final int FETCH_BATCH_SIZE = 10000; 
+    private static final int FETCH_BATCH_SIZE = 10000;
     private static final int UPDATE_BATCH_SIZE = 1000;
     private static final int ID_FETCH_BATCH_SIZE = 10000; // Used in Pass 3 Discovery
 
@@ -77,7 +77,8 @@ public class TableMigrationExecutor {
             selfReferenceFkInfo = MigrationUtils.findSelfReference(foreignKeyInfoMap, targetEntityClass);
             isSelfReferencing = selfReferenceFkInfo != null;
 
-            logMetadata(targetTableName, idFieldName, idColumnName, isGeneratedId, isSelfReferencing, foreignKeyInfoMap);
+            logMetadata(targetTableName, idFieldName, idColumnName, isGeneratedId, isSelfReferencing,
+                    foreignKeyInfoMap);
 
         } catch (ClassNotFoundException | IllegalArgumentException e) {
             log.error("Failed to load or analyze target entity class '{}': {}", tableConfig.getTargetEntityClassName(),
@@ -115,24 +116,29 @@ public class TableMigrationExecutor {
                     writerPool.submit(() -> {
                         TenantContext.setTenant(tenant);
                         try {
-                            if (asyncError.get() != null) return; // Skip if already failed
+                            if (asyncError.get() != null)
+                                return; // Skip if already failed
 
                             // *** THE HEAVY LIFTING ***
                             try {
                                 // Try fast batch insert
                                 int skipped = migrationRowProcessor.processBatchInsert(
                                         batch, tableConfig, targetEntityClass, idField, idFieldName,
-                                        idColumnName, targetTableName, isGeneratedId, foreignKeyInfoMap, selfReferenceFkInfo);
+                                        idColumnName, targetTableName, isGeneratedId, foreignKeyInfoMap,
+                                        selfReferenceFkInfo);
                                 failedInsertCountPass1.addAndGet(skipped);
                             } catch (Exception batchEx) {
-                                log.warn("Batch failed in async writer, falling back to row-by-row: {}", batchEx.getMessage());
+                                log.warn("Batch failed in async writer, falling back to row-by-row: {}",
+                                        extractShortErrorMessage(batchEx));
                                 // Fallback: Row-by-Row
                                 for (Map<String, Object> sourceRow : batch) {
                                     try {
                                         boolean success = migrationRowProcessor.processSingleRowInsert(
                                                 sourceRow, tableConfig, targetEntityClass, idField, idFieldName,
-                                                idColumnName, targetTableName, isGeneratedId, foreignKeyInfoMap, selfReferenceFkInfo);
-                                        if (!success) failedInsertCountPass1.incrementAndGet();
+                                                idColumnName, targetTableName, isGeneratedId, foreignKeyInfoMap,
+                                                selfReferenceFkInfo);
+                                        if (!success)
+                                            failedInsertCountPass1.incrementAndGet();
                                     } catch (Exception ex) {
                                         failedInsertCountPass1.incrementAndGet();
                                     }
@@ -185,14 +191,14 @@ public class TableMigrationExecutor {
         log.info("Finished Pass 1 (Async). Total Processed: {}, Failed/Skipped: {}",
                 processedCountPass1.get(), failedInsertCountPass1.get());
 
-
         // --- PASS 2: SELF-REFERENCING FK UPDATES (SYNC) ---
         if (isSelfReferencing) {
             log.info("Starting Pass 2: Updating self-reference FK '{}' for table {} (Batch: {})",
                     selfReferenceFkInfo.getDbColumnName(), targetTableName, FETCH_BATCH_SIZE);
             try {
                 Consumer<List<Map<String, Object>>> pass2BatchProcessor = batch -> {
-                    if (batch.isEmpty()) return;
+                    if (batch.isEmpty())
+                        return;
                     try {
                         int updated = migrationRowProcessor.processSelfRefUpdateBatch(
                                 batch, tableConfig, targetEntityClass, targetTableName, idColumnName,
@@ -202,11 +208,12 @@ public class TableMigrationExecutor {
                         log.error("SQLException processing self-ref update batch: {}. Skipping.", sqle.getMessage());
                         failedUpdateBatchCountPass2.incrementAndGet();
                     } catch (Exception e) {
-                        log.error("Unexpected error processing self-ref update batch: {}. Skipping.", e.getMessage(), e);
+                        log.error("Unexpected error processing self-ref update batch: {}. Skipping.", e.getMessage(),
+                                e);
                         failedUpdateBatchCountPass2.incrementAndGet();
                     }
                 };
-                
+
                 sourceDataFetcher.fetchData(
                         sourceDbConfig,
                         tableConfig.getSourceTableName(),
@@ -221,7 +228,6 @@ public class TableMigrationExecutor {
             }
             log.info("Finished Pass 2. Total Updated FKs: {}", updatedFkCountPass2.get());
         }
-
 
         // --- PASS 3: HISTORICAL ACTIVENESS (SYNC) ---
         if (tableConfig.isProcessHistoricalActiveness()) {
@@ -240,7 +246,8 @@ public class TableMigrationExecutor {
                         Object sourceId = row.get(tableConfig.getSourceIdColumnName());
                         Object histCtlId = row.get(tableConfig.getSourceHistoricalControlIdColumn());
 
-                        if (sourceId == null) continue;
+                        if (sourceId == null)
+                            continue;
 
                         long histCtlIdLong = -1;
                         if (histCtlId instanceof Number) {
@@ -248,7 +255,8 @@ public class TableMigrationExecutor {
                         } else if (histCtlId instanceof String && !((String) histCtlId).trim().isEmpty()) {
                             try {
                                 histCtlIdLong = Long.parseLong(((String) histCtlId).trim());
-                            } catch (NumberFormatException ignored) {}
+                            } catch (NumberFormatException ignored) {
+                            }
                         }
 
                         if (histCtlIdLong > 0) {
@@ -274,22 +282,27 @@ public class TableMigrationExecutor {
             allIdsToProcess.addAll(standaloneIds);
 
             log.info("Pass 3.B: Processing {} total records for active status...", allIdsToProcess.size());
-            
+
             // Re-using FETCH_BATCH_SIZE for the chunks of IDs we want to update
             for (int i = 0; i < allIdsToProcess.size(); i += FETCH_BATCH_SIZE) {
-                List<Object> idBatch = allIdsToProcess.subList(i, Math.min(i + FETCH_BATCH_SIZE, allIdsToProcess.size()));
-                if (idBatch.isEmpty()) continue;
+                List<Object> idBatch = allIdsToProcess.subList(i,
+                        Math.min(i + FETCH_BATCH_SIZE, allIdsToProcess.size()));
+                if (idBatch.isEmpty())
+                    continue;
 
                 try {
                     // Fetch full row data for the current batch of IDs
-                    // NOTE: sourceDataFetcher.fetchFullDataForIds handles sub-batching for SQL Server 2100 limit internally now
+                    // NOTE: sourceDataFetcher.fetchFullDataForIds handles sub-batching for SQL
+                    // Server 2100 limit internally now
                     List<Map<String, Object>> fullRowDataBatch = sourceDataFetcher.fetchFullDataForIds(sourceDbConfig,
                             tableConfig.getSourceTableName(), columnsToFetch, tableConfig.getSourceIdColumnName(),
                             idBatch);
 
                     int updatedInBatch = migrationRowProcessor.processHistoricalActivenessUpdateBatch(
-                            fullRowDataBatch, tableConfig, targetEntityClass, targetTableName, idColumnName, idFieldName,
-                            tableConfig.getSourceHistoricalControlIdColumn(), tableConfig.getSourceValidFromDateColumn(),
+                            fullRowDataBatch, tableConfig, targetEntityClass, targetTableName, idColumnName,
+                            idFieldName,
+                            tableConfig.getSourceHistoricalControlIdColumn(),
+                            tableConfig.getSourceValidFromDateColumn(),
                             UPDATE_BATCH_SIZE);
                     updatedActiveCountPass3.addAndGet(updatedInBatch);
 
@@ -306,7 +319,7 @@ public class TableMigrationExecutor {
     }
 
     private void logMetadata(String targetTableName, String idFieldName, String idColumnName, boolean isGeneratedId,
-                             boolean isSelfReferencing, Map<String, ForeignKeyInfo> foreignKeyInfoMap) {
+            boolean isSelfReferencing, Map<String, ForeignKeyInfo> foreignKeyInfoMap) {
         log.debug("Target Table: {}, ID Field: {}, ID Column: {}, IsGenerated: {}, IsSelfReferencing: {}",
                 targetTableName, idFieldName, idColumnName, isGeneratedId, isSelfReferencing);
         if (!foreignKeyInfoMap.isEmpty()) {
@@ -317,7 +330,7 @@ public class TableMigrationExecutor {
     }
 
     private Set<String> determineColumnsToFetch(TableMigrationConfig tableConfig,
-                                                Map<String, ForeignKeyInfo> foreignKeyInfoMap, ForeignKeyInfo selfReferenceFkInfo) {
+            Map<String, ForeignKeyInfo> foreignKeyInfoMap, ForeignKeyInfo selfReferenceFkInfo) {
         Set<String> columnsToFetch = new HashSet<>();
         if (tableConfig.getColumnMapping() != null) {
             columnsToFetch.addAll(tableConfig.getColumnMapping().keySet());
@@ -348,5 +361,24 @@ public class TableMigrationExecutor {
             columnsToFetch.add(tableConfig.getSourceIdColumnName());
         }
         return columnsToFetch;
+    }
+
+    private String extractShortErrorMessage(Exception e) {
+        Throwable current = e;
+        while (current != null) {
+            String msg = current.getMessage();
+            if (msg != null && msg.contains("was aborted:")) {
+                return msg.substring(msg.indexOf("was aborted:"));
+            }
+            if (current.getCause() == current)
+                break;
+            current = current.getCause();
+        }
+
+        String msg = e.getMessage();
+        if (msg != null && msg.length() > 500) {
+            return "..." + msg.substring(msg.length() - 500);
+        }
+        return msg != null ? msg : e.getClass().getSimpleName();
     }
 }
