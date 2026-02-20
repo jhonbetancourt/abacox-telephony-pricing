@@ -33,6 +33,7 @@ public class TableMigrationExecutor {
     // Async Configuration
     private static final int WRITER_THREADS = 4; // Number of parallel connections to Target DB
     private static final int MAX_QUEUED_BATCHES = 8; // Backpressure limit (prevents OOM)
+    private static final int MIN_SPLIT_BATCH_SIZE = 100; // Threshold to drop to row-by-row during batch failure
 
     public void executeTableMigration(TableMigrationConfig tableConfig, SourceDbConfig sourceDbConfig)
             throws Exception {
@@ -121,28 +122,14 @@ public class TableMigrationExecutor {
 
                             // *** THE HEAVY LIFTING ***
                             try {
-                                // Try fast batch insert
-                                int skipped = migrationRowProcessor.processBatchInsert(
+                                int skipped = processBatchWithRecursiveFallback(
                                         batch, tableConfig, targetEntityClass, idField, idFieldName,
                                         idColumnName, targetTableName, isGeneratedId, foreignKeyInfoMap,
                                         selfReferenceFkInfo);
                                 failedInsertCountPass1.addAndGet(skipped);
-                            } catch (Exception batchEx) {
-                                log.warn("Batch failed in async writer, falling back to row-by-row: {}",
-                                        extractShortErrorMessage(batchEx));
-                                // Fallback: Row-by-Row
-                                for (Map<String, Object> sourceRow : batch) {
-                                    try {
-                                        boolean success = migrationRowProcessor.processSingleRowInsert(
-                                                sourceRow, tableConfig, targetEntityClass, idField, idFieldName,
-                                                idColumnName, targetTableName, isGeneratedId, foreignKeyInfoMap,
-                                                selfReferenceFkInfo);
-                                        if (!success)
-                                            failedInsertCountPass1.incrementAndGet();
-                                    } catch (Exception ex) {
-                                        failedInsertCountPass1.incrementAndGet();
-                                    }
-                                }
+                            } catch (Exception e) {
+                                log.error("Async Write Failed during fallback processing!", e);
+                                asyncError.set(e);
                             }
 
                             processedCountPass1.addAndGet(batch.size());
@@ -380,5 +367,66 @@ public class TableMigrationExecutor {
             return "..." + msg.substring(msg.length() - 500);
         }
         return msg != null ? msg : e.getClass().getSimpleName();
+    }
+
+    private int processBatchWithRecursiveFallback(
+            List<Map<String, Object>> batch, TableMigrationConfig tableConfig,
+            Class<?> targetEntityClass, Field idField, String idFieldName,
+            String idColumnName, String targetTableName, boolean isGeneratedId,
+            Map<String, ForeignKeyInfo> foreignKeyInfoMap, ForeignKeyInfo selfReferenceFkInfo) {
+
+        try {
+            // Attempt full batch insert
+            return migrationRowProcessor.processBatchInsert(
+                    batch, tableConfig, targetEntityClass, idField, idFieldName,
+                    idColumnName, targetTableName, isGeneratedId, foreignKeyInfoMap,
+                    selfReferenceFkInfo);
+        } catch (Exception batchEx) {
+            int batchSize = batch.size();
+
+            // If the batch failed but is still large enough, split it in half
+            if (batchSize > MIN_SPLIT_BATCH_SIZE) {
+                log.warn("Batch of size {} failed. Splitting into halves. Reason: {}",
+                        batchSize, extractShortErrorMessage(batchEx));
+
+                int mid = batchSize / 2;
+                List<Map<String, Object>> leftHalf = batch.subList(0, mid);
+                List<Map<String, Object>> rightHalf = batch.subList(mid, batchSize);
+
+                int failedCount = 0;
+                // Recursively process both halves
+                failedCount += processBatchWithRecursiveFallback(
+                        leftHalf, tableConfig, targetEntityClass, idField, idFieldName,
+                        idColumnName, targetTableName, isGeneratedId, foreignKeyInfoMap,
+                        selfReferenceFkInfo);
+
+                failedCount += processBatchWithRecursiveFallback(
+                        rightHalf, tableConfig, targetEntityClass, idField, idFieldName,
+                        idColumnName, targetTableName, isGeneratedId, foreignKeyInfoMap,
+                        selfReferenceFkInfo);
+
+                return failedCount;
+            } else {
+                // If the batch is small enough, drop to row-by-row
+                log.warn("Sub-batch of size {} failed. Falling back to row-by-row processing. Reason: {}",
+                        batchSize, extractShortErrorMessage(batchEx));
+
+                int failedCount = 0;
+                for (Map<String, Object> sourceRow : batch) {
+                    try {
+                        boolean success = migrationRowProcessor.processSingleRowInsert(
+                                sourceRow, tableConfig, targetEntityClass, idField, idFieldName,
+                                idColumnName, targetTableName, isGeneratedId, foreignKeyInfoMap,
+                                selfReferenceFkInfo);
+                        if (!success) {
+                            failedCount++;
+                        }
+                    } catch (Exception ex) {
+                        failedCount++;
+                    }
+                }
+                return failedCount;
+            }
+        }
     }
 }
