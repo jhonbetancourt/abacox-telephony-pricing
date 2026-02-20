@@ -26,9 +26,9 @@ public class TableMigrationExecutor {
     private final SourceDataFetcher sourceDataFetcher;
     private final MigrationRowProcessor migrationRowProcessor;
 
-    private static final int FETCH_BATCH_SIZE = 2000;
-    private static final int UPDATE_BATCH_SIZE = 100;
-    private static final int ID_FETCH_BATCH_SIZE = 10000; // Larger batch for fetching just IDs
+    private static final int FETCH_BATCH_SIZE = 10000;
+    private static final int UPDATE_BATCH_SIZE = 1000;
+    private static final int ID_FETCH_BATCH_SIZE = 10000;
 
     public void executeTableMigration(TableMigrationConfig tableConfig, SourceDbConfig sourceDbConfig)
             throws Exception {

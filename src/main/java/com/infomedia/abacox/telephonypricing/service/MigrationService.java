@@ -1,5 +1,4 @@
-// File: com/infomedia/abacox/telephonypricing/service/MigrationService.java
-package com.infomedia.abacox.telephonypricing.service; // Use your actual package
+package com.infomedia.abacox.telephonypricing.service;
 
 import com.infomedia.abacox.telephonypricing.component.migration.DataMigrationExecutor;
 import com.infomedia.abacox.telephonypricing.component.migration.MigrationParams;
@@ -126,7 +125,8 @@ public class MigrationService {
                                         + runRequest.getDatabase()
                                         + ";encrypt=" + runRequest.getEncryption()
                                         + ";trustServerCertificate=" + runRequest.getTrustServerCertificate()
-                                        + ";packetSize=32767;";
+                                        + ";packetSize=32767"
+                                        + ";selectMethod=cursor";
 
                         SourceDbConfig sourceDbConfig = SourceDbConfig.builder()
                                         .url(url)
@@ -876,7 +876,7 @@ public class MigrationService {
                                                 entry("ACUMTOTAL_FCREACION", "createdDate"),
                                                 entry("ACUMTOTAL_FMODIFICADO", "lastModifiedDate")))
                                 .maxEntriesToMigrate(runRequest.getMaxCallRecordEntries())
-                                .orderByClause("ACUMTOTAL_ID DESC")
+                                .orderByClause("ACUMTOTAL_FECHA_SERVICIO DESC")
                                 .specificValueReplacements(Map.of("telephonyTypeId", telephonyTypeReplacements))
                                 .build());
 
