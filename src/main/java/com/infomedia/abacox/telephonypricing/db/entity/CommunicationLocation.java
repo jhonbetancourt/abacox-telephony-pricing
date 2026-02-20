@@ -5,8 +5,6 @@ import com.infomedia.abacox.telephonypricing.db.entity.superclass.ActivableEntit
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.time.LocalDateTime;
-
 import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.ColumnDefault;
 

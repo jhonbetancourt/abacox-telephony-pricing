@@ -21,7 +21,7 @@ public final class DestinationUsageReportQueries {
         INNER JOIN
             employee e ON cr.employee_id = e.id
         INNER JOIN
-            location l ON cr.location_id = l.id
+            communication_location l ON cr.comm_location_id = l.id
         WHERE
             (cr.service_date BETWEEN :startDate AND :endDate)
         GROUP BY
