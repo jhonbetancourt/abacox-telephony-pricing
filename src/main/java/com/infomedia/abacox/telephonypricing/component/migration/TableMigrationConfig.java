@@ -8,6 +8,7 @@ import lombok.AllArgsConstructor;
 
 import java.util.Map;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 @Data
 @NoArgsConstructor
@@ -42,6 +43,13 @@ public class TableMigrationConfig {
      * map.put("telephonyType", replacements);
      */
     private Map<String, Map<Object, Object>> specificValueReplacements;
+
+    /**
+     * An optional filter to discard rows purely in memory before insertion.
+     * Evaluates against the raw source row Map. If it returns false, the row is
+     * discarded.
+     */
+    private Predicate<Map<String, Object>> rowFilter;
 
     @Builder.Default
     private boolean selfReferencing = false;
@@ -80,5 +88,5 @@ public class TableMigrationConfig {
     private Integer maxEntriesToMigrate;
 
     @Builder.Default
-    private boolean assumeTargetIsEmpty = false; 
+    private boolean assumeTargetIsEmpty = false;
 }

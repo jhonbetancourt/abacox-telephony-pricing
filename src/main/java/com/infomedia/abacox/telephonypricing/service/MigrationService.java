@@ -135,7 +135,8 @@ public class MigrationService {
                                         .build();
 
                         tablesToMigrate = defineMigrationOrderAndMappings(runRequest);
-                        tablesToMigrate.forEach(tableConfig -> tableConfig.setAssumeTargetIsEmpty(runRequest.getCleanup()));
+                        tablesToMigrate.forEach(
+                                        tableConfig -> tableConfig.setAssumeTargetIsEmpty(runRequest.getCleanup()));
                         int totalTableCount = tablesToMigrate.size();
                         totalTables.set(totalTableCount);
 
@@ -879,6 +880,25 @@ public class MigrationService {
                                 .maxEntriesToMigrate(runRequest.getMaxCallRecordEntries())
                                 .orderByClause("ACUMTOTAL_FECHA_SERVICIO DESC")
                                 .specificValueReplacements(Map.of("telephonyTypeId", telephonyTypeReplacements))
+                                .rowFilter(row -> {
+                                        Object commLocIdRaw = row.get("ACUMTOTAL_COMUBICACION_ID");
+                                        if (commLocIdRaw == null)
+                                                return false;
+                                        if (commLocIdRaw instanceof Number) {
+                                                return ((Number) commLocIdRaw).longValue() >= 1;
+                                        }
+                                        if (commLocIdRaw instanceof String) {
+                                                String val = ((String) commLocIdRaw).trim();
+                                                if (val.isEmpty())
+                                                        return false;
+                                                try {
+                                                        return Long.parseLong(val) >= 1;
+                                                } catch (NumberFormatException e) {
+                                                        return false;
+                                                }
+                                        }
+                                        return false;
+                                })
                                 .build());
 
                 configs.add(TableMigrationConfig.builder()

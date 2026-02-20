@@ -296,6 +296,12 @@ public class MigrationRowProcessor {
         int skipCount = 0;
 
         for (Map<String, Object> sourceRow : batchRows) {
+            if (tableConfig.getRowFilter() != null && !tableConfig.getRowFilter().test(sourceRow)) {
+                log.debug("Skipping row in table {} due to row filter.", tableName);
+                skipCount++;
+                continue;
+            }
+
             Object sourceIdValue = sourceRow.get(tableConfig.getSourceIdColumnName());
             if (sourceIdValue == null) {
                 log.warn("Skipping row in table {} due to null source ID.", tableName);
@@ -460,6 +466,11 @@ public class MigrationRowProcessor {
         try {
             if (sourceIdValue == null) {
                 log.warn("Skipping row in table {} due to null source ID (Source Row: {}).", tableName, sourceRow);
+                return true; // Treat as skipped successfully
+            }
+
+            if (tableConfig.getRowFilter() != null && !tableConfig.getRowFilter().test(sourceRow)) {
+                log.debug("Skipping row in table {} due to row filter.", tableName);
                 return true; // Treat as skipped successfully
             }
 
