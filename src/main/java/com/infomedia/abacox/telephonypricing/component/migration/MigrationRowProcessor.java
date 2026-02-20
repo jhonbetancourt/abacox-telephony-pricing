@@ -17,6 +17,7 @@ import java.sql.Statement;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -371,14 +372,19 @@ public class MigrationRowProcessor {
         BatchSqlMetadata metadata = buildBatchSqlMetadata(targetEntityClass, idField, tableName, selfRefColToNull);
 
         session.doWork(connection -> {
-            // Batch check which IDs already exist
-            Set<Object> existingIds = MigrationUtils.checkExistingIds(connection, tableName, idColumnName,
-                    allTargetIds);
-            log.debug("Batch existence check for table {}: {} of {} IDs already exist",
+            Set<Object> existingIds;
+            
+            // --- OPTIMIZATION: SKIP EXISTENCE CHECK ---
+            if (tableConfig.isAssumeTargetIsEmpty()) {
+                existingIds = Collections.emptySet();
+            } else {
+                // Standard behavior: Check DB for existing IDs
+                existingIds = MigrationUtils.checkExistingIds(connection, tableName, idColumnName, allTargetIds);
+                log.debug("Batch existence check for table {}: {} of {} IDs already exist",
                     tableName, existingIds.size(), allTargetIds.size());
+            }
 
-            // Build a string-based set for flexible comparison (DB might return Long while
-            // we have Integer, etc.)
+            // Build a string-based set for flexible comparison
             Set<String> existingIdStrings = new HashSet<>();
             for (Object eid : existingIds) {
                 if (eid != null)
@@ -460,10 +466,14 @@ public class MigrationRowProcessor {
             // Convert ID using override logic (field lookup)
             targetIdValue = convertValueByFieldLookup(sourceIdValue, idFieldName, targetEntityClass, tableConfig);
 
-            boolean exists = checkEntityExistsInternal(tableName, idColumnName, targetIdValue);
+            boolean exists = false;
+            // --- OPTIMIZATION: SKIP EXISTENCE CHECK ---
+            if (!tableConfig.isAssumeTargetIsEmpty()) {
+                exists = checkEntityExistsInternal(tableName, idColumnName, targetIdValue);
+            }
+
             if (exists) {
                 log.trace("Updating existing row in table {} with ID: {}", tableName, targetIdValue);
-                // Fall through to update logic
             }
 
             Object targetEntity = targetEntityClass.getDeclaredConstructor().newInstance();
@@ -480,8 +490,6 @@ public class MigrationRowProcessor {
                 ForeignKeyInfo fkInfo = foreignKeyInfoMap.get(targetField);
 
                 if (fkInfo != null && fkInfo.isSelfReference()) {
-                    log.trace("Skipping self-ref FK field '{}' population in Pass 1 for ID {}", targetField,
-                            targetIdValue);
                     continue;
                 }
 
@@ -494,21 +502,17 @@ public class MigrationRowProcessor {
                             && tableConfig.isTreatZeroIdAsNullForForeignKeys()
                             && sourceValue instanceof Number
                             && ((Number) sourceValue).longValue() == 0L) {
-                        log.trace("Treating source value 0 as NULL for FK field '{}' (Source Col: {}) for ID {}",
-                                targetField, sourceCol, targetIdValue);
                         treatAsNull = true;
                     }
 
                     if (!treatAsNull && sourceValue != null) {
                         try {
-                            // Convert Field Value using override logic (field lookup)
                             convertedTargetValue = convertValueByFieldLookup(sourceValue, targetField,
                                     targetEntityClass, tableConfig);
                         } catch (Exception e) {
                             log.warn(
-                                    "Skipping field '{}' for row with ID {} due to conversion error: {}. Source Col: {}, Source type: {}, Value: '{}'",
-                                    targetField, targetIdValue, e.getMessage(), sourceCol,
-                                    (sourceValue != null ? sourceValue.getClass().getName() : "null"), sourceValue);
+                                    "Skipping field '{}' for row with ID {} due to conversion error: {}.",
+                                    targetField, targetIdValue, e.getMessage());
                             continue;
                         }
                     }
@@ -517,9 +521,8 @@ public class MigrationRowProcessor {
                         MigrationUtils.setProperty(targetEntity, targetField, convertedTargetValue);
                     } catch (Exception e) {
                         log.warn(
-                                "Skipping field '{}' for row with ID {} due to setting error: {}. Target Value: {}, Target Type: {}",
-                                targetField, targetIdValue, e.getMessage(), convertedTargetValue,
-                                (convertedTargetValue != null ? convertedTargetValue.getClass().getName() : "null"));
+                                "Skipping field '{}' for row with ID {} due to setting error: {}.",
+                                targetField, targetIdValue, e.getMessage());
                     }
                 }
             }

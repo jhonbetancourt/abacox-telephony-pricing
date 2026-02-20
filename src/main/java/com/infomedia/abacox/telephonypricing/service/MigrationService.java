@@ -135,6 +135,7 @@ public class MigrationService {
                                         .build();
 
                         tablesToMigrate = defineMigrationOrderAndMappings(runRequest);
+                        tablesToMigrate.forEach(tableConfig -> tableConfig.setAssumeTargetIsEmpty(runRequest.getCleanup()));
                         int totalTableCount = tablesToMigrate.size();
                         totalTables.set(totalTableCount);
 

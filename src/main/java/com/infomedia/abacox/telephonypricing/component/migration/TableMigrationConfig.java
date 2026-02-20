@@ -78,4 +78,7 @@ public class TableMigrationConfig {
      * If null or less than or equal to zero, all entries will be migrated.
      */
     private Integer maxEntriesToMigrate;
+
+    @Builder.Default
+    private boolean assumeTargetIsEmpty = false; 
 }
