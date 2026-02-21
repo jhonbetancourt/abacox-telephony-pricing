@@ -882,7 +882,8 @@ public class MigrationService {
                                 .maxEntriesToMigrate(runRequest.getMaxCallRecordEntries())
                                 .orderByClause("ACUMTOTAL_FECHA_SERVICIO DESC")
                                 .specificValueReplacements(Map.of("telephonyTypeId", telephonyTypeReplacements))
-                                .rowFilter(row -> isValidAcumtotalRow(row, validEmployeeIdsCache))
+                                .rowFilter(row -> true) // Allow all rows past the filter
+                                .rowModifier(row -> mutateAcumtotalRow(row, validEmployeeIdsCache))
                                 .build());
 
                 configs.add(TableMigrationConfig.builder()
@@ -916,44 +917,44 @@ public class MigrationService {
                 IDLE, STARTING, RUNNING, COMPLETED, FAILED
         }
 
-        private boolean isValidAcumtotalRow(Map<String, Object> row,
+        private void mutateAcumtotalRow(Map<String, Object> row,
                         AtomicReference<LongOpenHashSet> validEmployeeIdsCache) {
-                // 1. Check Communication Location ID
+                // 1. Check Communication Location ID (If we still want to keep valid logic, or
+                // set to null)
+                // For ACUMTOTAL, comm_location_id might be nullable in DB, or not.
+                // Assuming we just leave it alone or null it if invalid.
                 Object commLocIdRaw = row.get("ACUMTOTAL_COMUBICACION_ID");
-                if (commLocIdRaw == null)
-                        return false;
-
-                boolean validCommLoc = false;
-                if (commLocIdRaw instanceof Number) {
-                        validCommLoc = ((Number) commLocIdRaw).longValue() >= 1;
-                } else if (commLocIdRaw instanceof String) {
-                        String val = ((String) commLocIdRaw).trim();
-                        if (!val.isEmpty()) {
-                                try {
-                                        validCommLoc = Long.parseLong(val) >= 1;
-                                } catch (NumberFormatException e) {
-                                        // ignore
+                if (commLocIdRaw != null) {
+                        boolean validCommLoc = false;
+                        if (commLocIdRaw instanceof Number) {
+                                validCommLoc = ((Number) commLocIdRaw).longValue() >= 1;
+                        } else if (commLocIdRaw instanceof String) {
+                                String val = ((String) commLocIdRaw).trim();
+                                if (!val.isEmpty()) {
+                                        try {
+                                                validCommLoc = Long.parseLong(val) >= 1;
+                                        } catch (NumberFormatException e) {
+                                                // ignore
+                                        }
                                 }
                         }
-                }
-                if (!validCommLoc)
-                        return false;
-
-                // 2. Check Employee IDs (Source and Destination)
-                if (!isValidEmployeeId(row.get("ACUMTOTAL_FUNCIONARIO_ID"), validEmployeeIdsCache)) {
-                        return false;
+                        if (!validCommLoc) {
+                                // If not valid, clear it out instead of dropping the row
+                                row.put("ACUMTOTAL_COMUBICACION_ID", null);
+                        }
                 }
 
-                if (!isValidEmployeeId(row.get("ACUMTOTAL_FUNDESTINO_ID"), validEmployeeIdsCache)) {
-                        return false;
-                }
-
-                return true;
+                // 2. Check and Mutate Employee IDs (Source and Destination)
+                mutateEmployeeIdInRow(row, "ACUMTOTAL_FUNCIONARIO_ID", validEmployeeIdsCache);
+                mutateEmployeeIdInRow(row, "ACUMTOTAL_FUNDESTINO_ID", validEmployeeIdsCache);
         }
 
-        private boolean isValidEmployeeId(Object empIdRaw, AtomicReference<LongOpenHashSet> validEmployeeIdsCache) {
-                if (empIdRaw == null)
-                        return true; // Null IDs are usually OK if the column allows it (or checked elsewhere)
+        private void mutateEmployeeIdInRow(Map<String, Object> row, String columnName,
+                        AtomicReference<LongOpenHashSet> validEmployeeIdsCache) {
+                Object empIdRaw = row.get(columnName);
+                if (empIdRaw == null) {
+                        return; // Already null, nothing to do
+                }
 
                 long empId = -1;
                 if (empIdRaw instanceof Number) {
@@ -973,7 +974,7 @@ public class MigrationService {
                         if (validEmployeeIdsCache.get() == null) {
                                 synchronized (validEmployeeIdsCache) {
                                         if (validEmployeeIdsCache.get() == null) {
-                                                log.info("Lazy loading employee IDs for ACUMTOTAL filtering...");
+                                                log.info("Lazy loading employee IDs for ACUMTOTAL row modifier...");
                                                 List<Long> ids = entityManager
                                                                 .createQuery("SELECT e.id FROM Employee e",
                                                                                 Long.class)
@@ -987,10 +988,13 @@ public class MigrationService {
                                 }
                         }
                         if (!validEmployeeIdsCache.get().contains(empId)) {
-                                return false; // ID parses to a number but isn't in DB
+                                // ID parses to a number but isn't in DB: Set it to null!
+                                log.trace("Mutating row {}: Invalid employee ID {} set to null.", columnName, empId);
+                                row.put(columnName, null);
                         }
+                } else {
+                        // It was non-null but parsed to -1 or invalid text. Set to null.
+                        row.put(columnName, null);
                 }
-
-                return true;
         }
 }

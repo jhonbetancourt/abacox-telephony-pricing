@@ -9,6 +9,7 @@ import lombok.AllArgsConstructor;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.function.Consumer;
 
 @Data
 @NoArgsConstructor
@@ -50,6 +51,13 @@ public class TableMigrationConfig {
      * discarded.
      */
     private Predicate<Map<String, Object>> rowFilter;
+
+    /**
+     * An optional modifier to mutate row values purely in memory before insertion
+     * and entity mapping. This executes AFTER the rowFilter.
+     * Evaluates against the raw source row Map, allowing direct modification.
+     */
+    private Consumer<Map<String, Object>> rowModifier;
 
     @Builder.Default
     private boolean selfReferencing = false;

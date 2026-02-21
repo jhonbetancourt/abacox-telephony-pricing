@@ -302,6 +302,16 @@ public class MigrationRowProcessor {
                 continue;
             }
 
+            if (tableConfig.getRowModifier() != null) {
+                try {
+                    tableConfig.getRowModifier().accept(sourceRow);
+                } catch (Exception e) {
+                    log.error("Error executing row modifier for table {}: {}", tableName, e.getMessage(), e);
+                    skipCount++;
+                    continue;
+                }
+            }
+
             Object sourceIdValue = sourceRow.get(tableConfig.getSourceIdColumnName());
             if (sourceIdValue == null) {
                 log.warn("Skipping row in table {} due to null source ID.", tableName);
@@ -472,6 +482,15 @@ public class MigrationRowProcessor {
             if (tableConfig.getRowFilter() != null && !tableConfig.getRowFilter().test(sourceRow)) {
                 log.debug("Skipping row in table {} due to row filter.", tableName);
                 return true; // Treat as skipped successfully
+            }
+
+            if (tableConfig.getRowModifier() != null) {
+                try {
+                    tableConfig.getRowModifier().accept(sourceRow);
+                } catch (Exception e) {
+                    log.error("Error executing row modifier for table {}: {}", tableName, e.getMessage(), e);
+                    return false; // Treat as failure
+                }
             }
 
             // Convert ID using override logic (field lookup)
