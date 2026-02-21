@@ -30,6 +30,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 
 import static java.util.Map.entry;
 
@@ -306,6 +307,7 @@ public class MigrationService {
 
         private List<TableMigrationConfig> defineMigrationOrderAndMappings(MigrationStart runRequest) {
                 List<TableMigrationConfig> configs = new ArrayList<>();
+                AtomicReference<LongOpenHashSet> validEmployeeIdsCache = new AtomicReference<>(null);
 
                 // Level 0: No FK dependencies among these
                 configs.add(TableMigrationConfig.builder()
@@ -880,25 +882,7 @@ public class MigrationService {
                                 .maxEntriesToMigrate(runRequest.getMaxCallRecordEntries())
                                 .orderByClause("ACUMTOTAL_FECHA_SERVICIO DESC")
                                 .specificValueReplacements(Map.of("telephonyTypeId", telephonyTypeReplacements))
-                                .rowFilter(row -> {
-                                        Object commLocIdRaw = row.get("ACUMTOTAL_COMUBICACION_ID");
-                                        if (commLocIdRaw == null)
-                                                return false;
-                                        if (commLocIdRaw instanceof Number) {
-                                                return ((Number) commLocIdRaw).longValue() >= 1;
-                                        }
-                                        if (commLocIdRaw instanceof String) {
-                                                String val = ((String) commLocIdRaw).trim();
-                                                if (val.isEmpty())
-                                                        return false;
-                                                try {
-                                                        return Long.parseLong(val) >= 1;
-                                                } catch (NumberFormatException e) {
-                                                        return false;
-                                                }
-                                        }
-                                        return false;
-                                })
+                                .rowFilter(row -> isValidAcumtotalRow(row, validEmployeeIdsCache))
                                 .build());
 
                 configs.add(TableMigrationConfig.builder()
@@ -930,5 +914,83 @@ public class MigrationService {
 
         public enum MigrationState {
                 IDLE, STARTING, RUNNING, COMPLETED, FAILED
+        }
+
+        private boolean isValidAcumtotalRow(Map<String, Object> row,
+                        AtomicReference<LongOpenHashSet> validEmployeeIdsCache) {
+                // 1. Check Communication Location ID
+                Object commLocIdRaw = row.get("ACUMTOTAL_COMUBICACION_ID");
+                if (commLocIdRaw == null)
+                        return false;
+
+                boolean validCommLoc = false;
+                if (commLocIdRaw instanceof Number) {
+                        validCommLoc = ((Number) commLocIdRaw).longValue() >= 1;
+                } else if (commLocIdRaw instanceof String) {
+                        String val = ((String) commLocIdRaw).trim();
+                        if (!val.isEmpty()) {
+                                try {
+                                        validCommLoc = Long.parseLong(val) >= 1;
+                                } catch (NumberFormatException e) {
+                                        // ignore
+                                }
+                        }
+                }
+                if (!validCommLoc)
+                        return false;
+
+                // 2. Check Employee IDs (Source and Destination)
+                if (!isValidEmployeeId(row.get("ACUMTOTAL_FUNCIONARIO_ID"), validEmployeeIdsCache)) {
+                        return false;
+                }
+
+                if (!isValidEmployeeId(row.get("ACUMTOTAL_FUNDESTINO_ID"), validEmployeeIdsCache)) {
+                        return false;
+                }
+
+                return true;
+        }
+
+        private boolean isValidEmployeeId(Object empIdRaw, AtomicReference<LongOpenHashSet> validEmployeeIdsCache) {
+                if (empIdRaw == null)
+                        return true; // Null IDs are usually OK if the column allows it (or checked elsewhere)
+
+                long empId = -1;
+                if (empIdRaw instanceof Number) {
+                        empId = ((Number) empIdRaw).longValue();
+                } else if (empIdRaw instanceof String) {
+                        String val = ((String) empIdRaw).trim();
+                        if (!val.isEmpty()) {
+                                try {
+                                        empId = Long.parseLong(val);
+                                } catch (NumberFormatException e) {
+                                        // ignore
+                                }
+                        }
+                }
+
+                if (empId != -1) {
+                        if (validEmployeeIdsCache.get() == null) {
+                                synchronized (validEmployeeIdsCache) {
+                                        if (validEmployeeIdsCache.get() == null) {
+                                                log.info("Lazy loading employee IDs for ACUMTOTAL filtering...");
+                                                List<Long> ids = entityManager
+                                                                .createQuery("SELECT e.id FROM Employee e",
+                                                                                Long.class)
+                                                                .getResultList();
+                                                validEmployeeIdsCache.set(
+                                                                new LongOpenHashSet(
+                                                                                ids));
+                                                log.info("Loaded {} valid employee IDs into cache.",
+                                                                ids.size());
+                                        }
+                                }
+                        }
+                        if (!validEmployeeIdsCache.get().contains(empId)) {
+                                return false; // ID parses to a number but isn't in DB
+                        }
+                }
+
+                return true;
         }
 }
