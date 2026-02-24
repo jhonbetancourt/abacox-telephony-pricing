@@ -67,11 +67,6 @@ public class TableMigrationConfig {
     @Builder.Default
     private boolean treatZeroIdAsNullForForeignKeys = true;
 
-    @Builder.Default
-    private boolean processHistoricalActiveness = false;
-    private String sourceHistoricalControlIdColumn;
-    private String sourceValidFromDateColumn;
-
     /**
      * An optional action to run after this specific table has been migrated
      * successfully.

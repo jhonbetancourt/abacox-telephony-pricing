@@ -35,8 +35,6 @@ import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 
 import static java.util.Map.entry;
 
-import java.sql.Ref;
-
 @Service
 @Log4j2
 @RequiredArgsConstructor
@@ -691,16 +689,12 @@ public class MigrationService {
                                                 entry("FUNCIONARIO_TELEFONO", "phone"),
                                                 entry("FUNCIONARIO_DIRECCION", "address"),
                                                 entry("FUNCIONARIO_NUMEROID", "idNumber"),
-                                                entry("FUNCIONARIO_ACTIVO", "active"), // This will be overridden by
-                                                                                       // Pass 3 if enabled
+                                                entry("FUNCIONARIO_ACTIVO", "active"),
                                                 entry("FUNCIONARIO_FCREACION", "createdDate"),
                                                 entry("FUNCIONARIO_FMODIFICADO", "lastModifiedDate"),
                                                 entry("FUNCIONARIO_HISTORICTL_ID", "historyControlId"),
                                                 entry("FUNCIONARIO_HISTODESDE", "historySince"),
                                                 entry("FUNCIONARIO_HISTOCAMBIO", "historyChange")))
-                                .processHistoricalActiveness(true) // Enable Pass 3
-                                .sourceHistoricalControlIdColumn("FUNCIONARIO_HISTORICTL_ID")
-                                .sourceValidFromDateColumn("FUNCIONARIO_HISTODESDE")
                                 .build());
 
                 configs.add(TableMigrationConfig.builder()
@@ -721,9 +715,6 @@ public class MigrationService {
                                                 entry("RANGOEXT_HISTORICTL_ID", "historyControlId"),
                                                 entry("RANGOEXT_HISTODESDE", "historySince"),
                                                 entry("RANGOEXT_HISTOCAMBIO", "historyChange")))
-                                .processHistoricalActiveness(true) // Enable Pass 3
-                                .sourceHistoricalControlIdColumn("RANGOEXT_HISTORICTL_ID")
-                                .sourceValidFromDateColumn("RANGOEXT_HISTODESDE")
                                 .build());
 
                 configs.add(TableMigrationConfig.builder()

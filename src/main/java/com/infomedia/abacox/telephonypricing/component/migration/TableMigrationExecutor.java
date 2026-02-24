@@ -28,7 +28,6 @@ public class TableMigrationExecutor {
     // Increased batch size for high-speed streaming
     private static final int FETCH_BATCH_SIZE = 10000;
     private static final int UPDATE_BATCH_SIZE = 1000;
-    private static final int ID_FETCH_BATCH_SIZE = 10000; // Used in Pass 3 Discovery
 
     // Async Configuration
     private static final int WRITER_THREADS = 4; // Number of parallel connections to Target DB
@@ -44,8 +43,6 @@ public class TableMigrationExecutor {
         AtomicInteger failedInsertCountPass1 = new AtomicInteger(0);
         AtomicInteger updatedFkCountPass2 = new AtomicInteger(0);
         AtomicInteger failedUpdateBatchCountPass2 = new AtomicInteger(0);
-        AtomicInteger updatedActiveCountPass3 = new AtomicInteger(0);
-        AtomicInteger failedUpdateBatchCountPass3 = new AtomicInteger(0);
 
         // Error handling for async threads
         AtomicReference<Exception> asyncError = new AtomicReference<>(null);
@@ -88,10 +85,6 @@ public class TableMigrationExecutor {
         }
 
         Set<String> columnsToFetch = determineColumnsToFetch(tableConfig, foreignKeyInfoMap, selfReferenceFkInfo);
-        if (tableConfig.isProcessHistoricalActiveness()) {
-            columnsToFetch.add(tableConfig.getSourceHistoricalControlIdColumn());
-            columnsToFetch.add(tableConfig.getSourceValidFromDateColumn());
-        }
 
         // --- PASS 1: INSERT ROWS (ASYNC PARALLEL WRITING) ---
         log.info("Starting Pass 1: Streaming & Async Writing for table {} (Batch: {}, Threads: {})",
@@ -214,91 +207,6 @@ public class TableMigrationExecutor {
                 log.error("Fatal error during Pass 2: {}", e.getMessage(), e);
             }
             log.info("Finished Pass 2. Total Updated FKs: {}", updatedFkCountPass2.get());
-        }
-
-        // --- PASS 3: HISTORICAL ACTIVENESS (SYNC) ---
-        if (tableConfig.isProcessHistoricalActiveness()) {
-            log.info("Starting Pass 3: Updating 'active' flag for table {} based on historical data", targetTableName);
-
-            // Pass 3.A: Discovery
-            Map<Object, List<Object>> historicalGroups = new HashMap<>();
-            List<Object> standaloneIds = new ArrayList<>();
-            Set<String> idDiscoveryColumns = Set.of(tableConfig.getSourceIdColumnName(),
-                    tableConfig.getSourceHistoricalControlIdColumn());
-
-            log.info("Pass 3.A: Discovering historical chains (Batch: {})...", ID_FETCH_BATCH_SIZE);
-            try {
-                Consumer<List<Map<String, Object>>> discoveryProcessor = batch -> {
-                    for (Map<String, Object> row : batch) {
-                        Object sourceId = row.get(tableConfig.getSourceIdColumnName());
-                        Object histCtlId = row.get(tableConfig.getSourceHistoricalControlIdColumn());
-
-                        if (sourceId == null)
-                            continue;
-
-                        long histCtlIdLong = -1;
-                        if (histCtlId instanceof Number) {
-                            histCtlIdLong = ((Number) histCtlId).longValue();
-                        } else if (histCtlId instanceof String && !((String) histCtlId).trim().isEmpty()) {
-                            try {
-                                histCtlIdLong = Long.parseLong(((String) histCtlId).trim());
-                            } catch (NumberFormatException ignored) {
-                            }
-                        }
-
-                        if (histCtlIdLong > 0) {
-                            historicalGroups.computeIfAbsent(histCtlId, k -> new ArrayList<>()).add(sourceId);
-                        } else {
-                            standaloneIds.add(sourceId);
-                        }
-                    }
-                };
-
-                sourceDataFetcher.fetchData(sourceDbConfig, tableConfig.getSourceTableName(), idDiscoveryColumns,
-                        tableConfig.getSourceIdColumnName(), tableConfig.getOrderByClause(),
-                        tableConfig.getMaxEntriesToMigrate(), ID_FETCH_BATCH_SIZE, discoveryProcessor);
-
-            } catch (Exception e) {
-                log.error("Fatal error during Pass 3.A Discovery: {}", e.getMessage(), e);
-                return;
-            }
-
-            // Pass 3.B: Processing
-            List<Object> allIdsToProcess = new ArrayList<>();
-            historicalGroups.values().forEach(allIdsToProcess::addAll);
-            allIdsToProcess.addAll(standaloneIds);
-
-            log.info("Pass 3.B: Processing {} total records for active status...", allIdsToProcess.size());
-
-            // Re-using FETCH_BATCH_SIZE for the chunks of IDs we want to update
-            for (int i = 0; i < allIdsToProcess.size(); i += FETCH_BATCH_SIZE) {
-                List<Object> idBatch = allIdsToProcess.subList(i,
-                        Math.min(i + FETCH_BATCH_SIZE, allIdsToProcess.size()));
-                if (idBatch.isEmpty())
-                    continue;
-
-                try {
-                    // Fetch full row data for the current batch of IDs
-                    // NOTE: sourceDataFetcher.fetchFullDataForIds handles sub-batching for SQL
-                    // Server 2100 limit internally now
-                    List<Map<String, Object>> fullRowDataBatch = sourceDataFetcher.fetchFullDataForIds(sourceDbConfig,
-                            tableConfig.getSourceTableName(), columnsToFetch, tableConfig.getSourceIdColumnName(),
-                            idBatch);
-
-                    int updatedInBatch = migrationRowProcessor.processHistoricalActivenessUpdateBatch(
-                            fullRowDataBatch, tableConfig, targetEntityClass, targetTableName, idColumnName,
-                            idFieldName,
-                            tableConfig.getSourceHistoricalControlIdColumn(),
-                            tableConfig.getSourceValidFromDateColumn(),
-                            UPDATE_BATCH_SIZE);
-                    updatedActiveCountPass3.addAndGet(updatedInBatch);
-
-                } catch (Exception e) {
-                    log.error("Error processing 'active' flag batch: {}. Skipping.", e.getMessage(), e);
-                    failedUpdateBatchCountPass3.incrementAndGet();
-                }
-            }
-            log.info("Finished Pass 3. Updated Active Flags: {}", updatedActiveCountPass3.get());
         }
 
         long duration = System.currentTimeMillis() - startTime;
