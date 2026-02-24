@@ -8,6 +8,7 @@ import java.math.BigDecimal;
  * The getter method names MUST match the column aliases in the native query.
  */
 public interface TelephonyTypeUsageReport {
+    String getTelephonyCategoryName();
     String getTelephonyTypeName();
     Long getOutgoingCallCount();
     Long getIncomingCallCount();
@@ -16,3 +17,5 @@ public interface TelephonyTypeUsageReport {
     BigDecimal getTotalBilledAmount();
     BigDecimal getBilledAmountPercentage();
 }
+
+    

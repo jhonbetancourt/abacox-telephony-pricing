@@ -6,6 +6,7 @@ public final class TelephonyTypeUsageReportQueries {
     public static final String QUERY = """
     WITH report_data AS (
         SELECT
+            cc.name AS telephonyCategoryName,
             tt.name AS telephonyTypeName,
             COALESCE(COUNT(cr.id) FILTER (WHERE cr.is_incoming = false), 0) AS outgoingCallCount,
             COALESCE(COUNT(cr.id) FILTER (WHERE cr.is_incoming = true), 0) AS incomingCallCount,
@@ -28,9 +29,10 @@ public final class TelephonyTypeUsageReportQueries {
         AND
             (cr.is_incoming = true OR (cr.is_incoming = false AND cr.operator_id > 0))
         GROUP BY
-            tt.id, tt.name
+            cc.name, tt.id, tt.name
     )
     SELECT
+        rd.telephonyCategoryName,
         rd.telephonyTypeName,
         rd.outgoingCallCount,
         rd.incomingCallCount,
@@ -46,6 +48,8 @@ public final class TelephonyTypeUsageReportQueries {
         END AS billedAmountPercentage
     FROM
         report_data rd
+    ORDER BY
+        rd.telephonyCategoryName, rd.telephonyTypeName
     """;
 
     public static final String COUNT_QUERY = """

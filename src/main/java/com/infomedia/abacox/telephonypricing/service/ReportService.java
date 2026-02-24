@@ -27,8 +27,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.time.LocalDateTime;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -364,18 +364,81 @@ public class ReportService {
     }
 
     @Transactional(readOnly = true)
-    public Page<TelephonyTypeUsageReportDto> generateTelephonyTypeUsageReport(
+    public Page<TelephonyTypeUsageGroupDto> generateTelephonyTypeUsageReport(
             LocalDateTime startDate, LocalDateTime endDate, Pageable pageable) {
-        return modelConverter.mapPage(reportRepository.getTelephonyTypeUsageReport(startDate, endDate, pageable),
-                TelephonyTypeUsageReportDto.class);
+
+        // 1. Fetch all matching rows (unpaged to ensure correct grouping and
+        // percentages)
+        List<com.infomedia.abacox.telephonypricing.db.projection.TelephonyTypeUsageReport> rows = reportRepository
+                .getTelephonyTypeUsageReport(startDate, endDate, Pageable.unpaged()).getContent();
+
+        // 2. Map to DTOs
+        List<TelephonyTypeUsageReportDto> allDtoRows = rows.stream()
+                .map(row -> modelConverter.map(row, TelephonyTypeUsageReportDto.class))
+                .collect(Collectors.toList());
+
+        // 3. Group by Category
+        Map<String, List<TelephonyTypeUsageReportDto>> grouped = allDtoRows.stream()
+                .collect(Collectors.groupingBy(
+                        dto -> dto.getTelephonyCategoryName() != null ? dto.getTelephonyCategoryName()
+                                : "Sin Categoría",
+                        LinkedHashMap::new, // Keep insertion order (which is sorted by the query)
+                        Collectors.toList()));
+
+        // 4. Create Groups with Subtotals
+        List<TelephonyTypeUsageGroupDto> groups = new ArrayList<>();
+        for (Map.Entry<String, List<TelephonyTypeUsageReportDto>> entry : grouped.entrySet()) {
+            String categoryName = entry.getKey();
+            List<TelephonyTypeUsageReportDto> items = entry.getValue();
+
+            TelephonyTypeUsageReportDto subtotal = new TelephonyTypeUsageReportDto();
+            subtotal.setTelephonyCategoryName(categoryName);
+            subtotal.setTelephonyTypeName("Subtotal");
+            subtotal.setIncomingCallCount(
+                    items.stream().mapToLong(TelephonyTypeUsageReportDto::getIncomingCallCount).sum());
+            subtotal.setOutgoingCallCount(
+                    items.stream().mapToLong(TelephonyTypeUsageReportDto::getOutgoingCallCount).sum());
+            subtotal.setTotalDuration(items.stream().mapToLong(TelephonyTypeUsageReportDto::getTotalDuration).sum());
+            subtotal.setTotalBilledAmount(items.stream()
+                    .map(TelephonyTypeUsageReportDto::getTotalBilledAmount)
+                    .filter(Objects::nonNull)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add));
+
+            // Percentage of the GRAND TOTAL (sum of percentages)
+            subtotal.setDurationPercentage(items.stream()
+                    .map(TelephonyTypeUsageReportDto::getDurationPercentage)
+                    .filter(Objects::nonNull)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add));
+            subtotal.setBilledAmountPercentage(items.stream()
+                    .map(TelephonyTypeUsageReportDto::getBilledAmountPercentage)
+                    .filter(Objects::nonNull)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add));
+
+            groups.add(new TelephonyTypeUsageGroupDto(categoryName, items, subtotal));
+        }
+
+        // 5. Paginate groups
+        int start = (int) pageable.getOffset();
+        int end = Math.min((start + pageable.getPageSize()), groups.size());
+
+        List<TelephonyTypeUsageGroupDto> pageContent;
+        if (start > groups.size()) {
+            pageContent = Collections.emptyList();
+        } else {
+            pageContent = groups.subList(start, end);
+        }
+
+        return new PageImpl<>(pageContent, pageable, groups.size());
     }
 
     @Transactional(readOnly = true)
     public ByteArrayResource exportExcelTelephonyTypeUsageReport(
             LocalDateTime startDate, LocalDateTime endDate, Pageable pageable, ExcelGeneratorBuilder builder) {
-        Page<TelephonyTypeUsageReportDto> collection = generateTelephonyTypeUsageReport(startDate, endDate, pageable);
+        Page<TelephonyTypeUsageGroupDto> collection = generateTelephonyTypeUsageReport(startDate, endDate, pageable);
         try {
-            InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
+            InputStream inputStream = builder.withEntities(collection.toList())
+                    .withFlattenedCollection("items")
+                    .generateAsInputStream();
             return new ByteArrayResource(inputStream.readAllBytes());
         } catch (IOException e) {
             throw new RuntimeException(e);

@@ -357,7 +357,7 @@ public class ReportController {
         }
 
         @GetMapping(value = "telephonyTypeUsage", produces = MediaType.APPLICATION_JSON_VALUE)
-        public Page<TelephonyTypeUsageReportDto> getTelephonyTypeUsageReport(
+        public Page<TelephonyTypeUsageGroupDto> getTelephonyTypeUsageReport(
                         @Parameter(hidden = true) Pageable pageable, @ParameterObject PageableRequest pageableRequest,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate) {

@@ -5,6 +5,7 @@ import java.math.BigDecimal;
 
 @Data
 public class TelephonyTypeUsageReportDto {
+    private String telephonyCategoryName;
     private String telephonyTypeName;
     private Long outgoingCallCount;
     private Long incomingCallCount;
