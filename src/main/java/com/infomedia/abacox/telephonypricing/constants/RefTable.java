@@ -2,7 +2,7 @@ package com.infomedia.abacox.telephonypricing.constants;
 
 public enum RefTable {
     EMPLOYEE(1),
-    EXTENSION_RANGE(2)
+    EXTENSION_RANGE(2);
 
     private final int id;
 
@@ -22,5 +22,14 @@ public enum RefTable {
             }
         }
         throw new IllegalArgumentException("Invalid ref_table ID: " + id);
+    }
+
+    public static boolean isValidId(int id) {
+        for (RefTable table : RefTable.values()) {
+            if (table.getId() == id) {
+                return true;
+            }
+        }
+        return false;
     }
 }

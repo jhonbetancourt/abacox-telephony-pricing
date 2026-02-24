@@ -5,6 +5,8 @@ import com.infomedia.abacox.telephonypricing.db.entity.superclass.ActivableEntit
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.time.LocalDateTime;
+
 import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.ColumnDefault;
 
@@ -25,7 +27,8 @@ import org.hibernate.annotations.ColumnDefault;
                 // Note: Standard indexes help exact matches; standard btree has limited use for
                 // leading wildcard ILIKE
                 // but is still good practice for sorting/grouping.
-                @Index(name = "idx_employee_name", columnList = "name")
+                @Index(name = "idx_employee_name", columnList = "name"),
+                @Index(name = "idx_employee_history_control", columnList = "history_control_id")
 })
 @Getter
 @Setter
@@ -95,4 +98,17 @@ public class Employee extends ActivableEntity {
         @Column(name = "id_number", length = 20, nullable = false)
         @ColumnDefault("''")
         private String idNumber;
+
+        @Column(name = "history_since")
+        private LocalDateTime historySince;
+
+        @Column(name = "history_change", columnDefinition = "TEXT")
+        private String historyChange;
+
+        @Column(name = "history_control_id")
+        private Long historyControlId;
+
+        @ManyToOne
+        @JoinColumn(name = "history_control_id", insertable = false, updatable = false, foreignKey = @ForeignKey(name = "fk_employee_history_control"))
+        private HistoryControl historyControl;
 }

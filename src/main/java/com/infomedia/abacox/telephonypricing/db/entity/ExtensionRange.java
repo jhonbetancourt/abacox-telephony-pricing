@@ -7,17 +7,18 @@ import lombok.*;
 import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.ColumnDefault;
 
+import java.time.LocalDateTime;
+
 @Entity
-@Table(
-    name = "extension_range",
-    indexes = {
-        // Used in EmployeeLookupService::getExtensionRanges
-        @Index(name = "idx_ext_range_comm_loc_active", columnList = "comm_location_id, active"),
-        
-        // Used for range comparison logic
-        @Index(name = "idx_ext_range_vals", columnList = "range_start, range_end")
-    }
-)
+@Table(name = "extension_range", indexes = {
+                // Used in EmployeeLookupService::getExtensionRanges
+                @Index(name = "idx_ext_range_comm_loc_active", columnList = "comm_location_id, active"),
+
+                // Used for range comparison logic
+                @Index(name = "idx_ext_range_vals", columnList = "range_start, range_end"),
+
+                @Index(name = "idx_ext_range_history_control", columnList = "history_control_id")
+})
 @Getter
 @Setter
 @NoArgsConstructor
@@ -25,62 +26,55 @@ import org.hibernate.annotations.ColumnDefault;
 @SuperBuilder(toBuilder = true)
 public class ExtensionRange extends ActivableEntity {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "extension_range_id_seq")
-    @SequenceGenerator(
-            name = "extension_range_id_seq",
-            sequenceName = "extension_range_id_seq",
-            allocationSize = 1,
-            initialValue = 10000000
-    )
-    @Column(name = "id", nullable = false)
-    private Long id;
+        @Id
+        @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "extension_range_id_seq")
+        @SequenceGenerator(name = "extension_range_id_seq", sequenceName = "extension_range_id_seq", allocationSize = 1, initialValue = 10000000)
+        @Column(name = "id", nullable = false)
+        private Long id;
 
-    @Column(name = "comm_location_id")
-    private Long commLocationId;
+        @Column(name = "comm_location_id")
+        private Long commLocationId;
 
-    @ManyToOne
-    @JoinColumn(
-            name = "comm_location_id",
-            insertable = false,
-            updatable = false,
-            foreignKey = @ForeignKey(name = "fk_extension_range_comm_location")
-    )
-    private CommunicationLocation commLocation;
+        @ManyToOne
+        @JoinColumn(name = "comm_location_id", insertable = false, updatable = false, foreignKey = @ForeignKey(name = "fk_extension_range_comm_location"))
+        private CommunicationLocation commLocation;
 
-    @Column(name = "subdivision_id")
-    private Long subdivisionId;
+        @Column(name = "subdivision_id")
+        private Long subdivisionId;
 
-    @ManyToOne
-    @JoinColumn(
-            name = "subdivision_id",
-            insertable = false,
-            updatable = false,
-            foreignKey = @ForeignKey(name = "fk_extension_range_subdivision")
-    )
-    private Subdivision subdivision;
+        @ManyToOne
+        @JoinColumn(name = "subdivision_id", insertable = false, updatable = false, foreignKey = @ForeignKey(name = "fk_extension_range_subdivision"))
+        private Subdivision subdivision;
 
-    @Column(name = "prefix", length = 250, nullable = false)
-    @ColumnDefault("''")
-    private String prefix;
+        @Column(name = "prefix", length = 250, nullable = false)
+        @ColumnDefault("''")
+        private String prefix;
 
-    @Column(name = "range_start", length = 50, nullable = false)
-    @ColumnDefault("0")
-    private Long rangeStart;
+        @Column(name = "range_start", length = 50, nullable = false)
+        @ColumnDefault("0")
+        private Long rangeStart;
 
-    @Column(name = "range_end", length = 50, nullable = false)
-    @ColumnDefault("0")
-    private Long rangeEnd;
+        @Column(name = "range_end", length = 50, nullable = false)
+        @ColumnDefault("0")
+        private Long rangeEnd;
 
-    @Column(name = "cost_center_id")
-    private Long costCenterId;
+        @Column(name = "cost_center_id")
+        private Long costCenterId;
 
-    @ManyToOne
-    @JoinColumn(
-            name = "cost_center_id",
-            insertable = false,
-            updatable = false,
-            foreignKey = @ForeignKey(name = "fk_extension_range_cost_center")
-    )
-    private CostCenter costCenter;
+        @ManyToOne
+        @JoinColumn(name = "cost_center_id", insertable = false, updatable = false, foreignKey = @ForeignKey(name = "fk_extension_range_cost_center"))
+        private CostCenter costCenter;
+
+        @Column(name = "history_since")
+        private LocalDateTime historySince;
+
+        @Column(name = "history_change", columnDefinition = "TEXT")
+        private String historyChange;
+
+        @Column(name = "history_control_id")
+        private Long historyControlId;
+
+        @ManyToOne
+        @JoinColumn(name = "history_control_id", insertable = false, updatable = false, foreignKey = @ForeignKey(name = "fk_extension_range_history_control"))
+        private HistoryControl historyControl;
 }

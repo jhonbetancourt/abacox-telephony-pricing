@@ -4,6 +4,7 @@ import com.infomedia.abacox.telephonypricing.component.migration.DataMigrationEx
 import com.infomedia.abacox.telephonypricing.component.migration.MigrationParams;
 import com.infomedia.abacox.telephonypricing.component.migration.SourceDbConfig;
 import com.infomedia.abacox.telephonypricing.component.migration.TableMigrationConfig;
+import com.infomedia.abacox.telephonypricing.constants.RefTable;
 import com.infomedia.abacox.telephonypricing.component.configmanager.ConfigKey;
 import com.infomedia.abacox.telephonypricing.component.configmanager.ConfigService;
 import com.infomedia.abacox.telephonypricing.dto.migration.MigrationStart;
@@ -33,6 +34,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 
 import static java.util.Map.entry;
+
+import java.sql.Ref;
 
 @Service
 @Log4j2
@@ -323,6 +326,27 @@ public class MigrationService {
                                                 entry("MPORIGEN_ACTIVO", "active"),
                                                 entry("MPORIGEN_FCREACION", "createdDate"),
                                                 entry("MPORIGEN_FMODIFICADO", "lastModifiedDate")))
+                                .build());
+
+                configs.add(TableMigrationConfig.builder()
+                                .sourceTableName("historictl")
+                                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.HistoryControl")
+                                .sourceIdColumnName("HISTORICTL_ID")
+                                .targetIdFieldName("id")
+                                .columnMapping(Map.ofEntries(
+                                                entry("HISTORICTL_ID", "id"),
+                                                entry("HISTORICTL_REFTABLE", "refTable"),
+                                                entry("HISTORICTL_REFID", "refId"),
+                                                entry("HISTORICTL_HISTODESDE", "historySince")))
+                                .rowFilter(row -> {
+                                        Object refTableObj = row.get("HISTORICTL_REFTABLE");
+                                        if (refTableObj instanceof Number) {
+                                                int refTableId = ((Number) refTableObj).intValue();
+                                                // Only EMPLOYEE (1) and EXTENSION_RANGE (2)
+                                                return RefTable.isValidId(refTableId);
+                                        }
+                                        return false;
+                                })
                                 .build());
 
                 configs.add(TableMigrationConfig.builder()
@@ -670,15 +694,13 @@ public class MigrationService {
                                                 entry("FUNCIONARIO_ACTIVO", "active"), // This will be overridden by
                                                                                        // Pass 3 if enabled
                                                 entry("FUNCIONARIO_FCREACION", "createdDate"),
-                                                entry("FUNCIONARIO_FMODIFICADO", "lastModifiedDate")))
+                                                entry("FUNCIONARIO_FMODIFICADO", "lastModifiedDate"),
+                                                entry("FUNCIONARIO_HISTORICTL_ID", "historyControlId"),
+                                                entry("FUNCIONARIO_HISTODESDE", "historySince"),
+                                                entry("FUNCIONARIO_HISTOCAMBIO", "historyChange")))
                                 .processHistoricalActiveness(true) // Enable Pass 3
                                 .sourceHistoricalControlIdColumn("FUNCIONARIO_HISTORICTL_ID")
                                 .sourceValidFromDateColumn("FUNCIONARIO_HISTODESDE")
-                                .postMigrationSuccessAction(() -> {
-                                        int n = employeeRepository.deactivateDuplicateActiveEmployees();
-                                        log.info("Post-migration action: Deactivated {} duplicate active employees.",
-                                                        n);
-                                })
                                 .build());
 
                 configs.add(TableMigrationConfig.builder()
@@ -695,7 +717,10 @@ public class MigrationService {
                                                 entry("RANGOEXT_HASTA", "rangeEnd"),
                                                 entry("RANGOEXT_CENTROCOSTOS_ID", "costCenterId"),
                                                 entry("RANGOEXT_FCREACION", "createdDate"),
-                                                entry("RANGOEXT_FMODIFICADO", "lastModifiedDate")))
+                                                entry("RANGOEXT_FMODIFICADO", "lastModifiedDate"),
+                                                entry("RANGOEXT_HISTORICTL_ID", "historyControlId"),
+                                                entry("RANGOEXT_HISTODESDE", "historySince"),
+                                                entry("RANGOEXT_HISTOCAMBIO", "historyChange")))
                                 .processHistoricalActiveness(true) // Enable Pass 3
                                 .sourceHistoricalControlIdColumn("RANGOEXT_HISTORICTL_ID")
                                 .sourceValidFromDateColumn("RANGOEXT_HISTODESDE")
