@@ -10,7 +10,7 @@ import com.infomedia.abacox.telephonypricing.dto.generic.PageableRequest;
 import com.infomedia.abacox.telephonypricing.dto.report.*;
 import com.infomedia.abacox.telephonypricing.dto.generic.ExcelRequest;
 import com.infomedia.abacox.telephonypricing.dto.generic.FilterRequest;
-import com.infomedia.abacox.telephonypricing.service.ReportService;
+import com.infomedia.abacox.telephonypricing.service.report.*;
 import com.turkraft.springfilter.boot.Filter;
 import io.swagger.v3.oas.annotations.Parameter;
 import org.springdoc.core.annotations.ParameterObject;
@@ -46,20 +46,25 @@ import java.util.List;
 @RequestMapping("/api/report")
 public class ReportController {
 
-        private final ReportService reportService;
+        private final CallRecordReportService callRecordReportService;
+        private final EmployeeReportService employeeReportService;
+        private final TelephonyUsageReportService telephonyUsageReportService;
+        private final SubdivisionReportService subdivisionReportService;
+        private final ExtensionReportService extensionReportService;
+        private final ConferenceReportService conferenceReportService;
 
         @GetMapping(value = "failedCallRecords", produces = MediaType.APPLICATION_JSON_VALUE)
         public Page<FailedCallRecordDto> getFailedCallRecords(@Parameter(hidden = true) Pageable pageable,
                         @Parameter(hidden = true) @Filter Specification<FailedCallRecord> spec,
                         @ParameterObject FilterRequest filterRequest) {
-                return reportService.generateFailedCallRecordsReport(spec, pageable);
+                return callRecordReportService.generateFailedCallRecordsReport(spec, pageable);
         }
 
         @GetMapping(value = "failedCallRecords/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
         public ResponseEntity<Resource> exportExcelFailedCallRecords(@Parameter(hidden = true) Pageable pageable,
                         @Parameter(hidden = true) @Filter Specification<FailedCallRecord> spec,
                         @ParameterObject FilterRequest filterRequest, @ParameterObject ExcelRequest excelRequest) {
-                ByteArrayResource resource = reportService.exportExcelFailedCallRecordsReport(spec, pageable,
+                ByteArrayResource resource = callRecordReportService.exportExcelFailedCallRecordsReport(spec, pageable,
                                 excelRequest.toExcelGeneratorBuilder());
                 return ResponseEntity.ok()
                                 .header(HttpHeaders.CONTENT_DISPOSITION,
@@ -72,38 +77,36 @@ public class ReportController {
         public Page<CallRecordDto> getCallRecords(@Parameter(hidden = true) Pageable pageable,
                         @Parameter(hidden = true) @Filter Specification<CallRecord> spec,
                         @ParameterObject FilterRequest filterRequest) {
-                return reportService.generateCallRecordsReport(spec, pageable);
+                return callRecordReportService.generateCallRecordsReport(spec, pageable);
         }
 
         @GetMapping(value = "callRecords/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
         public ResponseEntity<Resource> exportExcelCallRecords(@Parameter(hidden = true) Pageable pageable,
                         @Parameter(hidden = true) @Filter Specification<CallRecord> spec,
                         @ParameterObject FilterRequest filterRequest, @ParameterObject ExcelRequest excelRequest) {
-                ByteArrayResource resource = reportService.exportExcelCallRecordsReport(spec, pageable,
-                                excelRequest.toExcelGeneratorBuilder());
                 return ResponseEntity.ok()
                                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=call_records.xlsx")
                                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
-                                .body(resource);
+                                .body(callRecordReportService.exportExcelCallRecordsReport(spec, pageable,
+                                                excelRequest.toExcelGeneratorBuilder()));
         }
 
         @GetMapping(value = "corporateReport", produces = MediaType.APPLICATION_JSON_VALUE)
         public Page<CorporateReportDto> getCorporateReport(@Parameter(hidden = true) Pageable pageable,
                         @Parameter(hidden = true) @Filter Specification<CorporateReportView> spec,
                         @ParameterObject FilterRequest filterRequest) {
-                return reportService.generateCorporateReport(spec, pageable);
+                return callRecordReportService.generateCorporateReport(spec, pageable);
         }
 
         @GetMapping(value = "corporateReport/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
         public ResponseEntity<Resource> exportExcelCorporateReport(@Parameter(hidden = true) Pageable pageable,
                         @Parameter(hidden = true) @Filter Specification<CorporateReportView> spec,
                         @ParameterObject FilterRequest filterRequest, @ParameterObject ExcelRequest excelRequest) {
-                ByteArrayResource resource = reportService.exportExcelCorporateReport(spec, pageable,
-                                excelRequest.toExcelGeneratorBuilder());
                 return ResponseEntity.ok()
                                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=corporate_report.xlsx")
                                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
-                                .body(resource);
+                                .body(callRecordReportService.exportExcelCorporateReport(spec, pageable,
+                                                excelRequest.toExcelGeneratorBuilder()));
         }
 
         @GetMapping(value = "employeeActivity", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -113,7 +116,8 @@ public class ReportController {
                         @RequestParam(required = false) String employeeExtension,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate) {
-                return reportService.generateEmployeeActivityReport(employeeName, employeeExtension, startDate, endDate,
+                return employeeReportService.generateEmployeeActivityReport(employeeName, employeeExtension, startDate,
+                                endDate,
                                 pageable);
         }
 
@@ -125,14 +129,13 @@ public class ReportController {
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate,
                         @ParameterObject PageableRequest pageableRequest, @ParameterObject ExcelRequest excelRequest) {
 
-                ByteArrayResource resource = reportService.exportExcelEmployeeActivityReport(employeeName,
-                                employeeExtension, startDate, endDate, pageable,
-                                excelRequest.toExcelGeneratorBuilder());
                 return ResponseEntity.ok()
                                 .header(HttpHeaders.CONTENT_DISPOSITION,
                                                 "attachment; filename=employee_activity_report.xlsx")
                                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
-                                .body(resource);
+                                .body(employeeReportService.exportExcelEmployeeActivityReport(employeeName,
+                                                employeeExtension, startDate, endDate, pageable,
+                                                excelRequest.toExcelGeneratorBuilder()));
         }
 
         @GetMapping(value = "employeeCall", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -142,7 +145,8 @@ public class ReportController {
                         @RequestParam(required = false) String employeeExtension,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate) {
-                return reportService.generateEmployeeCallReport(employeeName, employeeExtension, startDate, endDate,
+                return employeeReportService.generateEmployeeCallReport(employeeName, employeeExtension, startDate,
+                                endDate,
                                 pageable);
         }
 
@@ -154,7 +158,7 @@ public class ReportController {
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate,
                         @ParameterObject ExcelRequest excelRequest, @ParameterObject PageableRequest pageableRequest) {
 
-                ByteArrayResource resource = reportService.exportExcelEmployeeCallReport(employeeName,
+                ByteArrayResource resource = employeeReportService.exportExcelEmployeeCallReport(employeeName,
                                 employeeExtension, startDate, endDate, pageable,
                                 excelRequest.toExcelGeneratorBuilder());
                 return ResponseEntity.ok()
@@ -170,7 +174,7 @@ public class ReportController {
                         @RequestParam(required = false) String extension,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate) {
-                return reportService.generateUnassignedCallReport(extension, startDate, endDate, pageable);
+                return callRecordReportService.generateUnassignedCallReport(extension, startDate, endDate, pageable);
         }
 
         @GetMapping(value = "unassignedCall/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
@@ -180,7 +184,8 @@ public class ReportController {
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate,
                         @ParameterObject ExcelRequest excelRequest, @ParameterObject PageableRequest pageableRequest) {
 
-                ByteArrayResource resource = reportService.exportExcelUnassignedCallReport(extension, startDate,
+                ByteArrayResource resource = callRecordReportService.exportExcelUnassignedCallReport(extension,
+                                startDate,
                                 endDate, pageable, excelRequest.toExcelGeneratorBuilder());
                 return ResponseEntity.ok()
                                 .header(HttpHeaders.CONTENT_DISPOSITION,
@@ -196,7 +201,7 @@ public class ReportController {
                         @RequestParam(required = false) String errorType,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate) {
-                return reportService.generateProcessingFailureReport(directory, errorType, startDate, endDate,
+                return callRecordReportService.generateProcessingFailureReport(directory, errorType, startDate, endDate,
                                 pageable);
         }
 
@@ -208,7 +213,8 @@ public class ReportController {
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate,
                         @ParameterObject ExcelRequest excelRequest, @ParameterObject PageableRequest pageableRequest) {
 
-                ByteArrayResource resource = reportService.exportExcelProcessingFailureReport(directory, errorType,
+                ByteArrayResource resource = callRecordReportService.exportExcelProcessingFailureReport(directory,
+                                errorType,
                                 startDate, endDate, pageable, excelRequest.toExcelGeneratorBuilder());
                 return ResponseEntity.ok()
                                 .header(HttpHeaders.CONTENT_DISPOSITION,
@@ -223,7 +229,8 @@ public class ReportController {
                         @RequestParam(required = false) String employeeName,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate) {
-                return reportService.generateMissedCallEmployeeReport(employeeName, startDate, endDate, pageable);
+                return employeeReportService.generateMissedCallEmployeeReport(employeeName, startDate, endDate,
+                                pageable);
         }
 
         @GetMapping(value = "missedCallEmployee/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
@@ -234,7 +241,8 @@ public class ReportController {
                         @ParameterObject ExcelRequest excelRequest,
                         @ParameterObject PageableRequest pageableRequest) {
 
-                ByteArrayResource resource = reportService.exportExcelMissedCallEmployeeReport(employeeName, startDate,
+                ByteArrayResource resource = employeeReportService.exportExcelMissedCallEmployeeReport(employeeName,
+                                startDate,
                                 endDate,
                                 pageable, excelRequest.toExcelGeneratorBuilder());
                 return ResponseEntity.ok()
@@ -251,7 +259,7 @@ public class ReportController {
                         @RequestParam(required = false) String extension,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate) {
-                return reportService.generateUnusedExtensionReport(employeeName, extension, startDate, endDate,
+                return extensionReportService.generateUnusedExtensionReport(employeeName, extension, startDate, endDate,
                                 pageable);
         }
 
@@ -264,7 +272,8 @@ public class ReportController {
                         @ParameterObject ExcelRequest excelRequest,
                         @ParameterObject PageableRequest pageableRequest) {
 
-                ByteArrayResource resource = reportService.exportExcelUnusedExtensionReport(employeeName, extension,
+                ByteArrayResource resource = extensionReportService.exportExcelUnusedExtensionReport(employeeName,
+                                extension,
                                 startDate,
                                 endDate, pageable, excelRequest.toExcelGeneratorBuilder());
                 return ResponseEntity.ok()
@@ -282,7 +291,7 @@ public class ReportController {
                         @RequestParam(required = false) List<String> extensions,
                         @RequestParam(required = false) List<Long> operatorIds,
                         @RequestParam(required = false) String voicemailNumber) {
-                return reportService.generateExtensionGroupReport(startDate, endDate, extensions, operatorIds,
+                return extensionReportService.generateExtensionGroupReport(startDate, endDate, extensions, operatorIds,
                                 voicemailNumber, pageable);
         }
 
@@ -296,7 +305,7 @@ public class ReportController {
                         @ParameterObject ExcelRequest excelRequest,
                         @ParameterObject PageableRequest pageableRequest) {
 
-                ByteArrayResource resource = reportService.exportExcelExtensionGroupReport(startDate, endDate,
+                ByteArrayResource resource = extensionReportService.exportExcelExtensionGroupReport(startDate, endDate,
                                 extensions,
                                 operatorIds, voicemailNumber, pageable, excelRequest.toExcelGeneratorBuilder());
                 return ResponseEntity.ok()
@@ -312,7 +321,8 @@ public class ReportController {
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate,
                         @RequestParam List<Long> subdivisionIds) {
-                return reportService.generateSubdivisionUsageReport(startDate, endDate, subdivisionIds, pageable);
+                return subdivisionReportService.generateSubdivisionUsageReport(startDate, endDate, subdivisionIds,
+                                pageable);
         }
 
         @GetMapping(value = "subdivisionUsage/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
@@ -322,7 +332,8 @@ public class ReportController {
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate,
                         @RequestParam List<Long> subdivisionIds, @ParameterObject ExcelRequest excelRequest) {
 
-                ByteArrayResource resource = reportService.exportExcelSubdivisionUsageReport(startDate, endDate,
+                ByteArrayResource resource = subdivisionReportService.exportExcelSubdivisionUsageReport(startDate,
+                                endDate,
                                 subdivisionIds, pageable, excelRequest.toExcelGeneratorBuilder());
                 return ResponseEntity.ok()
                                 .header(HttpHeaders.CONTENT_DISPOSITION,
@@ -337,7 +348,8 @@ public class ReportController {
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate,
                         @RequestParam List<Long> subdivisionIds) {
-                return reportService.generateSubdivisionUsageByTypeReport(startDate, endDate, subdivisionIds, pageable);
+                return subdivisionReportService.generateSubdivisionUsageByTypeReport(startDate, endDate, subdivisionIds,
+                                pageable);
         }
 
         @GetMapping(value = "subdivisionUsageByType/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
@@ -347,7 +359,8 @@ public class ReportController {
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate,
                         @RequestParam List<Long> subdivisionIds, @ParameterObject ExcelRequest excelRequest) {
 
-                ByteArrayResource resource = reportService.exportExcelSubdivisionUsageByTypeReport(startDate, endDate,
+                ByteArrayResource resource = subdivisionReportService.exportExcelSubdivisionUsageByTypeReport(startDate,
+                                endDate,
                                 subdivisionIds, pageable, excelRequest.toExcelGeneratorBuilder());
                 return ResponseEntity.ok()
                                 .header(HttpHeaders.CONTENT_DISPOSITION,
@@ -361,7 +374,7 @@ public class ReportController {
                         @Parameter(hidden = true) Pageable pageable, @ParameterObject PageableRequest pageableRequest,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate) {
-                return reportService.generateTelephonyTypeUsageReport(startDate, endDate, pageable);
+                return telephonyUsageReportService.generateTelephonyTypeUsageReport(startDate, endDate, pageable);
         }
 
         @GetMapping(value = "telephonyTypeUsage/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
@@ -371,7 +384,8 @@ public class ReportController {
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate,
                         @ParameterObject ExcelRequest excelRequest) {
 
-                ByteArrayResource resource = reportService.exportExcelTelephonyTypeUsageReport(startDate, endDate,
+                ByteArrayResource resource = telephonyUsageReportService.exportExcelTelephonyTypeUsageReport(startDate,
+                                endDate,
                                 pageable, excelRequest.toExcelGeneratorBuilder());
                 return ResponseEntity.ok()
                                 .header(HttpHeaders.CONTENT_DISPOSITION,
@@ -381,11 +395,12 @@ public class ReportController {
         }
 
         @GetMapping(value = "monthlyTelephonyTypeUsage", produces = MediaType.APPLICATION_JSON_VALUE)
-        public Page<MonthlyTelephonyTypeUsageReportDto> getMonthlyTelephonyTypeUsageReport(
+        public Page<MonthlyTelephonyTypeUsageGroupDto> getMonthlyTelephonyTypeUsageReport(
                         @Parameter(hidden = true) Pageable pageable, @ParameterObject PageableRequest pageableRequest,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate) {
-                return reportService.generateMonthlyTelephonyTypeUsageReport(startDate, endDate, pageable);
+                return telephonyUsageReportService.generateMonthlyTelephonyTypeUsageReport(startDate, endDate,
+                                pageable);
         }
 
         @GetMapping(value = "monthlyTelephonyTypeUsage/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
@@ -395,7 +410,8 @@ public class ReportController {
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate,
                         @ParameterObject ExcelRequest excelRequest) {
 
-                ByteArrayResource resource = reportService.exportExcelMonthlyTelephonyTypeUsageReport(startDate,
+                ByteArrayResource resource = telephonyUsageReportService.exportExcelMonthlyTelephonyTypeUsageReport(
+                                startDate,
                                 endDate, pageable, excelRequest.toExcelGeneratorBuilder());
                 return ResponseEntity.ok()
                                 .header(HttpHeaders.CONTENT_DISPOSITION,
@@ -409,7 +425,7 @@ public class ReportController {
                         @ParameterObject PageableRequest pageableRequest,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate) {
-                return reportService.generateCostCenterUsageReport(startDate, endDate, pageable);
+                return telephonyUsageReportService.generateCostCenterUsageReport(startDate, endDate, pageable);
         }
 
         @GetMapping(value = "costCenterUsage/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
@@ -419,7 +435,8 @@ public class ReportController {
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate,
                         @ParameterObject ExcelRequest excelRequest) {
 
-                ByteArrayResource resource = reportService.exportExcelCostCenterUsageReport(startDate, endDate,
+                ByteArrayResource resource = telephonyUsageReportService.exportExcelCostCenterUsageReport(startDate,
+                                endDate,
                                 pageable, excelRequest.toExcelGeneratorBuilder());
                 return ResponseEntity.ok()
                                 .header(HttpHeaders.CONTENT_DISPOSITION,
@@ -433,7 +450,7 @@ public class ReportController {
                         @Parameter(hidden = true) Pageable pageable, @ParameterObject PageableRequest pageableRequest,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate) {
-                return reportService.generateEmployeeAuthCodeUsageReport(startDate, endDate, pageable);
+                return employeeReportService.generateEmployeeAuthCodeUsageReport(startDate, endDate, pageable);
         }
 
         @GetMapping(value = "employeeAuthCodeUsage/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
@@ -443,7 +460,8 @@ public class ReportController {
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate,
                         @ParameterObject ExcelRequest excelRequest) {
 
-                ByteArrayResource resource = reportService.exportExcelEmployeeAuthCodeUsageReport(startDate, endDate,
+                ByteArrayResource resource = employeeReportService.exportExcelEmployeeAuthCodeUsageReport(startDate,
+                                endDate,
                                 pageable, excelRequest.toExcelGeneratorBuilder());
                 return ResponseEntity.ok()
                                 .header(HttpHeaders.CONTENT_DISPOSITION,
@@ -458,7 +476,8 @@ public class ReportController {
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate,
                         @RequestParam List<Long> subdivisionIds) {
-                return reportService.generateMonthlySubdivisionUsageReport(startDate, endDate, subdivisionIds,
+                return subdivisionReportService.generateMonthlySubdivisionUsageReport(startDate, endDate,
+                                subdivisionIds,
                                 pageable);
         }
 
@@ -469,7 +488,8 @@ public class ReportController {
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate,
                         @RequestParam List<Long> subdivisionIds, @ParameterObject ExcelRequest excelRequest) {
 
-                ByteArrayResource resource = reportService.exportExcelMonthlySubdivisionUsageReport(startDate, endDate,
+                ByteArrayResource resource = subdivisionReportService.exportExcelMonthlySubdivisionUsageReport(
+                                startDate, endDate,
                                 subdivisionIds, pageable, excelRequest.toExcelGeneratorBuilder());
                 return ResponseEntity.ok()
                                 .header(HttpHeaders.CONTENT_DISPOSITION,
@@ -483,7 +503,7 @@ public class ReportController {
                         @ParameterObject PageableRequest pageableRequest,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate) {
-                return reportService.generateDialedNumberUsageReport(startDate, endDate, pageable);
+                return telephonyUsageReportService.generateDialedNumberUsageReport(startDate, endDate, pageable);
         }
 
         @GetMapping(value = "dialedNumberUsage/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
@@ -493,7 +513,8 @@ public class ReportController {
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate,
                         @ParameterObject ExcelRequest excelRequest) {
 
-                ByteArrayResource resource = reportService.exportExcelDialedNumberUsageReport(startDate, endDate,
+                ByteArrayResource resource = telephonyUsageReportService.exportExcelDialedNumberUsageReport(startDate,
+                                endDate,
                                 pageable, excelRequest.toExcelGeneratorBuilder());
                 return ResponseEntity.ok()
                                 .header(HttpHeaders.CONTENT_DISPOSITION,
@@ -507,7 +528,7 @@ public class ReportController {
                         @ParameterObject PageableRequest pageableRequest,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate) {
-                return reportService.generateDestinationUsageReport(startDate, endDate, pageable);
+                return telephonyUsageReportService.generateDestinationUsageReport(startDate, endDate, pageable);
         }
 
         @GetMapping(value = "destinationUsage/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
@@ -517,7 +538,8 @@ public class ReportController {
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate,
                         @ParameterObject ExcelRequest excelRequest) {
 
-                ByteArrayResource resource = reportService.exportExcelDestinationUsageReport(startDate, endDate,
+                ByteArrayResource resource = telephonyUsageReportService.exportExcelDestinationUsageReport(startDate,
+                                endDate,
                                 pageable, excelRequest.toExcelGeneratorBuilder());
                 return ResponseEntity.ok()
                                 .header(HttpHeaders.CONTENT_DISPOSITION,
@@ -531,7 +553,7 @@ public class ReportController {
                         @Parameter(hidden = true) Pageable pageable, @ParameterObject PageableRequest pageableRequest,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate) {
-                return reportService.generateHighestConsumptionEmployeeReport(startDate, endDate, pageable);
+                return employeeReportService.generateHighestConsumptionEmployeeReport(startDate, endDate, pageable);
         }
 
         @GetMapping(value = "highestConsumptionEmployee/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
@@ -541,7 +563,8 @@ public class ReportController {
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate,
                         @ParameterObject ExcelRequest excelRequest) {
 
-                ByteArrayResource resource = reportService.exportExcelHighestConsumptionEmployeeReport(startDate,
+                ByteArrayResource resource = employeeReportService.exportExcelHighestConsumptionEmployeeReport(
+                                startDate,
                                 endDate, pageable, excelRequest.toExcelGeneratorBuilder());
                 return ResponseEntity.ok()
                                 .header(HttpHeaders.CONTENT_DISPOSITION,
@@ -557,7 +580,7 @@ public class ReportController {
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate,
                         @RequestParam(required = false) String extension,
                         @RequestParam(required = false) String employeeName) {
-                return reportService.generateConferenceCallsReport(startDate, endDate, extension,
+                return conferenceReportService.generateConferenceCallsReport(startDate, endDate, extension,
                                 employeeName, pageable);
         }
 
@@ -569,7 +592,8 @@ public class ReportController {
                         @RequestParam(required = false) String employeeName,
                         @ParameterObject PageableRequest pageableRequest,
                         @ParameterObject ExcelRequest excelRequest) {
-                ByteArrayResource resource = reportService.exportExcelConferenceCallsReport(startDate, endDate,
+                ByteArrayResource resource = conferenceReportService.exportExcelConferenceCallsReport(startDate,
+                                endDate,
                                 extension, employeeName,
                                 pageable, excelRequest.toExcelGeneratorBuilder());
                 return ResponseEntity.ok()
