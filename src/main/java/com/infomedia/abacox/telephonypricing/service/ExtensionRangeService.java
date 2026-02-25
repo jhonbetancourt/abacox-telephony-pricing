@@ -16,7 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.List;
+import java.util.Map;
 
 @Service
 public class ExtensionRangeService extends CrudService<ExtensionRange, Long, ExtensionRangeRepository> {
@@ -58,7 +58,8 @@ public class ExtensionRangeService extends CrudService<ExtensionRange, Long, Ext
         return historyControlService.processUpdate(
                 current,
                 updated,
-                List.of(ExtensionRange::getRangeStart, ExtensionRange::getCommLocationId),
+                Map.of("Range Start", ExtensionRange::getRangeStart, "Location",
+                        ExtensionRange::getCommLocationId),
                 RefTable.EXTENSION_RANGE,
                 getRepository());
     }

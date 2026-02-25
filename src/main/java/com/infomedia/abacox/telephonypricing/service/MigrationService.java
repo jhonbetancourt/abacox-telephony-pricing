@@ -359,11 +359,11 @@ public class MigrationService {
                                 .targetIdFieldName("id")
                                 .columnMapping(Map.ofEntries(
                                                 entry("HISTORICTL_ID", "id"),
-                                                entry("HISTORICTL_REFTABLE", "refTable"),
-                                                entry("HISTORICTL_REFID", "refId"),
+                                                entry("HISTORICTL_REF_TABLA", "refTable"),
+                                                entry("HISTORICTL_REF_ID", "refId"),
                                                 entry("HISTORICTL_HISTODESDE", "historySince")))
                                 .rowFilter(row -> {
-                                        Object refTableObj = row.get("HISTORICTL_REFTABLE");
+                                        Object refTableObj = row.get("HISTORICTL_REF_TABLA");
                                         if (refTableObj instanceof Number) {
                                                 int refTableId = ((Number) refTableObj).intValue();
                                                 // Only EMPLOYEE (1) and EXTENSION_RANGE (2)

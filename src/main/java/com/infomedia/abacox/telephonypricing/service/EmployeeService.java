@@ -16,7 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.List;
+import java.util.Map;
 
 @Service
 public class EmployeeService extends CrudService<Employee, Long, EmployeeRepository> {
@@ -68,7 +68,7 @@ public class EmployeeService extends CrudService<Employee, Long, EmployeeReposit
         return historyControlService.processUpdate(
                 current,
                 updated,
-                List.of(Employee::getExtension, Employee::getCommunicationLocationId),
+                Map.of("Extension", Employee::getExtension, "Location", Employee::getCommunicationLocationId),
                 RefTable.EMPLOYEE,
                 getRepository());
     }

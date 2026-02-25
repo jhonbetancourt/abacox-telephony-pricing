@@ -11,7 +11,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.function.Function;
 
@@ -26,39 +28,25 @@ public class HistoryControlService {
     public void initHistory(HistoricalEntity entity) {
         entity.setHistorySince(LocalDateTime.now());
         entity.setHistoryControlId(null);
+        entity.setHistoryChange("Initial Creation");
     }
 
-    /**
-     * Processes an update to a historical entity.
-     * 
-     * @param current               The current state of the entity (loaded from
-     *                              DB).
-     *                              Note: This entity should be considered
-     *                              "stale/read-only" if a trigger changes.
-     * @param updated               The entity with NEW values applied.
-     * @param triggerFieldAccessors List of functions to extract values of fields
-     *                              that trigger a new version.
-     * @param refTable              The identifier for the table group.
-     * @param repository            The repository for saving the entity versions.
-     * @return The saved active version of the entity.
-     */
     @Transactional
     public <T extends HistoricalEntity> T processUpdate(
             T current,
             T updated,
-            List<Function<T, Object>> triggerFieldAccessors,
+            Map<String, Function<T, Object>> triggerFieldAccessors,
             RefTable refTable,
             JpaRepository<T, Long> repository) {
 
-        boolean triggerChanged = false;
-        for (var accessor : triggerFieldAccessors) {
-            if (!Objects.equals(accessor.apply(current), accessor.apply(updated))) {
-                triggerChanged = true;
-                break;
+        List<String> changedFields = new ArrayList<>();
+        for (var entry : triggerFieldAccessors.entrySet()) {
+            if (!Objects.equals(entry.getValue().apply(current), entry.getValue().apply(updated))) {
+                changedFields.add(entry.getKey());
             }
         }
 
-        if (triggerChanged) {
+        if (!changedFields.isEmpty()) {
             HistoryControl hc;
             if (current.getHistoryControlId() == null) {
                 log.info("Creating first historical control for {} ID {}", refTable, current.getId());
@@ -83,6 +71,10 @@ public class HistoryControlService {
             updated.setId(null);
             updated.setHistoryControlId(hc.getId());
             updated.setHistorySince(LocalDateTime.now());
+
+            // Build a descriptive reason
+            String reason = "Change in: " + String.join(", ", changedFields);
+            updated.setHistoryChange(reason);
 
             // Save the new version
             T savedNewVersion = repository.save(updated);
@@ -120,7 +112,15 @@ public class HistoryControlService {
         }
 
         log.info("Retiring history group {} for entity {}/{}", hc.getId(), refTable, entity.getId());
-        hc.setRefId(null);
+
+        // Populate the history change in the record being retired
+        entity.setHistoryChange("Retirement / Deactivation");
+        repository.save(entity);
+
+        // Logic for deactivation in historical system: negate the ref_id
+        if (hc.getRefId() != null) {
+            hc.setRefId(-Math.abs(hc.getRefId()));
+        }
         historyControlRepository.save(hc);
     }
 }

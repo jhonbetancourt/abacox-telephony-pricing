@@ -14,4 +14,8 @@ public interface HistoricalEntity {
     Long getHistoryControlId();
 
     void setHistoryControlId(Long historyControlId);
+
+    String getHistoryChange();
+
+    void setHistoryChange(String historyChange);
 }
