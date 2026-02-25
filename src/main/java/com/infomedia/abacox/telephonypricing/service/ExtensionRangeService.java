@@ -64,8 +64,9 @@ public class ExtensionRangeService extends CrudService<ExtensionRange, Long, Ext
     }
 
     @Transactional
-    public void retire(Long historyControlId) {
-        historyControlService.retire(RefTable.EXTENSION_RANGE, historyControlId);
+    public void retire(Long id) {
+        ExtensionRange extensionRange = get(id);
+        historyControlService.processRetire(extensionRange, RefTable.EXTENSION_RANGE, getRepository());
     }
 
     public ByteArrayResource exportExcel(Specification<ExtensionRange> specification, Pageable pageable,

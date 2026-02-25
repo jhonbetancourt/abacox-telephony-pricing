@@ -64,9 +64,9 @@ public class EmployeeController {
         return modelConverter.map(employeeService.changeActivation(id, activationDto.getActive()), EmployeeDto.class);
     }
 
-    @PatchMapping(value = "/retire/{historyControlId}", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<Void> retire(@PathVariable("historyControlId") Long historyControlId) {
-        employeeService.retire(historyControlId);
+    @PatchMapping(value = "/retire/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<Void> retire(@PathVariable("id") Long id) {
+        employeeService.retire(id);
         return ResponseEntity.noContent().build();
     }
 

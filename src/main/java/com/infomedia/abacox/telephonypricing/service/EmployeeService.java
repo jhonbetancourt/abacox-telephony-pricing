@@ -74,8 +74,9 @@ public class EmployeeService extends CrudService<Employee, Long, EmployeeReposit
     }
 
     @Transactional
-    public void retire(Long historyControlId) {
-        historyControlService.retire(RefTable.EMPLOYEE, historyControlId);
+    public void retire(Long id) {
+        Employee employee = get(id);
+        historyControlService.processRetire(employee, RefTable.EMPLOYEE, getRepository());
     }
 
     public ByteArrayResource exportExcel(Specification<Employee> specification, Pageable pageable,

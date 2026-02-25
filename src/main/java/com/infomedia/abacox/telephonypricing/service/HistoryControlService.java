@@ -99,12 +99,12 @@ public class HistoryControlService {
     }
 
     @Transactional
-    public <T extends HistoricalEntity> void retire(RefTable refTable, T entity, JpaRepository<T, Long> repository) {
-        Long historyControlId = entity.getHistoryControlId();
+    public <T extends HistoricalEntity> void processRetire(T entity, RefTable refTable,
+            JpaRepository<T, Long> repository) {
         HistoryControl hc;
-
-        if (historyControlId == null) {
-            log.info("Retiring {} {} that has no history group. Creating group first.", refTable, entity.getId());
+        if (entity.getHistoryControlId() == null) {
+            log.info("Retiring record {}/{} that has no history group. Creating group first.", refTable,
+                    entity.getId());
             hc = historyControlRepository.save(HistoryControl.builder()
                     .refTable(refTable.getId())
                     .refId(entity.getId())
@@ -114,16 +114,12 @@ public class HistoryControlService {
             entity.setHistoryControlId(hc.getId());
             repository.save(entity);
         } else {
-            hc = historyControlRepository.findById(historyControlId)
-                    .orElseThrow(() -> new RuntimeException("HistoryControl not found for ID " + historyControlId));
+            hc = historyControlRepository.findById(entity.getHistoryControlId())
+                    .orElseThrow(() -> new RuntimeException(
+                            "HistoryControl not found for ID " + entity.getHistoryControlId()));
         }
 
-        if (!Objects.equals(hc.getRefTable(), refTable.getId())) {
-            throw new IllegalArgumentException(
-                    "HistoryControl " + hc.getId() + " does not belong to table " + refTable);
-        }
-
-        log.info("Retiring history group {} for table {}", hc.getId(), refTable);
+        log.info("Retiring history group {} for entity {}/{}", hc.getId(), refTable, entity.getId());
         hc.setRefId(null);
         historyControlRepository.save(hc);
     }

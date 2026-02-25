@@ -66,9 +66,9 @@ public class ExtensionRangeController {
                 ExtensionRangeDto.class);
     }
 
-    @PatchMapping(value = "/retire/{historyControlId}", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseEntity<Void> retire(@PathVariable("historyControlId") Long historyControlId) {
-        extensionRangeService.retire(historyControlId);
+    @PatchMapping(value = "/retire/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<Void> retire(@PathVariable("id") Long id) {
+        extensionRangeService.retire(id);
         return ResponseEntity.noContent().build();
     }
 
