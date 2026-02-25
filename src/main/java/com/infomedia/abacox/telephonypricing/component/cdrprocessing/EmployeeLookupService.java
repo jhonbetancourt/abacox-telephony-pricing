@@ -52,7 +52,14 @@ public class EmployeeLookupService {
 
         // --- 1. Fetch Employees ---
         if (!cleanedExtensions.isEmpty() || !validAuthCodes.isEmpty()) {
-            String fetchAllQuery = "SELECT e.* FROM employee e WHERE e.extension IN (:extensions) OR e.auth_code IN (:authCodes) ORDER BY e.history_since DESC";
+            String fetchAllQuery = 
+                "SELECT e.* FROM employee e " +
+                "WHERE e.extension IN (:extensions) OR e.auth_code IN (:authCodes) " +
+                "   OR (e.history_control_id IS NOT NULL AND e.history_control_id IN ( " +
+                "       SELECT e2.history_control_id FROM employee e2 " +
+                "       WHERE e2.extension IN (:extensions) OR e2.auth_code IN (:authCodes) " +
+                "   )) " +
+                "ORDER BY e.history_control_id, e.history_since DESC";
             jakarta.persistence.Query fetchQuery = entityManager.createNativeQuery(fetchAllQuery, Employee.class);
             fetchQuery.setParameter("extensions", cleanedExtensions.isEmpty() ? Collections.singleton("-1") : cleanedExtensions);
             fetchQuery.setParameter("authCodes", validAuthCodes.isEmpty() ? Collections.singleton("-1") : validAuthCodes);
