@@ -13,7 +13,6 @@ import java.util.stream.Stream;
 @Getter
 public enum ConfigKey {
 
-    SERVICE_DATE_HOUR_OFFSET(ConfigGroup.CDR, "-5"),
     SPECIAL_VALUE_TARIFFING(ConfigGroup.CDR, "true"),
     MIN_CALL_DURATION_FOR_TARIFFING(ConfigGroup.CDR, "0"), // in seconds
     MAX_CALL_DURATION_MINUTES(ConfigGroup.CDR, "2880"), // 48 hours

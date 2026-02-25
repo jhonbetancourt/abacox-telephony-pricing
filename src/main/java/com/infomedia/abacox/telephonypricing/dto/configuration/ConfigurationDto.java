@@ -15,7 +15,6 @@ import java.time.LocalDate;
 @NoArgsConstructor
 public class ConfigurationDto {
     private Boolean cdrProcessingEnabled;
-    private Integer serviceDateHourOffset;
     private Boolean specialValueTariffing;
     private Integer minCallDurationForTariffing;
     private Integer maxCallDurationMinutes;

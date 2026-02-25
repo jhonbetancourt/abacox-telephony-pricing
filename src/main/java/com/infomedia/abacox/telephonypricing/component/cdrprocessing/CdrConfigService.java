@@ -8,7 +8,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.ZoneId;
-import java.time.ZoneOffset;
 
 @Service
 @Log4j2
@@ -29,16 +28,9 @@ public class CdrConfigService {
     public static final Long DEFAULT_OPERATOR_ID_FOR_INTERNAL = null;
 
     public ZoneId getTargetDatabaseZoneId() {
-        // This is a new concept for Java's timezone handling, no direct PHP equivalent.
-        // It replaces implicit server timezone assumptions.
-        String zoneIdStr = configService.getValue(ConfigKey.SERVICE_DATE_HOUR_OFFSET).asString();
-        try {
-            int offsetHours = Integer.parseInt(zoneIdStr);
-            return ZoneOffset.ofHours(offsetHours);
-        } catch (Exception e) {
-            log.debug("Invalid ZoneId configured: '{}'. Defaulting to UTC.", zoneIdStr, e);
-            return ZoneId.of("UTC");
-        }
+        // Hardcoded to America/Bogota as per requirement, replacing the dynamic config
+        // parameter.
+        return ZoneId.of("America/Bogota");
     }
 
     public boolean isSpecialValueTariffingEnabled() {
