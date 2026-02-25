@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -24,7 +25,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class EmployeeLookupService {
 
-    @PersistenceContext
+     @PersistenceContext
     private EntityManager entityManager;
     private final CdrConfigService cdrConfigService;
 
@@ -97,6 +98,9 @@ public class EmployeeLookupService {
      * Calculates the fhasta (end date) for historical groups just like PHP's Obtener_HistoricoHasta_Listado
      */
     private <T extends HistoricalEntity> void processHistorySlices(List<T> entities, HistorySliceConsumer<T> consumer) {
+        // Retrieve the configured timezone (e.g., America/Bogota) for DB dates
+        ZoneId targetDbZone = cdrConfigService.getTargetDatabaseZoneId();
+
         // Group by history control id
         Map<Long, List<T>> grouped = entities.stream()
                 .filter(e -> e.getHistoryControlId() != null)
@@ -108,7 +112,9 @@ public class EmployeeLookupService {
             long nextFdesde = -1;
 
             for (T entity : group) {
-                long fdesde = entity.getHistorySince() != null ? entity.getHistorySince().toEpochSecond(ZoneOffset.UTC) : 0;
+                // Convert DB date (Target Zone) to Epoch seconds for accurate comparison with UTC CDRs
+                long fdesde = entity.getHistorySince() != null ? 
+                        entity.getHistorySince().atZone(targetDbZone).toEpochSecond() : 0;
                 long fhasta = -1; // -1 means open/no limit
 
                 if (nextFdesde != -1) {
@@ -124,7 +130,8 @@ public class EmployeeLookupService {
         entities.stream()
                 .filter(e -> e.getHistoryControlId() == null)
                 .forEach(e -> {
-                    long fdesde = e.getHistorySince() != null ? e.getHistorySince().toEpochSecond(ZoneOffset.UTC) : 0;
+                    long fdesde = e.getHistorySince() != null ? 
+                            e.getHistorySince().atZone(targetDbZone).toEpochSecond() : 0;
                     consumer.accept(e, fdesde, -1L);
                 });
     }
@@ -146,8 +153,11 @@ public class EmployeeLookupService {
         boolean isAuthCodeIgnoredType = hasAuthCode && ignoredAuthCodeDescriptions.stream().anyMatch(ignored -> ignored.equalsIgnoreCase(authCode));
         String validAuthCode = (hasAuthCode && !isAuthCodeIgnoredType) ? authCode : null;
 
-        // Ensure fallback defaults to the moment of evaluation if timestamp is absent
-        long callTimestampEpoch = callTimestamp != null ? callTimestamp.toEpochSecond(ZoneOffset.UTC) : LocalDateTime.now().toEpochSecond(ZoneOffset.UTC);
+        // Ensure fallback defaults to the moment of evaluation if timestamp is absent.
+        // CdrData timestamps are UTC, so we convert them to Epoch using UTC.
+        long callTimestampEpoch = callTimestamp != null ? 
+                callTimestamp.toEpochSecond(ZoneOffset.UTC) : 
+                LocalDateTime.now(ZoneOffset.UTC).toEpochSecond(ZoneOffset.UTC);
 
         // --- 2. Lazy Load Historical Data (For Synchronous Processing) ---
         if (historicalData == null) {
@@ -187,7 +197,20 @@ public class EmployeeLookupService {
             Optional<Employee> conceptualEmployeeOpt = findEmployeeByExtensionRange(cleanedExtension, commLocationIdContext, fallbackExtensionRanges, callTimestamp, historicalData);
             if (conceptualEmployeeOpt.isPresent()) {
                 Employee conceptualEmployee = conceptualEmployeeOpt.get();
+                
+                // Fix 1: Check if this extension is part of a managed history.
+                // If it is (even if not valid for this specific timestamp in the timeline), 
+                // we block auto-persistence to avoid creating orphan records outside the timeline.
+                boolean isManagedExtension = historicalData.getExtensionTimelines().containsKey(cleanedExtension);
+
                 if (conceptualEmployee.getId() == null && cdrConfigService.createEmployeesAutomaticallyFromRange()) {
+                    
+                    if (isManagedExtension) {
+                        log.debug("Extension {} belongs to a managed history. Blocking auto-creation/persistence.", cleanedExtension);
+                        // Return the conceptual employee for pricing/assignment, but do NOT persist.
+                        return Optional.of(conceptualEmployee);
+                    }
+
                     log.debug("Persisting new employee for extension {} from range, CommLocation ID: {}", conceptualEmployee.getExtension(), conceptualEmployee.getCommunicationLocationId());
                     entityManager.persist(conceptualEmployee);
                     return Optional.of(conceptualEmployee);
@@ -216,7 +239,11 @@ public class EmployeeLookupService {
             return Optional.empty();
         }
 
-        long callTimestampEpoch = callTimestamp != null ? callTimestamp.toEpochSecond(ZoneOffset.UTC) : LocalDateTime.now().toEpochSecond(ZoneOffset.UTC);
+        // CDR Timestamp is UTC. Convert to Epoch using UTC to compare with DB Epochs (which were converted from TargetZone)
+        long callTimestampEpoch = callTimestamp != null ? 
+                callTimestamp.toEpochSecond(ZoneOffset.UTC) : 
+                LocalDateTime.now(ZoneOffset.UTC).toEpochSecond(ZoneOffset.UTC);
+
         boolean searchRangesGlobally = cdrConfigService.areExtensionsGlobal();
         
         // Lazy load for sync processing
