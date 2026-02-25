@@ -36,16 +36,14 @@ public class CommunicationLocationLookupService {
      * buscarPlantaDestino)
      * but scoped to a single client's CommunicationLocations.
      *
-     * @param plantTypeId                     The plantType of the CDR source (e.g.,
-     *                                        Cisco CM 6.0)
+     * @param plantTypeId                     The plantType of the CDR source (e.g., Cisco CM 6.0)
      * @param callingPartyNumber              From CDR
      * @param callingPartyNumberPartition     From CDR
      * @param finalCalledPartyNumber          From CDR
      * @param finalCalledPartyNumberPartition From CDR
      * @param lastRedirectDn                  From CDR
      * @param lastRedirectDnPartition         From CDR
-     * @param callDateTime                    For historical context (currently
-     *                                        simplified)
+     * @param callDateTime                    For historical context evaluation
      * @return Optional<CommunicationLocation>
      */
     @Transactional(readOnly = true)
@@ -103,8 +101,7 @@ public class CommunicationLocationLookupService {
 
         // Fallback: If no specific match, and there's only ONE active
         // CommunicationLocation for this plantType, use it.
-        // This mimics PHP's behavior where if a client has only one plant, CDRs might
-        // default to it.
+        // This mimics PHP's behavior where if a client has only one plant, CDRs might default to it.
         List<CommunicationLocation> activeCommLocationsForPlantType = findActiveCommLocationsByPlantType(plantTypeId);
         if (activeCommLocationsForPlantType.size() == 1) {
             log.debug(
@@ -133,24 +130,24 @@ public class CommunicationLocationLookupService {
             cleanedExtension = cleanedExtension.substring(1);
 
         // 1. Try direct Employee lookup by extension
-        // PHP: $query = "SELECT ... FROM funcionario JOIN comubicacion ... WHERE
-        // FUNCIONARIO_EXTENSION = :ext"
-        // We need to consider the partition implicitly if it's part of the extension
-        // string in some systems,
-        // or if specific logic for partition mapping is added. Cisco CDRs provide
-        // partition separately.
-        // For now, we assume extension is unique enough or partition is handled by
-        // plantType context.
-
         StringBuilder empQueryBuilder = new StringBuilder(
                 "SELECT cl.* FROM communication_location cl " +
                         "JOIN employee e ON e.communication_location_id = cl.id " +
                         "WHERE cl.active = true AND cl.plant_type_id = :plantTypeId " +
                         "AND e.extension = :extension ");
+        
         if (callDateTime != null) {
-            empQueryBuilder.append("AND e.history_since <= :callDateTime ");
+            // Emulate PHP's ValidarFechasHistorico & Obtener_HistoricoHasta logic efficiently in SQL:
+            // "Match where history_since <= callDate AND there is NO newer record in the same history_control_id group that is ALSO <= callDate"
+            empQueryBuilder.append("AND (e.history_since IS NULL OR e.history_since <= :callDateTime) ");
+            empQueryBuilder.append("AND (e.history_control_id IS NULL OR NOT EXISTS ( ");
+            empQueryBuilder.append("    SELECT 1 FROM employee e2 ");
+            empQueryBuilder.append("    WHERE e2.history_control_id = e.history_control_id ");
+            empQueryBuilder.append("      AND e2.history_since > e.history_since ");
+            empQueryBuilder.append("      AND e2.history_since <= :callDateTime ");
+            empQueryBuilder.append(")) ");
         }
-        empQueryBuilder.append("ORDER BY e.history_since DESC LIMIT 1");
+        empQueryBuilder.append("ORDER BY e.history_since DESC NULLS LAST LIMIT 1");
 
         jakarta.persistence.Query empQuery = entityManager.createNativeQuery(empQueryBuilder.toString(),
                 CommunicationLocation.class);
@@ -184,10 +181,19 @@ public class CommunicationLocationLookupService {
                         "JOIN extension_range er ON er.comm_location_id = cl.id " +
                         "WHERE cl.active = true AND cl.plant_type_id = :plantTypeId " +
                         "AND er.range_start <= :extNum AND er.range_end >= :extNum ");
+        
         if (callDateTime != null) {
-            rangeQueryBuilder.append("AND er.history_since <= :callDateTime ");
+            // Replicate PHP historical limit validation for ranges
+            rangeQueryBuilder.append("AND (er.history_since IS NULL OR er.history_since <= :callDateTime) ");
+            rangeQueryBuilder.append("AND (er.history_control_id IS NULL OR NOT EXISTS ( ");
+            rangeQueryBuilder.append("    SELECT 1 FROM extension_range er2 ");
+            rangeQueryBuilder.append("    WHERE er2.history_control_id = er.history_control_id ");
+            rangeQueryBuilder.append("      AND er2.history_since > er.history_since ");
+            rangeQueryBuilder.append("      AND er2.history_since <= :callDateTime ");
+            rangeQueryBuilder.append(")) ");
         }
-        rangeQueryBuilder.append("ORDER BY er.history_since DESC, (er.range_end - er.range_start) ASC LIMIT 1");
+        rangeQueryBuilder.append("ORDER BY (er.range_end - er.range_start) ASC, er.history_since DESC NULLS LAST LIMIT 1");
+        
         jakarta.persistence.Query rangeQuery = entityManager.createNativeQuery(rangeQueryBuilder.toString(),
                 CommunicationLocation.class);
         rangeQuery.setParameter("plantTypeId", plantTypeId);
