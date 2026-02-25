@@ -7,8 +7,6 @@ import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import java.time.ZoneId;
-
 @Service
 @Log4j2
 @RequiredArgsConstructor
@@ -26,12 +24,6 @@ public class CdrConfigService {
     public static final int CDR_PROCESSING_BATCH_SIZE = 500;
     // Original PHP: Hardcoded value 0 for internal operator lookups
     public static final Long DEFAULT_OPERATOR_ID_FOR_INTERNAL = null;
-
-    public ZoneId getTargetDatabaseZoneId() {
-        // Hardcoded to America/Bogota as per requirement, replacing the dynamic config
-        // parameter.
-        return ZoneId.of("America/Bogota");
-    }
 
     public boolean isSpecialValueTariffingEnabled() {
         // Original PHP: $usar_valorespecial = ValidarUso($link, 'valorespecial');

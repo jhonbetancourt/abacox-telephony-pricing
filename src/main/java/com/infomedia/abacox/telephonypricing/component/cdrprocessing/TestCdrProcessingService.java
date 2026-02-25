@@ -17,6 +17,7 @@ import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBo
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -205,7 +206,7 @@ public class TestCdrProcessingService {
                             data.getEffectiveDestinationNumber(),
                             commLocationId,
                             String.valueOf(DateTimeUtil.convertToZone(data.getDateTimeOrigination(),
-                                    cdrConfigService.getTargetDatabaseZoneId())),
+                                    ZoneId.systemDefault())),
                             String.valueOf(data.getOperatorId()),
                             data.getCallingPartyNumber(),
                             data.getAuthCodeDescription(),

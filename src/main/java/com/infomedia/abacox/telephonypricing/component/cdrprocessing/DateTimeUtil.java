@@ -23,12 +23,14 @@ public class DateTimeUtil {
 
 
     public static LocalDateTime epochSecondsToLocalDateTime(long epochSeconds) {
-        return LocalDateTime.ofInstant(Instant.ofEpochSecond(epochSeconds), ZoneOffset.UTC);
+        // Converts the absolute UTC epoch into the pinned local timezone
+        return LocalDateTime.ofInstant(Instant.ofEpochSecond(epochSeconds), ZoneId.systemDefault());
     }
 
     public static long localDateTimeToEpochSeconds(LocalDateTime ldt) {
-        if (ldt == null) return 0L; // Or throw IllegalArgumentException
-        return ldt.toEpochSecond(ZoneOffset.UTC);
+        if (ldt == null) return 0L;
+        // Converts the local time back to an absolute epoch
+        return ldt.atZone(ZoneId.systemDefault()).toEpochSecond();
     }
 
     public static LocalDateTime parseCmeDateTime(String cmeDateTimeString) {

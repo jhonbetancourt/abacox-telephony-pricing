@@ -11,6 +11,7 @@ import lombok.extern.log4j.Log4j2;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.UUID;
 
@@ -114,8 +115,8 @@ public class CdrData {
     private String originalDialNumberBeforePbxIncoming;
 
     public long getDateTimeOriginationEpochSeconds() {
-        return dateTimeOrigination != null ? dateTimeOrigination.toEpochSecond(ZoneOffset.UTC) : 0;
-    }
+    return dateTimeOrigination != null ? dateTimeOrigination.atZone(ZoneId.systemDefault()).toEpochSecond() : 0;
+}
 
     public void setRawCdrLine(String rawCdrLine) {
         this.rawCdrLine = rawCdrLine;

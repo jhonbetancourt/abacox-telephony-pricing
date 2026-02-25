@@ -14,6 +14,7 @@ import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
@@ -98,9 +99,6 @@ public class EmployeeLookupService {
      * Calculates the fhasta (end date) for historical groups just like PHP's Obtener_HistoricoHasta_Listado
      */
     private <T extends HistoricalEntity> void processHistorySlices(List<T> entities, HistorySliceConsumer<T> consumer) {
-        // Retrieve the configured timezone (e.g., America/Bogota) for DB dates
-        ZoneId targetDbZone = cdrConfigService.getTargetDatabaseZoneId();
-
         // Group by history control id
         Map<Long, List<T>> grouped = entities.stream()
                 .filter(e -> e.getHistoryControlId() != null)
@@ -112,9 +110,8 @@ public class EmployeeLookupService {
             long nextFdesde = -1;
 
             for (T entity : group) {
-                // Convert DB date (Target Zone) to Epoch seconds for accurate comparison with UTC CDRs
                 long fdesde = entity.getHistorySince() != null ? 
-                        entity.getHistorySince().atZone(targetDbZone).toEpochSecond() : 0;
+                        entity.getHistorySince().atZone(ZoneId.systemDefault()).toEpochSecond() : 0;
                 long fhasta = -1; // -1 means open/no limit
 
                 if (nextFdesde != -1) {
@@ -131,7 +128,7 @@ public class EmployeeLookupService {
                 .filter(e -> e.getHistoryControlId() == null)
                 .forEach(e -> {
                     long fdesde = e.getHistorySince() != null ? 
-                            e.getHistorySince().atZone(targetDbZone).toEpochSecond() : 0;
+                            e.getHistorySince().atZone(ZoneId.systemDefault()).toEpochSecond() : 0;
                     consumer.accept(e, fdesde, -1L);
                 });
     }
@@ -154,10 +151,9 @@ public class EmployeeLookupService {
         String validAuthCode = (hasAuthCode && !isAuthCodeIgnoredType) ? authCode : null;
 
         // Ensure fallback defaults to the moment of evaluation if timestamp is absent.
-        // CdrData timestamps are UTC, so we convert them to Epoch using UTC.
         long callTimestampEpoch = callTimestamp != null ? 
-                callTimestamp.toEpochSecond(ZoneOffset.UTC) : 
-                LocalDateTime.now(ZoneOffset.UTC).toEpochSecond(ZoneOffset.UTC);
+                callTimestamp.atZone(ZoneId.systemDefault()).toEpochSecond() : 
+                Instant.now().getEpochSecond();
 
         // --- 2. Lazy Load Historical Data (For Synchronous Processing) ---
         if (historicalData == null) {
@@ -239,10 +235,10 @@ public class EmployeeLookupService {
             return Optional.empty();
         }
 
-        // CDR Timestamp is UTC. Convert to Epoch using UTC to compare with DB Epochs (which were converted from TargetZone)
+
         long callTimestampEpoch = callTimestamp != null ? 
-                callTimestamp.toEpochSecond(ZoneOffset.UTC) : 
-                LocalDateTime.now(ZoneOffset.UTC).toEpochSecond(ZoneOffset.UTC);
+                callTimestamp.atZone(ZoneId.systemDefault()).toEpochSecond() : 
+                Instant.now().getEpochSecond();
 
         boolean searchRangesGlobally = cdrConfigService.areExtensionsGlobal();
         

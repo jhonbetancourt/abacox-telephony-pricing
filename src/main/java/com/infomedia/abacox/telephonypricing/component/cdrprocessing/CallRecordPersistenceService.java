@@ -1,9 +1,7 @@
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
-import com.infomedia.abacox.telephonypricing.component.utils.CompressionZipUtil;
 import com.infomedia.abacox.telephonypricing.db.entity.CallRecord;
 import com.infomedia.abacox.telephonypricing.db.entity.CommunicationLocation;
-import com.infomedia.abacox.telephonypricing.db.entity.FailedCallRecord; // Needed for exception check logic or generic util
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.NoResultException;
 import jakarta.persistence.PersistenceContext;
@@ -16,7 +14,6 @@ import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.*;
 
@@ -135,15 +132,7 @@ public class CallRecordPersistenceService {
         callRecord.setDial(truncate(cdrData.getEffectiveDestinationNumber(), 50));
         callRecord.setDestinationPhone(truncate(cdrData.getOriginalFinalCalledPartyNumber(), 50));
         callRecord.setCommLocationId(commLocation.getId());
-
-        LocalDateTime serviceDateUtc = cdrData.getDateTimeOrigination();
-        if (serviceDateUtc != null) {
-            LocalDateTime serviceDateInTargetZone = DateTimeUtil.convertToZone(serviceDateUtc, cdrConfigService.getTargetDatabaseZoneId());
-            callRecord.setServiceDate(serviceDateInTargetZone);
-        } else {
-            callRecord.setServiceDate(null);
-        }
-
+        callRecord.setServiceDate(cdrData.getDateTimeOrigination());
         callRecord.setOperatorId(cdrData.getOperatorId());
         callRecord.setEmployeeExtension(truncate(cdrData.getCallingPartyNumber(), 50));
         callRecord.setEmployeeAuthCode(truncate(cdrData.getAuthCodeDescription(), 50));
