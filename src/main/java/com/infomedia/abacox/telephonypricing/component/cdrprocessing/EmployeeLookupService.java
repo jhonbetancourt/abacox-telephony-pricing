@@ -1,8 +1,10 @@
+// File: com/infomedia/abacox/telephonypricing/component/cdrprocessing/EmployeeLookupService.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
 import com.infomedia.abacox.telephonypricing.db.entity.CommunicationLocation;
 import com.infomedia.abacox.telephonypricing.db.entity.Employee;
 import com.infomedia.abacox.telephonypricing.db.entity.ExtensionRange;
+import com.infomedia.abacox.telephonypricing.db.entity.HistoricalEntity;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.Query;
@@ -13,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -25,10 +28,18 @@ public class EmployeeLookupService {
     private EntityManager entityManager;
     private final CdrConfigService cdrConfigService;
 
+    @FunctionalInterface
+    private interface HistorySliceConsumer<T> {
+        void accept(T entity, long fdesde, long fhasta);
+    }
+
     @SuppressWarnings("unchecked")
     public HistoricalDataContainer prefetchHistoricalData(Set<String> extensions, Set<String> authCodes) {
-        log.debug("Pre-fetching historical data for {} extensions and {} auth codes", extensions.size(),
-                authCodes.size());
+        log.debug("Pre-fetching historical data for {} extensions and {} auth codes", extensions.size(), authCodes.size());
+
+        HistoricalDataContainer container = new HistoricalDataContainer();
+        boolean isGlobalExt = cdrConfigService.areExtensionsGlobal();
+        boolean isGlobalAuth = cdrConfigService.areAuthCodesGlobal();
 
         Set<String> cleanedExtensions = extensions.stream()
                 .filter(Objects::nonNull)
@@ -40,82 +51,227 @@ public class EmployeeLookupService {
                 .filter(ac -> !ac.trim().isEmpty())
                 .collect(Collectors.toSet());
 
-        // Step 1: Identify identifiers that HAVE history (any record with historyControlId)
-        String historyCheckQuery = "SELECT DISTINCT extension, auth_code FROM employee WHERE history_control_id IS NOT NULL "
-                + "AND (extension IN (:extensions) OR auth_code IN (:authCodes))";
-
-        jakarta.persistence.Query checkQuery = entityManager.createNativeQuery(historyCheckQuery, Tuple.class);
-        checkQuery.setParameter("extensions", cleanedExtensions.isEmpty() ? Collections.singleton("-1") : cleanedExtensions);
-        checkQuery.setParameter("authCodes", validAuthCodes.isEmpty() ? Collections.singleton("-1") : validAuthCodes);
-
-        List<Tuple> historyCheckResults = checkQuery.getResultList();
-        Set<String> extensionsWithHistory = new HashSet<>();
-        Set<String> authCodesWithHistory = new HashSet<>();
-
-        for (Tuple t : historyCheckResults) {
-            String ext = t.get(0, String.class);
-            String ac = t.get(1, String.class);
-            if (ext != null) extensionsWithHistory.add(ext);
-            if (ac != null) authCodesWithHistory.add(ac);
-        }
-
-        HistoricalDataContainer container = new HistoricalDataContainer(extensionsWithHistory, authCodesWithHistory);
-
-        // Step 2: Fetch all versions for these identifiers
-        if (!extensionsWithHistory.isEmpty() || !authCodesWithHistory.isEmpty()) {
-            String fetchAllQuery = "SELECT e.* FROM employee e WHERE e.extension IN (:extensions) OR e.auth_code IN (:authCodes) "
-                    + "ORDER BY e.history_since DESC";
-
+        // --- 1. Fetch Employees ---
+        if (!cleanedExtensions.isEmpty() || !validAuthCodes.isEmpty()) {
+            String fetchAllQuery = "SELECT e.* FROM employee e WHERE e.extension IN (:extensions) OR e.auth_code IN (:authCodes) ORDER BY e.history_since DESC";
             jakarta.persistence.Query fetchQuery = entityManager.createNativeQuery(fetchAllQuery, Employee.class);
-            fetchQuery.setParameter("extensions", extensionsWithHistory.isEmpty() ? Collections.singleton("-1") : extensionsWithHistory);
-            fetchQuery.setParameter("authCodes", authCodesWithHistory.isEmpty() ? Collections.singleton("-1") : authCodesWithHistory);
+            fetchQuery.setParameter("extensions", cleanedExtensions.isEmpty() ? Collections.singleton("-1") : cleanedExtensions);
+            fetchQuery.setParameter("authCodes", validAuthCodes.isEmpty() ? Collections.singleton("-1") : validAuthCodes);
 
             List<Employee> allVersions = fetchQuery.getResultList();
 
-            // Group by HistoryControlId
-            Map<Long, List<Employee>> versionsByGroup = allVersions.stream()
-                    .filter(e -> e.getHistoryControlId() != null)
-                    .collect(Collectors.groupingBy(Employee::getHistoryControlId));
-
-            for (Map.Entry<Long, List<Employee>> entry : versionsByGroup.entrySet()) {
-                HistoricalTimeline<Employee> timeline = new HistoricalTimeline<>(entry.getKey(), entry.getValue());
-                
-                // Map the timeline to all unique extensions/auth codes it represents to avoid duplicate timeline lists
-                Set<String> uniqueExts = entry.getValue().stream().map(Employee::getExtension).filter(Objects::nonNull).collect(Collectors.toSet());
-                for (String ext : uniqueExts) {
-                    container.addEmployeeTimelineByExtension(ext, timeline);
+            processHistorySlices(allVersions, (emp, fdesde, fhasta) -> {
+                if (emp.getExtension() != null && !emp.getExtension().isEmpty()) {
+                    String ext = CdrUtil.cleanExtension(emp.getExtension());
+                    container.addEmployeeExtensionSlice(ext, emp, fdesde, fhasta, isGlobalExt);
                 }
-                
-                Set<String> uniqueAuths = entry.getValue().stream().map(Employee::getAuthCode).filter(Objects::nonNull).collect(Collectors.toSet());
-                for (String auth : uniqueAuths) {
-                    container.addEmployeeTimelineByAuthCode(auth, timeline);
+                if (emp.getAuthCode() != null && !emp.getAuthCode().isEmpty()) {
+                    container.addEmployeeAuthCodeSlice(emp.getAuthCode(), emp, fdesde, fhasta, isGlobalAuth);
+                }
+            });
+        }
+
+        // --- 2. Fetch Extension Ranges ---
+        String fetchRangesQuery = "SELECT er.* FROM extension_range er ORDER BY er.history_since DESC";
+        List<ExtensionRange> allRanges = entityManager.createNativeQuery(fetchRangesQuery, ExtensionRange.class).getResultList();
+
+        processHistorySlices(allRanges, (range, fdesde, fhasta) -> {
+            container.addRangeSlice(range.getCommLocationId(), range, fdesde, fhasta);
+        });
+
+        return container;
+    }
+
+    /**
+     * Calculates the fhasta (end date) for historical groups just like PHP's Obtener_HistoricoHasta_Listado
+     */
+    private <T extends HistoricalEntity> void processHistorySlices(List<T> entities, HistorySliceConsumer<T> consumer) {
+        // Group by history control id
+        Map<Long, List<T>> grouped = entities.stream()
+                .filter(e -> e.getHistoryControlId() != null)
+                .collect(Collectors.groupingBy(HistoricalEntity::getHistoryControlId));
+
+        // Process entities WITH history control ID
+        for (List<T> group : grouped.values()) {
+            group.sort(Comparator.comparing(HistoricalEntity::getHistorySince, Comparator.nullsLast(Comparator.reverseOrder())));
+            long nextFdesde = -1;
+
+            for (T entity : group) {
+                long fdesde = entity.getHistorySince() != null ? entity.getHistorySince().toEpochSecond(ZoneOffset.UTC) : 0;
+                long fhasta = -1; // -1 means open/no limit
+
+                if (nextFdesde != -1) {
+                    fhasta = nextFdesde - 1;
+                }
+
+                consumer.accept(entity, fdesde, fhasta);
+                nextFdesde = fdesde;
+            }
+        }
+
+        // Process entities WITHOUT history control ID (Standalone records)
+        entities.stream()
+                .filter(e -> e.getHistoryControlId() == null)
+                .forEach(e -> {
+                    long fdesde = e.getHistorySince() != null ? e.getHistorySince().toEpochSecond(ZoneOffset.UTC) : 0;
+                    consumer.accept(e, fdesde, -1L);
+                });
+    }
+
+    @Transactional
+    public Optional<Employee> findEmployeeByExtensionOrAuthCode(String extension, String authCode,
+            Long commLocationIdContext, List<String> ignoredAuthCodeDescriptions,
+            Map<Long, List<ExtensionRange>> fallbackExtensionRanges, LocalDateTime callTimestamp,
+            HistoricalDataContainer historicalData) {
+
+        // --- 1. Preparation ---
+        boolean hasAuthCode = authCode != null && !authCode.isEmpty();
+        String cleanedExtension = (extension != null) ? CdrUtil.cleanPhoneNumber(extension, null, false).getCleanedNumber() : null;
+        if (cleanedExtension != null && cleanedExtension.startsWith("+")) {
+            cleanedExtension = cleanedExtension.substring(1);
+        }
+        boolean hasExtension = cleanedExtension != null && !cleanedExtension.isEmpty();
+
+        boolean isAuthCodeIgnoredType = hasAuthCode && ignoredAuthCodeDescriptions.stream().anyMatch(ignored -> ignored.equalsIgnoreCase(authCode));
+        String validAuthCode = (hasAuthCode && !isAuthCodeIgnoredType) ? authCode : null;
+
+        long callTimestampEpoch = callTimestamp != null ? callTimestamp.toEpochSecond(ZoneOffset.UTC) : 0;
+
+        // --- 2. Lazy Load Historical Data (For Synchronous Processing) ---
+        if (historicalData == null) {
+            Set<String> extsToFetch = hasExtension ? Collections.singleton(cleanedExtension) : Collections.emptySet();
+            Set<String> authsToFetch = validAuthCode != null ? Collections.singleton(validAuthCode) : Collections.emptySet();
+            historicalData = prefetchHistoricalData(extsToFetch, authsToFetch);
+        }
+
+        // --- 3. Lookup Auth Code ---
+        if (validAuthCode != null) {
+            HistoricalDataContainer.ResolvedTimeline authTimeline = historicalData.getAuthCodeTimelines().get(validAuthCode);
+            if (authTimeline != null) {
+                Optional<Employee> match = authTimeline.findMatch(callTimestampEpoch, commLocationIdContext);
+                if (match.isPresent()) {
+                    log.debug("Found employee via AuthCode timeline: {}", match.get().getId());
+                    return match;
                 }
             }
         }
 
-        // Step 3: Fetch Extension Ranges (Pre-fetch all, as they are few typically)
-        String fetchRangesQuery = "SELECT er.* FROM extension_range er ORDER BY er.history_since DESC";
-        List<ExtensionRange> allRanges = entityManager.createNativeQuery(fetchRangesQuery, ExtensionRange.class)
-                .getResultList();
-
-        Map<Long, List<ExtensionRange>> rangesByGroup = allRanges.stream()
-                .filter(er -> er.getHistoryControlId() != null)
-                .collect(Collectors.groupingBy(ExtensionRange::getHistoryControlId));
-
-        for (Map.Entry<Long, List<ExtensionRange>> entry : rangesByGroup.entrySet()) {
-            container.addRangeTimeline(entry.getKey(), new HistoricalTimeline<>(entry.getKey(), entry.getValue()));
+        // --- 4. Lookup Extension Fallback ---
+        if (hasExtension) {
+            HistoricalDataContainer.ResolvedTimeline extTimeline = historicalData.getExtensionTimelines().get(cleanedExtension);
+            if (extTimeline != null) {
+                Optional<Employee> match = extTimeline.findMatch(callTimestampEpoch, commLocationIdContext);
+                if (match.isPresent()) {
+                    log.debug("Found employee via Extension timeline: {}", match.get().getId());
+                    return match;
+                }
+            }
         }
 
-        return container;
+        // --- 5. Range Lookup (Conceptual Employee) ---
+        boolean phpExtensionValida = hasExtension && (!cleanedExtension.startsWith("0") || cleanedExtension.equals("0")) && cleanedExtension.matches("^[0-9#*+]+$");
+
+        if (phpExtensionValida) {
+            Optional<Employee> conceptualEmployeeOpt = findEmployeeByExtensionRange(cleanedExtension, commLocationIdContext, fallbackExtensionRanges, callTimestamp, historicalData);
+            if (conceptualEmployeeOpt.isPresent()) {
+                Employee conceptualEmployee = conceptualEmployeeOpt.get();
+                if (conceptualEmployee.getId() == null && cdrConfigService.createEmployeesAutomaticallyFromRange()) {
+                    log.debug("Persisting new employee for extension {} from range, CommLocation ID: {}", conceptualEmployee.getExtension(), conceptualEmployee.getCommunicationLocationId());
+                    entityManager.persist(conceptualEmployee);
+                    return Optional.of(conceptualEmployee);
+                } else if (conceptualEmployee.getId() != null) {
+                    return Optional.of(conceptualEmployee);
+                }
+            }
+        }
+
+        return Optional.empty();
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<Employee> findEmployeeByExtensionRange(String extension, Long commLocationId,
+            Map<Long, List<ExtensionRange>> fallbackExtensionRanges, LocalDateTime callTimestamp,
+            HistoricalDataContainer historicalData) {
+            
+        if (extension == null || !extension.matches("\\d+")) {
+            return Optional.empty();
+        }
+        
+        long extNum;
+        try {
+            extNum = Long.parseLong(extension);
+        } catch (NumberFormatException e) {
+            return Optional.empty();
+        }
+
+        long callTimestampEpoch = callTimestamp != null ? callTimestamp.toEpochSecond(ZoneOffset.UTC) : 0;
+        boolean searchRangesGlobally = cdrConfigService.areExtensionsGlobal();
+        
+        // Lazy load for sync processing
+        if (historicalData == null) {
+            historicalData = prefetchHistoricalData(Collections.emptySet(), Collections.emptySet());
+        }
+
+        List<HistoricalDataContainer.RangeSlice> matchingSlices = new ArrayList<>();
+
+        if (searchRangesGlobally) {
+            // Search across all plants
+            for (List<HistoricalDataContainer.RangeSlice> slices : historicalData.getRangeSlicesByCommId().values()) {
+                for (HistoricalDataContainer.RangeSlice slice : slices) {
+                    if (extNum >= slice.getRange().getRangeStart() && extNum <= slice.getRange().getRangeEnd()) {
+                        if ((slice.getFdesde() <= 0 || slice.getFdesde() <= callTimestampEpoch) &&
+                            (slice.getFhasta() <= 0 || slice.getFhasta() >= callTimestampEpoch)) {
+                            matchingSlices.add(slice);
+                        }
+                    }
+                }
+            }
+        } else {
+            // Search strictly within the context plant
+            List<HistoricalDataContainer.RangeSlice> slices = historicalData.getRangeSlicesByCommId().get(commLocationId);
+            if (slices != null) {
+                for (HistoricalDataContainer.RangeSlice slice : slices) {
+                    if (extNum >= slice.getRange().getRangeStart() && extNum <= slice.getRange().getRangeEnd()) {
+                        if ((slice.getFdesde() <= 0 || slice.getFdesde() <= callTimestampEpoch) &&
+                            (slice.getFhasta() <= 0 || slice.getFhasta() >= callTimestampEpoch)) {
+                            matchingSlices.add(slice);
+                        }
+                    }
+                }
+            }
+        }
+
+        if (!matchingSlices.isEmpty()) {
+            // Prioritize: 1. Exact commLocation, 2. Smallest Range Size, 3. Newest
+            matchingSlices.sort(Comparator
+                    .comparing((HistoricalDataContainer.RangeSlice rs) -> !Objects.equals(rs.getRange().getCommLocationId(), commLocationId))
+                    .thenComparingLong(rs -> rs.getRange().getRangeEnd() - rs.getRange().getRangeStart())
+                    .thenComparing(rs -> rs.getRange().getCreatedDate(), Comparator.nullsLast(Comparator.reverseOrder())));
+
+            ExtensionRange bestMatch = matchingSlices.get(0).getRange();
+            log.debug("Extension {} matched range (historically): {}", extension, bestMatch.getId());
+            
+            Employee conceptualEmployee = createEmployeeFromRange(
+                    extension,
+                    bestMatch.getSubdivisionId(),
+                    bestMatch.getCommLocationId(),
+                    bestMatch.getPrefix()); 
+
+            if (bestMatch.getCommLocationId() != null) {
+                CommunicationLocation cl = entityManager.find(CommunicationLocation.class, bestMatch.getCommLocationId());
+                conceptualEmployee.setCommunicationLocation(cl);
+            }
+            return Optional.of(conceptualEmployee);
+        }
+
+        return Optional.empty();
     }
 
     private Employee createEmployeeFromRange(String extension, Long subdivisionId, Long commLocationId, String namePrefix) {
         Employee newEmployee = new Employee();
         newEmployee.setExtension(extension);
 
-        String prefixToUse = (namePrefix != null && !namePrefix.isEmpty())
-                ? namePrefix
-                : cdrConfigService.getEmployeeNamePrefixFromRange();
+        String prefixToUse = (namePrefix != null && !namePrefix.isEmpty()) ? namePrefix : cdrConfigService.getEmployeeNamePrefixFromRange();
 
         newEmployee.setName(prefixToUse + " " + extension);
         newEmployee.setSubdivisionId(subdivisionId);
@@ -128,193 +284,6 @@ public class EmployeeLookupService {
         newEmployee.setIdNumber("");
         log.debug("Conceptually created new employee object for extension {} from range.", extension);
         return newEmployee;
-    }
-
-    @Transactional
-    public Optional<Employee> findEmployeeByExtensionOrAuthCode(String extension, String authCode,
-            Long commLocationIdContext,
-            List<String> ignoredAuthCodeDescriptions,
-            Map<Long, List<ExtensionRange>> extensionRanges,
-            LocalDateTime callTimestamp,
-            HistoricalDataContainer historicalData) {
-
-        // --- 1. Preparation ---
-        boolean hasAuthCode = authCode != null && !authCode.isEmpty();
-        String cleanedExtension = (extension != null)
-                ? CdrUtil.cleanPhoneNumber(extension, null, false).getCleanedNumber()
-                : null;
-        if (cleanedExtension != null && cleanedExtension.startsWith("+")) {
-            cleanedExtension = cleanedExtension.substring(1);
-        }
-        boolean hasExtension = cleanedExtension != null && !cleanedExtension.isEmpty();
-
-        boolean isAuthCodeIgnoredType = hasAuthCode && ignoredAuthCodeDescriptions.stream()
-                .anyMatch(ignored -> ignored.equalsIgnoreCase(authCode));
-
-        boolean searchGlobally = (hasAuthCode && !isAuthCodeIgnoredType) ? cdrConfigService.areAuthCodesGlobal()
-                : cdrConfigService.areExtensionsGlobal();
-
-        // --- 2. Check Pre-fetched Historical Timelines ---
-        if (historicalData != null && callTimestamp != null) {
-            String employeeKey = (hasAuthCode && !isAuthCodeIgnoredType) ? authCode : cleanedExtension;
-            List<HistoricalTimeline<Employee>> timelines = (hasAuthCode && !isAuthCodeIgnoredType)
-                    ? historicalData.getEmployeeTimelinesByAuthCode().get(authCode)
-                    : historicalData.getEmployeeTimelinesByExtension().get(cleanedExtension);
-
-            if (timelines != null && !timelines.isEmpty()) {
-                Employee bestMatch = null;
-                Employee fallbackGlobalMatch = null;
-
-                for (HistoricalTimeline<Employee> timeline : timelines) {
-                    Optional<Employee> matchedOpt = timeline.findMatch(callTimestamp);
-                    if (matchedOpt.isPresent()) {
-                        Employee matchedEmp = matchedOpt.get();
-                        
-                        // Exact Location Match
-                        if (commLocationIdContext == null || Objects.equals(matchedEmp.getCommunicationLocationId(), commLocationIdContext)) {
-                            bestMatch = matchedEmp;
-                            break; 
-                        } else if (searchGlobally && fallbackGlobalMatch == null) {
-                            // PHP: if ($retornar['id'] <= 0 && $primer_funid['id'] > 0 && $ext_globales) { $retornar = $primer_funid; }
-                            fallbackGlobalMatch = matchedEmp;
-                        }
-                    }
-                }
-
-                if (bestMatch != null) {
-                    log.debug("Found employee via pre-fetched historical timeline: {}", bestMatch.getId());
-                    return Optional.of(bestMatch);
-                } else if (fallbackGlobalMatch != null) {
-                    log.debug("Found global fallback employee via pre-fetched historical timeline: {}", fallbackGlobalMatch.getId());
-                    return Optional.of(fallbackGlobalMatch);
-                }
-
-                log.debug("Historical group exists for {}, but no slice matches timestamp {} and location context. Blocking.", employeeKey, callTimestamp);
-                return Optional.empty();
-            }
-
-            // If no pre-fetched timeline, but the extension is known to HAVE history globally, block auto-creation.
-            if (hasExtension && historicalData.hasHistoryForExtension(cleanedExtension)) {
-                log.debug("Extension {} has history but no matching slice for {}. Blocking auto-creation.", cleanedExtension, callTimestamp);
-                return Optional.empty();
-            }
-        }
-
-        // --- 3. Primary Query Construction (Fallback for non-batch or first-time) ---
-        StringBuilder queryStr = new StringBuilder("SELECT e.* FROM employee e ");
-        queryStr.append(" LEFT JOIN communication_location cl ON e.communication_location_id = cl.id ");
-        queryStr.append(" WHERE 1=1 ");
-
-        if (hasAuthCode && !isAuthCodeIgnoredType) {
-            queryStr.append(" AND e.auth_code = :authCode ");
-        } else if (hasExtension) {
-            queryStr.append(" AND e.extension = :extension ");
-        } else {
-            return Optional.empty();
-        }
-
-        if (!searchGlobally && commLocationIdContext != null) {
-            queryStr.append(" AND e.communication_location_id = :commLocationIdContext ");
-        }
-        queryStr.append(" AND (cl.id IS NULL OR cl.active = true) ");
-
-        if (callTimestamp != null) {
-            queryStr.append(" AND e.history_since <= :callTimestamp ");
-            queryStr.append(" ORDER BY e.history_since DESC LIMIT 1");
-        } else {
-            queryStr.append(" ORDER BY e.history_since DESC LIMIT 1");
-        }
-
-        jakarta.persistence.Query nativeQuery = entityManager.createNativeQuery(queryStr.toString(), Employee.class);
-
-        if (hasAuthCode && !isAuthCodeIgnoredType) {
-            nativeQuery.setParameter("authCode", authCode);
-        } else if (hasExtension) {
-            nativeQuery.setParameter("extension", cleanedExtension);
-        }
-        if (callTimestamp != null) {
-            nativeQuery.setParameter("callTimestamp", callTimestamp);
-        }
-        if (!searchGlobally && commLocationIdContext != null) {
-            nativeQuery.setParameter("commLocationIdContext", commLocationIdContext);
-        }
-
-        // --- 4. Execution & Fallback Logic ---
-        try {
-            Employee employee = (Employee) nativeQuery.getSingleResult();
-            log.debug("Found employee by primary query: {}", employee.getId());
-            return Optional.of(employee);
-        } catch (jakarta.persistence.NoResultException e) {
-            
-            if (historicalData != null) {
-                boolean extHasHistory = historicalData.getEmployeeTimelinesByExtension().containsKey(cleanedExtension);
-                boolean authHasHistory = hasAuthCode && historicalData.getEmployeeTimelinesByAuthCode().containsKey(authCode);
-
-                if (extHasHistory || authHasHistory) {
-                    log.debug("Historical data exists for identifier but no match for timestamp {}. Blocking auto-creation.", callTimestamp);
-                    return Optional.empty();
-                }
-            }
-
-            // --- FALLBACK: If we searched by AuthCode and failed, try searching by Extension now ---
-            if (hasAuthCode && !isAuthCodeIgnoredType && hasExtension) {
-                log.debug("Auth code lookup failed, falling back to extension lookup for: {}", cleanedExtension);
-
-                StringBuilder fallbackSb = new StringBuilder("SELECT e.* FROM employee e ");
-                fallbackSb.append(" LEFT JOIN communication_location cl ON e.communication_location_id = cl.id ");
-                fallbackSb.append(" WHERE e.extension = :extension ");
-                fallbackSb.append(" AND (cl.id IS NULL OR cl.active = true) ");
-
-                if (!searchGlobally && commLocationIdContext != null) {
-                    fallbackSb.append(" AND e.communication_location_id = :commLocationIdContext ");
-                }
-                if (callTimestamp != null) {
-                    fallbackSb.append(" AND e.history_since <= :callTimestamp ");
-                }
-                fallbackSb.append(" ORDER BY e.history_since DESC LIMIT 1");
-
-                jakarta.persistence.Query fallbackQuery = entityManager.createNativeQuery(fallbackSb.toString(), Employee.class);
-                fallbackQuery.setParameter("extension", cleanedExtension);
-
-                if (callTimestamp != null) {
-                    fallbackQuery.setParameter("callTimestamp", callTimestamp);
-                }
-                if (!searchGlobally && commLocationIdContext != null) {
-                    fallbackQuery.setParameter("commLocationIdContext", commLocationIdContext);
-                }
-
-                try {
-                    Employee fallbackEmployee = (Employee) fallbackQuery.getSingleResult();
-                    log.debug("Found employee by fallback extension: {}", fallbackEmployee.getId());
-                    return Optional.of(fallbackEmployee);
-                } catch (jakarta.persistence.NoResultException ex2) {
-                    log.trace("Fallback extension lookup returned no result.");
-                }
-            }
-
-            // --- 5. Range Lookup (Conceptual Employee) ---
-            boolean phpExtensionValida = hasExtension &&
-                    (!cleanedExtension.startsWith("0") || cleanedExtension.equals("0")) &&
-                    cleanedExtension.matches("^[0-9#*+]+$");
-
-            if (phpExtensionValida) {
-                Optional<Employee> conceptualEmployeeOpt = findEmployeeByExtensionRange(cleanedExtension,
-                        commLocationIdContext, extensionRanges, callTimestamp, historicalData);
-                if (conceptualEmployeeOpt.isPresent()) {
-                    Employee conceptualEmployee = conceptualEmployeeOpt.get();
-                    if (conceptualEmployee.getId() == null
-                            && cdrConfigService.createEmployeesAutomaticallyFromRange()) {
-                        log.debug("Persisting new employee for extension {} from range, CommLocation ID: {}",
-                                conceptualEmployee.getExtension(), conceptualEmployee.getCommunicationLocationId());
-                        entityManager.persist(conceptualEmployee);
-                        return Optional.of(conceptualEmployee);
-                    } else if (conceptualEmployee.getId() != null) {
-                        return Optional.of(conceptualEmployee);
-                    }
-                }
-            }
-            return Optional.empty();
-        }
     }
 
     @SuppressWarnings("unchecked")
@@ -402,92 +371,6 @@ public class EmployeeLookupService {
 
         resultMap.values().forEach(ExtensionLimits::calculateFinalMinMaxValues);
         return resultMap;
-    }
-
-    @Transactional(readOnly = true)
-    public Optional<Employee> findEmployeeByExtensionRange(String extension, Long commLocationId,
-            Map<Long, List<ExtensionRange>> extensionRanges, LocalDateTime callTimestamp,
-            HistoricalDataContainer historicalData) {
-        if (extension == null || !extension.matches("\\d+") || extensionRanges == null || extensionRanges.isEmpty()) {
-            return Optional.empty();
-        }
-        long extNum;
-        try {
-            extNum = Long.parseLong(extension);
-        } catch (NumberFormatException e) {
-            return Optional.empty();
-        }
-
-        boolean searchRangesGlobally = cdrConfigService.areExtensionsGlobal();
-        List<ExtensionRange> matchingRanges = new ArrayList<>();
-
-        if (searchRangesGlobally) {
-            extensionRanges.values().stream()
-                    .flatMap(List::stream) 
-                    .filter(er -> extNum >= er.getRangeStart() && extNum <= er.getRangeEnd())
-                    .forEach(er -> {
-                        if (historicalData != null && callTimestamp != null && er.getHistoryControlId() != null) {
-                            HistoricalTimeline<ExtensionRange> timeline = historicalData.getRangeTimelines().get(er.getHistoryControlId());
-                            if (timeline != null) {
-                                Optional<ExtensionRange> matchedRange = timeline.findMatch(callTimestamp);
-                                if (matchedRange.isPresent()) {
-                                    matchingRanges.add(matchedRange.get());
-                                }
-                            } else {
-                                matchingRanges.add(er);
-                            }
-                        } else {
-                            matchingRanges.add(er);
-                        }
-                    });
-
-            matchingRanges.sort(Comparator
-                    .comparing((ExtensionRange er) -> !Objects.equals(er.getCommLocationId(), commLocationId))
-                    .thenComparingLong(er -> er.getRangeEnd() - er.getRangeStart()) 
-                    .thenComparing(ExtensionRange::getCreatedDate, Comparator.nullsLast(Comparator.reverseOrder())));
-        } else {
-            List<ExtensionRange> rangesForLocation = extensionRanges.get(commLocationId);
-            if (rangesForLocation != null) {
-                rangesForLocation.stream()
-                        .filter(er -> extNum >= er.getRangeStart() && extNum <= er.getRangeEnd())
-                        .forEach(er -> {
-                            if (historicalData != null && callTimestamp != null && er.getHistoryControlId() != null) {
-                                HistoricalTimeline<ExtensionRange> timeline = historicalData.getRangeTimelines().get(er.getHistoryControlId());
-                                if (timeline != null) {
-                                    Optional<ExtensionRange> matchedRange = timeline.findMatch(callTimestamp);
-                                    if (matchedRange.isPresent()) {
-                                        // Guard: Ensure the historical slice hasn't drifted to a different plant!
-                                        if (Objects.equals(matchedRange.get().getCommLocationId(), commLocationId)) {
-                                            matchingRanges.add(matchedRange.get());
-                                        }
-                                    }
-                                } else {
-                                    matchingRanges.add(er);
-                                }
-                            } else {
-                                matchingRanges.add(er);
-                            }
-                        });
-            }
-        }
-
-        if (!matchingRanges.isEmpty()) {
-            ExtensionRange bestMatch = matchingRanges.get(0);
-            log.debug("Extension {} matched range (historically): {}", extension, bestMatch.getId());
-            Employee conceptualEmployee = createEmployeeFromRange(
-                    extension,
-                    bestMatch.getSubdivisionId(),
-                    bestMatch.getCommLocationId(),
-                    bestMatch.getPrefix()); 
-
-            if (bestMatch.getCommLocationId() != null) {
-                CommunicationLocation cl = entityManager.find(CommunicationLocation.class, bestMatch.getCommLocationId());
-                conceptualEmployee.setCommunicationLocation(cl);
-            }
-            return Optional.of(conceptualEmployee);
-        }
-
-        return Optional.empty();
     }
 
     @SuppressWarnings("unchecked")
