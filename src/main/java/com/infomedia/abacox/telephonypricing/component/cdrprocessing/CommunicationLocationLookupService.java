@@ -1,3 +1,4 @@
+// File: com/infomedia/abacox/telephonypricing/component/cdrprocessing/CommunicationLocationLookupService.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
 import com.infomedia.abacox.telephonypricing.db.entity.CommunicationLocation;
@@ -122,6 +123,11 @@ public class CommunicationLocationLookupService {
     private Optional<CommunicationLocation> findCommLocationByExtension(
             Long plantTypeId, String extensionNumber, String partitionName, LocalDateTime callDateTime) {
 
+        // PHP Fallback: if ($fecha_segundos <= 0) { $fecha_segundos = time(); }
+        if (callDateTime == null) {
+            callDateTime = LocalDateTime.now();
+        }
+
         if (extensionNumber == null || extensionNumber.isEmpty()) {
             return Optional.empty();
         }
@@ -136,26 +142,22 @@ public class CommunicationLocationLookupService {
                         "WHERE cl.active = true AND cl.plant_type_id = :plantTypeId " +
                         "AND e.extension = :extension ");
         
-        if (callDateTime != null) {
-            // Emulate PHP's ValidarFechasHistorico & Obtener_HistoricoHasta logic efficiently in SQL:
-            // "Match where history_since <= callDate AND there is NO newer record in the same history_control_id group that is ALSO <= callDate"
-            empQueryBuilder.append("AND (e.history_since IS NULL OR e.history_since <= :callDateTime) ");
-            empQueryBuilder.append("AND (e.history_control_id IS NULL OR NOT EXISTS ( ");
-            empQueryBuilder.append("    SELECT 1 FROM employee e2 ");
-            empQueryBuilder.append("    WHERE e2.history_control_id = e.history_control_id ");
-            empQueryBuilder.append("      AND e2.history_since > e.history_since ");
-            empQueryBuilder.append("      AND e2.history_since <= :callDateTime ");
-            empQueryBuilder.append(")) ");
-        }
+        // Emulate PHP's ValidarFechasHistorico & Obtener_HistoricoHasta logic efficiently in SQL:
+        // "Match where history_since <= callDate AND there is NO newer record in the same history_control_id group that is ALSO <= callDate"
+        empQueryBuilder.append("AND (e.history_since IS NULL OR e.history_since <= :callDateTime) ");
+        empQueryBuilder.append("AND (e.history_control_id IS NULL OR NOT EXISTS ( ");
+        empQueryBuilder.append("    SELECT 1 FROM employee e2 ");
+        empQueryBuilder.append("    WHERE e2.history_control_id = e.history_control_id ");
+        empQueryBuilder.append("      AND e2.history_since > e.history_since ");
+        empQueryBuilder.append("      AND e2.history_since <= :callDateTime ");
+        empQueryBuilder.append(")) ");
         empQueryBuilder.append("ORDER BY e.history_since DESC NULLS LAST LIMIT 1");
 
         jakarta.persistence.Query empQuery = entityManager.createNativeQuery(empQueryBuilder.toString(),
                 CommunicationLocation.class);
         empQuery.setParameter("plantTypeId", plantTypeId);
         empQuery.setParameter("extension", cleanedExtension);
-        if (callDateTime != null) {
-            empQuery.setParameter("callDateTime", callDateTime);
-        }
+        empQuery.setParameter("callDateTime", callDateTime);
 
         try {
             CommunicationLocation cl = (CommunicationLocation) empQuery.getSingleResult();
@@ -182,25 +184,21 @@ public class CommunicationLocationLookupService {
                         "WHERE cl.active = true AND cl.plant_type_id = :plantTypeId " +
                         "AND er.range_start <= :extNum AND er.range_end >= :extNum ");
         
-        if (callDateTime != null) {
-            // Replicate PHP historical limit validation for ranges
-            rangeQueryBuilder.append("AND (er.history_since IS NULL OR er.history_since <= :callDateTime) ");
-            rangeQueryBuilder.append("AND (er.history_control_id IS NULL OR NOT EXISTS ( ");
-            rangeQueryBuilder.append("    SELECT 1 FROM extension_range er2 ");
-            rangeQueryBuilder.append("    WHERE er2.history_control_id = er.history_control_id ");
-            rangeQueryBuilder.append("      AND er2.history_since > er.history_since ");
-            rangeQueryBuilder.append("      AND er2.history_since <= :callDateTime ");
-            rangeQueryBuilder.append(")) ");
-        }
+        // Replicate PHP historical limit validation for ranges
+        rangeQueryBuilder.append("AND (er.history_since IS NULL OR er.history_since <= :callDateTime) ");
+        rangeQueryBuilder.append("AND (er.history_control_id IS NULL OR NOT EXISTS ( ");
+        rangeQueryBuilder.append("    SELECT 1 FROM extension_range er2 ");
+        rangeQueryBuilder.append("    WHERE er2.history_control_id = er.history_control_id ");
+        rangeQueryBuilder.append("      AND er2.history_since > er.history_since ");
+        rangeQueryBuilder.append("      AND er2.history_since <= :callDateTime ");
+        rangeQueryBuilder.append(")) ");
         rangeQueryBuilder.append("ORDER BY (er.range_end - er.range_start) ASC, er.history_since DESC NULLS LAST LIMIT 1");
         
         jakarta.persistence.Query rangeQuery = entityManager.createNativeQuery(rangeQueryBuilder.toString(),
                 CommunicationLocation.class);
         rangeQuery.setParameter("plantTypeId", plantTypeId);
         rangeQuery.setParameter("extNum", extNum);
-        if (callDateTime != null) {
-            rangeQuery.setParameter("callDateTime", callDateTime);
-        }
+        rangeQuery.setParameter("callDateTime", callDateTime);
 
         try {
             CommunicationLocation cl = (CommunicationLocation) rangeQuery.getSingleResult();

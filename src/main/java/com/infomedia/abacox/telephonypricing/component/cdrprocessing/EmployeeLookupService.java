@@ -1,3 +1,4 @@
+// File: com/infomedia/abacox/telephonypricing/component/cdrprocessing/EmployeeLookupService.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
 import com.infomedia.abacox.telephonypricing.db.entity.CommunicationLocation;
@@ -78,7 +79,11 @@ public class EmployeeLookupService {
         }
 
         // --- 2. Fetch Extension Ranges ---
-        String fetchRangesQuery = "SELECT er.* FROM extension_range er ORDER BY er.history_since DESC";
+        // Ensuring only active communication location ranges are prefetched.
+        String fetchRangesQuery = "SELECT er.* FROM extension_range er " +
+                                  "JOIN communication_location cl ON er.comm_location_id = cl.id " +
+                                  "WHERE cl.active = true " +
+                                  "ORDER BY er.history_since DESC";
         List<ExtensionRange> allRanges = entityManager.createNativeQuery(fetchRangesQuery, ExtensionRange.class).getResultList();
 
         processHistorySlices(allRanges, (range, fdesde, fhasta) -> {
@@ -141,7 +146,8 @@ public class EmployeeLookupService {
         boolean isAuthCodeIgnoredType = hasAuthCode && ignoredAuthCodeDescriptions.stream().anyMatch(ignored -> ignored.equalsIgnoreCase(authCode));
         String validAuthCode = (hasAuthCode && !isAuthCodeIgnoredType) ? authCode : null;
 
-        long callTimestampEpoch = callTimestamp != null ? callTimestamp.toEpochSecond(ZoneOffset.UTC) : 0;
+        // Ensure fallback defaults to the moment of evaluation if timestamp is absent
+        long callTimestampEpoch = callTimestamp != null ? callTimestamp.toEpochSecond(ZoneOffset.UTC) : LocalDateTime.now().toEpochSecond(ZoneOffset.UTC);
 
         // --- 2. Lazy Load Historical Data (For Synchronous Processing) ---
         if (historicalData == null) {
@@ -210,7 +216,7 @@ public class EmployeeLookupService {
             return Optional.empty();
         }
 
-        long callTimestampEpoch = callTimestamp != null ? callTimestamp.toEpochSecond(ZoneOffset.UTC) : 0;
+        long callTimestampEpoch = callTimestamp != null ? callTimestamp.toEpochSecond(ZoneOffset.UTC) : LocalDateTime.now().toEpochSecond(ZoneOffset.UTC);
         boolean searchRangesGlobally = cdrConfigService.areExtensionsGlobal();
         
         // Lazy load for sync processing
