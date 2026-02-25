@@ -194,15 +194,26 @@ public class EmployeeLookupService {
             if (conceptualEmployeeOpt.isPresent()) {
                 Employee conceptualEmployee = conceptualEmployeeOpt.get();
                 
-                // Fix 1: Check if this extension is part of a managed history.
+                // Check if this extension is part of a managed history in the relevant context.
                 // If it is (even if not valid for this specific timestamp in the timeline), 
                 // we block auto-persistence to avoid creating orphan records outside the timeline.
-                boolean isManagedExtension = historicalData.getExtensionTimelines().containsKey(cleanedExtension);
+                boolean isManagedExtension = false;
+                HistoricalDataContainer.ResolvedTimeline extTimelineForCheck = historicalData.getExtensionTimelines().get(cleanedExtension);
+
+                if (extTimelineForCheck != null) {
+                    if (cdrConfigService.areExtensionsGlobal()) {
+                        isManagedExtension = true;
+                    } else {
+                        // Only block auto-creation if the timeline actually belongs to this specific plant
+                        isManagedExtension = extTimelineForCheck.getSlices().values().stream()
+                                .anyMatch(slice -> Objects.equals(slice.getEmployee().getCommunicationLocationId(), commLocationIdContext));
+                    }
+                }
 
                 if (conceptualEmployee.getId() == null && cdrConfigService.createEmployeesAutomaticallyFromRange()) {
                     
                     if (isManagedExtension) {
-                        log.debug("Extension {} belongs to a managed history. Blocking auto-creation/persistence.", cleanedExtension);
+                        log.debug("Extension {} belongs to a managed history in this context. Blocking auto-creation/persistence.", cleanedExtension);
                         // Return the conceptual employee for pricing/assignment, but do NOT persist.
                         return Optional.of(conceptualEmployee);
                     }

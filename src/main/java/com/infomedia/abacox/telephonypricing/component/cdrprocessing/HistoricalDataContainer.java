@@ -46,6 +46,7 @@ public class HistoricalDataContainer {
         private long fhasta;
     }
 
+    @Getter
     public static class ResolvedTimeline {
         private final Map<String, EmployeeSlice> slices = new HashMap<>();
 
