@@ -1,6 +1,5 @@
 package com.infomedia.abacox.telephonypricing.controller;
 
-import com.infomedia.abacox.telephonypricing.component.export.excel.ExcelGeneratorBuilder;
 import com.infomedia.abacox.telephonypricing.component.modeltools.ModelConverter;
 import com.infomedia.abacox.telephonypricing.dto.extensionrange.ExtensionRangeDto;
 import com.infomedia.abacox.telephonypricing.dto.extensionrange.CreateExtensionRange;
@@ -43,10 +42,10 @@ public class ExtensionRangeController {
     private final ModelConverter modelConverter;
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
-    public Page<ExtensionRangeDto> find(@Parameter(hidden = true) @Filter Specification<ExtensionRange> spec
-            , @Parameter(hidden = true) Pageable pageable
-            , @RequestParam(required = false) String filter, @RequestParam(required = false) Integer page
-            , @RequestParam(required = false) Integer size, @RequestParam(required = false) String sort) {
+    public Page<ExtensionRangeDto> find(@Parameter(hidden = true) @Filter Specification<ExtensionRange> spec,
+            @Parameter(hidden = true) Pageable pageable, @RequestParam(required = false) String filter,
+            @RequestParam(required = false) Integer page, @RequestParam(required = false) Integer size,
+            @RequestParam(required = false) String sort) {
         return modelConverter.mapPage(extensionRangeService.find(spec, pageable), ExtensionRangeDto.class);
     }
 
@@ -56,13 +55,21 @@ public class ExtensionRangeController {
     }
 
     @PatchMapping(value = "{id}", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
-    public ExtensionRangeDto update(@PathVariable("id") Long id, @Valid @RequestBody UpdateExtensionRange updateExtensionRange) {
+    public ExtensionRangeDto update(@PathVariable("id") Long id,
+            @Valid @RequestBody UpdateExtensionRange updateExtensionRange) {
         return modelConverter.map(extensionRangeService.update(id, updateExtensionRange), ExtensionRangeDto.class);
     }
 
     @PatchMapping(value = "/status/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public ExtensionRangeDto activate(@PathVariable("id") Long id, @Valid @RequestBody ActivationDto activationDto) {
-        return modelConverter.map(extensionRangeService.changeActivation(id, activationDto.getActive()), ExtensionRangeDto.class);
+        return modelConverter.map(extensionRangeService.changeActivation(id, activationDto.getActive()),
+                ExtensionRangeDto.class);
+    }
+
+    @PatchMapping(value = "/retire/{historyControlId}", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<Void> retire(@PathVariable("historyControlId") Long historyControlId) {
+        extensionRangeService.retire(historyControlId);
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping(value = "{id}", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -71,17 +78,17 @@ public class ExtensionRangeController {
     }
 
     @GetMapping(value = "/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
-    public ResponseEntity<Resource> exportExcel(@Parameter(hidden = true) @Filter Specification<ExtensionRange> spec
-            , @Parameter(hidden = true) Pageable pageable
-            , @ParameterObject FilterRequest filterRequest
-            , @ParameterObject ExcelRequest excelRequest) {
+    public ResponseEntity<Resource> exportExcel(@Parameter(hidden = true) @Filter Specification<ExtensionRange> spec,
+            @Parameter(hidden = true) Pageable pageable, @ParameterObject FilterRequest filterRequest,
+            @ParameterObject ExcelRequest excelRequest) {
 
-        
-        ByteArrayResource resource = extensionRangeService.exportExcel(spec, pageable, excelRequest.toExcelGeneratorBuilder());
+        ByteArrayResource resource = extensionRangeService.exportExcel(spec, pageable,
+                excelRequest.toExcelGeneratorBuilder());
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment;filename=extension_ranges.xlsx")
-                .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .contentType(
+                        MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
                 .body(resource);
     }
 

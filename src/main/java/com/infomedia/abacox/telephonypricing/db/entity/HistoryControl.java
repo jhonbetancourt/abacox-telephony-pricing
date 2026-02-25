@@ -23,7 +23,7 @@ public class HistoryControl {
     @Column(name = "ref_table", nullable = false)
     private Integer refTable;
 
-    @Column(name = "ref_id", nullable = false)
+    @Column(name = "ref_id")
     private Long refId;
 
     @Column(name = "history_since")

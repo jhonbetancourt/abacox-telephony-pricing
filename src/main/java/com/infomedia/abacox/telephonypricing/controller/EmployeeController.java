@@ -1,6 +1,5 @@
 package com.infomedia.abacox.telephonypricing.controller;
 
-import com.infomedia.abacox.telephonypricing.component.export.excel.ExcelGeneratorBuilder;
 import com.infomedia.abacox.telephonypricing.component.modeltools.ModelConverter;
 import com.infomedia.abacox.telephonypricing.dto.employee.EmployeeDto;
 import com.infomedia.abacox.telephonypricing.dto.employee.CreateEmployee;
@@ -43,10 +42,10 @@ public class EmployeeController {
     private final ModelConverter modelConverter;
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
-    public Page<EmployeeDto> find(@Parameter(hidden = true) @Filter Specification<Employee> spec
-            , @Parameter(hidden = true) Pageable pageable
-            , @RequestParam(required = false) String filter, @RequestParam(required = false) Integer page
-            , @RequestParam(required = false) Integer size, @RequestParam(required = false) String sort) {
+    public Page<EmployeeDto> find(@Parameter(hidden = true) @Filter Specification<Employee> spec,
+            @Parameter(hidden = true) Pageable pageable, @RequestParam(required = false) String filter,
+            @RequestParam(required = false) Integer page, @RequestParam(required = false) Integer size,
+            @RequestParam(required = false) String sort) {
         return modelConverter.mapPage(employeeService.find(spec, pageable), EmployeeDto.class);
     }
 
@@ -65,22 +64,29 @@ public class EmployeeController {
         return modelConverter.map(employeeService.changeActivation(id, activationDto.getActive()), EmployeeDto.class);
     }
 
+    @PatchMapping(value = "/retire/{historyControlId}", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<Void> retire(@PathVariable("historyControlId") Long historyControlId) {
+        employeeService.retire(historyControlId);
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping(value = "{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     private EmployeeDto get(@PathVariable("id") Long id) {
         return modelConverter.map(employeeService.get(id), EmployeeDto.class);
     }
 
     @GetMapping(value = "/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
-    public ResponseEntity<Resource> exportExcel(@Parameter(hidden = true) @Filter Specification<Employee> spec
-            , @Parameter(hidden = true) Pageable pageable
-            , @ParameterObject FilterRequest filterRequest
-            , @ParameterObject ExcelRequest excelRequest) {
+    public ResponseEntity<Resource> exportExcel(@Parameter(hidden = true) @Filter Specification<Employee> spec,
+            @Parameter(hidden = true) Pageable pageable, @ParameterObject FilterRequest filterRequest,
+            @ParameterObject ExcelRequest excelRequest) {
 
-                ByteArrayResource resource = employeeService.exportExcel(spec, pageable, excelRequest.toExcelGeneratorBuilder());
+        ByteArrayResource resource = employeeService.exportExcel(spec, pageable,
+                excelRequest.toExcelGeneratorBuilder());
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment;filename=employees.xlsx")
-                .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .contentType(
+                        MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
                 .body(resource);
     }
 

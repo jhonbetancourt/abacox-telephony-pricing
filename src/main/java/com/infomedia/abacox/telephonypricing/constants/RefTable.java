@@ -13,7 +13,7 @@ public enum RefTable {
     public int getId() {
         return id;
     }
-    
+
     // Optional: Helper method to get the enum from an ID
     public static RefTable fromId(int id) {
         for (RefTable table : RefTable.values()) {

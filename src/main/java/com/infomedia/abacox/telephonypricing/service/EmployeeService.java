@@ -1,28 +1,35 @@
 package com.infomedia.abacox.telephonypricing.service;
 
 import com.infomedia.abacox.telephonypricing.component.export.excel.ExcelGeneratorBuilder;
-import com.infomedia.abacox.telephonypricing.dto.employee.CreateEmployee;
-import com.infomedia.abacox.telephonypricing.dto.employee.UpdateEmployee;
+import com.infomedia.abacox.telephonypricing.constants.RefTable;
 import com.infomedia.abacox.telephonypricing.db.entity.Employee;
 import com.infomedia.abacox.telephonypricing.db.repository.EmployeeRepository;
+import com.infomedia.abacox.telephonypricing.dto.employee.CreateEmployee;
+import com.infomedia.abacox.telephonypricing.dto.employee.UpdateEmployee;
 import com.infomedia.abacox.telephonypricing.service.common.CrudService;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.List;
 
 @Service
 public class EmployeeService extends CrudService<Employee, Long, EmployeeRepository> {
-    public EmployeeService(EmployeeRepository repository) {
+
+    private final HistoryControlService historyControlService;
+
+    public EmployeeService(EmployeeRepository repository, HistoryControlService historyControlService) {
         super(repository);
+        this.historyControlService = historyControlService;
     }
 
-
-    public Employee create(CreateEmployee cDto){
+    @Transactional
+    public Employee create(CreateEmployee cDto) {
         Employee employee = Employee.builder()
                 .name(cDto.getName())
                 .subdivisionId(cDto.getSubdivisionId())
@@ -37,28 +44,44 @@ public class EmployeeService extends CrudService<Employee, Long, EmployeeReposit
                 .idNumber(cDto.getIdNumber())
                 .build();
 
+        historyControlService.initHistory(employee);
         return save(employee);
     }
 
-    public Employee update(Long id, UpdateEmployee uDto){
-        Employee employee = get(id);
-        uDto.getName().ifPresent(employee::setName);
-        uDto.getSubdivisionId().ifPresent(employee::setSubdivisionId);
-        uDto.getCostCenterId().ifPresent(employee::setCostCenterId);
-        uDto.getAuthCode().ifPresent(employee::setAuthCode);
-        uDto.getExtension().ifPresent(employee::setExtension);
-        uDto.getCommunicationLocationId().ifPresent(employee::setCommunicationLocationId);
-        uDto.getJobPositionId().ifPresent(employee::setJobPositionId);
-        uDto.getEmail().ifPresent(employee::setEmail);
-        uDto.getPhone().ifPresent(employee::setPhone);
-        uDto.getAddress().ifPresent(employee::setAddress);
-        uDto.getIdNumber().ifPresent(employee::setIdNumber);
-        return save(employee);
+    @Transactional
+    public Employee update(Long id, UpdateEmployee uDto) {
+        Employee current = get(id);
+        Employee updated = current.toBuilder().build();
+
+        uDto.getName().ifPresent(updated::setName);
+        uDto.getSubdivisionId().ifPresent(updated::setSubdivisionId);
+        uDto.getCostCenterId().ifPresent(updated::setCostCenterId);
+        uDto.getAuthCode().ifPresent(updated::setAuthCode);
+        uDto.getExtension().ifPresent(updated::setExtension);
+        uDto.getCommunicationLocationId().ifPresent(updated::setCommunicationLocationId);
+        uDto.getJobPositionId().ifPresent(updated::setJobPositionId);
+        uDto.getEmail().ifPresent(updated::setEmail);
+        uDto.getPhone().ifPresent(updated::setPhone);
+        uDto.getAddress().ifPresent(updated::setAddress);
+        uDto.getIdNumber().ifPresent(updated::setIdNumber);
+
+        return historyControlService.processUpdate(
+                current,
+                updated,
+                List.of(Employee::getExtension, Employee::getCommunicationLocationId),
+                RefTable.EMPLOYEE,
+                getRepository());
     }
 
-    public ByteArrayResource exportExcel(Specification<Employee> specification, Pageable pageable, ExcelGeneratorBuilder builder) {
+    @Transactional
+    public void retire(Long historyControlId) {
+        historyControlService.retire(RefTable.EMPLOYEE, historyControlId);
+    }
+
+    public ByteArrayResource exportExcel(Specification<Employee> specification, Pageable pageable,
+            ExcelGeneratorBuilder builder) {
         Page<Employee> collection = find(specification, pageable);
-       try {
+        try {
             InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
             return new ByteArrayResource(inputStream.readAllBytes());
         } catch (IOException e) {

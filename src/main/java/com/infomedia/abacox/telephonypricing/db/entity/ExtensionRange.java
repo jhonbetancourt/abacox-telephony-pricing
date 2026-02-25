@@ -24,7 +24,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @SuperBuilder(toBuilder = true)
-public class ExtensionRange extends ActivableEntity {
+public class ExtensionRange extends ActivableEntity implements HistoricalEntity {
 
         @Id
         @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "extension_range_id_seq")

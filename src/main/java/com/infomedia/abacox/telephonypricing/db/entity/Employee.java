@@ -35,7 +35,7 @@ import org.hibernate.annotations.ColumnDefault;
 @NoArgsConstructor
 @AllArgsConstructor
 @SuperBuilder(toBuilder = true)
-public class Employee extends ActivableEntity {
+public class Employee extends ActivableEntity implements HistoricalEntity {
 
         @Id
         @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "employee_id_seq")
