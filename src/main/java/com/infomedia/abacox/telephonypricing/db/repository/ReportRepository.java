@@ -80,7 +80,7 @@ public interface ReportRepository extends JpaRepository<VirtualEntity, Long> {
         Page<SubdivisionUsageReport> getSubdivisionUsageReport(
                         @Param("startDate") LocalDateTime startDate,
                         @Param("endDate") LocalDateTime endDate,
-                        @Param("subdivisionIds") List<Long> subdivisionIds,
+                        @Param("parentSubdivisionId") Long parentSubdivisionId,
                         Pageable pageable);
 
         @Query(value = SubdivisionUsageByTypeReportQueries.QUERY, countQuery = SubdivisionUsageByTypeReportQueries.COUNT_QUERY, nativeQuery = true)

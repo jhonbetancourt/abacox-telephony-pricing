@@ -27,17 +27,18 @@ public class SubdivisionReportService {
 
     @Transactional(readOnly = true)
     public Page<SubdivisionUsageReportDto> generateSubdivisionUsageReport(
-            LocalDateTime startDate, LocalDateTime endDate, List<Long> subdivisionIds, Pageable pageable) {
+            LocalDateTime startDate, LocalDateTime endDate, Long parentSubdivisionId, Pageable pageable) {
         return modelConverter.mapPage(
-                reportRepository.getSubdivisionUsageReport(startDate, endDate, subdivisionIds, pageable),
+                reportRepository.getSubdivisionUsageReport(startDate, endDate, parentSubdivisionId, pageable),
                 SubdivisionUsageReportDto.class);
     }
 
     @Transactional(readOnly = true)
     public ByteArrayResource exportExcelSubdivisionUsageReport(
-            LocalDateTime startDate, LocalDateTime endDate, List<Long> subdivisionIds, Pageable pageable,
+            LocalDateTime startDate, LocalDateTime endDate, Long parentSubdivisionId, Pageable pageable,
             ExcelGeneratorBuilder builder) {
-        Page<SubdivisionUsageReportDto> collection = generateSubdivisionUsageReport(startDate, endDate, subdivisionIds,
+        Page<SubdivisionUsageReportDto> collection = generateSubdivisionUsageReport(startDate, endDate,
+                parentSubdivisionId,
                 pageable);
         try {
             InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();

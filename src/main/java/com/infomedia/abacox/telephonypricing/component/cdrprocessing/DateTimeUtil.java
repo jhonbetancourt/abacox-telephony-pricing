@@ -18,7 +18,8 @@ public class DateTimeUtil {
 
     private static final List<DateTimeFormatter> CME_DATE_FORMATTERS = Arrays.asList(
             DateTimeFormatter.ofPattern("HH:mm:ss.SSS zz E MMM dd yyyy", Locale.ENGLISH),
-            DateTimeFormatter.ofPattern("HH:mm:ss.SSS z E MMM dd yyyy", Locale.ENGLISH)
+            DateTimeFormatter.ofPattern("HH:mm:ss.SSS z E MMM dd yyyy", Locale.ENGLISH),
+            DateTimeFormatter.ofPattern("HH:mm:ss.SSS X E MMM dd yyyy", Locale.ENGLISH)
     );
 
 
@@ -39,7 +40,7 @@ public class DateTimeUtil {
         }
         for (DateTimeFormatter formatter : CME_DATE_FORMATTERS) {
             try {
-                String parsableString = cmeDateTimeString.replace(" CO ", " UTC ");
+                String parsableString = cmeDateTimeString.replace(" CO ", " -0500 ");
                 return LocalDateTime.parse(parsableString, formatter);
             } catch (DateTimeParseException e) {
                 // Try next formatter

@@ -320,8 +320,8 @@ public class ReportController {
                         @ParameterObject PageableRequest pageableRequest,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate,
-                        @RequestParam List<Long> subdivisionIds) {
-                return subdivisionReportService.generateSubdivisionUsageReport(startDate, endDate, subdivisionIds,
+                        @RequestParam(required = false) Long parentSubdivisionId) {
+                return subdivisionReportService.generateSubdivisionUsageReport(startDate, endDate, parentSubdivisionId,
                                 pageable);
         }
 
@@ -330,11 +330,12 @@ public class ReportController {
                         @ParameterObject PageableRequest pageableRequest,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate,
-                        @RequestParam List<Long> subdivisionIds, @ParameterObject ExcelRequest excelRequest) {
+                        @RequestParam(required = false) Long parentSubdivisionId,
+                        @ParameterObject ExcelRequest excelRequest) {
 
                 ByteArrayResource resource = subdivisionReportService.exportExcelSubdivisionUsageReport(startDate,
                                 endDate,
-                                subdivisionIds, pageable, excelRequest.toExcelGeneratorBuilder());
+                                parentSubdivisionId, pageable, excelRequest.toExcelGeneratorBuilder());
                 return ResponseEntity.ok()
                                 .header(HttpHeaders.CONTENT_DISPOSITION,
                                                 "attachment; filename=subdivision_usage_report.xlsx")

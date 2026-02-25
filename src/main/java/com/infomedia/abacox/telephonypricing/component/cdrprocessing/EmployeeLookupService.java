@@ -18,6 +18,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -111,7 +112,7 @@ public class EmployeeLookupService {
 
             for (T entity : group) {
                 long fdesde = entity.getHistorySince() != null ? 
-                        entity.getHistorySince().atZone(ZoneId.systemDefault()).toEpochSecond() : 0;
+                        entity.getHistorySince().truncatedTo(ChronoUnit.DAYS).atZone(ZoneId.systemDefault()).toEpochSecond() : 0;
                 long fhasta = -1; // -1 means open/no limit
 
                 if (nextFdesde != -1) {

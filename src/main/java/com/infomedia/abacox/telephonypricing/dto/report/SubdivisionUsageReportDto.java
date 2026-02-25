@@ -5,6 +5,7 @@ import java.math.BigDecimal;
 
 @Data
 public class SubdivisionUsageReportDto {
+    private Long subdivisionId;
     private String subdivisionName;
     private Long totalEmployees;
     private Long incomingCallCount;
