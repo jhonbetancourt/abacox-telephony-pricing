@@ -20,11 +20,12 @@ public class LineProcessingContext {
     private Map<Long, List<ExtensionRange>> extensionRanges;
     private Map<Long, ExtensionLimits> extensionLimits;
     private FileInfo fileInfo;
+    private HistoricalDataContainer historicalData;
 
     // Added: Holds the CSV column mapping for the specific file being processed
     private Map<String, Integer> headerPositions;
 
-    public ExtensionLimits getCommLocationExtensionLimits(){
+    public ExtensionLimits getCommLocationExtensionLimits() {
         return extensionLimits.get(commLocation.getId());
     }
 

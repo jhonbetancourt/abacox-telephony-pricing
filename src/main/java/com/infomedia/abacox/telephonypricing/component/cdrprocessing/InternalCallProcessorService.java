@@ -29,13 +29,16 @@ public class InternalCallProcessorService {
     /**
      * PHP equivalent: procesaInterna
      */
-    public void processInternal(CdrData cdrData, LineProcessingContext processingContext, boolean pbxSpecialRuleAppliedRecursively) {
+    public void processInternal(CdrData cdrData, LineProcessingContext processingContext,
+            boolean pbxSpecialRuleAppliedRecursively) {
         CommunicationLocation commLocation = processingContext.getCommLocation();
-        log.debug("Processing INTERNAL call logic for CDR: {}. Recursive PBX applied: {}", cdrData.getCtlHash(), pbxSpecialRuleAppliedRecursively);
+        log.debug("Processing INTERNAL call logic for CDR: {}. Recursive PBX applied: {}", cdrData.getCtlHash(),
+                pbxSpecialRuleAppliedRecursively);
 
         List<String> prefixesToClean = Collections.emptyList();
         boolean stripOnlyIfPrefixMatchesAndFound = false;
-        if (pbxSpecialRuleAppliedRecursively && commLocation.getPbxPrefix() != null && !commLocation.getPbxPrefix().isEmpty()) {
+        if (pbxSpecialRuleAppliedRecursively && commLocation.getPbxPrefix() != null
+                && !commLocation.getPbxPrefix().isEmpty()) {
             prefixesToClean = Arrays.asList(commLocation.getPbxPrefix().split(","));
             stripOnlyIfPrefixMatchesAndFound = true;
         }
@@ -43,14 +46,14 @@ public class InternalCallProcessorService {
         String cleanedDestination = CdrUtil.cleanPhoneNumber(
                 cdrData.getEffectiveDestinationNumber(),
                 prefixesToClean,
-                stripOnlyIfPrefixMatchesAndFound
-        ).getCleanedNumber();
+                stripOnlyIfPrefixMatchesAndFound).getCleanedNumber();
         cdrData.setEffectiveDestinationNumber(cleanedDestination);
         log.debug("Cleaned internal destination: {}", cleanedDestination);
 
         if (cdrData.getCallingPartyNumber() != null && !cdrData.getCallingPartyNumber().trim().isEmpty() &&
                 Objects.equals(cdrData.getCallingPartyNumber().trim(), cleanedDestination.trim())) {
-            log.debug("Internal call to self (Origin: {}, Destination: {}). Marking for quarantine.", cdrData.getCallingPartyNumber(), cleanedDestination);
+            log.debug("Internal call to self (Origin: {}, Destination: {}). Marking for quarantine.",
+                    cdrData.getCallingPartyNumber(), cleanedDestination);
             cdrData.setTelephonyTypeId(TelephonyTypeEnum.ERRORS.getValue());
             cdrData.setTelephonyTypeName("Internal Self-Call (Ignored)");
             cdrData.setMarkedForQuarantine(true);
@@ -65,32 +68,43 @@ public class InternalCallProcessorService {
         if (internalTypeInfo.isIgnoreCall()) {
             log.debug("Internal call marked to be ignored. Reason: {}", internalTypeInfo.getAdditionalInfo());
             cdrData.setTelephonyTypeId(TelephonyTypeEnum.ERRORS.getValue());
-            cdrData.setTelephonyTypeName("Internal Call Ignored (Policy: " + internalTypeInfo.getAdditionalInfo() + ")");
+            cdrData.setTelephonyTypeName(
+                    "Internal Call Ignored (Policy: " + internalTypeInfo.getAdditionalInfo() + ")");
             cdrData.setMarkedForQuarantine(true);
-            cdrData.setQuarantineReason(internalTypeInfo.getAdditionalInfo() != null ? internalTypeInfo.getAdditionalInfo() : "Internal call ignore policy");
+            cdrData.setQuarantineReason(
+                    internalTypeInfo.getAdditionalInfo() != null ? internalTypeInfo.getAdditionalInfo()
+                            : "Internal call ignore policy");
             cdrData.setQuarantineStep("processInternalCallLogic_IgnorePolicy");
             return;
         }
 
-        // PHP: procesaInterna -> InvertirLlamada if origin not found but destination is.
+        // PHP: procesaInterna -> InvertirLlamada if origin not found but destination
+        // is.
         if (internalTypeInfo.isEffectivelyIncoming() && cdrData.getCallDirection() == CallDirection.OUTGOING) {
-            log.debug("Internal call determined to be effectively incoming. Inverting parties and trunks. CDR: {}", cdrData.getCtlHash());
+            log.debug("Internal call determined to be effectively incoming. Inverting parties and trunks. CDR: {}",
+                    cdrData.getCtlHash());
             CdrUtil.swapFull(cdrData, true); // Full swap including trunks
             cdrData.setCallDirection(CallDirection.INCOMING);
             // After swap, the new "calling" party is the destination employee
             cdrData.setEmployee(internalTypeInfo.getDestinationEmployee());
-            cdrData.setEmployeeId(internalTypeInfo.getDestinationEmployee() != null ? internalTypeInfo.getDestinationEmployee().getId() : null);
+            cdrData.setEmployeeId(internalTypeInfo.getDestinationEmployee() != null
+                    ? internalTypeInfo.getDestinationEmployee().getId()
+                    : null);
             // The new "destination" is the origin employee
             cdrData.setDestinationEmployee(internalTypeInfo.getOriginEmployee());
-            cdrData.setDestinationEmployeeId(internalTypeInfo.getOriginEmployee() != null ? internalTypeInfo.getOriginEmployee().getId() : null);
+            cdrData.setDestinationEmployeeId(
+                    internalTypeInfo.getOriginEmployee() != null ? internalTypeInfo.getOriginEmployee().getId() : null);
             // The indicator should be that of the new origin (the original destination)
             cdrData.setIndicatorId(internalTypeInfo.getDestinationIndicatorId());
         } else {
             // Standard assignment if not inverted
             cdrData.setEmployee(internalTypeInfo.getOriginEmployee());
-            cdrData.setEmployeeId(internalTypeInfo.getOriginEmployee() != null ? internalTypeInfo.getOriginEmployee().getId() : null);
+            cdrData.setEmployeeId(
+                    internalTypeInfo.getOriginEmployee() != null ? internalTypeInfo.getOriginEmployee().getId() : null);
             cdrData.setDestinationEmployee(internalTypeInfo.getDestinationEmployee());
-            cdrData.setDestinationEmployeeId(internalTypeInfo.getDestinationEmployee() != null ? internalTypeInfo.getDestinationEmployee().getId() : null);
+            cdrData.setDestinationEmployeeId(internalTypeInfo.getDestinationEmployee() != null
+                    ? internalTypeInfo.getDestinationEmployee().getId()
+                    : null);
             cdrData.setIndicatorId(internalTypeInfo.getDestinationIndicatorId());
         }
 
@@ -102,8 +116,7 @@ public class InternalCallProcessorService {
 
         if (cdrData.getTelephonyTypeId() != null && commLocation.getIndicator() != null) {
             OperatorInfo internalOp = telephonyTypeLookupService.getInternalOperatorInfo(
-                    cdrData.getTelephonyTypeId(), commLocation.getIndicator().getOriginCountryId()
-            );
+                    cdrData.getTelephonyTypeId(), commLocation.getIndicator().getOriginCountryId());
             cdrData.setOperatorId(internalOp.getId());
             cdrData.setOperatorName(internalOp.getName());
         }
@@ -115,10 +128,12 @@ public class InternalCallProcessorService {
     /**
      * PHP equivalent: tipo_llamada_interna
      */
-    private InternalCallTypeInfo determineSpecificInternalCallType(CdrData cdrData, LineProcessingContext processingContext) {
+    private InternalCallTypeInfo determineSpecificInternalCallType(CdrData cdrData,
+            LineProcessingContext processingContext) {
         CommunicationLocation currentCommLocation = processingContext.getCommLocation();
         List<String> ignoredAuthCodes = processingContext.getCdrProcessor().getIgnoredAuthCodeDescriptions();
-        log.debug("Determining specific internal call type for Calling: {}, Destination: {}", cdrData.getCallingPartyNumber(), cdrData.getEffectiveDestinationNumber());
+        log.debug("Determining specific internal call type for Calling: {}, Destination: {}",
+                cdrData.getCallingPartyNumber(), cdrData.getEffectiveDestinationNumber());
         InternalCallTypeInfo result = new InternalCallTypeInfo();
         result.setTelephonyTypeId(appConfigService.getDefaultTelephonyTypeForUnresolvedInternalCalls());
         result.setTelephonyTypeName(telephonyTypeLookupService.getTelephonyTypeName(result.getTelephonyTypeId()));
@@ -129,36 +144,49 @@ public class InternalCallProcessorService {
 
         Optional<Employee> originEmpOpt = employeeLookupService.findEmployeeByExtensionOrAuthCode(
                 cdrData.getCallingPartyNumber(), null,
-                currentCommLocation.getId(), ignoredAuthCodes, processingContext.getExtensionRanges());
+                currentCommLocation.getId(), ignoredAuthCodes, processingContext.getExtensionRanges(),
+                cdrData.getDateTimeOrigination(), processingContext.getHistoricalData());
         if (originEmpOpt.isEmpty() && CdrUtil.isPossibleExtension(cdrData.getCallingPartyNumber(), limits)) {
-            originEmpOpt = employeeLookupService.findEmployeeByExtensionRange(cdrData.getCallingPartyNumber(), currentCommLocation.getId(), processingContext.getExtensionRanges());
+            originEmpOpt = employeeLookupService.findEmployeeByExtensionRange(cdrData.getCallingPartyNumber(),
+                    currentCommLocation.getId(), processingContext.getExtensionRanges(),
+                    cdrData.getDateTimeOrigination(), processingContext.getHistoricalData());
         }
         result.setOriginEmployee(originEmpOpt.orElse(null));
 
         Optional<Employee> destEmpOpt = employeeLookupService.findEmployeeByExtensionOrAuthCode(
                 cdrData.getEffectiveDestinationNumber(), null,
-                null, ignoredAuthCodes, processingContext.getExtensionRanges()); // Search globally for destination
+                null, ignoredAuthCodes, processingContext.getExtensionRanges(),
+                cdrData.getDateTimeOrigination(), processingContext.getHistoricalData()); // Search globally for
+                                                                                          // destination
         if (destEmpOpt.isEmpty() && CdrUtil.isPossibleExtension(cdrData.getEffectiveDestinationNumber(), limits)) {
-            destEmpOpt = employeeLookupService.findEmployeeByExtensionRange(cdrData.getEffectiveDestinationNumber(), null, processingContext.getExtensionRanges());
+            destEmpOpt = employeeLookupService.findEmployeeByExtensionRange(cdrData.getEffectiveDestinationNumber(),
+                    null, processingContext.getExtensionRanges(),
+                    cdrData.getDateTimeOrigination(), processingContext.getHistoricalData());
         }
         result.setDestinationEmployee(destEmpOpt.orElse(null));
 
-        CommunicationLocation originCommLoc = originEmpOpt.map(Employee::getCommunicationLocation).orElse(currentCommLocation);
+        CommunicationLocation originCommLoc = originEmpOpt.map(Employee::getCommunicationLocation)
+                .orElse(currentCommLocation);
         CommunicationLocation destCommLoc = destEmpOpt.map(Employee::getCommunicationLocation).orElse(null);
 
         if (originCommLoc != null && destCommLoc == null && originEmpOpt.isPresent()) {
             destCommLoc = currentCommLocation;
-            log.debug("Destination employee not found for internal call; assuming destination is within current commLocation: {}", currentCommLocation.getDirectory());
+            log.debug(
+                    "Destination employee not found for internal call; assuming destination is within current commLocation: {}",
+                    currentCommLocation.getDirectory());
         }
 
         boolean extGlobales = appConfigService.areExtensionsGlobal();
         if (extGlobales && originCommLoc != null && destCommLoc != null &&
-            (!Objects.equals(currentCommLocation.getId(), originCommLoc.getId()) || !Objects.equals(currentCommLocation.getId(), destCommLoc.getId()))) {
-            if (!Objects.equals(currentCommLocation.getId(), originCommLoc.getId()) && Objects.equals(currentCommLocation.getId(), destCommLoc.getId())) {
+                (!Objects.equals(currentCommLocation.getId(), originCommLoc.getId())
+                        || !Objects.equals(currentCommLocation.getId(), destCommLoc.getId()))) {
+            if (!Objects.equals(currentCommLocation.getId(), originCommLoc.getId())
+                    && Objects.equals(currentCommLocation.getId(), destCommLoc.getId())) {
                 result.setIgnoreCall(true);
                 result.setAdditionalInfo("Global Extension - Incoming internal from another plant");
                 return result;
-            } else if (!Objects.equals(currentCommLocation.getId(), originCommLoc.getId()) && !Objects.equals(currentCommLocation.getId(), destCommLoc.getId())) {
+            } else if (!Objects.equals(currentCommLocation.getId(), originCommLoc.getId())
+                    && !Objects.equals(currentCommLocation.getId(), destCommLoc.getId())) {
                 result.setIgnoreCall(true);
                 result.setAdditionalInfo("Global Extension - Internal call between two other plants");
                 return result;
@@ -167,8 +195,7 @@ public class InternalCallProcessorService {
 
         if (destEmpOpt.isEmpty()) {
             Map<String, Long> internalPrefixes = prefixLookupService.getInternalTelephonyTypePrefixes(
-                currentCommLocation.getIndicator().getOriginCountryId()
-            );
+                    currentCommLocation.getIndicator().getOriginCountryId());
             boolean prefixMatched = false;
             for (Map.Entry<String, Long> entry : internalPrefixes.entrySet()) {
                 if (cdrData.getEffectiveDestinationNumber().startsWith(entry.getKey())) {
@@ -182,17 +209,20 @@ public class InternalCallProcessorService {
             if (!prefixMatched) {
                 Long defaultUnresolvedType = appConfigService.getDefaultTelephonyTypeForUnresolvedInternalCalls();
                 result.setTelephonyTypeId(defaultUnresolvedType);
-                result.setTelephonyTypeName(telephonyTypeLookupService.getTelephonyTypeName(result.getTelephonyTypeId()));
+                result.setTelephonyTypeName(
+                        telephonyTypeLookupService.getTelephonyTypeName(result.getTelephonyTypeId()));
                 result.setAdditionalInfo(appConfigService.getAssumedText());
             }
-        } else if (originCommLoc != null && destCommLoc != null && originCommLoc.getIndicator() != null && destCommLoc.getIndicator() != null) {
+        } else if (originCommLoc != null && destCommLoc != null && originCommLoc.getIndicator() != null
+                && destCommLoc.getIndicator() != null) {
             Indicator originIndicator = originCommLoc.getIndicator();
             Indicator destIndicator = destCommLoc.getIndicator();
             result.setOriginIndicatorId(originIndicator.getId());
             result.setDestinationIndicatorId(destIndicator.getId());
 
             Subdivision originSubdivision = originEmpOpt.map(Employee::getSubdivision).orElse(null);
-            Long originOfficeId = originSubdivision != null ? originSubdivision.getId() : null; // Assuming Subdivision ID is office ID
+            Long originOfficeId = originSubdivision != null ? originSubdivision.getId() : null; // Assuming Subdivision
+                                                                                                // ID is office ID
             Subdivision destSubdivision = destEmpOpt.map(Employee::getSubdivision).orElse(null);
             Long destOfficeId = destSubdivision != null ? destSubdivision.getId() : null;
 
@@ -200,7 +230,8 @@ public class InternalCallProcessorService {
                 result.setTelephonyTypeId(TelephonyTypeEnum.INTERNAL_INTERNATIONAL_IP.getValue());
             } else if (!Objects.equals(originIndicator.getId(), destIndicator.getId())) {
                 result.setTelephonyTypeId(TelephonyTypeEnum.NATIONAL_IP.getValue());
-            } else if (originOfficeId != null && destOfficeId != null && !Objects.equals(originOfficeId, destOfficeId)) {
+            } else if (originOfficeId != null && destOfficeId != null
+                    && !Objects.equals(originOfficeId, destOfficeId)) {
                 result.setTelephonyTypeId(TelephonyTypeEnum.LOCAL_IP.getValue());
             } else {
                 result.setTelephonyTypeId(TelephonyTypeEnum.INTERNAL_SIMPLE.getValue());
@@ -210,19 +241,23 @@ public class InternalCallProcessorService {
                 result.setAdditionalInfo(appConfigService.getAssumedText() + "/" + appConfigService.getOriginText());
             }
         } else {
-             result.setTelephonyTypeId(appConfigService.getDefaultTelephonyTypeForUnresolvedInternalCalls());
-             result.setTelephonyTypeName(telephonyTypeLookupService.getTelephonyTypeName(result.getTelephonyTypeId()));
-             result.setAdditionalInfo(appConfigService.getAssumedText());
-             if (originCommLoc != null && originCommLoc.getIndicator() != null) result.setOriginIndicatorId(originCommLoc.getIndicator().getId());
-             if (destCommLoc != null && destCommLoc.getIndicator() != null) result.setDestinationIndicatorId(destCommLoc.getIndicator().getId());
+            result.setTelephonyTypeId(appConfigService.getDefaultTelephonyTypeForUnresolvedInternalCalls());
+            result.setTelephonyTypeName(telephonyTypeLookupService.getTelephonyTypeName(result.getTelephonyTypeId()));
+            result.setAdditionalInfo(appConfigService.getAssumedText());
+            if (originCommLoc != null && originCommLoc.getIndicator() != null)
+                result.setOriginIndicatorId(originCommLoc.getIndicator().getId());
+            if (destCommLoc != null && destCommLoc.getIndicator() != null)
+                result.setDestinationIndicatorId(destCommLoc.getIndicator().getId());
         }
 
-        // PHP: if (!ExtensionEncontrada($info['funcionario_funid']) && ExtensionEncontrada($info['funcionario_fundes']) ... )
+        // PHP: if (!ExtensionEncontrada($info['funcionario_funid']) &&
+        // ExtensionEncontrada($info['funcionario_fundes']) ... )
         if (originEmpOpt.isEmpty() && destEmpOpt.isPresent() &&
                 cdrData.getCallDirection() == CallDirection.OUTGOING &&
                 destCommLoc != null && Objects.equals(destCommLoc.getId(), currentCommLocation.getId())) {
 
-            // Check if destination is a Bridge. If it is, we usually want to keep it Outgoing.
+            // Check if destination is a Bridge. If it is, we usually want to keep it
+            // Outgoing.
             boolean isBridge = cdrData.getConferenceIdentifierUsed() != null;
             if (!isBridge) {
                 result.setEffectivelyIncoming(true);

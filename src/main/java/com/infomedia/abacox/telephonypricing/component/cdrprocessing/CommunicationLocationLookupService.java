@@ -29,20 +29,23 @@ public class CommunicationLocationLookupService {
         }
     }
 
-
     /**
-     * Determines the best CommunicationLocation for a CDR based on its identifying fields.
-     * This mimics parts of PHP's hc_cisco_cm.php (buscarExtensiones, buscarPlantaDestino)
+     * Determines the best CommunicationLocation for a CDR based on its identifying
+     * fields.
+     * This mimics parts of PHP's hc_cisco_cm.php (buscarExtensiones,
+     * buscarPlantaDestino)
      * but scoped to a single client's CommunicationLocations.
      *
-     * @param plantTypeId The plantType of the CDR source (e.g., Cisco CM 6.0)
-     * @param callingPartyNumber From CDR
-     * @param callingPartyNumberPartition From CDR
-     * @param finalCalledPartyNumber From CDR
+     * @param plantTypeId                     The plantType of the CDR source (e.g.,
+     *                                        Cisco CM 6.0)
+     * @param callingPartyNumber              From CDR
+     * @param callingPartyNumberPartition     From CDR
+     * @param finalCalledPartyNumber          From CDR
      * @param finalCalledPartyNumberPartition From CDR
-     * @param lastRedirectDn From CDR
-     * @param lastRedirectDnPartition From CDR
-     * @param callDateTime For historical context (currently simplified)
+     * @param lastRedirectDn                  From CDR
+     * @param lastRedirectDnPartition         From CDR
+     * @param callDateTime                    For historical context (currently
+     *                                        simplified)
      * @return Optional<CommunicationLocation>
      */
     @Transactional(readOnly = true)
@@ -67,42 +70,52 @@ public class CommunicationLocationLookupService {
 
         // Check Calling Party
         if (callingPartyNumber != null && !callingPartyNumber.isEmpty()) {
-            commLocationOpt = findCommLocationByExtension(plantTypeId, callingPartyNumber, callingPartyNumberPartition, callDateTime);
+            commLocationOpt = findCommLocationByExtension(plantTypeId, callingPartyNumber, callingPartyNumberPartition,
+                    callDateTime);
             if (commLocationOpt.isPresent()) {
-                log.debug("Routed by CallingParty: {} -> CommLocation ID: {}", callingPartyNumber, commLocationOpt.get().getId());
+                log.debug("Routed by CallingParty: {} -> CommLocation ID: {}", callingPartyNumber,
+                        commLocationOpt.get().getId());
                 return commLocationOpt;
             }
         }
 
         // Check Final Called Party
         if (finalCalledPartyNumber != null && !finalCalledPartyNumber.isEmpty()) {
-            commLocationOpt = findCommLocationByExtension(plantTypeId, finalCalledPartyNumber, finalCalledPartyNumberPartition, callDateTime);
+            commLocationOpt = findCommLocationByExtension(plantTypeId, finalCalledPartyNumber,
+                    finalCalledPartyNumberPartition, callDateTime);
             if (commLocationOpt.isPresent()) {
-                log.debug("Routed by FinalCalledParty: {} -> CommLocation ID: {}", finalCalledPartyNumber, commLocationOpt.get().getId());
+                log.debug("Routed by FinalCalledParty: {} -> CommLocation ID: {}", finalCalledPartyNumber,
+                        commLocationOpt.get().getId());
                 return commLocationOpt;
             }
         }
 
         // Check Last Redirect DN
         if (lastRedirectDn != null && !lastRedirectDn.isEmpty()) {
-            commLocationOpt = findCommLocationByExtension(plantTypeId, lastRedirectDn, lastRedirectDnPartition, callDateTime);
+            commLocationOpt = findCommLocationByExtension(plantTypeId, lastRedirectDn, lastRedirectDnPartition,
+                    callDateTime);
             if (commLocationOpt.isPresent()) {
-                log.debug("Routed by LastRedirectDN: {} -> CommLocation ID: {}", lastRedirectDn, commLocationOpt.get().getId());
+                log.debug("Routed by LastRedirectDN: {} -> CommLocation ID: {}", lastRedirectDn,
+                        commLocationOpt.get().getId());
                 return commLocationOpt;
             }
         }
 
-        // Fallback: If no specific match, and there's only ONE active CommunicationLocation for this plantType, use it.
-        // This mimics PHP's behavior where if a client has only one plant, CDRs might default to it.
+        // Fallback: If no specific match, and there's only ONE active
+        // CommunicationLocation for this plantType, use it.
+        // This mimics PHP's behavior where if a client has only one plant, CDRs might
+        // default to it.
         List<CommunicationLocation> activeCommLocationsForPlantType = findActiveCommLocationsByPlantType(plantTypeId);
         if (activeCommLocationsForPlantType.size() == 1) {
-            log.debug("No specific extension match. Defaulting to the single active CommLocation ID: {} for PlantType: {}",
+            log.debug(
+                    "No specific extension match. Defaulting to the single active CommLocation ID: {} for PlantType: {}",
                     activeCommLocationsForPlantType.get(0).getId(), plantTypeId);
             return Optional.of(activeCommLocationsForPlantType.get(0));
         } else if (activeCommLocationsForPlantType.isEmpty()) {
             log.debug("No active CommunicationLocation found for PlantType ID: {}", plantTypeId);
         } else {
-            log.debug("Multiple ({}) active CommunicationLocations found for PlantType ID: {} and no specific extension match. Cannot uniquely determine CommLocation.",
+            log.debug(
+                    "Multiple ({}) active CommunicationLocations found for PlantType ID: {} and no specific extension match. Cannot uniquely determine CommLocation.",
                     activeCommLocationsForPlantType.size(), plantTypeId);
         }
 
@@ -116,32 +129,36 @@ public class CommunicationLocationLookupService {
             return Optional.empty();
         }
         String cleanedExtension = CdrUtil.cleanPhoneNumber(extensionNumber, null, false).getCleanedNumber();
-        if (cleanedExtension.startsWith("+")) cleanedExtension = cleanedExtension.substring(1);
-
+        if (cleanedExtension.startsWith("+"))
+            cleanedExtension = cleanedExtension.substring(1);
 
         // 1. Try direct Employee lookup by extension
-        // PHP: $query = "SELECT ... FROM funcionario JOIN comubicacion ... WHERE FUNCIONARIO_EXTENSION = :ext"
-        // We need to consider the partition implicitly if it's part of the extension string in some systems,
-        // or if specific logic for partition mapping is added. Cisco CDRs provide partition separately.
-        // For now, we assume extension is unique enough or partition is handled by plantType context.
+        // PHP: $query = "SELECT ... FROM funcionario JOIN comubicacion ... WHERE
+        // FUNCIONARIO_EXTENSION = :ext"
+        // We need to consider the partition implicitly if it's part of the extension
+        // string in some systems,
+        // or if specific logic for partition mapping is added. Cisco CDRs provide
+        // partition separately.
+        // For now, we assume extension is unique enough or partition is handled by
+        // plantType context.
 
         StringBuilder empQueryBuilder = new StringBuilder(
                 "SELECT cl.* FROM communication_location cl " +
                         "JOIN employee e ON e.communication_location_id = cl.id " +
-                        "WHERE cl.active = true AND e.active = true AND cl.plant_type_id = :plantTypeId " +
-                        "AND e.extension = :extension "
-        );
-        // In Cisco, partition is important. If partitionName is provided and not "NN-VALIDA" (PHP's default for no partition)
-        // we might need a more complex query if employees can have same extension in different partitions *within the same commLocation*.
-        // However, usually an extension is tied to one employee in one commLocation.
-        // The PHP logic for `cm_procesar` doesn't seem to use partition directly in `buscarExtensiones` SQL,
-        // but rather uses it as a key to group extensions before calling `buscarExtensiones`.
-        // Here, we are looking across all commLocations of the client for this plantType.
-        empQueryBuilder.append("ORDER BY e.created_date DESC LIMIT 1"); // Simplified: take most recent if multiple
+                        "WHERE cl.active = true AND cl.plant_type_id = :plantTypeId " +
+                        "AND e.extension = :extension ");
+        if (callDateTime != null) {
+            empQueryBuilder.append("AND e.history_since <= :callDateTime ");
+        }
+        empQueryBuilder.append("ORDER BY e.history_since DESC LIMIT 1");
 
-        jakarta.persistence.Query empQuery = entityManager.createNativeQuery(empQueryBuilder.toString(), CommunicationLocation.class);
+        jakarta.persistence.Query empQuery = entityManager.createNativeQuery(empQueryBuilder.toString(),
+                CommunicationLocation.class);
         empQuery.setParameter("plantTypeId", plantTypeId);
         empQuery.setParameter("extension", cleanedExtension);
+        if (callDateTime != null) {
+            empQuery.setParameter("callDateTime", callDateTime);
+        }
 
         try {
             CommunicationLocation cl = (CommunicationLocation) empQuery.getSingleResult();
@@ -165,20 +182,27 @@ public class CommunicationLocationLookupService {
         StringBuilder rangeQueryBuilder = new StringBuilder(
                 "SELECT cl.* FROM communication_location cl " +
                         "JOIN extension_range er ON er.comm_location_id = cl.id " +
-                        "WHERE cl.active = true AND er.active = true AND cl.plant_type_id = :plantTypeId " +
-                        "AND er.range_start <= :extNum AND er.range_end >= :extNum " +
-                        "ORDER BY (er.range_end - er.range_start) ASC, er.created_date DESC LIMIT 1" // Prefer tighter range
-        );
-        jakarta.persistence.Query rangeQuery = entityManager.createNativeQuery(rangeQueryBuilder.toString(), CommunicationLocation.class);
+                        "WHERE cl.active = true AND cl.plant_type_id = :plantTypeId " +
+                        "AND er.range_start <= :extNum AND er.range_end >= :extNum ");
+        if (callDateTime != null) {
+            rangeQueryBuilder.append("AND er.history_since <= :callDateTime ");
+        }
+        rangeQueryBuilder.append("ORDER BY er.history_since DESC, (er.range_end - er.range_start) ASC LIMIT 1");
+        jakarta.persistence.Query rangeQuery = entityManager.createNativeQuery(rangeQueryBuilder.toString(),
+                CommunicationLocation.class);
         rangeQuery.setParameter("plantTypeId", plantTypeId);
         rangeQuery.setParameter("extNum", extNum);
+        if (callDateTime != null) {
+            rangeQuery.setParameter("callDateTime", callDateTime);
+        }
 
         try {
             CommunicationLocation cl = (CommunicationLocation) rangeQuery.getSingleResult();
             log.debug("Found CommLocation ID {} via ExtensionRange for extension {}", cl.getId(), cleanedExtension);
             return Optional.of(cl);
         } catch (NoResultException e) {
-            log.debug("Extension {} not found in direct Employee lookup or ExtensionRange for plantType {}", cleanedExtension, plantTypeId);
+            log.debug("Extension {} not found in direct Employee lookup or ExtensionRange for plantType {}",
+                    cleanedExtension, plantTypeId);
             return Optional.empty();
         }
     }

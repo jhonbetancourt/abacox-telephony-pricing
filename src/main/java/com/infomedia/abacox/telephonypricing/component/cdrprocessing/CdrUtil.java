@@ -16,14 +16,16 @@ public class CdrUtil {
     private static final int PROBE_LINE_COUNT = 5; // Read the first few lines for validation
 
     public static List<String> parseCsvLine(String line, String separator) {
-        if (line == null) return Arrays.asList("");
+        if (line == null)
+            return Arrays.asList("");
         return Arrays.stream(line.split(Pattern.quote(separator)))
                 .map(CdrUtil::cleanCsvField)
                 .collect(Collectors.toList());
     }
 
     public static String cleanCsvField(String field) {
-        if (field == null) return "";
+        if (field == null)
+            return "";
         String cleaned = field.trim();
         cleaned = cleaned.replace("\u0000", "");
 
@@ -45,7 +47,8 @@ public class CdrUtil {
                 (dec >> 24) & 0xFF);
     }
 
-    public static CleanPhoneNumberResult cleanPhoneNumber(String number, List<String> pbxExitPrefixes, boolean modoSeguro) {
+    public static CleanPhoneNumberResult cleanPhoneNumber(String number, List<String> pbxExitPrefixes,
+            boolean modoSeguro) {
         if (number == null) {
             return new CleanPhoneNumberResult("", false);
         }
@@ -72,7 +75,8 @@ public class CdrUtil {
                 numberAfterPrefixStrip = currentNumber.substring(longestMatchingPrefix.length());
                 phpMaxCaracterAExtraer = longestMatchingPrefix.length();
                 pbxPrefixWasStripped = true;
-                log.trace("PBX prefix '{}' stripped. Number is now: '{}'", longestMatchingPrefix, numberAfterPrefixStrip);
+                log.trace("PBX prefix '{}' stripped. Number is now: '{}'", longestMatchingPrefix,
+                        numberAfterPrefixStrip);
             } else {
                 phpMaxCaracterAExtraer = 0;
                 log.trace("PBX prefixes defined but none matched current number '{}'", currentNumber);
@@ -85,7 +89,8 @@ public class CdrUtil {
 
         if (modoSeguro && numberAfterPrefixStrip.isEmpty() && phpMaxCaracterAExtraer == 0) {
             numberAfterPrefixStrip = currentNumber;
-            log.trace("ModoSeguro is true and no PBX prefix matched, reverting to original for further cleaning: '{}'", numberAfterPrefixStrip);
+            log.trace("ModoSeguro is true and no PBX prefix matched, reverting to original for further cleaning: '{}'",
+                    numberAfterPrefixStrip);
         }
 
         String numToClean = numberAfterPrefixStrip;
@@ -121,10 +126,12 @@ public class CdrUtil {
     }
 
     /**
-     * Performs a complete swap of calling/called party information, including numbers, partitions,
-     * and optionally trunks. This replicates the full logic of PHP's `InvertirLlamada`.
+     * Performs a complete swap of calling/called party information, including
+     * numbers, partitions,
+     * and optionally trunks. This replicates the full logic of PHP's
+     * `InvertirLlamada`.
      *
-     * @param cdrData The CdrData object to modify.
+     * @param cdrData    The CdrData object to modify.
      * @param swapTrunks If true, swaps origDeviceName and destDeviceName.
      */
     public static void swapFull(CdrData cdrData, boolean swapTrunks) {
@@ -158,7 +165,9 @@ public class CdrUtil {
 
     /**
      * Performs a PARTIAL swap, exchanging only the calling and called numbers.
-     * Partitions and trunks are NOT affected. This is for the non-conference incoming detection case.
+     * Partitions and trunks are NOT affected. This is for the non-conference
+     * incoming detection case.
+     * 
      * @param cdrData The CdrData object to modify.
      */
     public static void swapPartyNumbersOnly(CdrData cdrData) {
@@ -178,11 +187,24 @@ public class CdrUtil {
     }
 
     public static void swapTrunks(CdrData cdrData) {
-        log.debug("Swapping trunks. Before: Orig='{}', Dest='{}'", cdrData.getOrigDeviceName(), cdrData.getDestDeviceName());
+        log.debug("Swapping trunks. Before: Orig='{}', Dest='{}'", cdrData.getOrigDeviceName(),
+                cdrData.getDestDeviceName());
         String tempTrunk = cdrData.getOrigDeviceName();
         cdrData.setOrigDeviceName(cdrData.getDestDeviceName());
         cdrData.setDestDeviceName(tempTrunk);
-        log.debug("Swapped trunks. After: Orig='{}', Dest='{}'", cdrData.getOrigDeviceName(), cdrData.getDestDeviceName());
+        log.debug("Swapped trunks. After: Orig='{}', Dest='{}'", cdrData.getOrigDeviceName(),
+                cdrData.getDestDeviceName());
+    }
+
+    public static String cleanExtension(String extension) {
+        if (extension == null)
+            return "";
+        String cleaned = extension.trim();
+        // Remove leading '+' if present
+        if (cleaned.startsWith("+"))
+            cleaned = cleaned.substring(1);
+        // Step 1: Trim and remove whitespace
+        return cleaned.replaceAll("\\s+", "");
     }
 
     public static boolean isPossibleExtension(String extensionNumber, ExtensionLimits limits) {
@@ -190,7 +212,8 @@ public class CdrUtil {
             return false;
         }
         String cleanedExt = CdrUtil.cleanPhoneNumber(extensionNumber, null, false).getCleanedNumber();
-        if (cleanedExt.startsWith("+")) cleanedExt = cleanedExt.substring(1);
+        if (cleanedExt.startsWith("+"))
+            cleanedExt = cleanedExt.substring(1);
 
         if (limits.getSpecialFullExtensions() != null && limits.getSpecialFullExtensions().contains(cleanedExt)) {
             return true;
@@ -224,8 +247,8 @@ public class CdrUtil {
         }
 
         try (InputStream inputStream = new FileInputStream(file);
-             InputStreamReader reader = new InputStreamReader(inputStream, StandardCharsets.UTF_8);
-             BufferedReader bufferedReader = new BufferedReader(reader)) {
+                InputStreamReader reader = new InputStreamReader(inputStream, StandardCharsets.UTF_8);
+                BufferedReader bufferedReader = new BufferedReader(reader)) {
 
             String line;
             while ((line = bufferedReader.readLine()) != null && lines.size() < PROBE_LINE_COUNT) {

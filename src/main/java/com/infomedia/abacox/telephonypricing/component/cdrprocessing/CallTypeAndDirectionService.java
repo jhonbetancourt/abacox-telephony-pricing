@@ -20,7 +20,8 @@ public class CallTypeAndDirectionService {
     private final PbxSpecialRuleLookupService pbxSpecialRuleLookupService;
 
     /**
-     * PHP equivalent: Orchestrates logic from CargarCDR's main loop after `evaluar_Formato`,
+     * PHP equivalent: Orchestrates logic from CargarCDR's main loop after
+     * `evaluar_Formato`,
      * leading into `procesaEntrante` or `procesaSaliente`.
      * This method determines the initial nature of the call and then delegates.
      */
@@ -38,7 +39,8 @@ public class CallTypeAndDirectionService {
 
         cdrData.setEffectiveDestinationNumber(cdrData.getFinalCalledPartyNumber());
 
-        // An incoming call that is found to be internal must be processed as internal, not as incoming.
+        // An incoming call that is found to be internal must be processed as internal,
+        // not as incoming.
         if (cdrData.isInternalCall()) {
             // PHP: procesaEntrante -> info_interna -> InvertirLlamada
             if (initialDirection == CallDirection.INCOMING) {
@@ -59,7 +61,8 @@ public class CallTypeAndDirectionService {
 
     /**
      * Logic adapted from PHP's `es_llamada_interna`
-     * This is called if the parser (like Cisco CM 6.0) hasn't already definitively marked the call as internal.
+     * This is called if the parser (like Cisco CM 6.0) hasn't already definitively
+     * marked the call as internal.
      */
     private void checkIfPotentiallyInternal(CdrData cdrData, LineProcessingContext lineProcessingContext) {
         log.debug("Checking if call is potentially internal. Calling: '{}', FinalCalled: '{}'",
@@ -68,13 +71,14 @@ public class CallTypeAndDirectionService {
         CommunicationLocation commLocation = lineProcessingContext.getCommLocation();
 
         if (CdrUtil.isPossibleExtension(cdrData.getCallingPartyNumber(), limits)) {
-            log.debug("Calling party '{}' is a possible extension. Checking destination for internal call.", cdrData.getCallingPartyNumber());
-            String destinationForInternalCheck = CdrUtil.cleanPhoneNumber(cdrData.getFinalCalledPartyNumber(), null, false).getCleanedNumber();
+            log.debug("Calling party '{}' is a possible extension. Checking destination for internal call.",
+                    cdrData.getCallingPartyNumber());
+            String destinationForInternalCheck = CdrUtil
+                    .cleanPhoneNumber(cdrData.getFinalCalledPartyNumber(), null, false).getCleanedNumber();
             log.debug("Cleaned destination for internal check: {}", destinationForInternalCheck);
 
             Optional<String> pbxInternalTransformed = pbxSpecialRuleLookupService.applyPbxSpecialRule(
-                    destinationForInternalCheck, commLocation.getDirectory(), PbxRuleDirection.INTERNAL.getValue()
-            );
+                    destinationForInternalCheck, commLocation.getDirectory(), PbxRuleDirection.INTERNAL.getValue());
             if (pbxInternalTransformed.isPresent()) {
                 destinationForInternalCheck = pbxInternalTransformed.get();
                 cdrData.setInternalCheckPbxTransformedDest(destinationForInternalCheck);
@@ -84,25 +88,31 @@ public class CallTypeAndDirectionService {
             if ((destinationForInternalCheck.length() == 1 && destinationForInternalCheck.matches("\\d")) ||
                     CdrUtil.isPossibleExtension(destinationForInternalCheck, limits)) {
                 cdrData.setInternalCall(true);
-                log.debug("Marked as internal call based on destination '{}' format/possibility.", destinationForInternalCheck);
+                log.debug("Marked as internal call based on destination '{}' format/possibility.",
+                        destinationForInternalCheck);
             } else if (destinationForInternalCheck.matches("\\d+") &&
                     (!destinationForInternalCheck.startsWith("0") || destinationForInternalCheck.equals("0")) &&
                     !destinationForInternalCheck.isEmpty()) {
-                log.debug("Destination '{}' is numeric, not starting with 0 (or is '0'). Checking extension ranges.", destinationForInternalCheck);
+                log.debug("Destination '{}' is numeric, not starting with 0 (or is '0'). Checking extension ranges.",
+                        destinationForInternalCheck);
                 Optional<Employee> employeeFromRange = employeeLookupService.findEmployeeByExtensionRange(
                         destinationForInternalCheck,
-                        null, lineProcessingContext.getExtensionRanges());
+                        null, lineProcessingContext.getExtensionRanges(),
+                        cdrData.getDateTimeOrigination(), lineProcessingContext.getHistoricalData());
                 if (employeeFromRange.isPresent()) {
                     cdrData.setInternalCall(true);
-                    log.debug("Marked as internal call based on destination '{}' matching an extension range.", destinationForInternalCheck);
+                    log.debug("Marked as internal call based on destination '{}' matching an extension range.",
+                            destinationForInternalCheck);
                 } else {
                     log.debug("Destination '{}' did not match any extension range.", destinationForInternalCheck);
                 }
             } else {
-                log.debug("Destination '{}' not identified as internal by format or range.", destinationForInternalCheck);
+                log.debug("Destination '{}' not identified as internal by format or range.",
+                        destinationForInternalCheck);
             }
         } else {
-            log.debug("Calling party '{}' is not a possible extension. Not an internal call.", cdrData.getCallingPartyNumber());
+            log.debug("Calling party '{}' is not a possible extension. Not an internal call.",
+                    cdrData.getCallingPartyNumber());
         }
     }
 }

@@ -1,7 +1,6 @@
 // File: com/infomedia/abacox/telephonypricing/cdr/CdrProcessorService.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
-import com.infomedia.abacox.telephonypricing.component.utils.CompressionZipUtil;
 import com.infomedia.abacox.telephonypricing.component.utils.XXHash128Util;
 import com.infomedia.abacox.telephonypricing.db.entity.*;
 import com.infomedia.abacox.telephonypricing.multitenancy.TenantContext;
@@ -63,20 +62,44 @@ public class CdrProcessorService {
 
     @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
     public void processCdrBatch(List<LineProcessingContext> batch) {
+        if (batch.isEmpty())
+            return;
+
         // Pre-register count in tracker BEFORE processing/queueing
         Map<Long, Integer> countsByFile = new HashMap<>();
+        Set<String> uniqueExtensions = new HashSet<>();
+        Set<String> uniqueAuthCodes = new HashSet<>();
+
         for (LineProcessingContext ctx : batch) {
             if (ctx.getFileInfoId() != null) {
                 countsByFile.merge(ctx.getFileInfoId(), 1, Integer::sum);
             }
+
+            // Collect unique identifiers for pre-fetching
+            // We need to parse enough to get the extension and auth code
+            CdrData preCdr = ctx.getCdrProcessor().evaluateFormat(
+                    ctx.getCdrLine(), ctx.getCommLocation(),
+                    ctx.getCommLocationExtensionLimits(), ctx.getHeaderPositions());
+
+            if (preCdr != null) {
+                if (preCdr.getCallingPartyNumber() != null)
+                    uniqueExtensions.add(preCdr.getCallingPartyNumber());
+                if (preCdr.getAuthCodeDescription() != null)
+                    uniqueAuthCodes.add(preCdr.getAuthCodeDescription());
+            }
         }
         countsByFile.forEach(trackerService::incrementPendingCount);
+
+        // Pre-fetch historical timelines
+        HistoricalDataContainer historicalData = employeeLookupService.prefetchHistoricalData(uniqueExtensions,
+                uniqueAuthCodes);
+        batch.forEach(ctx -> ctx.setHistoricalData(historicalData));
 
         // Capture TenantContext to propagate to parallel threads
         String tenantId = TenantContext.getTenant();
 
         // Use custom ForkJoinPool to prevent current thread (with transaction) from
-        // participating
+        // participatings
         try (ForkJoinPool customPool = new ForkJoinPool(
                 Math.min(batch.size(), Runtime.getRuntime().availableProcessors()))) {
             customPool.submit(() -> {
