@@ -41,7 +41,6 @@ import static java.util.Map.entry;
 public class MigrationService {
 
         private final DataMigrationExecutor dataMigrationExecutor;
-        private final EmployeeRepository employeeRepository;
         private final EntityManager entityManager;
         private final PlatformTransactionManager transactionManager;
         private final ConfigService configService;
@@ -60,6 +59,14 @@ public class MigrationService {
         // --- End State Tracking ---
 
         public void startAsync(MigrationStart runRequest) {
+                submitMigrationTask(() -> start(runRequest));
+        }
+
+        public void startHistoricalAsync(MigrationStart runRequest) {
+                submitMigrationTask(() -> startHistorical(runRequest));
+        }
+
+        private void submitMigrationTask(Runnable migrationTask) {
                 if (!isMigrationRunning.compareAndSet(false, true)) {
                         throw new MigrationAlreadyInProgressException("A data migration is already in progress.");
                 }
@@ -74,7 +81,7 @@ public class MigrationService {
                                 // 2. Set the tenant in the NEW thread
                                 try {
                                         TenantContext.setTenant(currentTenant);
-                                        start(runRequest);
+                                        migrationTask.run();
                                 } finally {
                                         // 3. Cleanup
                                         TenantContext.clear();
@@ -104,15 +111,35 @@ public class MigrationService {
         }
 
         public void start(MigrationStart runRequest) {
-                // isMigrationRunning is set by startAsync, or should be set if this is called
-                // directly (not recommended for async)
-                if (!isMigrationRunning.get()) { // Ensure it's marked as running if called directly
-                        isMigrationRunning.set(true);
-                        resetMigrationState(); // Reset if called directly without async wrapper
-                }
+                ensureRunning();
                 log.info("<<<<<<<<<< Starting Full Data Migration Execution >>>>>>>>>>");
+                executeMigration(runRequest, defineMigrationOrderAndMappings(runRequest));
+        }
+
+        public void startHistorical(MigrationStart runRequest) {
+                ensureRunning();
+                log.info("<<<<<<<<<< Starting Historical Data Migration Execution >>>>>>>>>>");
+                // Force cleanup = false for historical migration
+                runRequest.setCleanup(false);
+
+                List<TableMigrationConfig> fullList = defineMigrationOrderAndMappings(runRequest);
+                List<TableMigrationConfig> historicalList = fullList.stream()
+                                .filter(c -> List.of("historictl", "FUNCIONARIO", "rangoext")
+                                                .contains(c.getSourceTableName()))
+                                .toList();
+
+                executeMigration(runRequest, historicalList);
+        }
+
+        private void ensureRunning() {
+                if (!isMigrationRunning.get()) {
+                        isMigrationRunning.set(true);
+                        resetMigrationState();
+                }
+        }
+
+        private void executeMigration(MigrationStart runRequest, List<TableMigrationConfig> tablesToMigrate) {
                 currentState.set(MigrationState.RUNNING);
-                List<TableMigrationConfig> tablesToMigrate; // Initialize
 
                 // Snapshot the CDR processing flag so we can restore it after migration
                 boolean cdrWasEnabled = configService.getValue(ConfigKey.CDR_PROCESSING_ENABLED).asBoolean();
@@ -136,7 +163,6 @@ public class MigrationService {
                                         .password(runRequest.getPassword())
                                         .build();
 
-                        tablesToMigrate = defineMigrationOrderAndMappings(runRequest);
                         tablesToMigrate.forEach(
                                         tableConfig -> tableConfig.setAssumeTargetIsEmpty(runRequest.getCleanup()));
                         int totalTableCount = tablesToMigrate.size();
@@ -164,7 +190,7 @@ public class MigrationService {
                         currentState.set(MigrationState.COMPLETED);
                         currentStep.set(String.format("Finished: Successfully migrated %d/%d tables.",
                                         migratedTables.get(), totalTables.get()));
-                        log.info("<<<<<<<<<< Full Data Migration Finished Successfully >>>>>>>>>>");
+                        log.info("<<<<<<<<<< Data Migration Finished Successfully >>>>>>>>>>");
 
                 } catch (Exception e) {
                         log.error("<<<<<<<<<< Full Data Migration FAILED during execution >>>>>>>>>>", e);
