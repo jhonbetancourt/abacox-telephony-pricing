@@ -98,12 +98,22 @@ public class SubdivisionReportService {
         grouped.forEach((subdivisionId, projections) -> {
             String subdivisionName = projections.get(0).getSubdivisionName();
 
+            // Filter out projections with null year/month (subdivisions with no calls)
+            List<MonthlySubdivisionUsage> validProjections = projections.stream()
+                    .filter(p -> p.getYear() != null && p.getMonth() != null)
+                    .collect(Collectors.toList());
+
+            // Skip subdivisions with no valid data
+            if (validProjections.isEmpty()) {
+                return;
+            }
+
             // Sort projections by year/month to ensure correct order for variation
             // calculation
-            projections.sort(Comparator.comparing(MonthlySubdivisionUsage::getYear)
+            validProjections.sort(Comparator.comparing(MonthlySubdivisionUsage::getYear)
                     .thenComparing(MonthlySubdivisionUsage::getMonth));
 
-            List<MonthlyCostDto> monthlyCosts = projections.stream()
+            List<MonthlyCostDto> monthlyCosts = validProjections.stream()
                     .map(p -> MonthlyCostDto.builder()
                             .year(p.getYear())
                             .month(p.getMonth())
@@ -112,7 +122,7 @@ public class SubdivisionReportService {
                     .collect(Collectors.toList());
 
             BigDecimal totalVariation = calculateCumulativeVariation(
-                    projections.stream().map(MonthlySubdivisionUsage::getTotalBilledAmount)
+                    validProjections.stream().map(MonthlySubdivisionUsage::getTotalBilledAmount)
                             .collect(Collectors.toList()));
 
             dtos.add(MonthlySubdivisionUsageReportDto.builder()
