@@ -165,7 +165,10 @@ public class SubdivisionReportService {
         Page<MonthlySubdivisionUsageReportDto> collection = generateMonthlySubdivisionUsageReport(startDate, endDate,
                 subdivisionIds, pageable);
         try {
-            InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
+            InputStream inputStream = builder
+                    .withEntities(collection.toList())
+                    .withFlattenedCollection("monthlyCosts")
+                    .generateAsInputStream();
             return new ByteArrayResource(inputStream.readAllBytes());
         } catch (IOException e) {
             throw new RuntimeException(e);

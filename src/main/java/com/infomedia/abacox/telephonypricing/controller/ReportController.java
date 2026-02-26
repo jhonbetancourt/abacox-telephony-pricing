@@ -11,6 +11,7 @@ import com.infomedia.abacox.telephonypricing.dto.generic.PageWithSummaries;
 import com.infomedia.abacox.telephonypricing.dto.report.*;
 import com.infomedia.abacox.telephonypricing.dto.generic.ExcelRequest;
 import com.infomedia.abacox.telephonypricing.dto.generic.FilterRequest;
+import com.infomedia.abacox.telephonypricing.model.report.UnassignedCallGroupingType;
 import com.infomedia.abacox.telephonypricing.service.report.*;
 import com.turkraft.springfilter.boot.Filter;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -173,19 +174,23 @@ public class ReportController {
         public Page<UnassignedCallReportDto> getUnassignedCallReport(@Parameter(hidden = true) Pageable pageable,
                         @ParameterObject PageableRequest pageableRequest,
                         @RequestParam(required = false) String extension,
+                        @RequestParam(required = false, defaultValue = "EXTENSION") UnassignedCallGroupingType groupingType,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate) {
-                return callRecordReportService.generateUnassignedCallReport(extension, startDate, endDate, pageable);
+                return callRecordReportService.generateUnassignedCallReport(extension, groupingType, startDate, endDate,
+                                pageable);
         }
 
         @GetMapping(value = "unassignedCall/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
         public ResponseEntity<Resource> exportExcelUnassignedCallReport(@Parameter(hidden = true) Pageable pageable,
                         @RequestParam(required = false) String extension,
+                        @RequestParam(required = false, defaultValue = "EXTENSION") UnassignedCallGroupingType groupingType,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate,
                         @ParameterObject ExcelRequest excelRequest, @ParameterObject PageableRequest pageableRequest) {
 
                 ByteArrayResource resource = callRecordReportService.exportExcelUnassignedCallReport(extension,
+                                groupingType,
                                 startDate,
                                 endDate, pageable, excelRequest.toExcelGeneratorBuilder());
                 return ResponseEntity.ok()

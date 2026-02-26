@@ -1,5 +1,7 @@
 package com.infomedia.abacox.telephonypricing.service.report;
 
+import com.infomedia.abacox.telephonypricing.component.cdrprocessing.EmployeeLookupService;
+import com.infomedia.abacox.telephonypricing.component.cdrprocessing.ExtensionLimits;
 import com.infomedia.abacox.telephonypricing.component.export.excel.ExcelGeneratorBuilder;
 import com.infomedia.abacox.telephonypricing.component.modeltools.ModelConverter;
 import com.infomedia.abacox.telephonypricing.db.entity.CallRecord;
@@ -19,6 +21,7 @@ import com.infomedia.abacox.telephonypricing.dto.report.CorporateReportDto;
 import com.infomedia.abacox.telephonypricing.dto.report.ProcessingFailureReportDto;
 import com.infomedia.abacox.telephonypricing.dto.report.UnassignedCallReportDto;
 import com.infomedia.abacox.telephonypricing.dto.telephonytype.TelephonyTypeDto;
+import com.infomedia.abacox.telephonypricing.model.report.UnassignedCallGroupingType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.data.domain.Page;
@@ -43,6 +46,7 @@ public class CallRecordReportService {
     private final CorporateReportViewRepository corporateReportViewRepository;
     private final ReportRepository reportRepository;
     private final ModelConverter modelConverter;
+    private final EmployeeLookupService employeeLookupService;
 
     private CallRecordDto callRecordDtoFromEntity(CallRecord entity) {
         if (entity == null) {
@@ -171,16 +175,35 @@ public class CallRecordReportService {
     }
 
     @Transactional(readOnly = true)
-    public Page<UnassignedCallReportDto> generateUnassignedCallReport(String extension, LocalDateTime startDate,
-            LocalDateTime endDate, Pageable pageable) {
-        return modelConverter.mapPage(reportRepository.getUnassignedCallReport(startDate, endDate, extension, pageable),
+    public Page<UnassignedCallReportDto> generateUnassignedCallReport(String extension,
+            UnassignedCallGroupingType groupingType,
+            LocalDateTime startDate, LocalDateTime endDate, Pageable pageable) {
+
+        // 1. Get Extension Limits once
+        var limitsMap = employeeLookupService.getExtensionLimits();
+
+        // 2. Aggregate min/max lengths across all active plants
+        int minLength = limitsMap.values().stream()
+                .mapToInt(ExtensionLimits::getMinLength)
+                .min()
+                .orElse(3); // Fallback to 3 if no limits found
+
+        int maxLength = limitsMap.values().stream()
+                .mapToInt(ExtensionLimits::getMaxLength)
+                .max()
+                .orElse(5); // Fallback to 5 if no limits found
+
+        // 3. Query repository with parameters
+        return modelConverter.mapPage(reportRepository.getUnassignedCallReport(
+                startDate, endDate, extension, groupingType.name(), minLength, maxLength, pageable),
                 UnassignedCallReportDto.class);
     }
 
     @Transactional(readOnly = true)
-    public ByteArrayResource exportExcelUnassignedCallReport(String extension, LocalDateTime startDate,
-            LocalDateTime endDate, Pageable pageable, ExcelGeneratorBuilder builder) {
-        Page<UnassignedCallReportDto> collection = generateUnassignedCallReport(extension, startDate,
+    public ByteArrayResource exportExcelUnassignedCallReport(String extension, UnassignedCallGroupingType groupingType,
+            LocalDateTime startDate, LocalDateTime endDate, Pageable pageable,
+            ExcelGeneratorBuilder builder) {
+        Page<UnassignedCallReportDto> collection = generateUnassignedCallReport(extension, groupingType, startDate,
                 endDate, pageable);
         try {
             InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();

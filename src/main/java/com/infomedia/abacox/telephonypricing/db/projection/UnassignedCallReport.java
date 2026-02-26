@@ -12,17 +12,13 @@ import java.time.LocalDateTime;
  */
 public interface UnassignedCallReport {
 
+    String getConcept();
+
     String getEmployeeExtension();
 
-    Long getEmployeeId();
-
-    Integer getAssignmentCause();
-
-    String getCommLocationDirectory();
+    String getPlant();
 
     Long getCommLocationId();
-
-    String getPlantTypeName();
 
     BigDecimal getTotalCost();
 

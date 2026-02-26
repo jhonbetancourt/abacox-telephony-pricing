@@ -48,6 +48,9 @@ public interface ReportRepository extends JpaRepository<VirtualEntity, Long> {
                         @Param("startDate") LocalDateTime startDate,
                         @Param("endDate") LocalDateTime endDate,
                         @Param("extension") String extension,
+                        @Param("groupingType") String groupingType,
+                        @Param("minLength") Integer minLength,
+                        @Param("maxLength") Integer maxLength,
                         Pageable pageable);
 
         @Query(value = ProcessingFailureReportQueries.QUERY, countQuery = ProcessingFailureReportQueries.COUNT_QUERY, nativeQuery = true)

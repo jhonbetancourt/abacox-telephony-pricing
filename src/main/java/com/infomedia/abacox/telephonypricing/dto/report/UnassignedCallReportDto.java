@@ -1,6 +1,7 @@
 package com.infomedia.abacox.telephonypricing.dto.report;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.infomedia.abacox.telephonypricing.constants.DateTimePattern;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -12,7 +13,8 @@ import java.time.LocalDateTime;
 /**
  * DTO for the "Unassigned Calls" report.
  * <p>
- * Represents aggregated call data for extensions that are not assigned to a specific
+ * Represents aggregated call data for extensions that are not assigned to a
+ * specific
  * employee or are assigned for a special reason (cause #5).
  */
 @Data
@@ -20,24 +22,18 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class UnassignedCallReportDto {
 
-    private String employeeExtension;
+    private String concept;
 
-    private Long employeeId;
+    private String plant;
 
-    private Integer assignmentCause;
-
-    private String commLocationDirectory;
-
+    @JsonIgnore
     private Long commLocationId;
-
-    private String plantTypeName;
 
     private BigDecimal totalCost;
 
     private Long totalDuration;
 
     private Long callCount;
-
     @JsonFormat(pattern = DateTimePattern.DATE_TIME)
     private LocalDateTime lastCallDate;
 }
