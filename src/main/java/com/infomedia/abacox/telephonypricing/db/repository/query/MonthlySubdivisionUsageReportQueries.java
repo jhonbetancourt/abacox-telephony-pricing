@@ -1,73 +1,67 @@
 package com.infomedia.abacox.telephonypricing.db.repository.query;
 
 public final class MonthlySubdivisionUsageReportQueries {
-    private MonthlySubdivisionUsageReportQueries() {} // Private constructor to prevent instantiation
+    private MonthlySubdivisionUsageReportQueries() {
+    } // Private constructor to prevent instantiation
 
     public static final String QUERY = """
-    WITH report_data AS (
-        SELECT
-            s.parent_subdivision_id AS parentSubdivisionId,
-            ps.name AS parentSubdivisionName,
-            s.id AS subdivisionId,
-            s.name AS subdivisionName,
-            EXTRACT(YEAR FROM cr.service_date)::integer AS year,
-            EXTRACT(MONTH FROM cr.service_date)::integer AS month,
-            COALESCE(SUM(cr.billed_amount), 0) AS totalBilledAmount,
-            COALESCE(SUM(cr.duration), 0) AS totalDuration,
-            COALESCE(COUNT(cr.id) FILTER (WHERE cr.is_incoming = false), 0) AS outgoingCallCount,
-            COALESCE(COUNT(cr.id) FILTER (WHERE cr.is_incoming = true), 0) AS incomingCallCount
-        FROM
-            call_record cr
-        JOIN
-            employee e ON cr.employee_id = e.id
-        JOIN
-            subdivision s ON e.subdivision_id = s.id
-        LEFT JOIN
-            subdivision ps ON s.parent_subdivision_id = ps.id
-        JOIN
-            telephony_type tt ON cr.telephony_type_id = tt.id
-        JOIN
-            communication_location cl ON cr.comm_location_id = cl.id
-        WHERE
-            (cr.service_date BETWEEN :startDate AND :endDate)
-        AND
-            (s.id IN (:subdivisionIds))
-        GROUP BY
-            s.id, s.name, ps.id, ps.name, year, month
-    )
-    SELECT
-        parentSubdivisionId,
-        parentSubdivisionName,
-        subdivisionId,
-        subdivisionName,
-        year,
-        month,
-        totalBilledAmount,
-        totalDuration,
-        outgoingCallCount,
-        incomingCallCount
-    FROM
-        report_data
-    """;
+            WITH RECURSIVE subdivision_hierarchy AS (
+                -- Anchor: start from requested subdivisions OR roots if none provided
+                SELECT
+                    id,
+                    id AS anchor_id,
+                    name AS anchor_name
+                FROM subdivision
+                WHERE
+                    (:#{#subdivisionIds == null || #subdivisionIds.isEmpty() ? 1 : 0} = 1 AND parent_subdivision_id IS NULL)
+                    OR id IN (:subdivisionIds)
+
+                UNION ALL
+
+                -- Recursive: follow parent-child links
+                SELECT
+                    s.id,
+                    sh.anchor_id,
+                    sh.anchor_name
+                FROM subdivision s
+                INNER JOIN subdivision_hierarchy sh ON s.parent_subdivision_id = sh.id
+            ),
+            monthly_costs AS (
+                SELECT
+                    sh.anchor_id AS subdivisionId,
+                    sh.anchor_name AS subdivisionName,
+                    EXTRACT(YEAR FROM cr.service_date)::integer AS year,
+                    EXTRACT(MONTH FROM cr.service_date)::integer AS month,
+                    SUM(cr.billed_amount) AS totalBilledAmount
+                FROM
+                    call_record cr
+                JOIN
+                    employee e ON cr.employee_id = e.id
+                JOIN
+                    subdivision_hierarchy sh ON e.subdivision_id = sh.id
+                WHERE
+                    cr.service_date BETWEEN :startDate AND :endDate
+                GROUP BY
+                    sh.anchor_id, sh.anchor_name, year, month
+            )
+            SELECT
+                subdivisionId,
+                subdivisionName,
+                year,
+                month,
+                totalBilledAmount
+            FROM
+                monthly_costs
+            ORDER BY
+                subdivisionId, year, month
+            """;
 
     public static final String COUNT_QUERY = """
-    SELECT COUNT(*) FROM (
-        SELECT
-            s.id, ps.id, EXTRACT(YEAR FROM cr.service_date), EXTRACT(MONTH FROM cr.service_date)
-        FROM
-            call_record cr
-        JOIN
-            employee e ON cr.employee_id = e.id
-        JOIN
-            subdivision s ON e.subdivision_id = s.id
-        LEFT JOIN
-            subdivision ps ON s.parent_subdivision_id = ps.id
-        WHERE
-            (cr.service_date BETWEEN :startDate AND :endDate)
-        AND
-            (s.id IN (:subdivisionIds))
-        GROUP BY
-            s.id, ps.id, EXTRACT(YEAR FROM cr.service_date), EXTRACT(MONTH FROM cr.service_date)
-    ) AS group_count
-    """;
+            SELECT COUNT(*) FROM (
+                SELECT id FROM subdivision
+                WHERE
+                    (:#{#subdivisionIds == null || #subdivisionIds.isEmpty() ? 1 : 0} = 1 AND parent_subdivision_id IS NULL)
+                    OR id IN (:subdivisionIds)
+            ) AS count_subquery
+            """;
 }

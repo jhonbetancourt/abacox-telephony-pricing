@@ -478,7 +478,7 @@ public class ReportController {
                         @Parameter(hidden = true) Pageable pageable, @ParameterObject PageableRequest pageableRequest,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate,
-                        @RequestParam List<Long> subdivisionIds) {
+                        @RequestParam(required = false) List<Long> subdivisionIds) {
                 return subdivisionReportService.generateMonthlySubdivisionUsageReport(startDate, endDate,
                                 subdivisionIds,
                                 pageable);
@@ -489,7 +489,8 @@ public class ReportController {
                         @Parameter(hidden = true) Pageable pageable, @ParameterObject PageableRequest pageableRequest,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate,
-                        @RequestParam List<Long> subdivisionIds, @ParameterObject ExcelRequest excelRequest) {
+                        @RequestParam(required = false) List<Long> subdivisionIds,
+                        @ParameterObject ExcelRequest excelRequest) {
 
                 ByteArrayResource resource = subdivisionReportService.exportExcelMonthlySubdivisionUsageReport(
                                 startDate, endDate,

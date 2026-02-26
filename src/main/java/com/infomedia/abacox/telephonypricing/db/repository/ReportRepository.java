@@ -121,7 +121,7 @@ public interface ReportRepository extends JpaRepository<VirtualEntity, Long> {
                         Pageable pageable);
 
         @Query(value = MonthlySubdivisionUsageReportQueries.QUERY, countQuery = MonthlySubdivisionUsageReportQueries.COUNT_QUERY, nativeQuery = true)
-        Page<MonthlySubdivisionUsageReport> getMonthlySubdivisionUsageReport(
+        Page<MonthlySubdivisionUsage> getMonthlySubdivisionUsageReport(
                         @Param("startDate") LocalDateTime startDate,
                         @Param("endDate") LocalDateTime endDate,
                         @Param("subdivisionIds") List<Long> subdivisionIds,

@@ -1,18 +1,23 @@
 package com.infomedia.abacox.telephonypricing.dto.report;
 
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
+
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 
 @Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class MonthlySubdivisionUsageReportDto {
-    private Long parentSubdivisionId;
-    private String parentSubdivisionName;
     private Long subdivisionId;
     private String subdivisionName;
-    private Integer year;
-    private Integer month;
-    private BigDecimal totalBilledAmount;
-    private Long totalDuration;
-    private Long outgoingCallCount;
-    private Long incomingCallCount;
+    @Builder.Default
+    private List<MonthlyCostDto> monthlyCosts = new ArrayList<>();
+    @Builder.Default
+    private BigDecimal totalVariation = BigDecimal.ZERO;
 }

@@ -2,21 +2,27 @@ package com.infomedia.abacox.telephonypricing.service.report;
 
 import com.infomedia.abacox.telephonypricing.component.export.excel.ExcelGeneratorBuilder;
 import com.infomedia.abacox.telephonypricing.component.modeltools.ModelConverter;
+import com.infomedia.abacox.telephonypricing.db.projection.MonthlySubdivisionUsage;
 import com.infomedia.abacox.telephonypricing.db.repository.ReportRepository;
-import com.infomedia.abacox.telephonypricing.dto.report.SubdivisionUsageReportDto;
-import com.infomedia.abacox.telephonypricing.dto.report.SubdivisionUsageByTypeReportDto;
+import com.infomedia.abacox.telephonypricing.dto.report.MonthlyCostDto;
 import com.infomedia.abacox.telephonypricing.dto.report.MonthlySubdivisionUsageReportDto;
+import com.infomedia.abacox.telephonypricing.dto.report.SubdivisionUsageByTypeReportDto;
+import com.infomedia.abacox.telephonypricing.dto.report.SubdivisionUsageReportDto;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
-import java.util.List;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
 @Service
@@ -73,9 +79,83 @@ public class SubdivisionReportService {
     @Transactional(readOnly = true)
     public Page<MonthlySubdivisionUsageReportDto> generateMonthlySubdivisionUsageReport(
             LocalDateTime startDate, LocalDateTime endDate, List<Long> subdivisionIds, Pageable pageable) {
-        return modelConverter.mapPage(
-                reportRepository.getMonthlySubdivisionUsageReport(startDate, endDate, subdivisionIds, pageable),
-                MonthlySubdivisionUsageReportDto.class);
+
+        Page<MonthlySubdivisionUsage> rawPage = reportRepository.getMonthlySubdivisionUsageReport(
+                startDate, endDate, subdivisionIds, pageable);
+
+        if (rawPage.isEmpty()) {
+            return Page.empty(pageable);
+        }
+
+        // Group the projections by subdivisionId focusing on the order from the
+        // repository
+        Map<Long, List<MonthlySubdivisionUsage>> grouped = rawPage.getContent().stream()
+                .collect(Collectors.groupingBy(MonthlySubdivisionUsage::getSubdivisionId, LinkedHashMap::new,
+                        Collectors.toList()));
+
+        List<MonthlySubdivisionUsageReportDto> dtos = new ArrayList<>();
+
+        grouped.forEach((subdivisionId, projections) -> {
+            String subdivisionName = projections.get(0).getSubdivisionName();
+
+            // Sort projections by year/month to ensure correct order for variation
+            // calculation
+            projections.sort(Comparator.comparing(MonthlySubdivisionUsage::getYear)
+                    .thenComparing(MonthlySubdivisionUsage::getMonth));
+
+            List<MonthlyCostDto> monthlyCosts = projections.stream()
+                    .map(p -> MonthlyCostDto.builder()
+                            .year(p.getYear())
+                            .month(p.getMonth())
+                            .cost(p.getTotalBilledAmount())
+                            .build())
+                    .collect(Collectors.toList());
+
+            BigDecimal totalVariation = calculateCumulativeVariation(
+                    projections.stream().map(MonthlySubdivisionUsage::getTotalBilledAmount)
+                            .collect(Collectors.toList()));
+
+            dtos.add(MonthlySubdivisionUsageReportDto.builder()
+                    .subdivisionId(subdivisionId)
+                    .subdivisionName(subdivisionName)
+                    .monthlyCosts(monthlyCosts)
+                    .totalVariation(totalVariation)
+                    .build());
+        });
+
+        // Sort by variation descending
+        dtos.sort(Comparator.comparing(MonthlySubdivisionUsageReportDto::getTotalVariation).reversed());
+
+        return new PageImpl<>(dtos, pageable, rawPage.getTotalElements());
+    }
+
+    /**
+     * Matches PHP calcular_variacion in consumo_por_meses.php
+     * sum(((T[t]/T[t-1]) - 1) * 100)
+     */
+    private BigDecimal calculateCumulativeVariation(List<BigDecimal> values) {
+        if (values == null || values.size() < 2) {
+            return BigDecimal.ZERO;
+        }
+
+        BigDecimal totalVar = BigDecimal.ZERO;
+        for (int i = 0; i < values.size() - 1; i++) {
+            BigDecimal current = values.get(i);
+            BigDecimal next = values.get(i + 1);
+
+            if (current.compareTo(BigDecimal.ZERO) == 0 && next.compareTo(BigDecimal.ZERO) == 0) {
+                continue;
+            } else if (current.compareTo(BigDecimal.ZERO) == 0 && next.compareTo(BigDecimal.ZERO) > 0) {
+                totalVar = totalVar.add(BigDecimal.valueOf(100));
+            } else if (current.compareTo(BigDecimal.ZERO) > 0 && next.compareTo(BigDecimal.ZERO) == 0) {
+                totalVar = totalVar.add(BigDecimal.valueOf(-100));
+            } else if (current.compareTo(BigDecimal.ZERO) > 0) {
+                BigDecimal ratio = next.divide(current, 4, RoundingMode.HALF_UP);
+                BigDecimal variation = ratio.subtract(BigDecimal.ONE).multiply(BigDecimal.valueOf(100));
+                totalVar = totalVar.add(variation);
+            }
+        }
+        return totalVar.setScale(2, RoundingMode.HALF_UP);
     }
 
     @Transactional(readOnly = true)
