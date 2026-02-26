@@ -102,18 +102,18 @@ public class EmployeeReportService {
     @Transactional(readOnly = true)
     public Page<MissedCallEmployeeReportDto> generateMissedCallEmployeeReport(String employeeName,
             LocalDateTime startDate,
-            LocalDateTime endDate, Pageable pageable) {
+            LocalDateTime endDate, Integer minRingCount, Pageable pageable) {
         return modelConverter.mapPage(
-                reportRepository.getMissedCallEmployeeReport(startDate, endDate, employeeName, pageable),
+                reportRepository.getMissedCallEmployeeReport(startDate, endDate, employeeName, minRingCount, pageable),
                 MissedCallEmployeeReportDto.class);
     }
 
     @Transactional(readOnly = true)
     public ByteArrayResource exportExcelMissedCallEmployeeReport(String employeeName, LocalDateTime startDate,
-            LocalDateTime endDate, Pageable pageable,
+            LocalDateTime endDate, Integer minRingCount, Pageable pageable,
             ExcelGeneratorBuilder builder) {
         Page<MissedCallEmployeeReportDto> collection = generateMissedCallEmployeeReport(employeeName, startDate,
-                endDate, pageable);
+                endDate, minRingCount, pageable);
         try {
             InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
             return new ByteArrayResource(inputStream.readAllBytes());

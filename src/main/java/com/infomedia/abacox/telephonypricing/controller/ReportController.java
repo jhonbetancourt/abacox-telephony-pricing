@@ -235,9 +235,10 @@ public class ReportController {
                         @Parameter(hidden = true) Pageable pageable, @ParameterObject PageableRequest pageableRequest,
                         @RequestParam(required = false) String employeeName,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
-                        @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate) {
+                        @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate,
+                        @RequestParam(required = false, defaultValue = "15") Integer minRingCount) {
                 return employeeReportService.generateMissedCallEmployeeReport(employeeName, startDate, endDate,
-                                pageable);
+                                minRingCount, pageable);
         }
 
         @GetMapping(value = "missedCallEmployee/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
@@ -245,13 +246,14 @@ public class ReportController {
                         @RequestParam(required = false) String employeeName,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate,
+                        @RequestParam(required = false, defaultValue = "15") Integer minRingCount,
                         @ParameterObject ExcelRequest excelRequest,
                         @ParameterObject PageableRequest pageableRequest) {
 
                 ByteArrayResource resource = employeeReportService.exportExcelMissedCallEmployeeReport(employeeName,
                                 startDate,
                                 endDate,
-                                pageable, excelRequest.toExcelGeneratorBuilder());
+                                minRingCount, pageable, excelRequest.toExcelGeneratorBuilder());
                 return ResponseEntity.ok()
                                 .header(HttpHeaders.CONTENT_DISPOSITION,
                                                 "attachment; filename=missed_call_employee_report.xlsx")

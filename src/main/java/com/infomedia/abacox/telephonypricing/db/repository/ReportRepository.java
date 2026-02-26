@@ -66,6 +66,7 @@ public interface ReportRepository extends JpaRepository<VirtualEntity, Long> {
                         @Param("startDate") LocalDateTime startDate,
                         @Param("endDate") LocalDateTime endDate,
                         @Param("employeeName") String employeeName,
+                        @Param("minRingCount") Integer minRingCount,
                         Pageable pageable);
 
         @Query(value = UnusedExtensionReportQueries.QUERY, countQuery = UnusedExtensionReportQueries.COUNT_QUERY, nativeQuery = true)
