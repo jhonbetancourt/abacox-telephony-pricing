@@ -9,13 +9,24 @@ import java.time.LocalDateTime;
  */
 public interface UnusedExtensionReport {
     Long getEmployeeId();
+
     String getEmployeeName();
+
     String getExtension();
+
+    LocalDateTime getEmployeeHistoryStartDate();
+
     String getSubdivisionName();
-    String getCostCenterName();
-    String getCostCenterWorkOrder();
-    String getCommLocationDirectory();
-    String getIndicatorDepartmentCountry();
-    String getIndicatorCityName();
+
+    String getCostCenter();
+
+    String getPlant();
+
     LocalDateTime getLastCallDate(); // The last time this extension was ever used
+
+    Long getOutgoingCalls();
+
+    Long getIncomingCalls();
+
+    Long getTotalCalls();
 }
