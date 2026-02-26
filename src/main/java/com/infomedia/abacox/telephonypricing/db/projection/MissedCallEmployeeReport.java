@@ -7,12 +7,19 @@ package com.infomedia.abacox.telephonypricing.db.projection;
  * who have missed important calls based on a set of complex business rules.
  */
 public interface MissedCallEmployeeReport {
-
     Long getEmployeeId();
 
     String getEmployeeName();
 
     String getEmployeeExtension();
 
+    String getSubdivisionName();
+
+    Double getAverageRingTime();
+
     Long getMissedCallCount();
+
+    Long getTotalCallCount();
+
+    Double getMissedCallPercentage();
 }

@@ -10,5 +10,9 @@ public class MissedCallEmployeeReportDto {
     private Long employeeId;
     private String employeeName;
     private String employeeExtension;
+    private String subdivisionName;
+    private Double averageRingTime;
     private Long missedCallCount;
+    private Long totalCallCount;
+    private Double missedCallPercentage;
 }

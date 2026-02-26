@@ -233,15 +233,17 @@ public class ReportController {
         public Page<MissedCallEmployeeReportDto> getMissedCallEmployeeReport(
                         @Parameter(hidden = true) Pageable pageable, @ParameterObject PageableRequest pageableRequest,
                         @RequestParam(required = false) String employeeName,
+                        @RequestParam(required = false) Integer ringCount,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate) {
                 return employeeReportService.generateMissedCallEmployeeReport(employeeName, startDate, endDate,
-                                pageable);
+                                ringCount, pageable);
         }
 
         @GetMapping(value = "missedCallEmployee/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
         public ResponseEntity<Resource> exportExcelMissedCallEmployeeReport(@Parameter(hidden = true) Pageable pageable,
                         @RequestParam(required = false) String employeeName,
+                        @RequestParam(required = false) Integer ringCount,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate,
                         @ParameterObject ExcelRequest excelRequest,
@@ -250,6 +252,7 @@ public class ReportController {
                 ByteArrayResource resource = employeeReportService.exportExcelMissedCallEmployeeReport(employeeName,
                                 startDate,
                                 endDate,
+                                ringCount,
                                 pageable, excelRequest.toExcelGeneratorBuilder());
                 return ResponseEntity.ok()
                                 .header(HttpHeaders.CONTENT_DISPOSITION,

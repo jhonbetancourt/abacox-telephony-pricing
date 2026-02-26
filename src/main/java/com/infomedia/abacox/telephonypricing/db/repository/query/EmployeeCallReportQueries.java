@@ -20,13 +20,13 @@ public final class EmployeeCallReportQueries {
                     COALESCE(e.history_control_id, e.id)
             ),
             latest_profiles AS (
-                SELECT DISTINCT ON (COALESCE(history_control_id, id))
+                SELECT
                     COALESCE(history_control_id, id) AS masterId,
                     name,
                     extension,
                     communication_location_id
                 FROM employee
-                ORDER BY COALESCE(history_control_id, id), id DESC
+                WHERE (history_control_id IS NULL OR id IN (SELECT hc.ref_id FROM history_control hc WHERE hc.ref_table = 1))
             )
             SELECT
                 m.masterId AS employeeId,
@@ -44,6 +44,7 @@ public final class EmployeeCallReportQueries {
             WHERE
                 (:employeeName IS NULL OR p.name ILIKE CONCAT('%', :employeeName, '%'))
                 AND (:employeeExtension IS NULL OR p.extension ILIKE CONCAT('%', :employeeExtension, '%'))
+            ORDER BY m.totalCost DESC, p.name ASC
             """;
 
     public static final String BREAKDOWN_QUERY = """
@@ -70,6 +71,7 @@ public final class EmployeeCallReportQueries {
                     call_record c JOIN employee e ON c.employee_id = e.id
                 WHERE
                     c.service_date BETWEEN :startDate AND :endDate
+                    AND (e.history_control_id IS NULL OR e.id IN (SELECT hc.ref_id FROM history_control hc WHERE hc.ref_table = 1))
                     AND (:employeeName IS NULL OR e.name ILIKE CONCAT('%', :employeeName, '%'))
                     AND (:employeeExtension IS NULL OR e.extension ILIKE CONCAT('%', :employeeExtension, '%'))
                 GROUP BY
