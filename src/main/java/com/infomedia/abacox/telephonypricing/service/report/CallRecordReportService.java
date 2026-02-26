@@ -183,20 +183,15 @@ public class CallRecordReportService {
         var limitsMap = employeeLookupService.getExtensionLimits();
 
         // 2. Aggregate min/max lengths across all active plants
-        // ExtensionLimits returns numeric values (e.g., 10000, 99999) but SQL LENGTH() needs digit counts (e.g., 5, 5)
-        int minNumericValue = limitsMap.values().stream()
+        int minLength = limitsMap.values().stream()
                 .mapToInt(ExtensionLimits::getMinLength)
                 .min()
-                .orElse(100); // Fallback to 100 (3 digits) if no limits found
+                .orElse(3); // Fallback to 3 if no limits found
 
-        int maxNumericValue = limitsMap.values().stream()
+        int maxLength = limitsMap.values().stream()
                 .mapToInt(ExtensionLimits::getMaxLength)
                 .max()
-                .orElse(99999); // Fallback to 99999 (5 digits) if no limits found
-
-        // Convert numeric values to digit lengths for SQL LENGTH() comparison
-        int minLength = String.valueOf(minNumericValue).length();
-        int maxLength = String.valueOf(maxNumericValue).length();
+                .orElse(5); // Fallback to 5 if no limits found
 
         // 3. Query repository with parameters
         return modelConverter.mapPage(reportRepository.getUnassignedCallReport(
