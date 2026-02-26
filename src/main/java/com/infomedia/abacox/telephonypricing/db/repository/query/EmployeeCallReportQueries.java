@@ -16,6 +16,8 @@ public final class EmployeeCallReportQueries {
                     JOIN employee e ON c.employee_id = e.id
                 WHERE
                     c.service_date BETWEEN :startDate AND :endDate
+                    AND c.billed_amount > 0
+                    AND (c.is_incoming = true OR c.operator_id > 0)
                 GROUP BY
                     COALESCE(e.history_control_id, e.id)
             ),
@@ -55,11 +57,12 @@ public final class EmployeeCallReportQueries {
             FROM
                 call_record c
                 JOIN employee e ON c.employee_id = e.id
-                JOIN indicator i ON c.indicator_id = i.id
-                JOIN telephony_type tt ON i.telephony_type_id = tt.id
+                INNER JOIN telephony_type tt ON c.telephony_type_id = tt.id
             WHERE
                 COALESCE(e.history_control_id, e.id) IN (:employeeIds)
                 AND c.service_date BETWEEN :startDate AND :endDate
+                AND c.billed_amount > 0
+                AND (c.is_incoming = true OR c.operator_id > 0)
             GROUP BY
                 COALESCE(e.history_control_id, e.id), tt.name
             """;
@@ -71,6 +74,8 @@ public final class EmployeeCallReportQueries {
                     call_record c JOIN employee e ON c.employee_id = e.id
                 WHERE
                     c.service_date BETWEEN :startDate AND :endDate
+                    AND c.billed_amount > 0
+                    AND (c.is_incoming = true OR c.operator_id > 0)
                     AND (e.history_control_id IS NULL OR e.id IN (SELECT hc.ref_id FROM history_control hc WHERE hc.ref_table = 1))
                     AND (:employeeName IS NULL OR e.name ILIKE CONCAT('%', :employeeName, '%'))
                     AND (:employeeExtension IS NULL OR e.extension ILIKE CONCAT('%', :employeeExtension, '%'))
