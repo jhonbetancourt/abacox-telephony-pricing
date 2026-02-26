@@ -12,8 +12,8 @@ public final class UnassignedCallReportQueries {
                     CASE
                         WHEN :groupingType = 'EXTENSION' THEN cr.employee_extension
                         WHEN :groupingType = 'AUTH_CODE' THEN CASE WHEN cr.employee_auth_code != '' THEN 'xxxx' ELSE '' END
-                        WHEN :groupingType = 'DESTINATION_PHONE' THEN cr.destination_phone
-                        ELSE CONCAT('Ext: ', cr.employee_extension, ' / Tel: ', cr.destination_phone)
+                        WHEN :groupingType = 'DESTINATION_PHONE' THEN COALESCE(NULLIF(cr.dial, ''), cr.destination_phone)
+                        ELSE CONCAT('Ext: ', cr.employee_extension, ' / Tel: ', COALESCE(NULLIF(cr.dial, ''), cr.destination_phone))
                     END as concept_val
                 FROM
                     call_record cr
@@ -24,8 +24,8 @@ public final class UnassignedCallReportQueries {
                     AND cr.duration > 0
                     AND (
                         (:groupingType = 'EXTENSION' AND (
-                            (cr.employee_id IS NULL AND NOT (cr.employee_extension LIKE '0%' OR cr.employee_extension LIKE '%-%') AND LENGTH(cr.employee_extension) BETWEEN :minLength AND :maxLength)
-                            OR cr.assignment_cause = 5
+                            (cr.employee_id IS NULL OR cr.assignment_cause = 5)
+                            AND LENGTH(cr.employee_extension) BETWEEN :minLength AND :maxLength
                         ))
                         OR
                         (:groupingType = 'AUTH_CODE' AND (
@@ -33,15 +33,21 @@ public final class UnassignedCallReportQueries {
                             (cr.employee_id IS NOT NULL AND cr.employee_auth_code != '' AND cr.assignment_cause = 2)
                         ))
                         OR
-                        (:groupingType = 'DESTINATION_PHONE' AND cr.is_incoming = false AND cr.employee_id IS NOT NULL)
+                        (:groupingType = 'DESTINATION_PHONE' AND
+                            cr.is_incoming = false AND
+                            cr.employee_id IS NOT NULL AND
+                            (cr.telephony_type_id IS NULL OR cr.operator_id IS NULL)
+                        )
                         OR
-                        (:groupingType = 'CONCEPT' AND (cr.employee_id IS NULL OR (cr.is_incoming = false AND cr.employee_id IS NOT NULL)))
+                        (:groupingType = 'CONCEPT' AND (
+                            cr.employee_id IS NULL OR
+                            (cr.is_incoming = false AND cr.employee_id IS NOT NULL AND (cr.telephony_type_id IS NULL OR cr.operator_id IS NULL))
+                        ))
                     )
                     AND (:extension IS NULL OR cr.employee_extension ILIKE CONCAT('%', :extension, '%'))
             )
             SELECT
                 concept_val as concept,
-                employee_extension as employeeExtension,
                 plant,
                 comm_location_id as commLocationId,
                 SUM(billed_amount) as totalCost,
@@ -51,7 +57,7 @@ public final class UnassignedCallReportQueries {
             FROM
                 filtered_data
             GROUP BY
-                concept_val, employee_extension, plant, comm_location_id
+                concept_val, plant, comm_location_id
             ORDER BY totalCost DESC, callCount DESC, lastCallDate DESC
             """;
 
@@ -67,8 +73,8 @@ public final class UnassignedCallReportQueries {
                     AND cr.duration > 0
                     AND (
                         (:groupingType = 'EXTENSION' AND (
-                            (cr.employee_id IS NULL AND NOT (cr.employee_extension LIKE '0%' OR cr.employee_extension LIKE '%-%') AND LENGTH(cr.employee_extension) BETWEEN :minLength AND :maxLength)
-                            OR cr.assignment_cause = 5
+                            (cr.employee_id IS NULL OR cr.assignment_cause = 5)
+                            AND LENGTH(cr.employee_extension) BETWEEN :minLength AND :maxLength
                         ))
                         OR
                         (:groupingType = 'AUTH_CODE' AND (
@@ -76,19 +82,28 @@ public final class UnassignedCallReportQueries {
                             (cr.employee_id IS NOT NULL AND cr.employee_auth_code != '' AND cr.assignment_cause = 2)
                         ))
                         OR
-                        (:groupingType = 'DESTINATION_PHONE' AND cr.is_incoming = false AND cr.employee_id IS NOT NULL)
+                        (:groupingType = 'DESTINATION_PHONE' AND
+                            cr.is_incoming = false AND
+                            (
+                                cr.employee_id IS NULL
+                                OR (cr.employee_id IS NOT NULL AND (cr.telephony_type_id IS NULL OR cr.operator_id IS NULL))
+                            )
+                        )
                         OR
-                        (:groupingType = 'CONCEPT' AND (cr.employee_id IS NULL OR (cr.is_incoming = false AND cr.employee_id IS NOT NULL)))
+                        (:groupingType = 'CONCEPT' AND (
+                            cr.employee_id IS NULL OR
+                            (cr.is_incoming = false AND cr.employee_id IS NOT NULL AND (cr.telephony_type_id IS NULL OR cr.operator_id IS NULL))
+                        ))
                     )
                     AND (:extension IS NULL OR cr.employee_extension ILIKE CONCAT('%', :extension, '%'))
                 GROUP BY
                     CASE
                         WHEN :groupingType = 'EXTENSION' THEN cr.employee_extension
                         WHEN :groupingType = 'AUTH_CODE' THEN CASE WHEN cr.employee_auth_code != '' THEN 'xxxx' ELSE '' END
-                        WHEN :groupingType = 'DESTINATION_PHONE' THEN cr.destination_phone
-                        ELSE CONCAT('Ext: ', cr.employee_extension, ' / Tel: ', cr.destination_phone)
+                        WHEN :groupingType = 'DESTINATION_PHONE' THEN COALESCE(NULLIF(cr.dial, ''), cr.destination_phone)
+                        ELSE CONCAT('Ext: ', cr.employee_extension, ' / Tel: ', COALESCE(NULLIF(cr.dial, ''), cr.destination_phone))
                     END,
-                    cr.employee_extension, CONCAT(cl.directory, ' - ', pt.name), cr.comm_location_id
+                    CONCAT(cl.directory, ' - ', pt.name), cr.comm_location_id
             ) AS count_subquery
             """;
 }

@@ -14,8 +14,6 @@ public interface UnassignedCallReport {
 
     String getConcept();
 
-    String getEmployeeExtension();
-
     String getPlant();
 
     Long getCommLocationId();
