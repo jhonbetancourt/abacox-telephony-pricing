@@ -80,52 +80,67 @@ public class SubdivisionReportService {
     public Page<MonthlySubdivisionUsageReportDto> generateMonthlySubdivisionUsageReport(
             LocalDateTime startDate, LocalDateTime endDate, List<Long> subdivisionIds, Pageable pageable) {
 
-        Page<MonthlySubdivisionUsage> rawPage = reportRepository.getMonthlySubdivisionUsageReport(
-                startDate, endDate, subdivisionIds, pageable);
+        List<MonthlySubdivisionUsage> rawList = reportRepository.getMonthlySubdivisionUsageReportAll(
+                startDate, endDate, subdivisionIds);
 
-        if (rawPage.isEmpty()) {
+        if (rawList.isEmpty()) {
             return Page.empty(pageable);
         }
 
-        // Group the projections by subdivisionId focusing on the order from the
-        // repository
-        Map<Long, List<MonthlySubdivisionUsage>> grouped = rawPage.getContent().stream()
+        // Group the projections by subdivisionId
+        Map<Long, List<MonthlySubdivisionUsage>> grouped = rawList.stream()
                 .collect(Collectors.groupingBy(MonthlySubdivisionUsage::getSubdivisionId, LinkedHashMap::new,
                         Collectors.toList()));
 
-        List<MonthlySubdivisionUsageReportDto> dtos = new ArrayList<>();
+        // Calculate the full range of months expected
+        List<java.time.YearMonth> expectedMonths = new ArrayList<>();
+        java.time.YearMonth currentYearMonth = java.time.YearMonth.from(startDate);
+        java.time.YearMonth endYearMonth = java.time.YearMonth.from(endDate);
+        while (!currentYearMonth.isAfter(endYearMonth)) {
+            expectedMonths.add(currentYearMonth);
+            currentYearMonth = currentYearMonth.plusMonths(1);
+        }
+
+        List<MonthlySubdivisionUsageReportDto> allDtos = new ArrayList<>();
 
         grouped.forEach((subdivisionId, projections) -> {
-            String subdivisionName = projections.get(0).getSubdivisionName();
+            MonthlySubdivisionUsage projection = projections.get(0);
+            String subdivisionName = projection.getSubdivisionName();
+            String csv = projection.getMonthlyCostsCsv();
 
-            // Filter out projections with null year/month (subdivisions with no calls)
-            List<MonthlySubdivisionUsage> validProjections = projections.stream()
-                    .filter(p -> p.getYear() != null && p.getMonth() != null)
-                    .collect(Collectors.toList());
-
-            // Skip subdivisions with no valid data
-            if (validProjections.isEmpty()) {
-                return;
+            // Create a map of existing costs by parsing the aggregated CSV string
+            Map<java.time.YearMonth, BigDecimal> costMap = new HashMap<>();
+            if (csv != null && !csv.isBlank()) {
+                String[] entries = csv.split(",");
+                for (String entry : entries) {
+                    String[] parts = entry.split(":");
+                    if (parts.length == 3) {
+                        try {
+                            int year = Integer.parseInt(parts[0]);
+                            int monthValue = Integer.parseInt(parts[1]);
+                            BigDecimal cost = new BigDecimal(parts[2]);
+                            costMap.put(java.time.YearMonth.of(year, monthValue), cost);
+                        } catch (NumberFormatException e) {
+                            // Log or handle parsing error if necessary
+                        }
+                    }
+                }
             }
 
-            // Sort projections by year/month to ensure correct order for variation
-            // calculation
-            validProjections.sort(Comparator.comparing(MonthlySubdivisionUsage::getYear)
-                    .thenComparing(MonthlySubdivisionUsage::getMonth));
-
-            List<MonthlyCostDto> monthlyCosts = validProjections.stream()
-                    .map(p -> MonthlyCostDto.builder()
-                            .year(p.getYear())
-                            .month(p.getMonth())
-                            .cost(p.getTotalBilledAmount())
+            // Fill gaps with ZERO for all expected months
+            List<MonthlyCostDto> monthlyCosts = expectedMonths.stream()
+                    .map(ym -> MonthlyCostDto.builder()
+                            .year(ym.getYear())
+                            .month(ym.getMonthValue())
+                            .cost(costMap.getOrDefault(ym, BigDecimal.ZERO))
                             .build())
                     .collect(Collectors.toList());
 
+            // Calculate variation based on the full list of costs (including filled zeroes)
             BigDecimal totalVariation = calculateCumulativeVariation(
-                    validProjections.stream().map(MonthlySubdivisionUsage::getTotalBilledAmount)
-                            .collect(Collectors.toList()));
+                    monthlyCosts.stream().map(MonthlyCostDto::getCost).collect(Collectors.toList()));
 
-            dtos.add(MonthlySubdivisionUsageReportDto.builder()
+            allDtos.add(MonthlySubdivisionUsageReportDto.builder()
                     .subdivisionId(subdivisionId)
                     .subdivisionName(subdivisionName)
                     .monthlyCosts(monthlyCosts)
@@ -133,10 +148,26 @@ public class SubdivisionReportService {
                     .build());
         });
 
-        // Sort by variation descending
-        dtos.sort(Comparator.comparing(MonthlySubdivisionUsageReportDto::getTotalVariation).reversed());
+        // Sort the ENTIRE list by variation ascending (to put drops first: -100, -90,
+        // ..., 0, ..., 100)
+        // Secondary sort by name for stable ordering
+        allDtos.sort(Comparator.comparing(MonthlySubdivisionUsageReportDto::getTotalVariation)
+                .thenComparing(MonthlySubdivisionUsageReportDto::getSubdivisionName));
 
-        return new PageImpl<>(dtos, pageable, rawPage.getTotalElements());
+        // Format variation as absolute value for display as requested ("always
+        // positive")
+        allDtos.forEach(dto -> dto.setTotalVariation(dto.getTotalVariation().abs()));
+
+        // Manually apply paging
+        int start = (int) pageable.getOffset();
+        int end = Math.min((start + pageable.getPageSize()), allDtos.size());
+
+        List<MonthlySubdivisionUsageReportDto> pageContent = new ArrayList<>();
+        if (start < allDtos.size()) {
+            pageContent = allDtos.subList(start, end);
+        }
+
+        return new PageImpl<>(pageContent, pageable, allDtos.size());
     }
 
     /**

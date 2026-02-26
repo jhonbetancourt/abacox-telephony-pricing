@@ -79,20 +79,16 @@ public final class MonthlySubdivisionUsageReportQueries {
                 SELECT
                     ac.anchor_id AS subdivisionId,
                     sh.anchor_name AS subdivisionName,
-                    ac.year,
-                    ac.month,
-                    ac.totalBilledAmount
+                    STRING_AGG(ac.year || ':' || ac.month || ':' || (ac.totalBilledAmount::text), ',') AS monthlyCostsCsv
                 FROM
                     aggregated_costs ac
                 INNER JOIN subdivision_hierarchy sh ON ac.anchor_id = sh.anchor_id
-                GROUP BY ac.anchor_id, sh.anchor_name, ac.year, ac.month, ac.totalBilledAmount
+                GROUP BY ac.anchor_id, sh.anchor_name
             )
             SELECT
                 rd.subdivisionId,
                 rd.subdivisionName,
-                rd.year,
-                rd.month,
-                rd.totalBilledAmount
+                rd.monthlyCostsCsv
             FROM
                 report_data rd
             INNER JOIN
@@ -100,7 +96,7 @@ public final class MonthlySubdivisionUsageReportQueries {
             WHERE
                 ec.totalEmployees > 0
             ORDER BY
-                rd.subdivisionName ASC, rd.year, rd.month
+                rd.subdivisionName ASC
             """;
 
     public static final String COUNT_QUERY = """
