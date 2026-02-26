@@ -37,6 +37,12 @@ public interface ReportRepository extends JpaRepository<VirtualEntity, Long> {
                         @Param("employeeExtension") String employeeExtension,
                         Pageable pageable);
 
+        @Query(value = EmployeeCallReportQueries.BREAKDOWN_QUERY, nativeQuery = true)
+        List<EmployeeTelephonyTypeBreakdown> getEmployeeTelephonyTypeBreakdown(
+                        @Param("startDate") LocalDateTime startDate,
+                        @Param("endDate") LocalDateTime endDate,
+                        @Param("employeeIds") List<Long> employeeIds);
+
         @Query(value = UnassignedCallReportQueries.QUERY, countQuery = UnassignedCallReportQueries.COUNT_QUERY, nativeQuery = true)
         Page<UnassignedCallReport> getUnassignedCallReport(
                         @Param("startDate") LocalDateTime startDate,

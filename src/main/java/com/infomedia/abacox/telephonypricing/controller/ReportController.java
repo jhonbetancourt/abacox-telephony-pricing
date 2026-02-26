@@ -7,6 +7,7 @@ import com.infomedia.abacox.telephonypricing.db.view.CorporateReportView;
 import com.infomedia.abacox.telephonypricing.dto.callrecord.CallRecordDto;
 import com.infomedia.abacox.telephonypricing.dto.failedcallrecord.FailedCallRecordDto;
 import com.infomedia.abacox.telephonypricing.dto.generic.PageableRequest;
+import com.infomedia.abacox.telephonypricing.dto.generic.PageWithSummaries;
 import com.infomedia.abacox.telephonypricing.dto.report.*;
 import com.infomedia.abacox.telephonypricing.dto.generic.ExcelRequest;
 import com.infomedia.abacox.telephonypricing.dto.generic.FilterRequest;
@@ -422,7 +423,8 @@ public class ReportController {
         }
 
         @GetMapping(value = "costCenterUsage", produces = MediaType.APPLICATION_JSON_VALUE)
-        public Page<CostCenterUsageReportDto> getCostCenterUsageReport(@Parameter(hidden = true) Pageable pageable,
+        public PageWithSummaries<CostCenterUsageReportDto, UsageReportSummaryDto> getCostCenterUsageReport(
+                        @Parameter(hidden = true) Pageable pageable,
                         @ParameterObject PageableRequest pageableRequest,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate) {

@@ -5,6 +5,8 @@ import java.math.BigDecimal;
 
 @Data
 public class CostCenterUsageReportDto {
+    private Long costCenterId;
+    private Long originCountryId;
     private String costCenterName;
     private Long incomingCallCount;
     private Long outgoingCallCount;

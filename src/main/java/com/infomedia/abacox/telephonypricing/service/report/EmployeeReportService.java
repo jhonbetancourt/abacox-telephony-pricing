@@ -8,6 +8,8 @@ import com.infomedia.abacox.telephonypricing.dto.report.EmployeeCallReportDto;
 import com.infomedia.abacox.telephonypricing.dto.report.MissedCallEmployeeReportDto;
 import com.infomedia.abacox.telephonypricing.dto.report.EmployeeAuthCodeUsageReportDto;
 import com.infomedia.abacox.telephonypricing.dto.report.HighestConsumptionEmployeeReportDto;
+import com.infomedia.abacox.telephonypricing.dto.report.TelephonyTypeCostDto;
+import com.infomedia.abacox.telephonypricing.db.projection.EmployeeTelephonyTypeBreakdown;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.data.domain.Page;
@@ -18,6 +20,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.io.IOException;
 import java.io.InputStream;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
 @Service
@@ -49,9 +55,32 @@ public class EmployeeReportService {
     @Transactional(readOnly = true)
     public Page<EmployeeCallReportDto> generateEmployeeCallReport(String employeeName, String employeeExtension,
             LocalDateTime startDate, LocalDateTime endDate, Pageable pageable) {
-        return modelConverter.mapPage(
+        Page<EmployeeCallReportDto> page = modelConverter.mapPage(
                 reportRepository.getEmployeeCallReport(startDate, endDate, employeeName, employeeExtension, pageable),
                 EmployeeCallReportDto.class);
+
+        if (page.isEmpty()) {
+            return page;
+        }
+
+        List<Long> employeeIds = page.getContent().stream()
+                .map(EmployeeCallReportDto::getEmployeeId)
+                .collect(Collectors.toList());
+
+        List<EmployeeTelephonyTypeBreakdown> breakdowns = reportRepository.getEmployeeTelephonyTypeBreakdown(startDate,
+                endDate, employeeIds);
+
+        Map<Long, List<TelephonyTypeCostDto>> breakdownMap = breakdowns.stream()
+                .collect(Collectors.groupingBy(
+                        EmployeeTelephonyTypeBreakdown::getEmployeeId,
+                        Collectors.mapping(b -> new TelephonyTypeCostDto(b.getTelephonyTypeName(), b.getTotalCost()),
+                                Collectors.toList())));
+
+        page.getContent().forEach(dto -> {
+            dto.setTelephonyCosts(breakdownMap.getOrDefault(dto.getEmployeeId(), new ArrayList<>()));
+        });
+
+        return page;
     }
 
     @Transactional(readOnly = true)
@@ -60,7 +89,10 @@ public class EmployeeReportService {
         Page<EmployeeCallReportDto> collection = generateEmployeeCallReport(employeeName, employeeExtension, startDate,
                 endDate, pageable);
         try {
-            InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
+            InputStream inputStream = builder
+                    .withEntities(collection.toList())
+                    .withFlattenedCollection("telephonyCosts")
+                    .generateAsInputStream();
             return new ByteArrayResource(inputStream.readAllBytes());
         } catch (IOException e) {
             throw new RuntimeException(e);
