@@ -40,6 +40,13 @@ public class MigrationController {
                 "Historical migration process initiated successfully. Check status endpoint for progress.");
     }
 
+    @PostMapping(value = "/start-extension-list", produces = MediaType.APPLICATION_JSON_VALUE)
+    public MessageResponse startExtensionListMigration(@Valid @RequestBody MigrationStart runRequest) {
+        migrationService.startExtensionListAsync(runRequest);
+        return new MessageResponse(
+                "ExtensionList (listadoext) migration initiated successfully. Check status endpoint for progress.");
+    }
+
     @GetMapping(value = "/status", produces = MediaType.APPLICATION_JSON_VALUE)
     public MigrationStatus getMigrationStatus() {
         return migrationService.getStatus();

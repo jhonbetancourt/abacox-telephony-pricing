@@ -8,9 +8,10 @@ public class DialedNumberUsageReportDto {
     private String phoneNumber;
     private String companyName;
     private String contactName;
-    private String destinationCity;
-    private String destinationCountry;
+    private String city;
     private Long callCount;
     private Long totalDuration;
     private BigDecimal totalBilledAmount;
+    private String destinationEmployeeName;
+    private Long destinationSubdivisionId;
 }

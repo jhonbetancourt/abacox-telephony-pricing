@@ -131,6 +131,23 @@ public class MigrationService {
                 executeMigration(runRequest, historicalList);
         }
 
+        public void startExtensionListAsync(MigrationStart runRequest) {
+                submitMigrationTask(() -> startExtensionList(runRequest));
+        }
+
+        public void startExtensionList(MigrationStart runRequest) {
+                ensureRunning();
+                log.info("<<<<<<<<<< Starting ExtensionList (listadoext) Migration Execution >>>>>>>>>>");
+                runRequest.setCleanup(false);
+
+                List<TableMigrationConfig> fullList = defineMigrationOrderAndMappings(runRequest);
+                List<TableMigrationConfig> extensionListConfig = fullList.stream()
+                                .filter(c -> "listadoext".equals(c.getSourceTableName()))
+                                .toList();
+
+                executeMigration(runRequest, extensionListConfig);
+        }
+
         private void ensureRunning() {
                 if (!isMigrationRunning.get()) {
                         isMigrationRunning.set(true);
@@ -410,6 +427,21 @@ public class MigrationService {
                                                 entry("CLASELLAMA_ACTIVO", "active"),
                                                 entry("CLASELLAMA_FCREACION", "createdDate"),
                                                 entry("CLASELLAMA_FMODIFICADO", "lastModifiedDate")))
+                                .build());
+
+                configs.add(TableMigrationConfig.builder()
+                                .sourceTableName("listadoext")
+                                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.ExtensionList")
+                                .sourceIdColumnName("LISTADOEXT_ID")
+                                .targetIdFieldName("id")
+                                .columnMapping(Map.ofEntries(
+                                                entry("LISTADOEXT_ID", "id"),
+                                                entry("LISTADOEXT_NOMBRE", "name"),
+                                                entry("LISTADOEXT_TIPO", "type"),
+                                                entry("LISTADOEXT_LISTADO", "extensionList"),
+                                                entry("LISTADOEXT_ACTIVO", "active"),
+                                                entry("LISTADOEXT_FCREACION", "createdDate"),
+                                                entry("LISTADOEXT_FMODIFICADO", "lastModifiedDate")))
                                 .build());
 
                 // Level 1: Depend on Level 0

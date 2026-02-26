@@ -47,11 +47,11 @@ public final class MissedCallEmployeeReportQueries {
           e.name as employeeName,
           e.extension as employeeExtension,
           s.name as subdivisionName,
-          ROUND(AVG(CASE WHEN cc.is_missed AND cc.ring_count >= COALESCE(:ringCount, 0) THEN cc.ring_count ELSE NULL END), 2) as averageRingTime,
-          COUNT(CASE WHEN cc.is_missed AND cc.ring_count >= COALESCE(:ringCount, 0) THEN 1 ELSE NULL END) as missedCallCount,
+          ROUND(AVG(CASE WHEN cc.is_missed THEN cc.ring_count ELSE NULL END), 2) as averageRingTime,
+          COUNT(CASE WHEN cc.is_missed THEN 1 ELSE NULL END) as missedCallCount,
           COUNT(cc.call_id) as totalCallCount,
           CASE WHEN COUNT(cc.call_id) > 0
-               THEN ROUND((COUNT(CASE WHEN cc.is_missed AND cc.ring_count >= COALESCE(:ringCount, 0) THEN 1 ELSE NULL END) * 100.0 / COUNT(cc.call_id)), 2)
+               THEN ROUND((COUNT(CASE WHEN cc.is_missed THEN 1 ELSE NULL END) * 100.0 / COUNT(cc.call_id)), 2)
                ELSE 0
           END as missedCallPercentage
       FROM employee e
@@ -60,7 +60,7 @@ public final class MissedCallEmployeeReportQueries {
       WHERE (e.history_control_id IS NULL OR e.id IN (SELECT hc.ref_id FROM history_control hc WHERE hc.ref_table = 1))
         AND (:employeeName IS NULL OR e.name ILIKE CONCAT('%', :employeeName, '%'))
       GROUP BY e.id, e.name, e.extension, s.name
-      HAVING COUNT(CASE WHEN cc.is_missed AND cc.ring_count >= COALESCE(:ringCount, 0) THEN 1 ELSE NULL END) > 0
+      HAVING COUNT(CASE WHEN cc.is_missed THEN 1 ELSE NULL END) > 0
       ORDER BY missedCallCount DESC, employeeName ASC
       """;
 
@@ -105,7 +105,7 @@ public final class MissedCallEmployeeReportQueries {
         WHERE (e.history_control_id IS NULL OR e.id IN (SELECT hc.ref_id FROM history_control hc WHERE hc.ref_table = 1))
           AND (:employeeName IS NULL OR e.name ILIKE CONCAT('%', :employeeName, '%'))
           GROUP BY e.id
-          HAVING COUNT(CASE WHEN cc.is_missed AND cc.ring_count >= COALESCE(:ringCount, 0) THEN 1 ELSE NULL END) > 0
+          HAVING COUNT(CASE WHEN cc.is_missed THEN 1 ELSE NULL END) > 0
       )
       SELECT COUNT(*) FROM missed_call_employees
       """;
