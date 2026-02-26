@@ -106,6 +106,7 @@ public interface ReportRepository extends JpaRepository<VirtualEntity, Long> {
         Page<CostCenterUsageReport> getCostCenterUsageReport(
                         @Param("startDate") LocalDateTime startDate,
                         @Param("endDate") LocalDateTime endDate,
+                        @Param("parentCostCenterId") Long parentCostCenterId,
                         Pageable pageable);
 
         @Query(value = EmployeeAuthCodeUsageReportQueries.QUERY, countQuery = EmployeeAuthCodeUsageReportQueries.COUNT_QUERY, nativeQuery = true)

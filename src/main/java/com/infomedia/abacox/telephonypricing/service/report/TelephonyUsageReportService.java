@@ -193,10 +193,10 @@ public class TelephonyUsageReportService {
 
         @Transactional(readOnly = true)
         public PageWithSummaries<CostCenterUsageReportDto, UsageReportSummaryDto> generateCostCenterUsageReport(
-                        LocalDateTime startDate, LocalDateTime endDate, Pageable pageable) {
+                        LocalDateTime startDate, LocalDateTime endDate, Long parentCostCenterId, Pageable pageable) {
                 // Fetch all rows unpaged to compute summaries
                 List<CostCenterUsageReportDto> allRows = reportRepository
-                                .getCostCenterUsageReport(startDate, endDate, Pageable.unpaged())
+                                .getCostCenterUsageReport(startDate, endDate, parentCostCenterId, Pageable.unpaged())
                                 .getContent()
                                 .stream()
                                 .map(row -> modelConverter.map(row, CostCenterUsageReportDto.class))
@@ -293,11 +293,13 @@ public class TelephonyUsageReportService {
 
         @Transactional(readOnly = true)
         public ByteArrayResource exportExcelCostCenterUsageReport(
-                        LocalDateTime startDate, LocalDateTime endDate, Pageable pageable,
+                        LocalDateTime startDate, LocalDateTime endDate, Long parentCostCenterId, Pageable pageable,
                         ExcelGeneratorBuilder builder) {
                 PageWithSummaries<CostCenterUsageReportDto, UsageReportSummaryDto> reportPage = generateCostCenterUsageReport(
                                 startDate,
-                                endDate, pageable);
+                                endDate,
+                                parentCostCenterId,
+                                pageable);
 
                 try {
                         InputStream inputStream = builder

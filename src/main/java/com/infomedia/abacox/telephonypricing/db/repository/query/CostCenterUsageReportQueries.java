@@ -6,49 +6,84 @@ public final class CostCenterUsageReportQueries {
 
     /**
      * Matches the original PHP "Centro de Costos" report logic:
-     * 1. Groups call records by cost center (via employee → cost_center)
-     * 2. Includes an "Información no relacionada" row for calls with no assigned
-     * employee
-     * (employee_id IS NULL), using costCenterId = -1 as sentinel value
-     * 3. Cost center name format: "work_order - name" matching PHP Arbol_Listar
-     * output
-     * 4. Percentages are computed over the grand total (cost centers + unrelated
-     * info)
-     * 5. Filters outgoing calls to only include those with a valid operator
-     * (operator_id > 0),
-     * matching the PHP filter: (ACUMTOTAL_IO > 0 OR (ACUMTOTAL_IO = 0 AND
-     * ACUMTOTAL_OPERADOR_ID > 0))
+     * 1. Uses a recursive CTE to rollup consumption from descendant cost centers.
+     * 2. Groups data by direct children of the selected parentCostCenterId.
+     * 3. Includes "Unassigned Information" (id = -1) for technical errors or no
+     * employee.
+     * 4. Includes "[ Sin Centro de Costos ]" (id = 0) for employees with no
+     * assigned cost center.
+     * 5. Filters outgoing calls to only include those with a valid operator.
+     * 6. Incorporates employee history filters.
      */
     public static final String QUERY = """
-            WITH assigned_data AS (
+            WITH RECURSIVE cost_center_tree AS (
                 SELECT
-                    cc.id AS costCenterId,
-                    cc.origin_country_id AS originCountryId,
+                    cc.id,
+                    cc.id AS display_cost_center_id,
+                    cc.name AS display_cost_center_name,
+                    cc.work_order AS display_work_order,
+                    cc.origin_country_id AS display_origin_country_id
+                FROM
+                    cost_center cc
+                WHERE
+                    ((:#{#parentCostCenterId == null ? 1 : 0} = 1 AND cc.parent_cost_center_id IS NULL)
+                    OR cc.parent_cost_center_id = :parentCostCenterId)
+
+                UNION ALL
+
+                SELECT
+                    cc.id,
+                    ct.display_cost_center_id,
+                    ct.display_cost_center_name,
+                    ct.display_work_order,
+                    ct.display_origin_country_id
+                FROM
+                    cost_center cc
+                INNER JOIN
+                    cost_center_tree ct ON cc.parent_cost_center_id = ct.id
+            ),
+            tree_data AS (
+                SELECT
+                    ct.display_cost_center_id AS costCenterId,
+                    ct.display_origin_country_id AS originCountryId,
                     CASE
-                        WHEN cc.id IS NULL THEN 'No Cost Center'
-                        WHEN COALESCE(TRIM(cc.work_order), '') = '' THEN cc.name
-                        ELSE TRIM(cc.work_order) || ' - ' || cc.name
+                        WHEN COALESCE(TRIM(ct.display_work_order), '') = '' THEN ct.display_cost_center_name
+                        ELSE TRIM(ct.display_work_order) || ' - ' || ct.display_cost_center_name
                     END AS costCenterName,
                     COALESCE(COUNT(cr.id) FILTER (WHERE cr.is_incoming = true), 0) AS incomingCallCount,
                     COALESCE(COUNT(cr.id) FILTER (WHERE cr.is_incoming = false), 0) AS outgoingCallCount,
                     COALESCE(SUM(cr.duration), 0) AS totalDuration,
-                    COALESCE(SUM(cr.billed_amount), 0) AS totalBilledAmount
+                    COALESCE(SUM(cr.billed_amount), 0.0) AS totalBilledAmount
                 FROM
                     call_record cr
-                JOIN
+                INNER JOIN
                     employee e ON cr.employee_id = e.id
-                LEFT JOIN
-                    cost_center cc ON e.cost_center_id = cc.id
-                JOIN
-                    communication_location cl ON cr.comm_location_id = cl.id
-                JOIN
-                    telephony_type tt ON cr.telephony_type_id = tt.id
+                INNER JOIN
+                    cost_center_tree ct ON e.cost_center_id = ct.id
                 WHERE
                     (cr.service_date BETWEEN :startDate AND :endDate)
-                AND
-                    (cr.is_incoming = true OR (cr.is_incoming = false AND cr.operator_id > 0))
+                AND (cr.is_incoming = true OR (cr.is_incoming = false AND cr.operator_id > 0))
                 GROUP BY
-                    cc.id, cc.name, cc.work_order, cc.origin_country_id
+                    ct.display_cost_center_id, ct.display_cost_center_name, ct.display_work_order, ct.display_origin_country_id
+            ),
+            no_cc_data AS (
+                SELECT
+                    0::bigint AS costCenterId,
+                    -1::bigint AS originCountryId,
+                    '[ Sin Centro de Costos ]' AS costCenterName,
+                    COALESCE(COUNT(cr.id) FILTER (WHERE cr.is_incoming = true), 0) AS incomingCallCount,
+                    COALESCE(COUNT(cr.id) FILTER (WHERE cr.is_incoming = false), 0) AS outgoingCallCount,
+                    COALESCE(SUM(cr.duration), 0) AS totalDuration,
+                    COALESCE(SUM(cr.billed_amount), 0.0) AS totalBilledAmount
+                FROM
+                    call_record cr
+                INNER JOIN
+                    employee e ON cr.employee_id = e.id
+                WHERE
+                    :#{#parentCostCenterId == null ? 1 : 0} = 1
+                AND e.cost_center_id IS NULL
+                AND (cr.service_date BETWEEN :startDate AND :endDate)
+                AND (cr.is_incoming = true OR (cr.is_incoming = false AND cr.operator_id > 0))
             ),
             unrelated_data AS (
                 SELECT
@@ -58,23 +93,27 @@ public final class CostCenterUsageReportQueries {
                     COALESCE(COUNT(cr.id) FILTER (WHERE cr.is_incoming = true), 0) AS incomingCallCount,
                     COALESCE(COUNT(cr.id) FILTER (WHERE cr.is_incoming = false), 0) AS outgoingCallCount,
                     COALESCE(SUM(cr.duration), 0) AS totalDuration,
-                    COALESCE(SUM(cr.billed_amount), 0) AS totalBilledAmount
+                    COALESCE(SUM(cr.billed_amount), 0.0) AS totalBilledAmount
                 FROM
                     call_record cr
                 WHERE
+                    :#{#parentCostCenterId == null ? 1 : 0} = 1
+                AND (cr.service_date BETWEEN :startDate AND :endDate)
+                AND (
                     cr.employee_id IS NULL
-                AND
-                    (cr.service_date BETWEEN :startDate AND :endDate)
+                    OR (cr.is_incoming = false AND (cr.telephony_type_id IS NULL OR cr.operator_id IS NULL))
+                )
             ),
             combined AS (
-                SELECT * FROM assigned_data
+                SELECT * FROM tree_data
                 UNION ALL
-                SELECT * FROM unrelated_data
-                WHERE (incomingCallCount + outgoingCallCount) > 0
+                SELECT * FROM no_cc_data WHERE (incomingCallCount + outgoingCallCount) > 0
+                UNION ALL
+                SELECT * FROM unrelated_data WHERE (incomingCallCount + outgoingCallCount) > 0
             )
             SELECT
                 c.costCenterId,
-                c.originCountryId,
+                c.originCountryId AS originCountryId,
                 c.costCenterName,
                 c.incomingCallCount,
                 c.outgoingCallCount,
@@ -91,29 +130,49 @@ public final class CostCenterUsageReportQueries {
             FROM
                 combined c
             ORDER BY
-                CASE WHEN c.costCenterId = -1 THEN 1 ELSE 0 END,
-                c.originCountryId ASC,
-                c.costCenterId ASC
+                CASE WHEN c.costCenterId = -1 THEN 2
+                     WHEN c.costCenterId = 0 THEN 1
+                     ELSE 0 END,
+                c.totalBilledAmount DESC,
+                c.costCenterName ASC
             """;
 
     public static final String COUNT_QUERY = """
             SELECT COUNT(*) FROM (
-                SELECT cc.id
+                WITH RECURSIVE cost_center_tree AS (
+                    SELECT cc.id, cc.id AS display_cost_center_id
+                    FROM cost_center cc
+                    WHERE ((:#{#parentCostCenterId == null ? 1 : 0} = 1 AND cc.parent_cost_center_id IS NULL)
+                       OR cc.parent_cost_center_id = :parentCostCenterId)
+                    UNION ALL
+                    SELECT cc.id, ct.display_cost_center_id
+                    FROM cost_center cc
+                    INNER JOIN cost_center_tree ct ON cc.parent_cost_center_id = ct.id
+                )
+                SELECT ct.display_cost_center_id
                 FROM call_record cr
-                JOIN employee e ON cr.employee_id = e.id
-                LEFT JOIN cost_center cc ON e.cost_center_id = cc.id
-                WHERE
-                    (cr.service_date BETWEEN :startDate AND :endDate)
-                AND
-                    (cr.is_incoming = true OR (cr.is_incoming = false AND cr.operator_id > 0))
-                GROUP BY cc.id
+                INNER JOIN employee e ON cr.employee_id = e.id
+                INNER JOIN cost_center_tree ct ON e.cost_center_id = ct.id
+                WHERE (cr.service_date BETWEEN :startDate AND :endDate)
+                GROUP BY ct.display_cost_center_id
 
                 UNION ALL
 
-                SELECT -1::bigint AS id
+                SELECT 0::bigint
                 FROM call_record cr
-                WHERE cr.employee_id IS NULL
-                AND (cr.service_date BETWEEN :startDate AND :endDate)
+                INNER JOIN employee e ON cr.employee_id = e.id
+                WHERE :#{#parentCostCenterId == null ? 1 : 0} = 1
+                  AND e.cost_center_id IS NULL
+                  AND (cr.service_date BETWEEN :startDate AND :endDate)
+                HAVING COUNT(*) > 0
+
+                UNION ALL
+
+                SELECT -1::bigint
+                FROM call_record cr
+                WHERE :#{#parentCostCenterId == null ? 1 : 0} = 1
+                  AND (cr.service_date BETWEEN :startDate AND :endDate)
+                  AND (cr.employee_id IS NULL OR (cr.is_incoming = false AND (cr.telephony_type_id IS NULL OR cr.operator_id IS NULL)))
                 HAVING COUNT(*) > 0
             ) AS group_count
             """;

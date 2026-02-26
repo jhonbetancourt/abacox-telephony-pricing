@@ -401,8 +401,10 @@ public class ReportController {
                         @Parameter(hidden = true) Pageable pageable,
                         @ParameterObject PageableRequest pageableRequest,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
-                        @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate) {
-                return telephonyUsageReportService.generateCostCenterUsageReport(startDate, endDate, pageable);
+                        @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate,
+                        @RequestParam(required = false) Long parentCostCenterId) {
+                return telephonyUsageReportService.generateCostCenterUsageReport(startDate, endDate, parentCostCenterId,
+                                pageable);
         }
 
         @GetMapping(value = "costCenterUsage/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
@@ -410,10 +412,12 @@ public class ReportController {
                         @ParameterObject PageableRequest pageableRequest,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate,
+                        @RequestParam(required = false) Long parentCostCenterId,
                         @ParameterObject ExcelRequest excelRequest) {
 
                 ByteArrayResource resource = telephonyUsageReportService.exportExcelCostCenterUsageReport(startDate,
                                 endDate,
+                                parentCostCenterId,
                                 pageable, excelRequest.toExcelGeneratorBuilder());
                 return ResponseEntity.ok()
                                 .header(HttpHeaders.CONTENT_DISPOSITION,
