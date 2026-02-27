@@ -1,8 +1,10 @@
 package com.infomedia.abacox.telephonypricing.component.migration.definition;
 
 import com.infomedia.abacox.telephonypricing.component.migration.TableMigrationConfig;
+import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import lombok.extern.log4j.Log4j2;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 import static java.util.Map.entry;
 
 @Log4j2
@@ -100,7 +102,16 @@ public class CallRecordDefinition implements MigrationTableDefinition {
         }
 
         if (empId != -1) {
-            if (!context.getMigratedEmployeeIds().contains(empId)) {
+            AtomicReference<LongOpenHashSet> cacheRef = context.getValidEmployeeIdsCache();
+            if (cacheRef.get() == null) {
+                synchronized (cacheRef) {
+                    if (cacheRef.get() == null) {
+                        log.info("Lazy loading employee IDs for ACUMTOTAL row modifier...");
+                        cacheRef.set(context.getEmployeeIdLoader().get());
+                    }
+                }
+            }
+            if (cacheRef.get() != null && !cacheRef.get().contains(empId)) {
                 row.put(columnName, null);
             }
         } else {

@@ -23,6 +23,7 @@ import java.sql.ResultSet;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -33,6 +34,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import java.util.HashSet;
 import com.infomedia.abacox.telephonypricing.component.migration.definition.*;
 
@@ -345,7 +347,10 @@ public class MigrationService {
                                 .runRequest(runRequest)
                                 .sourceClientId(sourceClientId)
                                 .telephonyTypeReplacements(telephonyTypeReplacements)
-                                .migratedEmployeeIds(Collections.synchronizedSet(new HashSet<>()))
+                                .validEmployeeIdsCache(new AtomicReference<>(null))
+                                .employeeIdLoader(() -> new LongOpenHashSet((Collection<Long>) entityManager
+                                                .createQuery("SELECT e.id FROM Employee e", Long.class)
+                                                .getResultList()))
                                 .migratedFileInfoIds(Collections.synchronizedSet(new HashSet<>()))
                                 .directorioToPlantCache(fetchDirectorioToPlantCache(runRequest, sourceClientId))
                                 .controlDatabase(runRequest.getControlDatabase())

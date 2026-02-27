@@ -31,14 +31,6 @@ public class EmployeeDefinition implements MigrationTableDefinition {
                         entry("FUNCIONARIO_HISTORICTL_ID", "historyControlId"),
                         entry("FUNCIONARIO_HISTODESDE", "historySince"),
                         entry("FUNCIONARIO_HISTOCAMBIO", "historyChange")))
-                .onBatchSuccess(batch -> {
-                    for (Map<String, Object> row : batch) {
-                        Object id = row.get("FUNCIONARIO_ID");
-                        if (id instanceof Number) {
-                            context.getMigratedEmployeeIds().add(((Number) id).longValue());
-                        }
-                    }
-                })
                 .build();
     }
 }
