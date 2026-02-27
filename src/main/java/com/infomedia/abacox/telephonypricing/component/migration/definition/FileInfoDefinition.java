@@ -1,6 +1,8 @@
 package com.infomedia.abacox.telephonypricing.component.migration.definition;
 
 import com.infomedia.abacox.telephonypricing.component.migration.TableMigrationConfig;
+import com.infomedia.abacox.telephonypricing.db.entity.FileInfo;
+
 import lombok.extern.log4j.Log4j2;
 import java.util.Map;
 import java.util.Set;
@@ -23,22 +25,20 @@ public class FileInfoDefinition implements MigrationTableDefinition {
                         entry("DERIVED_PLANT_ID", "plantTypeId"),
                         entry("LITERAL_STATUS", "processingStatus")))
                 .virtualColumns(Set.of("DERIVED_PLANT_ID", "LITERAL_STATUS"))
+                .additionalColumnsToFetch(Set.of("FILEINFO_DIRECTORIO"))
                 .rowModifier(row -> {
                     Object directorio = row.get("FILEINFO_DIRECTORIO");
                     Integer plantId = context.getDirectorioToPlantCache().getOrDefault(String.valueOf(directorio), 0);
                     row.put("DERIVED_PLANT_ID", plantId);
-                    row.put("LITERAL_STATUS", "COMPLETED");
+                    row.put("LITERAL_STATUS", FileInfo.ProcessingStatus.MISSING.name());
                 })
                 .beforeMigrationAction(config -> {
                     if (context.getMigratedFileInfoIds().isEmpty()) {
                         log.info("No FileInfo IDs collected. FileInfo migration will be effectively skipped.");
                         config.setWhereClause("1=0");
                     } else {
-                        String idsString = context.getMigratedFileInfoIds().stream()
-                                .map(String::valueOf)
-                                .collect(java.util.stream.Collectors.joining(","));
-                        config.setWhereClause("FILEINFO_ID IN (" + idsString + ")");
-                        log.info("Filtering FileInfo migration to {} collected IDs.",
+                        config.setSourceIdFilter(new java.util.HashSet<>(context.getMigratedFileInfoIds()));
+                        log.info("Filtering FileInfo migration to {} collected IDs via sourceIdFilter.",
                                 context.getMigratedFileInfoIds().size());
                     }
                 })

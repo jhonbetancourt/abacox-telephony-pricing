@@ -118,6 +118,15 @@ public class SourceDataFetcher {
                     .filter(actualCol -> requestedUpper.contains(actualCol.toUpperCase()))
                     .collect(Collectors.toSet());
 
+            if (tableConfig.getAdditionalColumnsToFetch() != null) {
+                Set<String> additionalUpper = tableConfig.getAdditionalColumnsToFetch().stream()
+                        .map(String::toUpperCase)
+                        .collect(Collectors.toSet());
+                actualColumns.stream()
+                        .filter(actualCol -> additionalUpper.contains(actualCol.toUpperCase()))
+                        .forEach(columnsToSelect::add);
+            }
+
             logSkippedColumns(tableConfig, columnsToSelect);
 
             // 3. Ensure essential columns exist in the select list
@@ -153,63 +162,69 @@ public class SourceDataFetcher {
                 finalOrderByClause = quoteIdentifier(actualSourceIdColumn, dialect) + " ASC";
             }
 
-            // 6. Build the Streaming SQL Query
-            String columnsSql = buildColumnsSql(columnsToSelect, dialect);
-            String sql = buildStreamingQuery(dialect, tableName, columnsSql, whereClause, finalOrderByClause,
-                    maxEntriesToMigrate);
+            if (tableConfig.getSourceIdFilter() != null && !tableConfig.getSourceIdFilter().isEmpty()) {
+                fetchDataWithIdFilter(connection, tableConfig, columnsToSelect, dialect, batchSize, batchProcessor);
+            } else {
+                // 6. Build the Streaming SQL Query
+                String columnsSql = buildColumnsSql(columnsToSelect, dialect);
+                String sql = buildStreamingQuery(dialect, tableName, columnsSql, whereClause, finalOrderByClause,
+                        maxEntriesToMigrate);
 
-            log.info("Executing streaming query: {}", sql);
+                log.info("Executing streaming query: {}", sql);
 
-            // Some drivers (e.g. Postgres) require autoCommit = false to honor setFetchSize
-            // as a cursor
-            boolean originalAutoCommit = connection.getAutoCommit();
-            try {
-                connection.setAutoCommit(false);
+                // Some drivers (e.g. Postgres) require autoCommit = false to honor setFetchSize
+                // as a cursor
+                boolean originalAutoCommit = connection.getAutoCommit();
+                try {
+                    connection.setAutoCommit(false);
 
-                // 7. Execute Query with Forward-Only Cursor settings
-                try (PreparedStatement preparedStatement = connection.prepareStatement(sql,
-                        ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY)) {
+                    // 7. Execute Query with Forward-Only Cursor settings
+                    try (PreparedStatement preparedStatement = connection.prepareStatement(sql,
+                            ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY)) {
 
-                    preparedStatement.setFetchSize(batchSize); // Tells JDBC to fetch in chunks over network
-                    if (maxEntriesToMigrate != null && maxEntriesToMigrate > 0) {
-                        preparedStatement.setMaxRows(maxEntriesToMigrate); // Standard JDBC fallback limit
-                    }
+                        preparedStatement.setFetchSize(batchSize); // Tells JDBC to fetch in chunks over network
+                        if (maxEntriesToMigrate != null && maxEntriesToMigrate > 0) {
+                            preparedStatement.setMaxRows(maxEntriesToMigrate); // Standard JDBC fallback limit
+                        }
 
-                    try (ResultSet resultSet = preparedStatement.executeQuery()) {
-                        ResultSetMetaData metaData = resultSet.getMetaData();
-                        Map<String, Integer> columnIndexMap = buildColumnIndexMap(metaData);
+                        try (ResultSet resultSet = preparedStatement.executeQuery()) {
+                            ResultSetMetaData metaData = resultSet.getMetaData();
+                            Map<String, Integer> columnIndexMap = buildColumnIndexMap(metaData);
 
-                        List<Map<String, Object>> currentBatch = new ArrayList<>(batchSize);
+                            List<Map<String, Object>> currentBatch = new ArrayList<>(batchSize);
 
-                        // 8. Stream through the results
-                        while (resultSet.next()) {
-                            Map<String, Object> row = extractRow(resultSet, columnsToSelect, columnIndexMap, dialect);
-                            currentBatch.add(row);
-                            totalRowsFetched++;
+                            // 8. Stream through the results
+                            while (resultSet.next()) {
+                                Map<String, Object> row = extractRow(resultSet, columnsToSelect, columnIndexMap,
+                                        dialect);
+                                currentBatch.add(row);
+                                totalRowsFetched++;
 
-                            // Dispatch batch to the processor
-                            if (currentBatch.size() >= batchSize) {
-                                log.debug("Processing streamed batch of size {}", currentBatch.size());
-                                batchProcessor.accept(new ArrayList<>(currentBatch)); // Pass copy
+                                // Dispatch batch to the processor
+                                if (currentBatch.size() >= batchSize) {
+                                    log.debug("Processing streamed batch of size {}", currentBatch.size());
+                                    batchProcessor.accept(new ArrayList<>(currentBatch)); // Pass copy
+                                    currentBatch.clear();
+                                }
+
+                                if (totalRowsFetched % (batchSize * 10) == 0) {
+                                    log.info("Streamed {} total rows from source table {}...", totalRowsFetched,
+                                            tableName);
+                                }
+                            }
+
+                            // Dispatch any remaining rows in the final batch
+                            if (!currentBatch.isEmpty()) {
+                                log.debug("Processing final streamed batch of size {}", currentBatch.size());
+                                batchProcessor.accept(new ArrayList<>(currentBatch));
                                 currentBatch.clear();
                             }
-
-                            if (totalRowsFetched % (batchSize * 10) == 0) {
-                                log.info("Streamed {} total rows from source table {}...", totalRowsFetched, tableName);
-                            }
-                        }
-
-                        // Dispatch any remaining rows in the final batch
-                        if (!currentBatch.isEmpty()) {
-                            log.debug("Processing final streamed batch of size {}", currentBatch.size());
-                            batchProcessor.accept(new ArrayList<>(currentBatch));
-                            currentBatch.clear();
                         }
                     }
+                } finally {
+                    // Restore original connection state
+                    connection.setAutoCommit(originalAutoCommit);
                 }
-            } finally {
-                // Restore original connection state
-                connection.setAutoCommit(originalAutoCommit);
             }
 
             log.info("Finished streaming data for source table {}. Total rows fetched: {}", tableName,
@@ -218,6 +233,49 @@ public class SourceDataFetcher {
         } catch (SQLException e) {
             log.error("Error during data fetch lifecycle for source table {}: {}", tableName, e.getMessage(), e);
             throw e;
+        }
+    }
+
+    private void fetchDataWithIdFilter(Connection connection, TableMigrationConfig tableConfig,
+            Set<String> columnsToSelect, SqlDialect dialect, int batchSize,
+            Consumer<List<Map<String, Object>>> batchProcessor) throws SQLException {
+
+        String tableName = tableConfig.getSourceTableName();
+        String sourceIdColumn = tableConfig.getSourceIdColumnName();
+        Set<Object> idFilter = tableConfig.getSourceIdFilter();
+        List<Object> idList = new ArrayList<>(idFilter);
+
+        log.info("Fetching data from {} for {} specific IDs via sub-batching.", tableName, idList.size());
+
+        String columnsSql = buildColumnsSql(columnsToSelect, dialect);
+        int maxParamsPerQuery = 2000;
+
+        for (int i = 0; i < idList.size(); i += maxParamsPerQuery) {
+            List<Object> subBatchIds = idList.subList(i, Math.min(i + maxParamsPerQuery, idList.size()));
+            String placeholders = String.join(",", Collections.nCopies(subBatchIds.size(), "?"));
+            String fromClause = quoteIdentifier(tableName, dialect);
+            if (dialect == SqlDialect.SQL_SERVER) {
+                fromClause += " WITH (NOLOCK)";
+            }
+
+            String sql = String.format("SELECT %s FROM %s WHERE %s IN (%s)",
+                    columnsSql, fromClause, quoteIdentifier(sourceIdColumn, dialect),
+                    placeholders);
+
+            try (PreparedStatement ps = connection.prepareStatement(sql)) {
+                MigrationUtils.setPreparedStatementParameters(ps, subBatchIds);
+                try (ResultSet rs = ps.executeQuery()) {
+                    ResultSetMetaData metaData = rs.getMetaData();
+                    Map<String, Integer> columnIndexMap = buildColumnIndexMap(metaData);
+                    List<Map<String, Object>> results = new ArrayList<>();
+                    while (rs.next()) {
+                        results.add(extractRow(rs, columnsToSelect, columnIndexMap, dialect));
+                    }
+                    if (!results.isEmpty()) {
+                        batchProcessor.accept(results);
+                    }
+                }
+            }
         }
     }
 

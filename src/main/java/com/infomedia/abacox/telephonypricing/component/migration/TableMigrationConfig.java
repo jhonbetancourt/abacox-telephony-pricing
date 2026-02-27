@@ -111,6 +111,20 @@ public class TableMigrationConfig {
      */
     private Integer maxEntriesToMigrate;
 
+    /**
+     * Columns that should be fetched from the source database even if they are not
+     * in the columnMapping (e.g. needed for rowModifier or rowFilter).
+     */
+    @Builder.Default
+    private Set<String> additionalColumnsToFetch = new HashSet<>();
+
+    /**
+     * An optional set of source IDs to filter by.
+     * If provided, the migration will only fetch rows with these IDs.
+     * This is handled via sub-batching in SourceDataFetcher to avoid SQL limits.
+     */
+    private Set<Object> sourceIdFilter;
+
     @Builder.Default
     private boolean assumeTargetIsEmpty = false;
 
