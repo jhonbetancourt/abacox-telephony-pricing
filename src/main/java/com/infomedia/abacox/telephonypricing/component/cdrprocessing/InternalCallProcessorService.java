@@ -30,7 +30,7 @@ public class InternalCallProcessorService {
      * PHP equivalent: procesaInterna
      */
     public void processInternal(CdrData cdrData, LineProcessingContext processingContext,
-            boolean pbxSpecialRuleAppliedRecursively) {
+                                boolean pbxSpecialRuleAppliedRecursively) {
         CommunicationLocation commLocation = processingContext.getCommLocation();
         log.debug("Processing INTERNAL call logic for CDR: {}. Recursive PBX applied: {}", cdrData.getCtlHash(),
                 pbxSpecialRuleAppliedRecursively);
@@ -74,7 +74,7 @@ public class InternalCallProcessorService {
             cdrData.setQuarantineReason(
                     internalTypeInfo.getAdditionalInfo() != null ? internalTypeInfo.getAdditionalInfo()
                             : "Internal call ignore policy");
-            cdrData.setQuarantineStep("processInternalCallLogic_IgnorePolicy");
+            cdrData.setQuarantineStep(QuarantineErrorType.INTERNAL_POLICY_IGNORE.name());
             return;
         }
 

@@ -84,7 +84,7 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
             cdrData.setMarkedForQuarantine(true);
             cdrData.setQuarantineReason(
                     "Insufficient fields. Found " + fields.size() + ", expected " + minExpectedFieldsForValidCdr);
-            cdrData.setQuarantineStep(QuarantineErrorType.PARSER_ERROR.name());
+            cdrData.setQuarantineStep(QuarantineErrorType.INSUFFICIENT_FIELDS.name());
             return cdrData;
         }
 

@@ -38,6 +38,7 @@ public class CdrEnrichmentService {
 
             if (cdrData.isMarkedForQuarantine() &&
                     (QuarantineErrorType.INTERNAL_SELF_CALL.name().equals(cdrData.getQuarantineStep()) ||
+                            QuarantineErrorType.INTERNAL_POLICY_IGNORE.name().equals(cdrData.getQuarantineStep()) ||
                             (cdrData.getQuarantineStep() != null
                                     && cdrData.getQuarantineStep().contains("IgnorePolicy")))) {
                 log.debug(
