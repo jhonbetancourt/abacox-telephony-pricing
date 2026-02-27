@@ -50,7 +50,7 @@ public class CdrRoutingService {
 
         trackerService.initFile(fileInfo.getId());
 
-        Long plantTypeId = fileInfo.getParentId().longValue();
+        Long plantTypeId = fileInfo.getPlantTypeId().longValue();
         CdrProcessor initialParser = getProcessorForPlantType(plantTypeId);
         Map<String, Integer> currentFileHeaderMap = null;
 
@@ -238,7 +238,7 @@ public class CdrRoutingService {
 
             Map<Long, ExtensionLimits> extensionLimits = employeeLookupService.getExtensionLimits();
             Map<Long, List<ExtensionRange>> extensionRanges = employeeLookupService.getExtensionRanges();
-            CdrProcessor initialParser = getProcessorForPlantType(fileInfo.getParentId().longValue());
+            CdrProcessor initialParser = getProcessorForPlantType(fileInfo.getPlantTypeId().longValue());
             Map<String, Integer> currentHeaderMap = null;
 
             try (InputStream inputStream = fileDataOpt.get().content();
@@ -279,7 +279,7 @@ public class CdrRoutingService {
 
                     Optional<CommunicationLocation> targetCommLocationOpt = commLocationLookupService
                             .findBestCommunicationLocation(
-                                    fileInfo.getParentId().longValue(),
+                                    fileInfo.getPlantTypeId().longValue(),
                                     preliminaryCdrData.getCallingPartyNumber(),
                                     preliminaryCdrData.getCallingPartyNumberPartition(),
                                     preliminaryCdrData.getFinalCalledPartyNumber(),

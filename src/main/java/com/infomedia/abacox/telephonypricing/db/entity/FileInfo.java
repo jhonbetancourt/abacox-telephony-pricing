@@ -26,12 +26,7 @@ public class FileInfo {
      */
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "file_info_id_seq")
-    @SequenceGenerator(
-            name = "file_info_id_seq",
-            sequenceName = "file_info_id_seq",
-            allocationSize = 1,
-            initialValue = 10000000
-    )
+    @SequenceGenerator(name = "file_info_id_seq", sequenceName = "file_info_id_seq", allocationSize = 1, initialValue = 10000000)
     @Column(name = "id", nullable = false)
     private Long id;
 
@@ -43,13 +38,9 @@ public class FileInfo {
     @ColumnDefault("''")
     private String filename;
 
-    /**
-     * ID of the entity that this file belongs to.
-     * Original field: FILEINFO_PERTENECE
-     */
-    @Column(name = "parent_id", nullable = false)
+    @Column(name = "plant_type_id", nullable = false)
     @ColumnDefault("0")
-    private Integer parentId;
+    private Integer plantTypeId;
 
     /**
      * Size of the file in bytes (uncompressed).
@@ -70,16 +61,8 @@ public class FileInfo {
      * Control or checksum information.
      * Original field: FILEINFO_CTL
      */
-    @Column(name = "checksum", nullable = true, unique = true)
+    @Column(name = "checksum", unique = true)
     private UUID checksum;
-
-    /**
-     * Type or MIME type of the file.
-     * Original field: FILEINFO_TIPO
-     */
-    @Column(name = "type", length = 64, nullable = false)
-    @ColumnDefault("''")
-    private String type;
 
     @Column(name = "storage_bucket", length = 100)
     private String storageBucket;

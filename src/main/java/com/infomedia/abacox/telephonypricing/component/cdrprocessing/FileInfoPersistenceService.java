@@ -49,7 +49,7 @@ public class FileInfoPersistenceService {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public FileInfoCreationResult createOrGetFileInfo(String filename, Long parentId, String type, File file)
+    public FileInfoCreationResult createOrGetFileInfo(String filename, Long plantTypeId, String type, File file)
             throws IOException {
 
         // 1. Calculate Hash
@@ -92,7 +92,7 @@ public class FileInfoPersistenceService {
             // 5. Save DB Record using returned metadata
             fileInfo = new FileInfo();
             fileInfo.setFilename(filename.length() > 255 ? filename.substring(0, 255) : filename);
-            fileInfo.setParentId(parentId != null ? parentId.intValue() : 0);
+            fileInfo.setPlantTypeId(plantTypeId != null ? plantTypeId.intValue() : 0);
             fileInfo.setType(type.length() > 64 ? type.substring(0, 64) : type);
             fileInfo.setDate(LocalDateTime.now());
             fileInfo.setChecksum(checksum);
