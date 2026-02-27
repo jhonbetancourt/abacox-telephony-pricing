@@ -79,6 +79,12 @@ public class DataMigrationExecutor {
                         tableConfig.getTargetEntityClassName());
                 Exception tableException = null;
                 try {
+                    if (tableConfig.getBeforeMigrationAction() != null) {
+                        log.info("Executing before-migration action for table '{}'...",
+                                tableConfig.getSourceTableName());
+                        tableConfig.getBeforeMigrationAction().accept(tableConfig);
+                    }
+
                     // Call the method on the executor bean (this goes through the proxy)
                     tableExecutor.executeTableMigration(tableConfig, request.getSourceDbConfig());
                     log.info("Successfully migrated table {}/{}: {}", currentTableIndex, totalTables,

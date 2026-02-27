@@ -24,6 +24,11 @@ public class TableMigrationConfig {
     private Map<String, String> columnMapping;
 
     /**
+     * An optional action to run before this specific table starts its migration.
+     */
+    private Consumer<TableMigrationConfig> beforeMigrationAction;
+
+    /**
      * An optional callback executed after a batch of rows is successfully persisted
      * in the target database.
      */

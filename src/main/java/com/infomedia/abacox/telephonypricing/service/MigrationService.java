@@ -1,12 +1,9 @@
 package com.infomedia.abacox.telephonypricing.service;
 
 import com.infomedia.abacox.telephonypricing.component.migration.DataMigrationExecutor;
-import com.infomedia.abacox.telephonypricing.component.cdrprocessing.QuarantineErrorType;
-import com.infomedia.abacox.telephonypricing.component.utils.XXHash128Util;
 import com.infomedia.abacox.telephonypricing.component.migration.MigrationParams;
 import com.infomedia.abacox.telephonypricing.component.migration.SourceDbConfig;
 import com.infomedia.abacox.telephonypricing.component.migration.TableMigrationConfig;
-import com.infomedia.abacox.telephonypricing.constants.RefTable;
 import com.infomedia.abacox.telephonypricing.component.configmanager.ConfigKey;
 import com.infomedia.abacox.telephonypricing.component.configmanager.ConfigService;
 import com.infomedia.abacox.telephonypricing.dto.migration.MigrationStart;
@@ -19,7 +16,6 @@ import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
-import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
@@ -37,9 +33,8 @@ import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
-
-import static java.util.Map.entry;
+import java.util.HashSet;
+import com.infomedia.abacox.telephonypricing.component.migration.definition.*;
 
 @Service
 @Log4j2
@@ -340,671 +335,102 @@ public class MigrationService {
 
         private List<TableMigrationConfig> defineMigrationOrderAndMappings(MigrationStart runRequest,
                         Integer sourceClientId) {
-                List<TableMigrationConfig> configs = new ArrayList<>();
-                AtomicReference<LongOpenHashSet> validEmployeeIdsCache = new AtomicReference<>(null);
 
                 log.info("Defining migration mappings. Using validated CLIENTE_ID: {}", sourceClientId);
-
-                // Level 0: No FK dependencies among these
-                configs.add(TableMigrationConfig.builder().sourceTableName("MPORIGEN")
-                                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.OriginCountry")
-                                .sourceIdColumnName("MPORIGEN_ID").targetIdFieldName("id").columnMapping(Map.ofEntries(
-
-                                                entry("MPORIGEN_ID", "id"),
-                                                entry("MPORIGEN_SIMBOLO", "currencySymbol"),
-                                                entry("MPORIGEN_PAIS", "name"),
-                                                entry("MPORIGEN_CCODE", "code"),
-                                                entry("MPORIGEN_ACTIVO", "active"),
-                                                entry("MPORIGEN_FCREACION", "createdDate"),
-                                                entry("MPORIGEN_FMODIFICADO", "lastModifiedDate")))
-                                .build());
-
-                configs.add(TableMigrationConfig.builder()
-                                .sourceTableName("historictl")
-                                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.HistoryControl")
-                                .sourceIdColumnName("HISTORICTL_ID")
-                                .targetIdFieldName("id")
-                                .columnMapping(Map.ofEntries(
-                                                entry("HISTORICTL_ID", "id"),
-                                                entry("HISTORICTL_REF_TABLA", "refTable"),
-                                                entry("HISTORICTL_REF_ID", "refId"),
-                                                entry("HISTORICTL_HISTODESDE", "historySince")))
-                                .rowFilter(row -> {
-                                        Object refTableObj = row.get("HISTORICTL_REF_TABLA");
-                                        if (refTableObj instanceof Number) {
-                                                int refTableId = ((Number) refTableObj).intValue();
-                                                // Only EMPLOYEE (1) and EXTENSION_RANGE (2)
-                                                return RefTable.isValidId(refTableId);
-                                        }
-                                        return false;
-                                })
-                                .build());
-
-                configs.add(TableMigrationConfig.builder()
-                                .sourceTableName("tipoplanta")
-                                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.PlantType")
-                                .sourceIdColumnName("TIPOPLANTA_ID")
-                                .targetIdFieldName("id")
-                                .columnMapping(Map.ofEntries(
-                                                entry("TIPOPLANTA_ID", "id"),
-                                                entry("TIPOPLANTA_NOMBRE", "name"),
-                                                entry("TIPOPLANTA_ACTIVO", "active"),
-                                                entry("TIPOPLANTA_FCREACION", "createdDate"),
-                                                entry("TIPOPLANTA_FMODIFICADO", "lastModifiedDate")))
-                                .build());
-
-                configs.add(TableMigrationConfig.builder()
-                                .sourceTableName("funcargo")
-                                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.JobPosition")
-                                .sourceIdColumnName("FUNCARGO_ID")
-                                .targetIdFieldName("id")
-                                .columnMapping(Map.ofEntries(
-                                                entry("FUNCARGO_ID", "id"),
-                                                entry("FUNCARGO_NOMBRE", "name"),
-                                                entry("FUNCARGO_ACTIVO", "active"),
-                                                entry("FUNCARGO_FCREACION", "createdDate"),
-                                                entry("FUNCARGO_FMODIFICADO", "lastModifiedDate")))
-                                .build());
-
-                configs.add(TableMigrationConfig.builder()
-                                .sourceTableName("CLASELLAMA")
-                                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.CallCategory")
-                                .sourceIdColumnName("CLASELLAMA_ID")
-                                .targetIdFieldName("id")
-                                .columnMapping(Map.ofEntries(
-                                                entry("CLASELLAMA_ID", "id"),
-                                                entry("CLASELLAMA_NOMBRE", "name"),
-                                                entry("CLASELLAMA_ACTIVO", "active"),
-                                                entry("CLASELLAMA_FCREACION", "createdDate"),
-                                                entry("CLASELLAMA_FMODIFICADO", "lastModifiedDate")))
-                                .build());
-
-                configs.add(TableMigrationConfig.builder()
-                                .sourceTableName("listadoext")
-                                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.ExtensionList")
-                                .sourceIdColumnName("LISTADOEXT_ID")
-                                .targetIdFieldName("id")
-                                .columnMapping(Map.ofEntries(
-                                                entry("LISTADOEXT_ID", "id"),
-                                                entry("LISTADOEXT_NOMBRE", "name"),
-                                                entry("LISTADOEXT_TIPO", "type"),
-                                                entry("LISTADOEXT_LISTADO", "extensionList"),
-                                                entry("LISTADOEXT_ACTIVO", "active"),
-                                                entry("LISTADOEXT_FCREACION", "createdDate"),
-                                                entry("LISTADOEXT_FMODIFICADO", "lastModifiedDate")))
-                                .build());
-
-                // Level 1: Depend on Level 0
-                configs.add(TableMigrationConfig.builder()
-                                .sourceTableName("OPERADOR")
-                                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.Operator")
-                                .sourceIdColumnName("OPERADOR_ID")
-                                .targetIdFieldName("id")
-                                .columnMapping(Map.ofEntries(
-                                                entry("OPERADOR_ID", "id"),
-                                                entry("OPERADOR_NOMBRE", "name"),
-                                                entry("OPERADOR_MPORIGEN_ID", "originCountryId"),
-                                                entry("OPERADOR_ACTIVO", "active"),
-                                                entry("OPERADOR_FCREACION", "createdDate"),
-                                                entry("OPERADOR_FMODIFICADO", "lastModifiedDate")))
-                                .build());
 
                 Map<Object, Object> telephonyTypeReplacements = new HashMap<>();
                 telephonyTypeReplacements.put(99, null);
 
-                configs.add(TableMigrationConfig.builder()
-                                .sourceTableName("TIPOTELE")
-                                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.TelephonyType")
-                                .sourceIdColumnName("TIPOTELE_ID")
-                                .targetIdFieldName("id")
-                                .columnMapping(Map.ofEntries(
-                                                entry("TIPOTELE_ID", "id"),
-                                                entry("TIPOTELE_NOMBRE", "name"),
-                                                entry("TIPOTELE_CLASELLAMA_ID", "callCategoryId"),
-                                                entry("TIPOTELE_TRONCALES", "usesTrunks"),
-                                                entry("TIPOTELE_ACTIVO", "active"),
-                                                entry("TIPOTELE_FCREACION", "createdDate"),
-                                                entry("TIPOTELE_FMODIFICADO", "lastModifiedDate")))
-                                .build());
+                MigrationContext context = MigrationContext.builder()
+                                .runRequest(runRequest)
+                                .sourceClientId(sourceClientId)
+                                .telephonyTypeReplacements(telephonyTypeReplacements)
+                                .migratedEmployeeIds(Collections.synchronizedSet(new HashSet<>()))
+                                .migratedFileInfoIds(Collections.synchronizedSet(new HashSet<>()))
+                                .directorioToPlantCache(fetchDirectorioToPlantCache(runRequest, sourceClientId))
+                                .controlDatabase(runRequest.getControlDatabase())
+                                .build();
 
-                // Level 2: Depend on Level 1 or 0
-                configs.add(TableMigrationConfig.builder()
-                                .sourceTableName("INDICATIVO")
-                                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.Indicator")
-                                .sourceIdColumnName("INDICATIVO_ID")
-                                .targetIdFieldName("id")
-                                .columnMapping(Map.ofEntries(
-                                                entry("INDICATIVO_ID", "id"),
-                                                entry("INDICATIVO_TIPOTELE_ID", "telephonyTypeId"),
-                                                entry("INDICATIVO_DPTO_PAIS", "departmentCountry"),
-                                                entry("INDICATIVO_CIUDAD", "cityName"),
-                                                entry("INDICATIVO_OPERADOR_ID", "operatorId"),
-                                                entry("INDICATIVO_MPORIGEN_ID", "originCountryId"),
-                                                entry("INDICATIVO_ENUSO", "active"), // Assuming ENUSO maps to active
-                                                entry("INDICATIVO_FCREACION", "createdDate"),
-                                                entry("INDICATIVO_FMODIFICADO", "lastModifiedDate")))
-                                .specificValueReplacements(Map.of("telephonyTypeId", telephonyTypeReplacements))
-                                .build());
+                List<MigrationTableDefinition> definitions = List.of(
+                                // Level 0
+                                new OriginCountryDefinition(),
+                                new HistoryControlDefinition(),
+                                new PlantTypeDefinition(),
+                                new JobPositionDefinition(),
+                                new CallCategoryDefinition(),
+                                new ExtensionListDefinition(),
+                                // Level 1
+                                new OperatorDefinition(),
+                                new TelephonyTypeDefinition(),
+                                // Level 2
+                                new IndicatorDefinition(),
+                                new PrefixDefinition(),
+                                new TelephonyTypeConfigDefinition(),
+                                // Level 3
+                                new BandDefinition(),
+                                new CompanyDefinition(),
+                                new CommunicationLocationDefinition(),
+                                new SeriesDefinition(),
+                                new SpecialServiceDefinition(),
+                                // Level 4
+                                new SubdivisionDefinition(),
+                                new CostCenterDefinition(),
+                                new BandIndicatorDefinition(),
+                                new SpecialRateValueDefinition(),
+                                new TrunkDefinition(),
+                                // Level 5
+                                new EmployeeDefinition(),
+                                new ExtensionRangeDefinition(),
+                                new PbxSpecialRuleDefinition(),
+                                new TrunkRateDefinition(),
+                                // Level 6
+                                new OfficeDetailsDefinition(),
+                                new ContactDefinition(),
+                                new TrunkRuleDefinition(),
+                                new SubdivisionManagerDefinition(),
+                                // Final
+                                new CallRecordDefinition(),
+                                new FailedCallRecordDefinition(),
+                                new CdrLoadControlDefinition(),
+                                new FileInfoDefinition());
 
-                configs.add(TableMigrationConfig.builder()
-                                .sourceTableName("PREFIJO")
-                                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.Prefix")
-                                .sourceIdColumnName("PREFIJO_ID")
-                                .targetIdFieldName("id")
-                                .columnMapping(Map.ofEntries(
-                                                entry("PREFIJO_ID", "id"),
-                                                entry("PREFIJO_OPERADOR_ID", "operatorId"),
-                                                entry("PREFIJO_TIPOTELE_ID", "telephonyTypeId"), // Renamed in entity
-                                                entry("PREFIJO_PREFIJO", "code"),
-                                                entry("PREFIJO_VALORBASE", "baseValue"),
-                                                entry("PREFIJO_BANDAOK", "bandOk"),
-                                                entry("PREFIJO_IVAINC", "vatIncluded"),
-                                                entry("PREFIJO_IVA", "vatValue"),
-                                                entry("PREFIJO_ACTIVO", "active"),
-                                                entry("PREFIJO_FCREACION", "createdDate"),
-                                                entry("PREFIJO_FMODIFICADO", "lastModifiedDate")))
-                                .specificValueReplacements(Map.of("telephonyTypeId", telephonyTypeReplacements))
-                                .build());
+                return definitions.stream()
+                                .map(def -> def.getTableMigrationConfig(context))
+                                .toList();
+        }
 
-                configs.add(TableMigrationConfig.builder()
-                                .sourceTableName("TIPOTELECFG")
-                                .targetEntityClassName(
-                                                "com.infomedia.abacox.telephonypricing.db.entity.TelephonyTypeConfig")
-                                .sourceIdColumnName("TIPOTELECFG_ID")
-                                .targetIdFieldName("id")
-                                .columnMapping(Map.ofEntries(
-                                                entry("TIPOTELECFG_ID", "id"),
-                                                entry("TIPOTELECFG_MIN", "minValue"),
-                                                entry("TIPOTELECFG_MAX", "maxValue"),
-                                                entry("TIPOTELECFG_TIPOTELE_ID", "telephonyTypeId"),
-                                                entry("TIPOTELECFG_MPORIGEN_ID", "originCountryId"),
-                                                // Assuming TIPOTELECFG doesn't have its own _ACTIVO, relies on parent
-                                                // entities
-                                                // If it has, add: entry("TIPOTELECFG_ACTIVO", "active"),
-                                                entry("TIPOTELECFG_FCREACION", "createdDate"),
-                                                entry("TIPOTELECFG_FMODIFICADO", "lastModifiedDate")))
-                                .specificValueReplacements(Map.of("telephonyTypeId", telephonyTypeReplacements))
-                                .build());
+        private Map<String, Integer> fetchDirectorioToPlantCache(MigrationStart runRequest, Integer sourceClientId) {
+                if (sourceClientId == null)
+                        return Map.of();
 
-                // Level 3: Depend on Level 2 or lower
-                configs.add(TableMigrationConfig.builder()
-                                .sourceTableName("BANDA")
-                                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.Band")
-                                .sourceIdColumnName("BANDA_ID")
-                                .targetIdFieldName("id")
-                                .columnMapping(Map.ofEntries(
-                                                entry("BANDA_ID", "id"),
-                                                entry("BANDA_PREFIJO_ID", "prefixId"),
-                                                entry("BANDA_NOMBRE", "name"),
-                                                entry("BANDA_VALOR", "value"),
-                                                entry("BANDA_INDICAORIGEN_ID", "originIndicatorId"),
-                                                entry("BANDA_IVAINC", "vatIncluded"),
-                                                entry("BANDA_REF", "reference"),
-                                                entry("BANDA_ACTIVO", "active"),
-                                                entry("BANDA_FCREACION", "createdDate"),
-                                                entry("BANDA_FMODIFICADO", "lastModifiedDate")))
-                                .build());
+                log.info("Loading plant cache from control database for client {}...", sourceClientId);
+                Map<String, Integer> cache = new HashMap<>();
 
-                configs.add(TableMigrationConfig.builder()
-                                .sourceTableName("EMPRESA")
-                                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.Company")
-                                .sourceIdColumnName("EMPRESA_ID")
-                                .targetIdFieldName("id")
-                                .columnMapping(Map.ofEntries(
-                                                entry("EMPRESA_ID", "id"),
-                                                entry("EMPRESA_ADICIONAL", "additionalInfo"),
-                                                entry("EMPRESA_DIRECCION", "address"),
-                                                entry("EMPRESA_EMPRESA", "name"),
-                                                entry("EMPRESA_NIT", "taxId"),
-                                                entry("EMPRESA_RSOCIAL", "legalName"),
-                                                entry("EMPRESA_URL", "website"),
-                                                entry("EMPRESA_INDICATIVO_ID", "indicatorId"),
-                                                entry("EMPRESA_ACTIVO", "active"),
-                                                entry("EMPRESA_FCREACION", "createdDate"),
-                                                entry("EMPRESA_FMODIFICADO", "lastModifiedDate")))
-                                .build());
+                String url = String.format(
+                                "jdbc:sqlserver://%s:%s;databaseName=%s;encrypt=%s;trustServerCertificate=%s;",
+                                runRequest.getHost(), runRequest.getPort(), runRequest.getControlDatabase(),
+                                runRequest.getEncryption(), runRequest.getTrustServerCertificate());
 
-                configs.add(TableMigrationConfig.builder()
-                                .sourceTableName("COMUBICACION")
-                                .targetEntityClassName(
-                                                "com.infomedia.abacox.telephonypricing.db.entity.CommunicationLocation")
-                                .sourceIdColumnName("COMUBICACION_ID")
-                                .targetIdFieldName("id")
-                                .columnMapping(Map.ofEntries(
-                                                entry("COMUBICACION_ID", "id"),
-                                                entry("COMUBICACION_DIRECTORIO", "directory"),
-                                                entry("COMUBICACION_TIPOPLANTA_ID", "plantTypeId"),
-                                                entry("COMUBICACION_SERIAL", "serial"),
-                                                entry("COMUBICACION_INDICATIVO_ID", "indicatorId"),
-                                                entry("COMUBICACION_PREFIJOPBX", "pbxPrefix"),
-                                                entry("COMUBICACION_ACTIVO", "active"),
-                                                entry("COMUBICACION_FCREACION", "createdDate"),
-                                                entry("COMUBICACION_FMODIFICADO", "lastModifiedDate")))
-                                .build());
+                String query = String.format(
+                                "SELECT CARGACTL_DIRECTORIO, CARGACTL_TIPOPLANTA_ID FROM %s.dbo.cargactl WHERE CARGACTL_CLIENTE_ID = ?",
+                                runRequest.getControlDatabase());
 
-                configs.add(TableMigrationConfig.builder()
-                                .sourceTableName("SERIE")
-                                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.Series")
-                                .sourceIdColumnName("SERIE_ID")
-                                .targetIdFieldName("id")
-                                .columnMapping(Map.ofEntries(
-                                                entry("SERIE_ID", "id"),
-                                                entry("SERIE_INDICATIVO_ID", "indicatorId"),
-                                                entry("SERIE_NDC", "ndc"),
-                                                entry("SERIE_INICIAL", "initialNumber"),
-                                                entry("SERIE_FINAL", "finalNumber"),
-                                                entry("SERIE_EMPRESA", "company"),
-                                                entry("SERIE_ACTIVO", "active"),
-                                                entry("SERIE_FCREACION", "createdDate"),
-                                                entry("SERIE_FMODIFICADO", "lastModifiedDate")))
-                                .build());
+                try (Connection conn = DriverManager.getConnection(url, runRequest.getUsername(),
+                                runRequest.getPassword());
+                                PreparedStatement ps = conn.prepareStatement(query)) {
 
-                configs.add(TableMigrationConfig.builder()
-                                .sourceTableName("servespecial")
-                                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.SpecialService")
-                                .sourceIdColumnName("SERVESPECIAL_ID")
-                                .targetIdFieldName("id")
-                                .columnMapping(Map.ofEntries(
-                                                entry("SERVESPECIAL_ID", "id"),
-                                                entry("SERVESPECIAL_INDICATIVO_ID", "indicatorId"),
-                                                entry("SERVESPECIAL_NUMERO", "phoneNumber"),
-                                                entry("SERVESPECIAL_VALOR", "value"),
-                                                entry("SERVESPECIAL_IVA", "vatAmount"),
-                                                entry("SERVESPECIAL_IVAINC", "vatIncluded"),
-                                                entry("SERVESPECIAL_DESCRIPCION", "description"),
-                                                entry("SERVESPECIAL_MPORIGEN_ID", "originCountryId"),
-                                                entry("SERVESPECIAL_ACTIVO", "active"),
-                                                entry("SERVESPECIAL_FCREACION", "createdDate"),
-                                                entry("SERVESPECIAL_FMODIFICADO", "lastModifiedDate")))
-                                .build());
-
-                // Level 4: Depend on Level 3 or lower (Self-referencing tables placed here)
-                configs.add(TableMigrationConfig.builder()
-                                .sourceTableName("SUBDIRECCION")
-                                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.Subdivision")
-                                .sourceIdColumnName("SUBDIRECCION_ID")
-                                .targetIdFieldName("id")
-                                .columnMapping(Map.ofEntries(
-                                                entry("SUBDIRECCION_ID", "id"),
-                                                entry("SUBDIRECCION_PERTENECE", "parentSubdivisionId"),
-                                                entry("SUBDIRECCION_NOMBRE", "name"),
-                                                entry("SUBDIRECCION_ACTIVO", "active"),
-                                                entry("SUBDIREccion_FCREACION", "createdDate"),
-                                                entry("SUBDIRECCION_FMODIFICADO", "lastModifiedDate")))
-                                .selfReferencing(true)
-                                .selfReferenceTargetForeignKeyFieldName("parentSubdivisionId")
-                                .build());
-
-                configs.add(TableMigrationConfig.builder()
-                                .sourceTableName("CENTROCOSTOS")
-                                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.CostCenter")
-                                .sourceIdColumnName("CENTROCOSTOS_ID")
-                                .targetIdFieldName("id")
-                                .columnMapping(Map.ofEntries(
-                                                entry("CENTROCOSTOS_ID", "id"),
-                                                entry("CENTROCOSTOS_CENTRO_COSTO", "name"),
-                                                entry("CENTROCOSTOS_OT", "workOrder"),
-                                                entry("CENTROCOSTOS_PERTENECE", "parentCostCenterId"),
-                                                entry("CENTROCOSTOS_MPORIGEN_ID", "originCountryId"),
-                                                entry("CENTROCOSTOS_ACTIVO", "active"),
-                                                entry("CENTROCOSTOS_FCREACION", "createdDate"),
-                                                entry("CENTROCOSTOS_FMODIFICADO", "lastModifiedDate")))
-                                .selfReferencing(true)
-                                .selfReferenceTargetForeignKeyFieldName("parentCostCenterId")
-                                .build());
-
-                configs.add(TableMigrationConfig.builder()
-                                .sourceTableName("BANDAINDICA")
-                                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.BandIndicator")
-                                .sourceIdColumnName("BANDAINDICA_ID")
-                                .targetIdFieldName("id")
-                                .columnMapping(Map.ofEntries(
-                                                entry("BANDAINDICA_ID", "id"),
-                                                entry("BANDAINDICA_BANDA_ID", "bandId"),
-                                                entry("BANDAINDICA_INDICATIVO_ID", "indicatorId"),
-                                                // BANDAINDICA doesn't have _ACTIVO, relies on Band and Indicator
-                                                entry("BANDAINDICA_FCREACION", "createdDate"),
-                                                entry("BANDAINDICA_FMODIFICADO", "lastModifiedDate")))
-                                .build());
-
-                configs.add(TableMigrationConfig.builder()
-                                .sourceTableName("valorespecial")
-                                .targetEntityClassName(
-                                                "com.infomedia.abacox.telephonypricing.db.entity.SpecialRateValue")
-                                .sourceIdColumnName("VALORESPECIAL_ID")
-                                .targetIdFieldName("id")
-                                .columnMapping(Map.ofEntries(
-                                                entry("VALORESPECIAL_ID", "id"),
-                                                entry("VALORESPECIAL_NOMBRE", "name"),
-                                                entry("VALORESPECIAL_VALOR", "rateValue"),
-                                                entry("VALORESPECIAL_IVAINC", "includesVat"),
-                                                entry("VALORESPECIAL_DOMINGO", "sundayEnabled"),
-                                                entry("VALORESPECIAL_LUNES", "mondayEnabled"),
-                                                entry("VALORESPECIAL_MARTES", "tuesdayEnabled"),
-                                                entry("VALORESPECIAL_MIERCOLES", "wednesdayEnabled"),
-                                                entry("VALORESPECIAL_JUEVES", "thursdayEnabled"),
-                                                entry("VALORESPECIAL_VIERNES", "fridayEnabled"),
-                                                entry("VALORESPECIAL_SABADO", "saturdayEnabled"),
-                                                entry("VALORESPECIAL_FESTIVO", "holidayEnabled"),
-                                                entry("VALORESPECIAL_TIPOTELE_ID", "telephonyTypeId"),
-                                                entry("VALORESPECIAL_OPERADOR_ID", "operatorId"),
-                                                entry("VALORESPECIAL_BANDA_ID", "bandId"),
-                                                entry("VALORESPECIAL_DESDE", "validFrom"),
-                                                entry("VALORESPECIAL_HASTA", "validTo"),
-                                                entry("VALORESPECIAL_INDICAORIGEN_ID", "originIndicatorId"),
-                                                entry("VALORESPECIAL_HORAS", "hoursSpecification"),
-                                                entry("VALORESPECIAL_TIPOVALOR", "valueType"),
-                                                entry("VALORESPECIAL_ACTIVO", "active"),
-                                                entry("VALORESPECIAL_FCREACION", "createdDate"),
-                                                entry("VALORESPECIAL_FMODIFICADO", "lastModifiedDate")))
-                                .specificValueReplacements(Map.of("telephonyTypeId", telephonyTypeReplacements))
-                                .build());
-
-                configs.add(TableMigrationConfig.builder()
-                                .sourceTableName("celulink")
-                                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.Trunk")
-                                .sourceIdColumnName("CELULINK_ID")
-                                .targetIdFieldName("id")
-                                .columnMapping(Map.ofEntries(
-                                                entry("CELULINK_ID", "id"),
-                                                entry("CELULINK_COMUBICACION_ID", "commLocationId"),
-                                                entry("CELULINK_DESC", "description"),
-                                                entry("CELULINK_TRONCAL", "name"),
-                                                entry("CELULINK_OPERADOR_ID", "operatorId"),
-                                                entry("CELULINK_NOPREFIJOPBX", "noPbxPrefix"),
-                                                entry("CELULINK_CANALES", "channels"),
-                                                entry("CELULINK_ACTIVO", "active"),
-                                                entry("CELULINK_FCREACION", "createdDate"),
-                                                entry("CELULINK_FMODIFICADO", "lastModifiedDate")))
-                                .build());
-
-                // Level 5: Depend on Level 4 or lower
-                configs.add(TableMigrationConfig.builder()
-                                .sourceTableName("FUNCIONARIO")
-                                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.Employee")
-                                .sourceIdColumnName("FUNCIONARIO_ID")
-                                .targetIdFieldName("id")
-                                .columnMapping(Map.ofEntries(
-                                                entry("FUNCIONARIO_ID", "id"),
-                                                entry("FUNCIONARIO_NOMBRE", "name"),
-                                                entry("FUNCIONARIO_SUBDIRECCION_ID", "subdivisionId"),
-                                                entry("FUNCIONARIO_CENTROCOSTOS_ID", "costCenterId"),
-                                                entry("FUNCIONARIO_CLAVE", "authCode"),
-                                                entry("FUNCIONARIO_EXTENSION", "extension"),
-                                                entry("FUNCIONARIO_COMUBICACION_ID", "communicationLocationId"),
-                                                entry("FUNCIONARIO_FUNCARGO_ID", "jobPositionId"),
-                                                entry("FUNCIONARIO_CORREO", "email"),
-                                                entry("FUNCIONARIO_TELEFONO", "phone"),
-                                                entry("FUNCIONARIO_DIRECCION", "address"),
-                                                entry("FUNCIONARIO_NUMEROID", "idNumber"),
-                                                entry("FUNCIONARIO_ACTIVO", "active"),
-                                                entry("FUNCIONARIO_FCREACION", "createdDate"),
-                                                entry("FUNCIONARIO_FMODIFICADO", "lastModifiedDate"),
-                                                entry("FUNCIONARIO_HISTORICTL_ID", "historyControlId"),
-                                                entry("FUNCIONARIO_HISTODESDE", "historySince"),
-                                                entry("FUNCIONARIO_HISTOCAMBIO", "historyChange")))
-                                .build());
-
-                configs.add(TableMigrationConfig.builder()
-                                .sourceTableName("rangoext")
-                                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.ExtensionRange")
-                                .sourceIdColumnName("RANGOEXT_ID")
-                                .targetIdFieldName("id")
-                                .columnMapping(Map.ofEntries(
-                                                entry("RANGOEXT_ID", "id"),
-                                                entry("RANGOEXT_COMUBICACION_ID", "commLocationId"),
-                                                entry("RANGOEXT_SUBDIRECCION_ID", "subdivisionId"),
-                                                entry("RANGOEXT_PREFIJO", "prefix"),
-                                                entry("RANGOEXT_DESDE", "rangeStart"),
-                                                entry("RANGOEXT_HASTA", "rangeEnd"),
-                                                entry("RANGOEXT_CENTROCOSTOS_ID", "costCenterId"),
-                                                entry("RANGOEXT_FCREACION", "createdDate"),
-                                                entry("RANGOEXT_FMODIFICADO", "lastModifiedDate"),
-                                                entry("RANGOEXT_HISTORICTL_ID", "historyControlId"),
-                                                entry("RANGOEXT_HISTODESDE", "historySince"),
-                                                entry("RANGOEXT_HISTOCAMBIO", "historyChange")))
-                                .build());
-
-                configs.add(TableMigrationConfig.builder()
-                                .sourceTableName("pbxespecial")
-                                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.PbxSpecialRule")
-                                .sourceIdColumnName("PBXESPECIAL_ID")
-                                .targetIdFieldName("id")
-                                .columnMapping(Map.ofEntries(
-                                                entry("PBXESPECIAL_ID", "id"),
-                                                entry("PBXESPECIAL_NOMBRE", "name"),
-                                                entry("PBXESPECIAL_BUSCAR", "searchPattern"),
-                                                entry("PBXESPECIAL_IGNORAR", "ignorePattern"),
-                                                entry("PBXESPECIAL_REMPLAZO", "replacement"),
-                                                entry("PBXESPECIAL_COMUBICACION_ID", "commLocationId"),
-                                                entry("PBXESPECIAL_MINLEN", "minLength"),
-                                                entry("PBXESPECIAL_IO", "direction"),
-                                                entry("PBXESPECIAL_ACTIVO", "active"),
-                                                entry("PBXESPECIAL_FCREACION", "createdDate"),
-                                                entry("PBXESPECIAL_FMODIFICADO", "lastModifiedDate")))
-                                .build());
-
-                configs.add(TableMigrationConfig.builder()
-                                .sourceTableName("tarifatroncal")
-                                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.TrunkRate")
-                                .sourceIdColumnName("TARIFATRONCAL_ID")
-                                .targetIdFieldName("id")
-                                .columnMapping(Map.ofEntries(
-                                                entry("TARIFATRONCAL_ID", "id"),
-                                                entry("TARIFATRONCAL_TRONCAL_ID", "trunkId"),
-                                                entry("TARIFATRONCAL_VALOR", "rateValue"),
-                                                entry("TARIFATRONCAL_IVAINC", "includesVat"),
-                                                entry("TARIFATRONCAL_OPERADOR_ID", "operatorId"),
-                                                entry("TARIFATRONCAL_TIPOTELE_ID", "telephonyTypeId"),
-                                                entry("TARIFATRONCAL_NOPREFIJOPBX", "noPbxPrefix"),
-                                                entry("TARIFATRONCAL_NOPREFIJO", "noPrefix"),
-                                                entry("TARIFATRONCAL_SEGUNDOS", "seconds"),
-                                                entry("TARIFATRONCAL_ACTIVO", "active"), // Assuming TARIFATRONCAL has
-                                                                                         // _ACTIVO
-                                                entry("TARIFATRONCAL_FCREACION", "createdDate"),
-                                                entry("TARIFATRONCAL_FMODIFICADO", "lastModifiedDate")))
-                                .specificValueReplacements(Map.of("telephonyTypeId", telephonyTypeReplacements))
-                                .build());
-
-                // ADDED: OfficeDetails (DATOSOFICINA) - Depends on Subdivision (L4) and
-                // Indicator (L2)
-                configs.add(TableMigrationConfig.builder()
-                                .sourceTableName("DATOSOFICINA")
-                                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.OfficeDetails")
-                                .sourceIdColumnName("DATOSOFICINA_ID")
-                                .targetIdFieldName("id")
-                                .columnMapping(Map.ofEntries(
-                                                entry("DATOSOFICINA_ID", "id"),
-                                                entry("DATOSOFICINA_SUBDIRECCION_ID", "subdivisionId"),
-                                                entry("DATOSOFICINA_DIRECCION", "address"),
-                                                entry("DATOSOFICINA_TELEFONO", "phone"),
-                                                entry("DATOSOFICINA_INDICATIVO_ID", "indicatorId"),
-                                                entry("DATOSOFICINA_ACTIVO", "active"),
-                                                entry("DATOSOFICINA_FCREACION", "createdDate"),
-                                                entry("DATOSOFICINA_FMODIFICADO", "lastModifiedDate")))
-                                .build());
-
-                // Level 6: Depend on Level 5 or lower
-                configs.add(TableMigrationConfig.builder()
-                                .sourceTableName("DIRECTORIO")
-                                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.Contact")
-                                .sourceIdColumnName("DIRECTORIO_ID")
-                                .targetIdFieldName("id")
-                                .columnMapping(Map.ofEntries(
-                                                entry("DIRECTORIO_ID", "id"),
-                                                entry("DIRECTORIO_TIPO", "contactType"),
-                                                entry("DIRECTORIO_FUNCIONARIO_ID", "employeeId"),
-                                                entry("DIRECTORIO_EMPRESA_ID", "companyId"),
-                                                entry("DIRECTORIO_TELEFONO", "phoneNumber"),
-                                                entry("DIRECTORIO_NOMBRE", "name"),
-                                                entry("DIRECTORIO_DESCRIPCION", "description"),
-                                                entry("DIRECTORIO_INDICATIVO_ID", "indicatorId"),
-                                                entry("DIRECTORIO_ACTIVO", "active"),
-                                                entry("DIRECTORIO_FCREACION", "createdDate"),
-                                                entry("DIRECTORIO_FMODIFICADO", "lastModifiedDate")))
-                                .build());
-
-                configs.add(TableMigrationConfig.builder()
-                                .sourceTableName("reglatroncal")
-                                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.TrunkRule")
-                                .sourceIdColumnName("REGLATRONCAL_ID")
-                                .targetIdFieldName("id")
-                                .columnMapping(Map.ofEntries(
-                                                entry("REGLATRONCAL_ID", "id"),
-                                                entry("REGLATRONCAL_VALOR", "rateValue"),
-                                                entry("REGLATRONCAL_IVAINC", "includesVat"),
-                                                entry("REGLATRONCAL_TIPOTELE_ID", "telephonyTypeId"),
-                                                entry("REGLATRONCAL_INDICATIVO_ID", "indicatorIds"),
-                                                entry("REGLATRONCAL_TRONCAL_ID", "trunkId"),
-                                                entry("REGLATRONCAL_OPERADOR_NUEVO", "newOperatorId"),
-                                                entry("REGLATRONCAL_TIPOTELE_NUEVO", "newTelephonyTypeId"),
-                                                entry("REGLATRONCAL_SEGUNDOS", "seconds"),
-                                                entry("REGLATRONCAL_INDICAORIGEN_ID", "originIndicatorId"),
-                                                entry("REGLATRONCAL_ACTIVO", "active"),
-                                                entry("REGLATRONCAL_FCREACION", "createdDate"),
-                                                entry("REGLATRONCAL_FMODIFICADO", "lastModifiedDate")))
-                                .build());
-
-                // ADDED: SubdivisionManager (JEFESUBDIR) - Depends on Subdivision (L4) and
-                // Employee (L5)
-                configs.add(TableMigrationConfig.builder()
-                                .sourceTableName("JEFESUBDIR")
-                                .targetEntityClassName(
-                                                "com.infomedia.abacox.telephonypricing.db.entity.SubdivisionManager")
-                                .sourceIdColumnName("JEFESUBDIR_ID")
-                                .targetIdFieldName("id")
-                                .columnMapping(Map.ofEntries(
-                                                entry("JEFESUBDIR_ID", "id"),
-                                                entry("JEFESUBDIR_SUBDIRECCION_ID", "subdivisionId"),
-                                                entry("JEFESUBDIR_JEFE", "managerId"),
-                                                entry("JEFESUBDIR_ACTIVO", "active"),
-                                                entry("JEFESUBDIR_FCREACION", "createdDate"),
-                                                entry("JEFESUBDIR_FMODIFICADO", "lastModifiedDate")))
-                                .build());
-
-                // Level 7: fileinfo (if needed, often populated by application logic, not
-                // direct migration)
-                // Assuming fileinfo is populated by the CDR processing logic itself, not a
-                // direct table migration from source.
-                // If it IS a direct migration:
-                /*
-                 * configs.add(TableMigrationConfig.builder()
-                 * .sourceTableName("fileinfo") // Assuming source table name
-                 * .targetEntityClassName(
-                 * "com.infomedia.abacox.telephonypricing.db.entity.FileInfo")
-                 * .sourceIdColumnName("FILEINFO_ID")
-                 * .targetIdFieldName("id")
-                 * .columnMapping(Map.ofEntries(
-                 * entry("FILEINFO_ID", "id"),
-                 * entry("FILEINFO_ARCHIVO", "filename"),
-                 * entry("FILEINFO_PERTENECE", "parentId"),
-                 * entry("FILEINFO_TAMANO", "size"),
-                 * entry("FILEINFO_FECHA", "date"),
-                 * entry("FILEINFO_CTL", "checksum"),
-                 * entry("FILEINFO_REF_ID", "referenceId"),
-                 * entry("FILEINFO_DIRECTORIO", "directory"),
-                 * entry("FILEINFO_TIPO", "type")
-                 * // FILEINFO typically doesn't have _FCREACION/_FMODIFICADO in the old system
-                 * ))
-                 * .build());
-                 */
-
-                // Level 8: ACUMTOTAL (CallRecord) - This is the final target, usually populated
-                // by CDR processing,
-                // but if you are migrating existing ACUMTOTAL data:
-                configs.add(TableMigrationConfig.builder()
-                                .sourceTableName("ACUMTOTAL")
-                                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.CallRecord")
-                                .sourceIdColumnName("ACUMTOTAL_ID")
-                                .targetIdFieldName("id")
-                                .columnMapping(Map.ofEntries(
-                                                entry("ACUMTOTAL_ID", "id"),
-                                                entry("ACUMTOTAL_DIAL", "dial"),
-                                                entry("ACUMTOTAL_COMUBICACION_ID", "commLocationId"),
-                                                entry("ACUMTOTAL_FECHA_SERVICIO", "serviceDate"),
-                                                entry("ACUMTOTAL_OPERADOR_ID", "operatorId"),
-                                                entry("ACUMTOTAL_FUN_EXTENSION", "employeeExtension"),
-                                                entry("ACUMTOTAL_FUN_CLAVE", "employeeAuthCode"),
-                                                entry("ACUMTOTAL_INDICATIVO_ID", "indicatorId"),
-                                                entry("ACUMTOTAL_TELEFONO_DESTINO", "destinationPhone"),
-                                                entry("ACUMTOTAL_TIEMPO", "duration"),
-                                                entry("ACUMTOTAL_REPIQUE", "ringCount"),
-                                                entry("ACUMTOTAL_TIPOTELE_ID", "telephonyTypeId"),
-                                                entry("ACUMTOTAL_VALOR_FACTURADO", "billedAmount"),
-                                                entry("ACUMTOTAL_PRECIOMINUTO", "pricePerMinute"),
-                                                entry("ACUMTOTAL_PRECIOINICIAL", "initialPrice"),
-                                                entry("ACUMTOTAL_IO", "isIncoming"),
-                                                entry("ACUMTOTAL_TRONCAL", "trunk"),
-                                                entry("ACUMTOTAL_TRONCALINI", "initialTrunk"),
-                                                entry("ACUMTOTAL_FUNCIONARIO_ID", "employeeId"),
-                                                entry("ACUMTOTAL_FUN_TRANSFER", "employeeTransfer"),
-                                                entry("ACUMTOTAL_CAUSA_TRANSFER", "transferCause"),
-                                                entry("ACUMTOTAL_CAUSA_ASIGNA", "assignmentCause"),
-                                                entry("ACUMTOTAL_FUNDESTINO_ID", "destinationEmployeeId"),
-                                                entry("ACUMTOTAL_FILEINFO_ID", "fileInfoId"),
-                                                entry("ACUMTOTAL_FCREACION", "createdDate"),
-                                                entry("ACUMTOTAL_FMODIFICADO", "lastModifiedDate")))
-                                .maxEntriesToMigrate(runRequest.getMaxCallRecordEntries())
-                                .orderByClause("ACUMTOTAL_FECHA_SERVICIO DESC")
-                                .specificValueReplacements(Map.of("telephonyTypeId", telephonyTypeReplacements))
-                                .rowFilter(row -> true) // Allow all rows past the filter
-                                .rowModifier(row -> mutateAcumtotalRow(row, validEmployeeIdsCache))
-                                .build());
-
-                Map<Object, Object> originalCallRecordIdReplacements = new HashMap<>();
-                originalCallRecordIdReplacements.put(0, null);
-
-                configs.add(TableMigrationConfig.builder()
-                                .sourceTableName("acumfallido")
-                                .targetEntityClassName(
-                                                "com.infomedia.abacox.telephonypricing.db.entity.FailedCallRecord")
-                                .sourceIdColumnName("ACUMFALLIDO_ID")
-                                .targetIdFieldName("id")
-                                .columnMapping(Map.ofEntries(
-                                                entry("ACUMFALLIDO_ID", "id"),
-                                                entry("ACUMFALLIDO_EXTENSION", "employeeExtension"),
-                                                entry("ACUMFALLIDO_DATOS", "errorType"),
-                                                entry("ACUMFALLIDO_MENSAJE", "errorMessage"),
-                                                entry("ACUMFALLIDO_ACUMTOTAL_ID", "originalCallRecordId"),
-                                                entry("ACUMFALLIDO_COMUBICACION_ID", "commLocationId"),
-                                                entry("ACUMFALLIDO_FILEINFO_ID", "fileInfoId"),
-                                                entry("ACUMFALLIDO_CDR", "ctlHash"),
-                                                entry("ACUMFALLIDO_FCREACION", "createdDate"),
-                                                entry("ACUMFALLIDO_FMODIFICADO", "lastModifiedDate")))
-                                .customValueTransformers(Map.of(
-                                                "errorType",
-                                                val -> QuarantineErrorType.fromPhpType(String.valueOf(val)).name(),
-                                                "ctlHash",
-                                                val -> val != null
-                                                                ? XXHash128Util.hash(String.valueOf(val)
-                                                                                .getBytes(StandardCharsets.UTF_8))
-                                                                : null))
-                                .maxEntriesToMigrate(runRequest.getMaxFailedCallRecordEntries())
-                                .specificValueReplacements(
-                                                Map.of("originalCallRecordId", originalCallRecordIdReplacements))
-                                .orderByClause("ACUMFALLIDO_ID DESC")
-                                .build());
-
-                log.info("Configuring cargactl migration with whereClause: {}",
-                                sourceClientId != null ? "CARGACTL_CLIENTE_ID = " + sourceClientId
-                                                : "NONE (sourceClientId is null)");
-
-                configs.add(TableMigrationConfig.builder()
-                                .sourceTableName(runRequest.getControlDatabase() + ".dbo.cargactl")
-                                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.CdrLoadControl")
-                                .sourceIdColumnName("CARGACTL_ID")
-                                .targetIdFieldName("id")
-                                .whereClause(sourceClientId != null ? "CARGACTL_CLIENTE_ID = " + sourceClientId : null)
-                                .columnMapping(Map.ofEntries(
-                                                entry("CARGACTL_ID", "id"),
-                                                entry("CARGACTL_DIRECTORIO", "name"),
-                                                entry("CARGACTL_TIPOPLANTA_ID", "plantTypeId"),
-                                                entry("CARGACTL_ACTIVO", "active"),
-                                                entry("CARGACTL_FCREACION", "createdDate"),
-                                                entry("CARGACTL_FMODIFICADO", "lastModifiedDate")))
-                                .build());
-
-                return configs;
+                        ps.setInt(1, sourceClientId);
+                        try (ResultSet rs = ps.executeQuery()) {
+                                while (rs.next()) {
+                                        cache.put(rs.getString("CARGACTL_DIRECTORIO"),
+                                                        rs.getInt("CARGACTL_TIPOPLANTA_ID"));
+                                }
+                        }
+                } catch (Exception e) {
+                        log.error("Failed to load plant cache from control database: {}", e.getMessage());
+                }
+                log.info("Loaded {} plant types into cache.", cache.size());
+                return cache;
         }
 
         private Integer fetchClientId(MigrationStart runRequest) {
@@ -1049,86 +475,5 @@ public class MigrationService {
 
         public enum MigrationState {
                 IDLE, STARTING, RUNNING, COMPLETED, FAILED
-        }
-
-        private void mutateAcumtotalRow(Map<String, Object> row,
-                        AtomicReference<LongOpenHashSet> validEmployeeIdsCache) {
-                // 1. Check Communication Location ID (If we still want to keep valid logic, or
-                // set to null)
-                // For ACUMTOTAL, comm_location_id might be nullable in DB, or not.
-                // Assuming we just leave it alone or null it if invalid.
-                Object commLocIdRaw = row.get("ACUMTOTAL_COMUBICACION_ID");
-                if (commLocIdRaw != null) {
-                        boolean validCommLoc = false;
-                        if (commLocIdRaw instanceof Number) {
-                                validCommLoc = ((Number) commLocIdRaw).longValue() >= 1;
-                        } else if (commLocIdRaw instanceof String) {
-                                String val = ((String) commLocIdRaw).trim();
-                                if (!val.isEmpty()) {
-                                        try {
-                                                validCommLoc = Long.parseLong(val) >= 1;
-                                        } catch (NumberFormatException e) {
-                                                // ignore
-                                        }
-                                }
-                        }
-                        if (!validCommLoc) {
-                                // If not valid, clear it out instead of dropping the row
-                                row.put("ACUMTOTAL_COMUBICACION_ID", null);
-                        }
-                }
-
-                // 2. Check and Mutate Employee IDs (Source and Destination)
-                mutateEmployeeIdInRow(row, "ACUMTOTAL_FUNCIONARIO_ID", validEmployeeIdsCache);
-                mutateEmployeeIdInRow(row, "ACUMTOTAL_FUNDESTINO_ID", validEmployeeIdsCache);
-        }
-
-        private void mutateEmployeeIdInRow(Map<String, Object> row, String columnName,
-                        AtomicReference<LongOpenHashSet> validEmployeeIdsCache) {
-                Object empIdRaw = row.get(columnName);
-                if (empIdRaw == null) {
-                        return; // Already null, nothing to do
-                }
-
-                long empId = -1;
-                if (empIdRaw instanceof Number) {
-                        empId = ((Number) empIdRaw).longValue();
-                } else if (empIdRaw instanceof String) {
-                        String val = ((String) empIdRaw).trim();
-                        if (!val.isEmpty()) {
-                                try {
-                                        empId = Long.parseLong(val);
-                                } catch (NumberFormatException e) {
-                                        // ignore
-                                }
-                        }
-                }
-
-                if (empId != -1) {
-                        if (validEmployeeIdsCache.get() == null) {
-                                synchronized (validEmployeeIdsCache) {
-                                        if (validEmployeeIdsCache.get() == null) {
-                                                log.info("Lazy loading employee IDs for ACUMTOTAL row modifier...");
-                                                List<Long> ids = entityManager
-                                                                .createQuery("SELECT e.id FROM Employee e",
-                                                                                Long.class)
-                                                                .getResultList();
-                                                validEmployeeIdsCache.set(
-                                                                new LongOpenHashSet(
-                                                                                ids));
-                                                log.info("Loaded {} valid employee IDs into cache.",
-                                                                ids.size());
-                                        }
-                                }
-                        }
-                        if (!validEmployeeIdsCache.get().contains(empId)) {
-                                // ID parses to a number but isn't in DB: Set it to null!
-                                log.trace("Mutating row {}: Invalid employee ID {} set to null.", columnName, empId);
-                                row.put(columnName, null);
-                        }
-                } else {
-                        // It was non-null but parsed to -1 or invalid text. Set to null.
-                        row.put(columnName, null);
-                }
         }
 }
