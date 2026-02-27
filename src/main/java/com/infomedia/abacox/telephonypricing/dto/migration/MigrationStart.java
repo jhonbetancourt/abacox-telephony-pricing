@@ -25,6 +25,10 @@ public class MigrationStart {
     @Schema(description = "Primary database name", example = "abacox_infomedia")
     private String database;
 
+    @Builder.Default
+    @Schema(description = "Database name for control tables", example = "abacox_control3_beta")
+    private String controlDatabase = "abacox_control3_beta";
+
     @NotBlank
     @Schema(description = "Database username", example = "sa")
     private String username;
@@ -48,10 +52,6 @@ public class MigrationStart {
     @NotNull
     @Schema(description = "Max failed call records to migrate (0 for all)", example = "1000")
     private Integer maxFailedCallRecordEntries;
-
-    @Builder.Default
-    @Schema(description = "Database name for control tables", example = "abacox_control3_beta")
-    private String controlDatabase = "abacox_control3_beta";
 
     @Builder.Default
     @Schema(description = "Cleanup target tables before migration", example = "true")
