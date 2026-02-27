@@ -20,6 +20,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import java.nio.charset.StandardCharsets;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -355,13 +359,20 @@ public class MigrationService {
                 List<TableMigrationConfig> configs = new ArrayList<>();
                 AtomicReference<LongOpenHashSet> validEmployeeIdsCache = new AtomicReference<>(null);
 
+                Integer sourceClientId = fetchClientId(runRequest);
+                if (sourceClientId != null) {
+                        log.info("Found CLIENTE_ID {} for database '{}' in control database '{}'",
+                                        sourceClientId, runRequest.getDatabase(), runRequest.getControlDatabase());
+                } else {
+                        log.warn("Could not find CLIENTE_ID for database '{}' in control database '{}'. cargactl migration might migrate more data than expected or fail if filtering is required.",
+                                        runRequest.getDatabase(), runRequest.getControlDatabase());
+                }
+
                 // Level 0: No FK dependencies among these
-                configs.add(TableMigrationConfig.builder()
-                                .sourceTableName("MPORIGEN")
+                configs.add(TableMigrationConfig.builder().sourceTableName("MPORIGEN")
                                 .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.OriginCountry")
-                                .sourceIdColumnName("MPORIGEN_ID")
-                                .targetIdFieldName("id")
-                                .columnMapping(Map.ofEntries(
+                                .sourceIdColumnName("MPORIGEN_ID").targetIdFieldName("id").columnMapping(Map.ofEntries(
+
                                                 entry("MPORIGEN_ID", "id"),
                                                 entry("MPORIGEN_SIMBOLO", "currencySymbol"),
                                                 entry("MPORIGEN_PAIS", "name"),
@@ -990,7 +1001,46 @@ public class MigrationService {
                                 .orderByClause("ACUMFALLIDO_ID DESC")
                                 .build());
 
+                configs.add(TableMigrationConfig.builder()
+                                .sourceTableName(runRequest.getControlDatabase() + ".dbo.cargactl")
+                                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.CdrLoadControl")
+                                .sourceIdColumnName("CARGACTL_ID")
+                                .targetIdFieldName("id")
+                                .whereClause(sourceClientId != null ? "CARGACTL_CLIENTE_ID = " + sourceClientId : null)
+                                .columnMapping(Map.ofEntries(
+                                                entry("CARGACTL_ID", "id"),
+                                                entry("CARGACTL_DIRECTORIO", "name"),
+                                                entry("CARGACTL_TIPOPLANTA_ID", "plantTypeId"),
+                                                entry("CARGACTL_ACTIVO", "active"),
+                                                entry("CARGACTL_FCREACION", "createdDate"),
+                                                entry("CARGACTL_FMODIFICADO", "lastModifiedDate")))
+                                .build());
+
                 return configs;
+        }
+
+        private Integer fetchClientId(MigrationStart runRequest) {
+                String url = String.format(
+                                "jdbc:sqlserver://%s:%s;databaseName=%s;encrypt=%s;trustServerCertificate=%s;",
+                                runRequest.getHost(), runRequest.getPort(), runRequest.getDatabase(),
+                                runRequest.getEncryption(), runRequest.getTrustServerCertificate());
+
+                String query = String.format("SELECT CLIENTE_ID FROM %s.dbo.cliente WHERE CLIENTE_BD = ?",
+                                runRequest.getControlDatabase());
+
+                try (Connection conn = DriverManager.getConnection(url, runRequest.getUsername(),
+                                runRequest.getPassword());
+                                PreparedStatement ps = conn.prepareStatement(query)) {
+                        ps.setString(1, runRequest.getDatabase());
+                        try (ResultSet rs = ps.executeQuery()) {
+                                if (rs.next()) {
+                                        return rs.getInt("CLIENTE_ID");
+                                }
+                        }
+                } catch (Exception e) {
+                        log.error("Failed to fetch CLIENTE_ID from control database: {}", e.getMessage());
+                }
+                return null;
         }
 
         public enum MigrationState {

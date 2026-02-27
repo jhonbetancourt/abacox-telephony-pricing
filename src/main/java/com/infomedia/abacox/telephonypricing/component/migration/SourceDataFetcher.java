@@ -81,8 +81,8 @@ public class SourceDataFetcher {
      * This mimics Python's fetchmany() and prevents massive DB performance
      * degradation on large tables.
      */
-    public void fetchData(SourceDbConfig config, String tableName, Set<String> requestedColumns, String sourceIdColumn,
-            String orderByClause, Integer maxEntriesToMigrate,
+    public void fetchData(SourceDbConfig config, String tableName, Set<String> requestedColumns, String whereClause,
+            String sourceIdColumn, String orderByClause, Integer maxEntriesToMigrate,
             int batchSize, Consumer<List<Map<String, Object>>> batchProcessor) throws SQLException {
 
         long totalRowsFetched = 0;
@@ -150,7 +150,8 @@ public class SourceDataFetcher {
 
             // 6. Build the Streaming SQL Query
             String columnsSql = buildColumnsSql(columnsToSelect, dialect);
-            String sql = buildStreamingQuery(dialect, tableName, columnsSql, finalOrderByClause, maxEntriesToMigrate);
+            String sql = buildStreamingQuery(dialect, tableName, columnsSql, whereClause, finalOrderByClause,
+                    maxEntriesToMigrate);
 
             log.info("Executing streaming query: {}", sql);
 
@@ -237,8 +238,8 @@ public class SourceDataFetcher {
         return SqlDialect.NONE;
     }
 
-    private String buildStreamingQuery(SqlDialect dialect, String tableName, String columnsSql, String orderByClause,
-            Integer maxEntries) {
+    private String buildStreamingQuery(SqlDialect dialect, String tableName, String columnsSql, String whereClause,
+            String orderByClause, Integer maxEntries) {
         String safeTableName = quoteIdentifier(tableName, dialect);
         StringBuilder sql = new StringBuilder("SELECT ");
 
@@ -252,6 +253,10 @@ public class SourceDataFetcher {
         // Mimicking Python script optimization for SQL Server
         if (dialect == SqlDialect.SQL_SERVER) {
             sql.append(" WITH (NOLOCK)");
+        }
+
+        if (whereClause != null && !whereClause.trim().isEmpty()) {
+            sql.append(" WHERE ").append(whereClause);
         }
 
         if (orderByClause != null && !orderByClause.trim().isEmpty()) {
@@ -280,8 +285,8 @@ public class SourceDataFetcher {
         if (identifier == null || identifier.isEmpty())
             return identifier;
 
-        String quoteCharStart = "\"";
-        String quoteCharEnd = "\"";
+        final String quoteCharStart;
+        final String quoteCharEnd;
 
         if (dialect == SqlDialect.SQL_SERVER) {
             quoteCharStart = "[";
@@ -289,6 +294,9 @@ public class SourceDataFetcher {
         } else if (dialect == SqlDialect.MYSQL) {
             quoteCharStart = "`";
             quoteCharEnd = "`";
+        } else {
+            quoteCharStart = "\"";
+            quoteCharEnd = "\"";
         }
 
         if (identifier.startsWith(quoteCharStart) && identifier.endsWith(quoteCharEnd)) {
@@ -296,10 +304,11 @@ public class SourceDataFetcher {
         }
 
         if (identifier.contains(".")) {
-            String[] parts = identifier.split("\\.", 2);
-            String part1 = parts[0].startsWith(quoteCharStart) ? parts[0] : quoteCharStart + parts[0] + quoteCharEnd;
-            String part2 = parts[1].startsWith(quoteCharStart) ? parts[1] : quoteCharStart + parts[1] + quoteCharEnd;
-            return part1 + "." + part2;
+            return Arrays.stream(identifier.split("\\."))
+                    .map(part -> part.startsWith(quoteCharStart) && part.endsWith(quoteCharEnd)
+                            ? part
+                            : quoteCharStart + part + quoteCharEnd)
+                    .collect(Collectors.joining("."));
         } else {
             return quoteCharStart + identifier + quoteCharEnd;
         }
@@ -378,9 +387,15 @@ public class SourceDataFetcher {
         }
 
         if (tableName.contains(".")) {
-            String[] parts = tableName.split("\\.", 2);
-            schemaPattern = parts[0];
-            actualTableName = parts[1];
+            String[] parts = tableName.split("\\.");
+            if (parts.length == 3) {
+                catalog = parts[0];
+                schemaPattern = parts[1];
+                actualTableName = parts[2];
+            } else if (parts.length == 2) {
+                schemaPattern = parts[0];
+                actualTableName = parts[1];
+            }
         }
 
         try (ResultSet rs = metaData.getColumns(catalog, schemaPattern, actualTableName, null)) {

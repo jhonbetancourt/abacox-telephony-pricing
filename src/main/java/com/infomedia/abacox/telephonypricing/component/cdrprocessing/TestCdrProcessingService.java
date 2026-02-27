@@ -34,7 +34,6 @@ public class TestCdrProcessingService {
     private final CdrProcessorService cdrProcessorService;
     private final CommunicationLocationLookupService commLocationLookupService;
     private final EmployeeLookupService employeeLookupService;
-    private final CdrConfigService cdrConfigService;
     private final List<CdrProcessor> cdrProcessors;
 
     private static final AtomicLong DUMMY_FILE_ID_GENERATOR = new AtomicLong(-1);
@@ -46,10 +45,9 @@ public class TestCdrProcessingService {
         FileInfo dummyFileInfo = FileInfo.builder()
                 .id(DUMMY_FILE_ID_GENERATOR.getAndDecrement())
                 .filename(file.getOriginalFilename())
-                .parentId(plantTypeId.intValue())
+                .plantTypeId(plantTypeId.intValue())
                 .size((int) file.getSize())
                 .date(LocalDateTime.now())
-                .type("TEST_UPLOAD")
                 .processingStatus(FileInfo.ProcessingStatus.PENDING)
                 .build();
 

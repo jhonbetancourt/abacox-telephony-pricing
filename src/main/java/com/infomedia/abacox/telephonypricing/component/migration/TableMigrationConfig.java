@@ -85,6 +85,13 @@ public class TableMigrationConfig {
     private String orderByClause;
 
     /**
+     * An optional SQL WHERE clause to filter the source data (without the WHERE
+     * keyword).
+     * e.g., "CLIENT_ID = 5"
+     */
+    private String whereClause;
+
+    /**
      * The maximum number of entries to migrate for this table.
      * If null or less than or equal to zero, all entries will be migrated.
      */

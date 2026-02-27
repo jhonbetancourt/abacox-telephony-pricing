@@ -97,7 +97,6 @@ public class CdrController {
                     .createOrGetFileInfo(
                             file.getOriginalFilename(),
                             plantTypeId,
-                            "SYNC_STREAM",
                             tempFile);
 
             if (!fileInfoResult.isNew()) {
@@ -163,7 +162,6 @@ public class CdrController {
             fileInfoPersistenceService.createOrGetFileInfo(
                     filename,
                     plantTypeId,
-                    "ROUTED_STREAM",
                     tempFile);
 
             log.info("Successfully queued single file: {}", filename);
