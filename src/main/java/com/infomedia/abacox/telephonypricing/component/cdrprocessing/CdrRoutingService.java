@@ -82,8 +82,7 @@ public class CdrRoutingService {
                     tempData.setFileInfo(fileInfo);
                     failedCallRecordPersistenceService.quarantineRecord(tempData,
                             QuarantineErrorType.MISSING_HEADER,
-                            "CDR data encountered before header",
-                            "RouteStream_HeaderCheck", null);
+                            "CDR data encountered before header", null);
                     unroutableCdrCount++;
                     continue;
                 }
@@ -126,8 +125,7 @@ public class CdrRoutingService {
                     preliminaryCdrData.setCommLocationId(null);
                     failedCallRecordPersistenceService.quarantineRecord(preliminaryCdrData,
                             QuarantineErrorType.PENDING_ASSOCIATION,
-                            "Could not route CDR to a CommunicationLocation",
-                            "CdrRoutingService_Unroutable", null);
+                            "Could not route CDR to a CommunicationLocation", null);
                 }
 
                 if (batch.size() >= CdrConfigService.CDR_PROCESSING_BATCH_SIZE) {
@@ -267,7 +265,6 @@ public class CdrRoutingService {
                                 tempData,
                                 QuarantineErrorType.MISSING_HEADER,
                                 "CDR data encountered before header (sync processing)",
-                                "SyncProcessing_HeaderCheck",
                                 null);
                         quarantinedRecords++;
                         continue;
@@ -320,7 +317,6 @@ public class CdrRoutingService {
                                 preliminaryCdrData,
                                 QuarantineErrorType.PENDING_ASSOCIATION,
                                 "Could not route CDR to a CommunicationLocation",
-                                "CdrRoutingService_SyncUnroutable",
                                 null);
                     }
                 }

@@ -64,7 +64,6 @@ public class FailedCallRecordPersistenceService {
 
         record.setErrorType(result.getErrorType() != null ? result.getErrorType().name() : "UNKNOWN");
         record.setErrorMessage(result.getErrorMessage());
-        record.setProcessingStep(truncate(result.getErrorStep(), 100));
 
         return record;
     }
@@ -76,7 +75,6 @@ public class FailedCallRecordPersistenceService {
     public void updateEntityFromDto(FailedCallRecord record, ProcessedCdrResult result) {
         record.setErrorType(result.getErrorType() != null ? result.getErrorType().name() : "UNKNOWN");
         record.setErrorMessage(result.getErrorMessage());
-        record.setProcessingStep(truncate(result.getErrorStep(), 100));
 
         CdrData cdrData = result.getCdrData();
         record.setEmployeeExtension(truncate(cdrData.getCallingPartyNumber(), 50));
@@ -96,7 +94,7 @@ public class FailedCallRecordPersistenceService {
      * we can safely exit that transaction block and start a NEW one to handle the update.
      */
     public FailedCallRecord quarantineRecord(CdrData cdrData,
-                                             QuarantineErrorType errorType, String errorMessage, String processingStep,
+                                             QuarantineErrorType errorType, String errorMessage,
                                              Long originalCallRecordId) {
         if (cdrData == null) {
             return null;
@@ -114,14 +112,14 @@ public class FailedCallRecordPersistenceService {
                 FailedCallRecord recordToSave = findByCtlHash(ctlHash);
 
                 if (recordToSave != null) {
-                    updateQuarantineDetails(recordToSave, cdrData, errorType, errorMessage, processingStep, originalCallRecordId);
+                    updateQuarantineDetails(recordToSave, cdrData, errorType, errorMessage, originalCallRecordId);
                     return entityManager.merge(recordToSave);
                 } else {
                     recordToSave = new FailedCallRecord();
                     recordToSave.setCtlHash(ctlHash);
 
                     recordToSave.setCommLocationId(cdrData.getCommLocationId());
-                    updateQuarantineDetails(recordToSave, cdrData, errorType, errorMessage, processingStep, originalCallRecordId);
+                    updateQuarantineDetails(recordToSave, cdrData, errorType, errorMessage, originalCallRecordId);
 
                     entityManager.persist(recordToSave);
                     entityManager.flush();
@@ -139,7 +137,7 @@ public class FailedCallRecordPersistenceService {
                     // Fetch the winner of the race
                     FailedCallRecord record = findByCtlHash(ctlHash);
                     if (record != null) {
-                        updateQuarantineDetails(record, cdrData, errorType, errorMessage, processingStep, originalCallRecordId);
+                        updateQuarantineDetails(record, cdrData, errorType, errorMessage, originalCallRecordId);
                         return entityManager.merge(record);
                     }
                     return null; 
@@ -152,11 +150,10 @@ public class FailedCallRecordPersistenceService {
     }
 
     private void updateQuarantineDetails(FailedCallRecord record, CdrData cdrData,
-                                         QuarantineErrorType errorType, String errorMessage, String processingStep,
+                                         QuarantineErrorType errorType, String errorMessage,
                                          Long originalCallRecordId) {
         record.setErrorType(errorType.name());
         record.setErrorMessage(errorMessage);
-        record.setProcessingStep(truncate(processingStep, 100));
         record.setEmployeeExtension(truncate(cdrData.getCallingPartyNumber(), 50));
 
         if (originalCallRecordId != null) {

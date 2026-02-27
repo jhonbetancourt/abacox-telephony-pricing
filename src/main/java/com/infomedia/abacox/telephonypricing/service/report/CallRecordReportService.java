@@ -121,7 +121,6 @@ public class CallRecordReportService {
         dto.setErrorType(entity.getErrorType());
         dto.setErrorMessage(entity.getErrorMessage());
         dto.setOriginalCallRecordId(entity.getOriginalCallRecordId());
-        dto.setProcessingStep(entity.getProcessingStep());
         dto.setFileInfoId(entity.getFileInfoId());
         dto.setCommLocationId(entity.getCommLocation() != null ? entity.getCommLocation().getId() : null);
         dto.setCommLocation(entity.getCommLocation() != null

@@ -47,9 +47,6 @@ public class FailedCallRecord extends AuditedEntity {
     @Column(name = "original_call_record_id")
     private Long originalCallRecordId;
 
-    @Column(name = "processing_step", length = 100)
-    private String processingStep;
-
     @Column(name = "file_info_id")
     private Long fileInfoId;
 

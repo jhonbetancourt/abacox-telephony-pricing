@@ -20,9 +20,7 @@ public class FailedCallRecordDto extends AuditedDto {
     private String errorType;
     private String errorMessage;
     private Long originalCallRecordId;
-    private String processingStep;
     private Long fileInfoId;
     private Long commLocationId;
     private CommLocationDto commLocation;
-    private String cdrString;
 }

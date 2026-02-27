@@ -282,7 +282,6 @@ public class CdrProcessorService {
                     processedCdrData,
                     resolveErrorType(processedCdrData.getQuarantineStep()),
                     processedCdrData.getQuarantineReason(),
-                    "reprocessCallRecord_" + processedCdrData.getQuarantineStep(),
                     callRecordId);
             entityManager.remove(callRecord);
             return false;
@@ -333,7 +332,6 @@ public class CdrProcessorService {
 
             failedCallRecord.setErrorType(errorType.name());
             failedCallRecord.setErrorMessage(processedCdrData.getQuarantineReason());
-            failedCallRecord.setProcessingStep("reprocessFailedCallRecord_" + processedCdrData.getQuarantineStep());
             entityManager.merge(failedCallRecord);
             return false;
         } else {

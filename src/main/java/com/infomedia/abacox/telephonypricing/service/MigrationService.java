@@ -969,19 +969,14 @@ public class MigrationService {
                                 .columnMapping(Map.ofEntries(
                                                 entry("ACUMFALLIDO_ID", "id"),
                                                 entry("ACUMFALLIDO_EXTENSION", "employeeExtension"),
-                                                entry("ACUMFALLIDO_TIPO", "errorType"), // Note: smallint to String
-                                                                                        // conversion will be attempted
-                                                                                        // by the migrator
+                                                entry("ACUMFALLIDO_DATOS", "errorType"),
                                                 entry("ACUMFALLIDO_MENSAJE", "errorMessage"),
                                                 entry("ACUMFALLIDO_ACUMTOTAL_ID", "originalCallRecordId"),
                                                 entry("ACUMFALLIDO_COMUBICACION_ID", "commLocationId"),
-                                                // AuditedEntity fields
                                                 entry("ACUMFALLIDO_FCREACION", "createdDate"),
                                                 entry("ACUMFALLIDO_FMODIFICADO", "lastModifiedDate")))
-                                .maxEntriesToMigrate(runRequest.getMaxFailedCallRecordEntries()) // Limit for
-                                                                                                 // performance, similar
-                                                                                                 // to CallRecord
-                                .orderByClause("ACUMFALLIDO_ID DESC") // Get the most recent failures first
+                                .maxEntriesToMigrate(runRequest.getMaxFailedCallRecordEntries())
+                                .orderByClause("ACUMFALLIDO_ID DESC")
                                 .build());
 
                 return configs;
