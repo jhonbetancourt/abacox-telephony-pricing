@@ -4,7 +4,6 @@ import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.ColumnDefault;
-import java.sql.Blob;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -71,7 +70,7 @@ public class FileInfo {
      * Control or checksum information.
      * Original field: FILEINFO_CTL
      */
-    @Column(name = "checksum", nullable = false, unique = true)
+    @Column(name = "checksum", nullable = true, unique = true)
     private UUID checksum;
 
     /**

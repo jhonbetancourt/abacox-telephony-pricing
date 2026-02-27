@@ -1,6 +1,8 @@
 package com.infomedia.abacox.telephonypricing.service;
 
 import com.infomedia.abacox.telephonypricing.component.migration.DataMigrationExecutor;
+import com.infomedia.abacox.telephonypricing.component.cdrprocessing.QuarantineErrorType;
+import com.infomedia.abacox.telephonypricing.component.utils.XXHash128Util;
 import com.infomedia.abacox.telephonypricing.component.migration.MigrationParams;
 import com.infomedia.abacox.telephonypricing.component.migration.SourceDbConfig;
 import com.infomedia.abacox.telephonypricing.component.migration.TableMigrationConfig;
@@ -10,7 +12,6 @@ import com.infomedia.abacox.telephonypricing.component.configmanager.ConfigServi
 import com.infomedia.abacox.telephonypricing.dto.migration.MigrationStart;
 import com.infomedia.abacox.telephonypricing.dto.migration.MigrationStatus;
 import com.infomedia.abacox.telephonypricing.exception.MigrationAlreadyInProgressException;
-import com.infomedia.abacox.telephonypricing.db.repository.EmployeeRepository;
 import com.infomedia.abacox.telephonypricing.multitenancy.TenantContext;
 import lombok.RequiredArgsConstructor;
 import jakarta.persistence.EntityManager;
@@ -18,6 +19,7 @@ import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
+import java.nio.charset.StandardCharsets;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -973,8 +975,17 @@ public class MigrationService {
                                                 entry("ACUMFALLIDO_MENSAJE", "errorMessage"),
                                                 entry("ACUMFALLIDO_ACUMTOTAL_ID", "originalCallRecordId"),
                                                 entry("ACUMFALLIDO_COMUBICACION_ID", "commLocationId"),
+                                                entry("ACUMFALLIDO_CDR", "ctlHash"),
                                                 entry("ACUMFALLIDO_FCREACION", "createdDate"),
                                                 entry("ACUMFALLIDO_FMODIFICADO", "lastModifiedDate")))
+                                .customValueTransformers(Map.of(
+                                                "errorType",
+                                                val -> QuarantineErrorType.fromPhpType(String.valueOf(val)).name(),
+                                                "ctlHash",
+                                                val -> val != null
+                                                                ? XXHash128Util.hash(String.valueOf(val)
+                                                                                .getBytes(StandardCharsets.UTF_8))
+                                                                : null))
                                 .maxEntriesToMigrate(runRequest.getMaxFailedCallRecordEntries())
                                 .orderByClause("ACUMFALLIDO_ID DESC")
                                 .build());
