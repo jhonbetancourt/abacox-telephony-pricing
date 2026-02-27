@@ -11,6 +11,7 @@ public class InternalCallTypeInfo {
     private Long originIndicatorId;    // Indicator of the origin employee
     private String additionalInfo;
     private boolean ignoreCall = false;
+    private QuarantineErrorType errorType; // Holds the specific reason if ignored
     private boolean effectivelyIncoming = false; // If the call should be treated as incoming despite initial parsing
     private Employee originEmployee;
     private Employee destinationEmployee;

@@ -179,7 +179,8 @@ public class CdrProcessorService {
 
             cdrData.setMarkedForQuarantine(true);
             cdrData.setQuarantineReason(e.getMessage());
-            cdrData.setQuarantineStep("UNHANDLED_EXCEPTION");
+            // Updated to use explicit enum name
+            cdrData.setQuarantineStep(QuarantineErrorType.UNHANDLED_EXCEPTION.name());
 
             return buildResult(cdrData, null, ProcessingOutcome.QUARANTINED);
         }

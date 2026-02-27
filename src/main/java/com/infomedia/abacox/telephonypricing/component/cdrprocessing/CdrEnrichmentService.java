@@ -32,13 +32,14 @@ public class CdrEnrichmentService {
         cdrData.setCommLocationId(commLocation.getId());
 
         try {
-            // This call now handles the main flow: es_llamada_interna ->
-            // procesaEntrante/procesaSaliente
+            // This call now handles the main flow: es_llamada_interna -> procesaEntrante/procesaSaliente
             callTypeAndDirectionService.processCall(cdrData, processingContext);
 
+            // Added support for GLOBAL_EXTENSION_IGNORE
             if (cdrData.isMarkedForQuarantine() &&
                     (QuarantineErrorType.INTERNAL_SELF_CALL.name().equals(cdrData.getQuarantineStep()) ||
                             QuarantineErrorType.INTERNAL_POLICY_IGNORE.name().equals(cdrData.getQuarantineStep()) ||
+                            QuarantineErrorType.GLOBAL_EXTENSION_IGNORE.name().equals(cdrData.getQuarantineStep()) ||
                             (cdrData.getQuarantineStep() != null
                                     && cdrData.getQuarantineStep().contains("IgnorePolicy")))) {
                 log.debug(
@@ -47,12 +48,10 @@ public class CdrEnrichmentService {
                 return cdrData;
             }
 
-            // Employee assignment logic (PHP: ObtenerFuncionario_Arreglo and parts of
-            // acumtotal_Insertar)
+            // Employee assignment logic
             assignEmployeeToCdr(cdrData, processingContext);
 
-            // Final duration check (PHP: if ($tiempo <= 0 && $tipotele_id > 0 &&
-            // $tipotele_id != _TIPOTELE_ERRORES))
+            // Final duration check
             if (cdrData.getDurationSeconds() != null
                     && cdrData.getDurationSeconds() <= appConfigService.getMinCallDurationForTariffing()) {
                 if (cdrData.getTelephonyTypeId() != null &&
@@ -63,14 +62,13 @@ public class CdrEnrichmentService {
                     cdrData.setTelephonyTypeId(TelephonyTypeEnum.NO_CONSUMPTION.getValue());
                     cdrData.setTelephonyTypeName(telephonyTypeLookupService
                             .getTelephonyTypeName(TelephonyTypeEnum.NO_CONSUMPTION.getValue()));
-                    cdrData.setBilledAmount(BigDecimal.ZERO); // Ensure billed amount is zero
+                    cdrData.setBilledAmount(BigDecimal.ZERO);
                     cdrData.setPricePerMinute(BigDecimal.ZERO);
                     cdrData.setInitialPricePerMinute(BigDecimal.ZERO);
                 }
             }
 
-            // Transfer cleanup (PHP: if ($ext_transfer !== '' && ($ext_transfer ===
-            // $extension || ...) ))
+            // Transfer cleanup
             finalizeTransferInformation(cdrData);
 
         } catch (Exception e) {
