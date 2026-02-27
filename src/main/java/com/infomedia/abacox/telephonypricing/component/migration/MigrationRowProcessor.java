@@ -110,10 +110,12 @@ public class MigrationRowProcessor {
     private static class PreparedRow {
         final Object targetIdValue;
         final Object targetEntity;
+        final Map<String, Object> sourceRow;
 
-        PreparedRow(Object targetIdValue, Object targetEntity) {
+        PreparedRow(Object targetIdValue, Object targetEntity, Map<String, Object> sourceRow) {
             this.targetIdValue = targetIdValue;
             this.targetEntity = targetEntity;
+            this.sourceRow = sourceRow;
         }
     }
 
@@ -367,7 +369,7 @@ public class MigrationRowProcessor {
                 }
             }
 
-            preparedRows.add(new PreparedRow(targetIdValue, targetEntity));
+            preparedRows.add(new PreparedRow(targetIdValue, targetEntity, sourceRow));
             allTargetIds.add(targetIdValue);
         }
 
@@ -443,6 +445,15 @@ public class MigrationRowProcessor {
                 }
             }
         });
+
+        // 5. Trigger Success Callback
+        if (tableConfig.getOnBatchSuccess() != null && !preparedRows.isEmpty()) {
+            List<Map<String, Object>> successSourceRows = new ArrayList<>(preparedRows.size());
+            for (PreparedRow pr : preparedRows) {
+                successSourceRows.add(pr.sourceRow);
+            }
+            tableConfig.getOnBatchSuccess().accept(successSourceRows);
+        }
 
         log.trace("Batch processed {} rows ({} inserts, {} updates) for table {}",
                 preparedRows.size(), preparedRows.size(), 0, tableName);
@@ -558,6 +569,12 @@ public class MigrationRowProcessor {
                     (selfReferenceFkInfo != null) ? selfReferenceFkInfo.getDbColumnName() : null);
 
             log.trace("Successfully inserted row in table {} with ID: {}", tableName, targetIdValue);
+
+            // Trigger Success Callback
+            if (tableConfig.getOnBatchSuccess() != null) {
+                tableConfig.getOnBatchSuccess().accept(List.of(sourceRow));
+            }
+
             return true;
 
         } catch (Exception e) {

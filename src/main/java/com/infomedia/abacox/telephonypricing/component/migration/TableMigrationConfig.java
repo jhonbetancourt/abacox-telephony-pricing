@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 
 import java.util.Map;
+import java.util.List;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Consumer;
@@ -21,6 +22,12 @@ public class TableMigrationConfig {
     private String sourceIdColumnName;
     private String targetIdFieldName;
     private Map<String, String> columnMapping;
+
+    /**
+     * An optional callback executed after a batch of rows is successfully persisted
+     * in the target database.
+     */
+    private Consumer<List<Map<String, Object>>> onBatchSuccess;
 
     /**
      * Map of Target Field Name -> Transformation Function.
