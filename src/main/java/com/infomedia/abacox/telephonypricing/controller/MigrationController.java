@@ -33,20 +33,6 @@ public class MigrationController {
         return new MessageResponse("Migration process initiated successfully. Check status endpoint for progress.");
     }
 
-    @PostMapping(value = "/start-historical", produces = MediaType.APPLICATION_JSON_VALUE)
-    public MessageResponse startHistoricalMigration(@Valid @RequestBody MigrationStart runRequest) {
-        migrationService.startHistoricalAsync(runRequest);
-        return new MessageResponse(
-                "Historical migration process initiated successfully. Check status endpoint for progress.");
-    }
-
-    @PostMapping(value = "/start-extension-list", produces = MediaType.APPLICATION_JSON_VALUE)
-    public MessageResponse startExtensionListMigration(@Valid @RequestBody MigrationStart runRequest) {
-        migrationService.startExtensionListAsync(runRequest);
-        return new MessageResponse(
-                "ExtensionList (listadoext) migration initiated successfully. Check status endpoint for progress.");
-    }
-
     @GetMapping(value = "/status", produces = MediaType.APPLICATION_JSON_VALUE)
     public MigrationStatus getMigrationStatus() {
         return migrationService.getStatus();

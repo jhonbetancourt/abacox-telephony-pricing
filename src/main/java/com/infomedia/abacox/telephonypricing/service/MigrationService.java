@@ -65,11 +65,8 @@ public class MigrationService {
         // --- End State Tracking ---
 
         public void startAsync(MigrationStart runRequest) {
-                submitMigrationTask(() -> start(runRequest));
-        }
-
-        public void startHistoricalAsync(MigrationStart runRequest) {
-                submitMigrationTask(() -> startHistorical(runRequest));
+                Integer clientId = validateAndGetClientId(runRequest);
+                submitMigrationTask(() -> start(runRequest, clientId));
         }
 
         private void submitMigrationTask(Runnable migrationTask) {
@@ -117,41 +114,27 @@ public class MigrationService {
         }
 
         public void start(MigrationStart runRequest) {
+                start(runRequest, validateAndGetClientId(runRequest));
+        }
+
+        public void start(MigrationStart runRequest, Integer sourceClientId) {
                 ensureRunning();
                 log.info("<<<<<<<<<< Starting Full Data Migration Execution >>>>>>>>>>");
-                executeMigration(runRequest, defineMigrationOrderAndMappings(runRequest));
+                executeMigration(runRequest, defineMigrationOrderAndMappings(runRequest, sourceClientId));
         }
 
-        public void startHistorical(MigrationStart runRequest) {
-                ensureRunning();
-                log.info("<<<<<<<<<< Starting Historical Data Migration Execution >>>>>>>>>>");
-                // Force cleanup = false for historical migration
-                runRequest.setCleanup(false);
-
-                List<TableMigrationConfig> fullList = defineMigrationOrderAndMappings(runRequest);
-                List<TableMigrationConfig> historicalList = fullList.stream()
-                                .filter(c -> List.of("historictl", "FUNCIONARIO", "rangoext")
-                                                .contains(c.getSourceTableName()))
-                                .toList();
-
-                executeMigration(runRequest, historicalList);
-        }
-
-        public void startExtensionListAsync(MigrationStart runRequest) {
-                submitMigrationTask(() -> startExtensionList(runRequest));
-        }
-
-        public void startExtensionList(MigrationStart runRequest) {
-                ensureRunning();
-                log.info("<<<<<<<<<< Starting ExtensionList (listadoext) Migration Execution >>>>>>>>>>");
-                runRequest.setCleanup(false);
-
-                List<TableMigrationConfig> fullList = defineMigrationOrderAndMappings(runRequest);
-                List<TableMigrationConfig> extensionListConfig = fullList.stream()
-                                .filter(c -> "listadoext".equals(c.getSourceTableName()))
-                                .toList();
-
-                executeMigration(runRequest, extensionListConfig);
+        private Integer validateAndGetClientId(MigrationStart runRequest) {
+                Integer clientId = fetchClientId(runRequest);
+                if (clientId == null) {
+                        String dbName = runRequest.getDatabase().trim();
+                        String lookupName = dbName.startsWith("abacox_") ? dbName.substring(7) : dbName;
+                        String error = String.format(
+                                        "Could not find CLIENTE_ID for database '%s' (lookup: '%s') in control database '%s'. Migration aborted.",
+                                        dbName, lookupName, runRequest.getControlDatabase());
+                        log.error(error);
+                        throw new RuntimeException(error);
+                }
+                return clientId;
         }
 
         private void ensureRunning() {
@@ -355,21 +338,12 @@ public class MigrationService {
                 }
         }
 
-        private List<TableMigrationConfig> defineMigrationOrderAndMappings(MigrationStart runRequest) {
+        private List<TableMigrationConfig> defineMigrationOrderAndMappings(MigrationStart runRequest,
+                        Integer sourceClientId) {
                 List<TableMigrationConfig> configs = new ArrayList<>();
                 AtomicReference<LongOpenHashSet> validEmployeeIdsCache = new AtomicReference<>(null);
 
-                Integer sourceClientId = fetchClientId(runRequest);
-                if (sourceClientId != null) {
-                        log.info("Found CLIENTE_ID {} for database '{}' in control database '{}'",
-                                        sourceClientId, runRequest.getDatabase(), runRequest.getControlDatabase());
-                } else {
-                        String error = String.format(
-                                        "Could not find CLIENTE_ID for database '%s' in control database '%s'. Migration aborted to prevent data contamination.",
-                                        runRequest.getDatabase(), runRequest.getControlDatabase());
-                        log.error(error);
-                        throw new RuntimeException(error);
-                }
+                log.info("Defining migration mappings. Using validated CLIENTE_ID: {}", sourceClientId);
 
                 // Level 0: No FK dependencies among these
                 configs.add(TableMigrationConfig.builder().sourceTableName("MPORIGEN")
@@ -976,6 +950,9 @@ public class MigrationService {
                                 .rowModifier(row -> mutateAcumtotalRow(row, validEmployeeIdsCache))
                                 .build());
 
+                Map<Object, Object> originalCallRecordIdReplacements = new HashMap<>();
+                originalCallRecordIdReplacements.put(0, null);
+
                 configs.add(TableMigrationConfig.builder()
                                 .sourceTableName("acumfallido")
                                 .targetEntityClassName(
@@ -1001,6 +978,7 @@ public class MigrationService {
                                                                                 .getBytes(StandardCharsets.UTF_8))
                                                                 : null))
                                 .maxEntriesToMigrate(runRequest.getMaxFailedCallRecordEntries())
+                                .specificValueReplacements(Map.of("originalCallRecordId", originalCallRecordIdReplacements))
                                 .orderByClause("ACUMFALLIDO_ID DESC")
                                 .build());
 
@@ -1038,23 +1016,27 @@ public class MigrationService {
                 String query = String.format("SELECT CLIENTE_ID FROM %s.dbo.cliente WHERE TRIM(CLIENTE_BD) = ?",
                                 runRequest.getControlDatabase());
 
+                String dbName = runRequest.getDatabase().trim();
+                String lookupName = dbName.startsWith("abacox_") ? dbName.substring(7) : dbName;
+
+                log.debug("Looking for CLIENTE_ID in {}.dbo.cliente where CLIENTE_BD = '{}' (Original DB: '{}')",
+                                runRequest.getControlDatabase(), lookupName, dbName);
+
                 try (Connection conn = DriverManager.getConnection(url, runRequest.getUsername(),
                                 runRequest.getPassword());
                                 PreparedStatement ps = conn.prepareStatement(query)) {
-                        ps.setString(1, runRequest.getDatabase().trim());
-                        log.debug("Executing query to find CLIENTE_ID for database '{}': {}", runRequest.getDatabase(),
-                                        query);
+
+                        ps.setString(1, lookupName);
                         try (ResultSet rs = ps.executeQuery()) {
                                 if (rs.next()) {
                                         int clientId = rs.getInt("CLIENTE_ID");
-                                        log.info("Successfully found CLIENTE_ID {} for database '{}'", clientId,
-                                                        runRequest.getDatabase());
+                                        log.info("Successfully found CLIENTE_ID {} for database '{}' (lookup: '{}')",
+                                                        clientId, dbName, lookupName);
                                         return clientId;
-                                } else {
-                                        log.warn("No record found in {}.dbo.cliente where CLIENTE_BD = '{}'",
-                                                        runRequest.getControlDatabase(), runRequest.getDatabase());
                                 }
                         }
+                        log.warn("No record found in {}.dbo.cliente for CLIENTE_BD = '{}'",
+                                        runRequest.getControlDatabase(), lookupName);
                 } catch (Exception e) {
                         log.error("Failed to fetch CLIENTE_ID from control database: {} (Query: {})", e.getMessage(),
                                         query, e);
