@@ -364,8 +364,11 @@ public class MigrationService {
                         log.info("Found CLIENTE_ID {} for database '{}' in control database '{}'",
                                         sourceClientId, runRequest.getDatabase(), runRequest.getControlDatabase());
                 } else {
-                        log.warn("Could not find CLIENTE_ID for database '{}' in control database '{}'. cargactl migration might migrate more data than expected or fail if filtering is required.",
+                        String error = String.format(
+                                        "Could not find CLIENTE_ID for database '%s' in control database '%s'. Migration aborted to prevent data contamination.",
                                         runRequest.getDatabase(), runRequest.getControlDatabase());
+                        log.error(error);
+                        throw new RuntimeException(error);
                 }
 
                 // Level 0: No FK dependencies among these
@@ -1001,6 +1004,10 @@ public class MigrationService {
                                 .orderByClause("ACUMFALLIDO_ID DESC")
                                 .build());
 
+                log.info("Configuring cargactl migration with whereClause: {}",
+                                sourceClientId != null ? "CARGACTL_CLIENTE_ID = " + sourceClientId
+                                                : "NONE (sourceClientId is null)");
+
                 configs.add(TableMigrationConfig.builder()
                                 .sourceTableName(runRequest.getControlDatabase() + ".dbo.cargactl")
                                 .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.CdrLoadControl")
@@ -1022,23 +1029,35 @@ public class MigrationService {
         private Integer fetchClientId(MigrationStart runRequest) {
                 String url = String.format(
                                 "jdbc:sqlserver://%s:%s;databaseName=%s;encrypt=%s;trustServerCertificate=%s;",
-                                runRequest.getHost(), runRequest.getPort(), runRequest.getDatabase(),
+                                runRequest.getHost(), runRequest.getPort(), runRequest.getControlDatabase(),
                                 runRequest.getEncryption(), runRequest.getTrustServerCertificate());
 
-                String query = String.format("SELECT CLIENTE_ID FROM %s.dbo.cliente WHERE CLIENTE_BD = ?",
+                log.debug("Connecting to control database '{}' via URL: {} (User: {})",
+                                runRequest.getControlDatabase(), url, runRequest.getUsername());
+
+                String query = String.format("SELECT CLIENTE_ID FROM %s.dbo.cliente WHERE TRIM(CLIENTE_BD) = ?",
                                 runRequest.getControlDatabase());
 
                 try (Connection conn = DriverManager.getConnection(url, runRequest.getUsername(),
                                 runRequest.getPassword());
                                 PreparedStatement ps = conn.prepareStatement(query)) {
-                        ps.setString(1, runRequest.getDatabase());
+                        ps.setString(1, runRequest.getDatabase().trim());
+                        log.debug("Executing query to find CLIENTE_ID for database '{}': {}", runRequest.getDatabase(),
+                                        query);
                         try (ResultSet rs = ps.executeQuery()) {
                                 if (rs.next()) {
-                                        return rs.getInt("CLIENTE_ID");
+                                        int clientId = rs.getInt("CLIENTE_ID");
+                                        log.info("Successfully found CLIENTE_ID {} for database '{}'", clientId,
+                                                        runRequest.getDatabase());
+                                        return clientId;
+                                } else {
+                                        log.warn("No record found in {}.dbo.cliente where CLIENTE_BD = '{}'",
+                                                        runRequest.getControlDatabase(), runRequest.getDatabase());
                                 }
                         }
                 } catch (Exception e) {
-                        log.error("Failed to fetch CLIENTE_ID from control database: {}", e.getMessage());
+                        log.error("Failed to fetch CLIENTE_ID from control database: {} (Query: {})", e.getMessage(),
+                                        query, e);
                 }
                 return null;
         }
