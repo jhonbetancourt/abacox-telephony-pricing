@@ -84,8 +84,6 @@ public class TableMigrationExecutor {
             throw new RuntimeException("Migration failed due to target entity metadata error", e);
         }
 
-        Set<String> columnsToFetch = determineColumnsToFetch(tableConfig, foreignKeyInfoMap, selfReferenceFkInfo);
-
         // --- PASS 1: INSERT ROWS (ASYNC PARALLEL WRITING) ---
         log.info("Starting Pass 1: Streaming & Async Writing for table {} (Batch: {}, Threads: {})",
                 targetTableName, FETCH_BATCH_SIZE, WRITER_THREADS);
@@ -146,12 +144,8 @@ public class TableMigrationExecutor {
             // START THE STREAM
             sourceDataFetcher.fetchData(
                     sourceDbConfig,
-                    tableConfig.getSourceTableName(),
-                    columnsToFetch,
+                    tableConfig,
                     tableConfig.getWhereClause(),
-                    tableConfig.getSourceIdColumnName(),
-                    tableConfig.getOrderByClause(),
-                    tableConfig.getMaxEntriesToMigrate(),
                     FETCH_BATCH_SIZE,
                     pass1AsyncProcessor);
 
@@ -197,12 +191,8 @@ public class TableMigrationExecutor {
 
                 sourceDataFetcher.fetchData(
                         sourceDbConfig,
-                        tableConfig.getSourceTableName(),
-                        columnsToFetch,
+                        tableConfig,
                         tableConfig.getWhereClause(),
-                        tableConfig.getSourceIdColumnName(),
-                        tableConfig.getOrderByClause(),
-                        tableConfig.getMaxEntriesToMigrate(),
                         FETCH_BATCH_SIZE,
                         pass2BatchProcessor);
             } catch (Exception e) {
@@ -224,40 +214,6 @@ public class TableMigrationExecutor {
                     foreignKeyInfoMap.entrySet().stream()
                             .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().getDbColumnName())));
         }
-    }
-
-    private Set<String> determineColumnsToFetch(TableMigrationConfig tableConfig,
-            Map<String, ForeignKeyInfo> foreignKeyInfoMap, ForeignKeyInfo selfReferenceFkInfo) {
-        Set<String> columnsToFetch = new HashSet<>();
-        if (tableConfig.getColumnMapping() != null) {
-            columnsToFetch.addAll(tableConfig.getColumnMapping().keySet());
-        }
-
-        if (foreignKeyInfoMap != null && tableConfig.getColumnMapping() != null) {
-            for (ForeignKeyInfo fkInfo : foreignKeyInfoMap.values()) {
-                if (fkInfo != null && fkInfo.getForeignKeyField() != null) {
-                    tableConfig.getColumnMapping().entrySet().stream()
-                            .filter(entry -> entry.getValue().equals(fkInfo.getForeignKeyField().getName()))
-                            .map(Map.Entry::getKey)
-                            .findFirst()
-                            .ifPresent(columnsToFetch::add);
-                }
-            }
-        }
-
-        if (selfReferenceFkInfo != null && selfReferenceFkInfo.getForeignKeyField() != null
-                && tableConfig.getColumnMapping() != null) {
-            tableConfig.getColumnMapping().entrySet().stream()
-                    .filter(entry -> entry.getValue().equals(selfReferenceFkInfo.getForeignKeyField().getName()))
-                    .map(Map.Entry::getKey)
-                    .findFirst()
-                    .ifPresent(columnsToFetch::add);
-        }
-
-        if (tableConfig.getSourceIdColumnName() != null && !tableConfig.getSourceIdColumnName().trim().isEmpty()) {
-            columnsToFetch.add(tableConfig.getSourceIdColumnName());
-        }
-        return columnsToFetch;
     }
 
     private String extractShortErrorMessage(Exception e) {

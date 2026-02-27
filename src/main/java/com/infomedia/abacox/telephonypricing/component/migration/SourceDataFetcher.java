@@ -81,9 +81,14 @@ public class SourceDataFetcher {
      * This mimics Python's fetchmany() and prevents massive DB performance
      * degradation on large tables.
      */
-    public void fetchData(SourceDbConfig config, String tableName, Set<String> requestedColumns, String whereClause,
-            String sourceIdColumn, String orderByClause, Integer maxEntriesToMigrate,
+    public void fetchData(SourceDbConfig config, TableMigrationConfig tableConfig, String whereClause,
             int batchSize, Consumer<List<Map<String, Object>>> batchProcessor) throws SQLException {
+
+        String tableName = tableConfig.getSourceTableName();
+        Set<String> requestedColumns = tableConfig.getColumnMapping().keySet();
+        String sourceIdColumn = tableConfig.getSourceIdColumnName();
+        String orderByClause = tableConfig.getOrderByClause();
+        Integer maxEntriesToMigrate = tableConfig.getMaxEntriesToMigrate();
 
         long totalRowsFetched = 0;
 
@@ -113,7 +118,7 @@ public class SourceDataFetcher {
                     .filter(actualCol -> requestedUpper.contains(actualCol.toUpperCase()))
                     .collect(Collectors.toSet());
 
-            logSkippedColumns(requestedColumns, columnsToSelect, tableName);
+            logSkippedColumns(tableConfig, columnsToSelect);
 
             // 3. Ensure essential columns exist in the select list
             String actualSourceIdColumn = null;
@@ -314,10 +319,14 @@ public class SourceDataFetcher {
         }
     }
 
-    private void logSkippedColumns(Set<String> requestedColumns, Set<String> columnsToSelect, String tableName) {
+    private void logSkippedColumns(TableMigrationConfig tableConfig, Set<String> columnsToSelect) {
+        String tableName = tableConfig.getSourceTableName();
+        Set<String> requestedColumns = tableConfig.getColumnMapping().keySet();
+        Set<String> virtualColumns = tableConfig.getVirtualColumns() != null ? tableConfig.getVirtualColumns()
+                : Collections.emptySet();
         Set<String> selectedUpper = columnsToSelect.stream().map(String::toUpperCase).collect(Collectors.toSet());
         requestedColumns.forEach(requestedCol -> {
-            if (!selectedUpper.contains(requestedCol.toUpperCase())) {
+            if (!selectedUpper.contains(requestedCol.toUpperCase()) && !virtualColumns.contains(requestedCol)) {
                 log.warn("Requested column '{}' not found in source table '{}' and will be skipped.", requestedCol,
                         tableName);
             }

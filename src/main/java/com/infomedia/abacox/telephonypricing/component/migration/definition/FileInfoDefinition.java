@@ -3,6 +3,7 @@ package com.infomedia.abacox.telephonypricing.component.migration.definition;
 import com.infomedia.abacox.telephonypricing.component.migration.TableMigrationConfig;
 import lombok.extern.log4j.Log4j2;
 import java.util.Map;
+import java.util.Set;
 import static java.util.Map.entry;
 
 @Log4j2
@@ -21,6 +22,7 @@ public class FileInfoDefinition implements MigrationTableDefinition {
                         entry("FILEINFO_FECHA", "date"),
                         entry("DERIVED_PLANT_ID", "plantTypeId"),
                         entry("LITERAL_STATUS", "processingStatus")))
+                .virtualColumns(Set.of("DERIVED_PLANT_ID", "LITERAL_STATUS"))
                 .rowModifier(row -> {
                     Object directorio = row.get("FILEINFO_DIRECTORIO");
                     Integer plantId = context.getDirectorioToPlantCache().getOrDefault(String.valueOf(directorio), 0);
@@ -30,10 +32,15 @@ public class FileInfoDefinition implements MigrationTableDefinition {
                 .beforeMigrationAction(config -> {
                     if (context.getMigratedFileInfoIds().isEmpty()) {
                         log.info("No FileInfo IDs collected. FileInfo migration will be effectively skipped.");
+                        config.setWhereClause("1=0");
+                    } else {
+                        String idsString = context.getMigratedFileInfoIds().stream()
+                                .map(String::valueOf)
+                                .collect(java.util.stream.Collectors.joining(","));
+                        config.setWhereClause("FILEINFO_ID IN (" + idsString + ")");
+                        log.info("Filtering FileInfo migration to {} collected IDs.",
+                                context.getMigratedFileInfoIds().size());
                     }
-                    // Filter logic will be handled by dynamic WHERE clause building in
-                    // MigrationService
-                    // or via a custom action here if we pass the config.
                 })
                 .build();
     }

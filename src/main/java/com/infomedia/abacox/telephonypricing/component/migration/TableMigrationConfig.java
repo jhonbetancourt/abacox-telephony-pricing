@@ -11,6 +11,8 @@ import java.util.List;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Consumer;
+import java.util.Set;
+import java.util.HashSet;
 
 @Data
 @NoArgsConstructor
@@ -111,4 +113,11 @@ public class TableMigrationConfig {
 
     @Builder.Default
     private boolean assumeTargetIsEmpty = false;
+
+    /**
+     * Columns that are populated manually (e.g. in rowModifier) and do not exist
+     * in the source table. This prevents SourceDataFetcher from warning about them.
+     */
+    @Builder.Default
+    private Set<String> virtualColumns = new HashSet<>();
 }

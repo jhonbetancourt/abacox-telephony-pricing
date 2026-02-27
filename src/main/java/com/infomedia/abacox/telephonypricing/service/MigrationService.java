@@ -178,10 +178,6 @@ public class MigrationService {
                         // Cleanup target tables (in reverse order) if requested
                         if (Boolean.TRUE.equals(runRequest.getCleanup())) {
                                 cleanupTargetTables(tablesToMigrate);
-                                // FileInfo is not in the migration list (populated by CDR processing),
-                                // but CallRecord and FailedCallRecord reference it via FK.
-                                // After those are deleted, clean up FileInfo as well.
-                                cleanupFileInfo();
                         } else {
                                 log.info("Skipping target table cleanup as per request.");
                         }
@@ -298,22 +294,6 @@ public class MigrationService {
                 });
 
                 log.info("Target table cleanup completed.");
-        }
-
-        private void cleanupFileInfo() {
-                log.info("Truncating file_info table (not in migration list, referenced by call records)...");
-                currentStep.set("Cleaning up file_info table...");
-                TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
-                transactionTemplate.execute(status -> {
-                        try {
-                                entityManager.createNativeQuery("TRUNCATE TABLE file_info CASCADE").executeUpdate();
-                                log.info("Truncated file_info table.");
-                        } catch (Exception e) {
-                                log.error("Failed to truncate file_info table: {}", e.getMessage());
-                                throw new RuntimeException("Failed to truncate file_info table", e);
-                        }
-                        return null;
-                });
         }
 
         /**
