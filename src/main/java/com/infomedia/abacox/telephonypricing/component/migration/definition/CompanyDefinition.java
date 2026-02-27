@@ -21,7 +21,6 @@ public class CompanyDefinition implements MigrationTableDefinition {
                         entry("EMPRESA_RSOCIAL", "legalName"),
                         entry("EMPRESA_URL", "website"),
                         entry("EMPRESA_INDICATIVO_ID", "indicatorId"),
-                        entry("EMPRESA_ACTIVO", "active"),
                         entry("EMPRESA_FCREACION", "createdDate"),
                         entry("EMPRESA_FMODIFICADO", "lastModifiedDate")))
                 .build();

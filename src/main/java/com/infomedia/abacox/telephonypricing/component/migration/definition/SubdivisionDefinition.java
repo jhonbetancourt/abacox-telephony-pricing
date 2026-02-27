@@ -16,7 +16,6 @@ public class SubdivisionDefinition implements MigrationTableDefinition {
                         entry("SUBDIRECCION_ID", "id"),
                         entry("SUBDIRECCION_PERTENECE", "parentSubdivisionId"),
                         entry("SUBDIRECCION_NOMBRE", "name"),
-                        entry("SUBDIRECCION_ACTIVO", "active"),
                         entry("SUBDIREccion_FCREACION", "createdDate"),
                         entry("SUBDIRECCION_FMODIFICADO", "lastModifiedDate")))
                 .selfReferencing(true)

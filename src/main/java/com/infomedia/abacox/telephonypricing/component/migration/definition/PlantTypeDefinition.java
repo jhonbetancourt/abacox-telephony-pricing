@@ -15,7 +15,6 @@ public class PlantTypeDefinition implements MigrationTableDefinition {
                 .columnMapping(Map.ofEntries(
                         entry("TIPOPLANTA_ID", "id"),
                         entry("TIPOPLANTA_NOMBRE", "name"),
-                        entry("TIPOPLANTA_ACTIVO", "active"),
                         entry("TIPOPLANTA_FCREACION", "createdDate"),
                         entry("TIPOPLANTA_FMODIFICADO", "lastModifiedDate")))
                 .build();

@@ -62,7 +62,7 @@ public class DataMigrationExecutor {
      *                         This callback is invoked after each table attempt.
      */
     public void runMigration(MigrationParams request, BiConsumer<TableMigrationConfig, Exception> progressCallback) {
-        log.info("Starting data migration process with progress reporting...");
+        log.debug("Starting data migration process with progress reporting...");
 
         // Suppress Hibernate SQL error logging during migration
         Level originalLevel = suppressHibernateSqlExceptionHelper();
@@ -73,29 +73,34 @@ public class DataMigrationExecutor {
 
             for (TableMigrationConfig tableConfig : request.getTablesToMigrate()) {
                 currentTableIndex++;
-                log.info("---------------------------------------------------------");
+                log.debug("---------------------------------------------------------");
+                String targetClassName = tableConfig.getTargetEntityClassName();
+                String simpleTargetName = targetClassName.contains(".")
+                        ? targetClassName.substring(targetClassName.lastIndexOf('.') + 1)
+                        : targetClassName;
+
                 log.info("Attempting migration for table {}/{} : {} -> {}",
                         currentTableIndex, totalTables, tableConfig.getSourceTableName(),
-                        tableConfig.getTargetEntityClassName());
+                        simpleTargetName);
                 Exception tableException = null;
                 try {
                     if (tableConfig.getBeforeMigrationAction() != null) {
-                        log.info("Executing before-migration action for table '{}'...",
+                        log.debug("Executing before-migration action for table '{}'...",
                                 tableConfig.getSourceTableName());
                         tableConfig.getBeforeMigrationAction().accept(tableConfig);
                     }
 
                     // Call the method on the executor bean (this goes through the proxy)
                     tableExecutor.executeTableMigration(tableConfig, request.getSourceDbConfig());
-                    log.info("Successfully migrated table {}/{}: {}", currentTableIndex, totalTables,
+                    log.debug("Successfully migrated table {}/{}: {}", currentTableIndex, totalTables,
                             tableConfig.getSourceTableName());
 
                     if (tableConfig.getPostMigrationSuccessAction() != null) {
-                        log.info("Executing post-migration success action for table '{}'...",
+                        log.debug("Executing post-migration success action for table '{}'...",
                                 tableConfig.getSourceTableName());
                         try {
                             tableConfig.getPostMigrationSuccessAction().run();
-                            log.info("Successfully executed post-migration action for table '{}'.",
+                            log.debug("Successfully executed post-migration action for table '{}'.",
                                     tableConfig.getSourceTableName());
                         } catch (Exception postActionEx) {
                             log.error(
@@ -124,10 +129,10 @@ public class DataMigrationExecutor {
                     throw new RuntimeException("Migration failed for table " + tableConfig.getSourceTableName(),
                             tableException);
                 }
-                log.info("---------------------------------------------------------");
+                log.debug("---------------------------------------------------------");
             }
 
-            log.info("Data migration process finished executing table loop.");
+            log.debug("Data migration process finished executing table loop.");
         } finally {
             // Always restore the logger, even if migration fails
             restoreHibernateSqlExceptionHelper(originalLevel);

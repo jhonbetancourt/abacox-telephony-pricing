@@ -19,7 +19,6 @@ public class SeriesDefinition implements MigrationTableDefinition {
                         entry("SERIE_INICIAL", "initialNumber"),
                         entry("SERIE_FINAL", "finalNumber"),
                         entry("SERIE_EMPRESA", "company"),
-                        entry("SERIE_ACTIVO", "active"),
                         entry("SERIE_FCREACION", "createdDate"),
                         entry("SERIE_FMODIFICADO", "lastModifiedDate")))
                 .build();

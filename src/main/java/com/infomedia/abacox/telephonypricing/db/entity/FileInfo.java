@@ -79,6 +79,6 @@ public class FileInfo {
         IN_PROGRESS,
         COMPLETED,
         FAILED,
-        MISSING
+        COMPLETED_MISSING
     }
 }

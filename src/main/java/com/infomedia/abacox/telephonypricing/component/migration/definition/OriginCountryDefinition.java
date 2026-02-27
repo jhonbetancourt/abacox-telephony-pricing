@@ -17,7 +17,6 @@ public class OriginCountryDefinition implements MigrationTableDefinition {
                         entry("MPORIGEN_SIMBOLO", "currencySymbol"),
                         entry("MPORIGEN_PAIS", "name"),
                         entry("MPORIGEN_CCODE", "code"),
-                        entry("MPORIGEN_ACTIVO", "active"),
                         entry("MPORIGEN_FCREACION", "createdDate"),
                         entry("MPORIGEN_FMODIFICADO", "lastModifiedDate")))
                 .build();

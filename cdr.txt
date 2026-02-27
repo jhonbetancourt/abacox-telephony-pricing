@@ -856,8 +856,8 @@ public class CdrData {
 ============================================================
 FILE: CdrEnrichmentService.java
 PATH: E:/Github/abacox/abacox-telephony-pricing/src/main/java/com/infomedia/abacox/telephonypricing/component/cdrprocessing/CdrEnrichmentService.java
-SIZE: 11.71 KB
-MODIFIED: 2026-02-24 23:41:52
+SIZE: 11.68 KB
+MODIFIED: 2026-02-27 10:57:47
 ============================================================
 // File: com/infomedia/abacox/telephonypricing/component/cdrprocessing/CdrEnrichmentService.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
@@ -893,12 +893,14 @@ public class CdrEnrichmentService {
         cdrData.setCommLocationId(commLocation.getId());
 
         try {
-            // This call now handles the main flow: es_llamada_interna ->
-            // procesaEntrante/procesaSaliente
+            // This call now handles the main flow: es_llamada_interna -> procesaEntrante/procesaSaliente
             callTypeAndDirectionService.processCall(cdrData, processingContext);
 
+            // Added support for GLOBAL_EXTENSION_IGNORE
             if (cdrData.isMarkedForQuarantine() &&
                     (QuarantineErrorType.INTERNAL_SELF_CALL.name().equals(cdrData.getQuarantineStep()) ||
+                            QuarantineErrorType.INTERNAL_POLICY_IGNORE.name().equals(cdrData.getQuarantineStep()) ||
+                            QuarantineErrorType.GLOBAL_EXTENSION_IGNORE.name().equals(cdrData.getQuarantineStep()) ||
                             (cdrData.getQuarantineStep() != null
                                     && cdrData.getQuarantineStep().contains("IgnorePolicy")))) {
                 log.debug(
@@ -907,12 +909,10 @@ public class CdrEnrichmentService {
                 return cdrData;
             }
 
-            // Employee assignment logic (PHP: ObtenerFuncionario_Arreglo and parts of
-            // acumtotal_Insertar)
+            // Employee assignment logic
             assignEmployeeToCdr(cdrData, processingContext);
 
-            // Final duration check (PHP: if ($tiempo <= 0 && $tipotele_id > 0 &&
-            // $tipotele_id != _TIPOTELE_ERRORES))
+            // Final duration check
             if (cdrData.getDurationSeconds() != null
                     && cdrData.getDurationSeconds() <= appConfigService.getMinCallDurationForTariffing()) {
                 if (cdrData.getTelephonyTypeId() != null &&
@@ -923,14 +923,13 @@ public class CdrEnrichmentService {
                     cdrData.setTelephonyTypeId(TelephonyTypeEnum.NO_CONSUMPTION.getValue());
                     cdrData.setTelephonyTypeName(telephonyTypeLookupService
                             .getTelephonyTypeName(TelephonyTypeEnum.NO_CONSUMPTION.getValue()));
-                    cdrData.setBilledAmount(BigDecimal.ZERO); // Ensure billed amount is zero
+                    cdrData.setBilledAmount(BigDecimal.ZERO);
                     cdrData.setPricePerMinute(BigDecimal.ZERO);
                     cdrData.setInitialPricePerMinute(BigDecimal.ZERO);
                 }
             }
 
-            // Transfer cleanup (PHP: if ($ext_transfer !== '' && ($ext_transfer ===
-            // $extension || ...) ))
+            // Transfer cleanup
             finalizeTransferInformation(cdrData);
 
         } catch (Exception e) {
@@ -1157,8 +1156,8 @@ public interface CdrProcessor {
 ============================================================
 FILE: CdrProcessorService.java
 PATH: E:/Github/abacox/abacox-telephony-pricing/src/main/java/com/infomedia/abacox/telephonypricing/component/cdrprocessing/CdrProcessorService.java
-SIZE: 19.43 KB
-MODIFIED: 2026-02-27 10:32:51
+SIZE: 19.5 KB
+MODIFIED: 2026-02-27 10:57:13
 ============================================================
 // File: com/infomedia/abacox/telephonypricing/cdr/CdrProcessorService.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
@@ -1341,7 +1340,8 @@ public class CdrProcessorService {
 
             cdrData.setMarkedForQuarantine(true);
             cdrData.setQuarantineReason(e.getMessage());
-            cdrData.setQuarantineStep("UNHANDLED_EXCEPTION");
+            // Updated to use explicit enum name
+            cdrData.setQuarantineStep(QuarantineErrorType.UNHANDLED_EXCEPTION.name());
 
             return buildResult(cdrData, null, ProcessingOutcome.QUARANTINED);
         }
@@ -1623,8 +1623,8 @@ public class CdrProcessorService {
 ============================================================
 FILE: CdrRoutingService.java
 PATH: E:/Github/abacox/abacox-telephony-pricing/src/main/java/com/infomedia/abacox/telephonypricing/component/cdrprocessing/CdrRoutingService.java
-SIZE: 17.16 KB
-MODIFIED: 2026-02-27 10:32:51
+SIZE: 17.17 KB
+MODIFIED: 2026-02-27 11:38:51
 ============================================================
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
@@ -1678,7 +1678,7 @@ public class CdrRoutingService {
 
         trackerService.initFile(fileInfo.getId());
 
-        Long plantTypeId = fileInfo.getParentId().longValue();
+        Long plantTypeId = fileInfo.getPlantTypeId().longValue();
         CdrProcessor initialParser = getProcessorForPlantType(plantTypeId);
         Map<String, Integer> currentFileHeaderMap = null;
 
@@ -1866,7 +1866,7 @@ public class CdrRoutingService {
 
             Map<Long, ExtensionLimits> extensionLimits = employeeLookupService.getExtensionLimits();
             Map<Long, List<ExtensionRange>> extensionRanges = employeeLookupService.getExtensionRanges();
-            CdrProcessor initialParser = getProcessorForPlantType(fileInfo.getParentId().longValue());
+            CdrProcessor initialParser = getProcessorForPlantType(fileInfo.getPlantTypeId().longValue());
             Map<String, Integer> currentHeaderMap = null;
 
             try (InputStream inputStream = fileDataOpt.get().content();
@@ -1907,7 +1907,7 @@ public class CdrRoutingService {
 
                     Optional<CommunicationLocation> targetCommLocationOpt = commLocationLookupService
                             .findBestCommunicationLocation(
-                                    fileInfo.getParentId().longValue(),
+                                    fileInfo.getPlantTypeId().longValue(),
                                     preliminaryCdrData.getCallingPartyNumber(),
                                     preliminaryCdrData.getCallingPartyNumberPartition(),
                                     preliminaryCdrData.getFinalCalledPartyNumber(),
@@ -2257,9 +2257,10 @@ public class CdrUtil {
 ============================================================
 FILE: CdrValidationService.java
 PATH: E:/Github/abacox/abacox-telephony-pricing/src/main/java/com/infomedia/abacox/telephonypricing/component/cdrprocessing/CdrValidationService.java
-SIZE: 5.86 KB
-MODIFIED: 2025-08-28 14:36:42
+SIZE: 6.78 KB
+MODIFIED: 2026-02-27 10:41:22
 ============================================================
+// File: com/infomedia/abacox/telephonypricing/component/cdrprocessing/CdrValidationService.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
 import lombok.extern.log4j.Log4j2;
@@ -2279,19 +2280,16 @@ public class CdrValidationService {
         this.appConfigService = appConfigService;
     }
 
-    /**
-     * PHP equivalent: ValidarCampos_CDR
-     * This method now directly modifies cdrData.isMarkedForQuarantine and sets reason/step.
-     * It returns true if CDR is valid, false if errors occurred.
-     */
     public boolean validateInitialCdrData(CdrData cdrData) {
         log.debug("Validating initial CDR data: {}", cdrData.getCtlHash());
         List<String> errorMessages = new ArrayList<>();
         List<String> warningMessages = new ArrayList<>();
+        QuarantineErrorType primaryErrorType = null;
+        QuarantineErrorType primaryWarningType = null;
 
         // PHP: if (trim($info_cdr['ext']) == '') { InvertirLlamada($info_cdr); ... }
         if ((cdrData.getCallingPartyNumber() == null || cdrData.getCallingPartyNumber().isEmpty()) &&
-            (cdrData.getFinalCalledPartyNumber() != null && !cdrData.getFinalCalledPartyNumber().isEmpty())) {
+                (cdrData.getFinalCalledPartyNumber() != null && !cdrData.getFinalCalledPartyNumber().isEmpty())) {
             log.debug("CallingPartyNumber is blank but FinalCalledPartyNumber is not. Performing full swap and treating as INCOMING. CDR: {}", cdrData.getCtlHash());
             CdrUtil.swapFull(cdrData, true); // Full swap including trunks
             cdrData.setCallDirection(CallDirection.INCOMING);
@@ -2300,42 +2298,50 @@ public class CdrValidationService {
 
         if (cdrData.getDateTimeOrigination() == null) {
             errorMessages.add("Missing or invalid origination date/time (PHP: _ESPERABA_FECHA).");
+            if (primaryErrorType == null) primaryErrorType = QuarantineErrorType.INVALID_DATE;
         } else {
             LocalDateTime minDate = DateTimeUtil.stringToLocalDateTime(appConfigService.getMinAllowedCaptureDate() + " 00:00:00");
             if (minDate != null && cdrData.getDateTimeOrigination().isBefore(minDate)) {
                 warningMessages.add("Origination date " + cdrData.getDateTimeOrigination() + " is before minimum allowed " + minDate + " (PHP: _FECHANO Min).");
+                if (primaryWarningType == null) primaryWarningType = QuarantineErrorType.INVALID_DATE;
             }
             int maxDaysFuture = appConfigService.getMaxAllowedCaptureDateDaysInFuture();
             if (maxDaysFuture > 0 && cdrData.getDateTimeOrigination().isAfter(LocalDateTime.now().plusDays(maxDaysFuture))) {
                 warningMessages.add("Origination date " + cdrData.getDateTimeOrigination() + " is too far in the future (max " + maxDaysFuture + " days) (PHP: _FECHANO Max).");
+                if (primaryWarningType == null) primaryWarningType = QuarantineErrorType.INVALID_DATE;
             }
         }
 
         if (cdrData.getCallingPartyNumber() != null && cdrData.getCallingPartyNumber().contains(" ")) {
             errorMessages.add("Calling party number '" + cdrData.getCallingPartyNumber() + "' contains spaces (PHP: _ESPERABA_NUMERO).");
+            if (primaryErrorType == null) primaryErrorType = QuarantineErrorType.INVALID_NUMBER_FORMAT;
         }
 
         if (cdrData.getFinalCalledPartyNumber() != null && !cdrData.getFinalCalledPartyNumber().isEmpty() &&
-            !cdrData.getFinalCalledPartyNumber().equalsIgnoreCase("ANONYMOUS") &&
-            !cdrData.getFinalCalledPartyNumber().matches("^[0-9#*+]+$")) {
+                !cdrData.getFinalCalledPartyNumber().equalsIgnoreCase("ANONYMOUS") &&
+                !cdrData.getFinalCalledPartyNumber().matches("^[0-9#*+]+$")) {
             errorMessages.add("Final called party number '" + cdrData.getFinalCalledPartyNumber() + "' contains invalid characters (PHP: _ESPERABA_NUMERO).");
+            if (primaryErrorType == null) primaryErrorType = QuarantineErrorType.INVALID_NUMBER_FORMAT;
         }
 
         if (cdrData.getDurationSeconds() == null || cdrData.getDurationSeconds() < 0) {
             errorMessages.add("Invalid call duration: " + cdrData.getDurationSeconds() + " (PHP: _ESPERABA_NUMEROPOS).");
+            if (primaryErrorType == null) primaryErrorType = QuarantineErrorType.INVALID_DURATION;
         } else {
             if (cdrData.getDurationSeconds() < appConfigService.getMinCallDurationForTariffing()) {
                 if (appConfigService.getMinCallDurationForTariffing() > 0) {
-                     warningMessages.add("Call duration " + cdrData.getDurationSeconds() + "s is less than minimum " + appConfigService.getMinCallDurationForTariffing() + "s (PHP: _TIEMPONO Min).");
+                    warningMessages.add("Call duration " + cdrData.getDurationSeconds() + "s is less than minimum " + appConfigService.getMinCallDurationForTariffing() + "s (PHP: _TIEMPONO Min).");
+                    if (primaryWarningType == null) primaryWarningType = QuarantineErrorType.INVALID_DURATION;
                 }
             }
             if (appConfigService.getMaxCallDurationSeconds() > 0 && cdrData.getDurationSeconds() > appConfigService.getMaxCallDurationSeconds()) {
                 warningMessages.add("Call duration " + cdrData.getDurationSeconds() + "s exceeds maximum allowed " + appConfigService.getMaxCallDurationSeconds() + "s (PHP: _TIEMPONO Max).");
+                if (primaryWarningType == null) primaryWarningType = QuarantineErrorType.INVALID_DURATION;
             }
         }
 
         if (cdrData.isMarkedForQuarantine() && cdrData.getQuarantineReason() != null &&
-            cdrData.getQuarantineStep() != null && cdrData.getQuarantineStep().startsWith("evaluateFormat")) {
+                cdrData.getQuarantineStep() != null && cdrData.getQuarantineStep().startsWith("evaluateFormat")) {
             if (errorMessages.isEmpty()) {
                 errorMessages.add("Marked for quarantine by parser: " + cdrData.getQuarantineReason());
             }
@@ -2347,14 +2353,14 @@ public class CdrValidationService {
                 cdrData.setQuarantineReason(String.join("; ", errorMessages));
             }
             if (cdrData.getQuarantineStep() == null || !cdrData.getQuarantineStep().startsWith("evaluateFormat")) {
-                cdrData.setQuarantineStep(QuarantineErrorType.INITIAL_VALIDATION_ERROR.name());
+                cdrData.setQuarantineStep(primaryErrorType != null ? primaryErrorType.name() : QuarantineErrorType.INITIAL_VALIDATION_ERROR.name());
             }
             log.debug("CDR validation errors: {}. Quarantine set.", errorMessages);
             return false;
         } else if (!warningMessages.isEmpty()) {
             cdrData.setMarkedForQuarantine(true);
             cdrData.setQuarantineReason(String.join("; ", warningMessages));
-            cdrData.setQuarantineStep(QuarantineErrorType.INITIAL_VALIDATION_WARNING.name());
+            cdrData.setQuarantineStep(primaryWarningType != null ? primaryWarningType.name() : QuarantineErrorType.INITIAL_VALIDATION_WARNING.name());
             log.debug("CDR validation warnings (leading to quarantine): {}. Quarantine set.", warningMessages);
             return true;
         }
@@ -2367,8 +2373,8 @@ public class CdrValidationService {
 ============================================================
 FILE: CiscoCm60CdrProcessor.java
 PATH: E:/Github/abacox/abacox-telephony-pricing/src/main/java/com/infomedia/abacox/telephonypricing/component/cdrprocessing/CiscoCm60CdrProcessor.java
-SIZE: 27.44 KB
-MODIFIED: 2026-02-16 19:28:14
+SIZE: 27.45 KB
+MODIFIED: 2026-02-27 10:52:12
 ============================================================
 // File: com/infomedia/abacox/telephonypricing/component/cdrprocessing/CiscoCm60CdrProcessor.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
@@ -2456,7 +2462,7 @@ public class CiscoCm60CdrProcessor implements CdrProcessor {
             cdrData.setMarkedForQuarantine(true);
             cdrData.setQuarantineReason(
                     "Insufficient fields. Found " + fields.size() + ", expected " + minExpectedFieldsForValidCdr);
-            cdrData.setQuarantineStep(QuarantineErrorType.PARSER_ERROR.name());
+            cdrData.setQuarantineStep(QuarantineErrorType.INSUFFICIENT_FIELDS.name());
             return cdrData;
         }
 
@@ -4032,8 +4038,8 @@ public record FileInfoData(String filename, InputStream content, long length) {
 ============================================================
 FILE: FileInfoPersistenceService.java
 PATH: E:/Github/abacox/abacox-telephony-pricing/src/main/java/com/infomedia/abacox/telephonypricing/component/cdrprocessing/FileInfoPersistenceService.java
-SIZE: 11.94 KB
-MODIFIED: 2026-01-28 13:35:55
+SIZE: 11.86 KB
+MODIFIED: 2026-02-27 12:22:03
 ============================================================
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
@@ -4086,7 +4092,7 @@ public class FileInfoPersistenceService {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public FileInfoCreationResult createOrGetFileInfo(String filename, Long parentId, String type, File file)
+    public FileInfoCreationResult createOrGetFileInfo(String filename, Long plantTypeId, File file)
             throws IOException {
 
         // 1. Calculate Hash
@@ -4129,8 +4135,7 @@ public class FileInfoPersistenceService {
             // 5. Save DB Record using returned metadata
             fileInfo = new FileInfo();
             fileInfo.setFilename(filename.length() > 255 ? filename.substring(0, 255) : filename);
-            fileInfo.setParentId(parentId != null ? parentId.intValue() : 0);
-            fileInfo.setType(type.length() > 64 ? type.substring(0, 64) : type);
+            fileInfo.setPlantTypeId(plantTypeId != null ? plantTypeId.intValue() : 0);
             fileInfo.setDate(LocalDateTime.now());
             fileInfo.setChecksum(checksum);
             fileInfo.setSize((int) file.length());
@@ -5149,9 +5154,10 @@ public class IndicatorLookupService {
 ============================================================
 FILE: InternalCallProcessorService.java
 PATH: E:/Github/abacox/abacox-telephony-pricing/src/main/java/com/infomedia/abacox/telephonypricing/component/cdrprocessing/InternalCallProcessorService.java
-SIZE: 15.98 KB
-MODIFIED: 2026-02-24 23:46:41
+SIZE: 15.69 KB
+MODIFIED: 2026-02-27 10:55:54
 ============================================================
+// File: com/infomedia/abacox/telephonypricing/component/cdrprocessing/InternalCallProcessorService.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
 import com.infomedia.abacox.telephonypricing.db.entity.CommunicationLocation;
@@ -5180,11 +5186,8 @@ public class InternalCallProcessorService {
     private final TelephonyTypeLookupService telephonyTypeLookupService;
     private final PrefixLookupService prefixLookupService;
 
-    /**
-     * PHP equivalent: procesaInterna
-     */
     public void processInternal(CdrData cdrData, LineProcessingContext processingContext,
-            boolean pbxSpecialRuleAppliedRecursively) {
+                                boolean pbxSpecialRuleAppliedRecursively) {
         CommunicationLocation commLocation = processingContext.getCommLocation();
         log.debug("Processing INTERNAL call logic for CDR: {}. Recursive PBX applied: {}", cdrData.getCtlHash(),
                 pbxSpecialRuleAppliedRecursively);
@@ -5228,27 +5231,29 @@ public class InternalCallProcessorService {
             cdrData.setQuarantineReason(
                     internalTypeInfo.getAdditionalInfo() != null ? internalTypeInfo.getAdditionalInfo()
                             : "Internal call ignore policy");
-            cdrData.setQuarantineStep("processInternalCallLogic_IgnorePolicy");
+
+            // Apply specific error type mapped in determination phase
+            cdrData.setQuarantineStep(internalTypeInfo.getErrorType() != null
+                    ? internalTypeInfo.getErrorType().name()
+                    : QuarantineErrorType.INTERNAL_POLICY_IGNORE.name());
             return;
         }
 
-        // PHP: procesaInterna -> InvertirLlamada if origin not found but destination
-        // is.
+        // PHP: procesaInterna -> InvertirLlamada if origin not found but destination is.
         if (internalTypeInfo.isEffectivelyIncoming() && cdrData.getCallDirection() == CallDirection.OUTGOING) {
             log.debug("Internal call determined to be effectively incoming. Inverting parties and trunks. CDR: {}",
                     cdrData.getCtlHash());
             CdrUtil.swapFull(cdrData, true); // Full swap including trunks
             cdrData.setCallDirection(CallDirection.INCOMING);
-            // After swap, the new "calling" party is the destination employee
+
             cdrData.setEmployee(internalTypeInfo.getDestinationEmployee());
             cdrData.setEmployeeId(internalTypeInfo.getDestinationEmployee() != null
-                    ? internalTypeInfo.getDestinationEmployee().getId()
-                    : null);
-            // The new "destination" is the origin employee
+                    ? internalTypeInfo.getDestinationEmployee().getId() : null);
+
             cdrData.setDestinationEmployee(internalTypeInfo.getOriginEmployee());
             cdrData.setDestinationEmployeeId(
                     internalTypeInfo.getOriginEmployee() != null ? internalTypeInfo.getOriginEmployee().getId() : null);
-            // The indicator should be that of the new origin (the original destination)
+
             cdrData.setIndicatorId(internalTypeInfo.getDestinationIndicatorId());
         } else {
             // Standard assignment if not inverted
@@ -5257,8 +5262,7 @@ public class InternalCallProcessorService {
                     internalTypeInfo.getOriginEmployee() != null ? internalTypeInfo.getOriginEmployee().getId() : null);
             cdrData.setDestinationEmployee(internalTypeInfo.getDestinationEmployee());
             cdrData.setDestinationEmployeeId(internalTypeInfo.getDestinationEmployee() != null
-                    ? internalTypeInfo.getDestinationEmployee().getId()
-                    : null);
+                    ? internalTypeInfo.getDestinationEmployee().getId() : null);
             cdrData.setIndicatorId(internalTypeInfo.getDestinationIndicatorId());
         }
 
@@ -5279,15 +5283,13 @@ public class InternalCallProcessorService {
         log.debug("Finished processing INTERNAL call logic. CDR Data: {}", cdrData);
     }
 
-    /**
-     * PHP equivalent: tipo_llamada_interna
-     */
     private InternalCallTypeInfo determineSpecificInternalCallType(CdrData cdrData,
-            LineProcessingContext processingContext) {
+                                                                   LineProcessingContext processingContext) {
         CommunicationLocation currentCommLocation = processingContext.getCommLocation();
         List<String> ignoredAuthCodes = processingContext.getCdrProcessor().getIgnoredAuthCodeDescriptions();
         log.debug("Determining specific internal call type for Calling: {}, Destination: {}",
                 cdrData.getCallingPartyNumber(), cdrData.getEffectiveDestinationNumber());
+
         InternalCallTypeInfo result = new InternalCallTypeInfo();
         result.setTelephonyTypeId(appConfigService.getDefaultTelephonyTypeForUnresolvedInternalCalls());
         result.setTelephonyTypeName(telephonyTypeLookupService.getTelephonyTypeName(result.getTelephonyTypeId()));
@@ -5310,8 +5312,7 @@ public class InternalCallProcessorService {
         Optional<Employee> destEmpOpt = employeeLookupService.findEmployeeByExtensionOrAuthCode(
                 cdrData.getEffectiveDestinationNumber(), null,
                 null, ignoredAuthCodes, processingContext.getExtensionRanges(),
-                cdrData.getDateTimeOrigination(), processingContext.getHistoricalData()); // Search globally for
-                                                                                          // destination
+                cdrData.getDateTimeOrigination(), processingContext.getHistoricalData());
         if (destEmpOpt.isEmpty() && CdrUtil.isPossibleExtension(cdrData.getEffectiveDestinationNumber(), limits)) {
             destEmpOpt = employeeLookupService.findEmployeeByExtensionRange(cdrData.getEffectiveDestinationNumber(),
                     null, processingContext.getExtensionRanges(),
@@ -5325,8 +5326,7 @@ public class InternalCallProcessorService {
 
         if (originCommLoc != null && destCommLoc == null && originEmpOpt.isPresent()) {
             destCommLoc = currentCommLocation;
-            log.debug(
-                    "Destination employee not found for internal call; assuming destination is within current commLocation: {}",
+            log.debug("Destination employee not found for internal call; assuming destination is within current commLocation: {}",
                     currentCommLocation.getDirectory());
         }
 
@@ -5337,11 +5337,13 @@ public class InternalCallProcessorService {
             if (!Objects.equals(currentCommLocation.getId(), originCommLoc.getId())
                     && Objects.equals(currentCommLocation.getId(), destCommLoc.getId())) {
                 result.setIgnoreCall(true);
+                result.setErrorType(QuarantineErrorType.GLOBAL_EXTENSION_IGNORE); // Specifically apply GLOBAL_EXTENSION_IGNORE
                 result.setAdditionalInfo("Global Extension - Incoming internal from another plant");
                 return result;
             } else if (!Objects.equals(currentCommLocation.getId(), originCommLoc.getId())
                     && !Objects.equals(currentCommLocation.getId(), destCommLoc.getId())) {
                 result.setIgnoreCall(true);
+                result.setErrorType(QuarantineErrorType.GLOBAL_EXTENSION_IGNORE); // Specifically apply GLOBAL_EXTENSION_IGNORE
                 result.setAdditionalInfo("Global Extension - Internal call between two other plants");
                 return result;
             }
@@ -5375,8 +5377,7 @@ public class InternalCallProcessorService {
             result.setDestinationIndicatorId(destIndicator.getId());
 
             Subdivision originSubdivision = originEmpOpt.map(Employee::getSubdivision).orElse(null);
-            Long originOfficeId = originSubdivision != null ? originSubdivision.getId() : null; // Assuming Subdivision
-                                                                                                // ID is office ID
+            Long originOfficeId = originSubdivision != null ? originSubdivision.getId() : null;
             Subdivision destSubdivision = destEmpOpt.map(Employee::getSubdivision).orElse(null);
             Long destOfficeId = destSubdivision != null ? destSubdivision.getId() : null;
 
@@ -5404,14 +5405,10 @@ public class InternalCallProcessorService {
                 result.setDestinationIndicatorId(destCommLoc.getIndicator().getId());
         }
 
-        // PHP: if (!ExtensionEncontrada($info['funcionario_funid']) &&
-        // ExtensionEncontrada($info['funcionario_fundes']) ... )
         if (originEmpOpt.isEmpty() && destEmpOpt.isPresent() &&
                 cdrData.getCallDirection() == CallDirection.OUTGOING &&
                 destCommLoc != null && Objects.equals(destCommLoc.getId(), currentCommLocation.getId())) {
 
-            // Check if destination is a Bridge. If it is, we usually want to keep it
-            // Outgoing.
             boolean isBridge = cdrData.getConferenceIdentifierUsed() != null;
             if (!isBridge) {
                 result.setEffectivelyIncoming(true);
@@ -5424,8 +5421,8 @@ public class InternalCallProcessorService {
 ============================================================
 FILE: InternalCallTypeInfo.java
 PATH: E:/Github/abacox/abacox-telephony-pricing/src/main/java/com/infomedia/abacox/telephonypricing/component/cdrprocessing/InternalCallTypeInfo.java
-SIZE: 0.7 KB
-MODIFIED: 2025-06-11 16:13:10
+SIZE: 0.78 KB
+MODIFIED: 2026-02-27 10:55:24
 ============================================================
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
@@ -5440,6 +5437,7 @@ public class InternalCallTypeInfo {
     private Long originIndicatorId;    // Indicator of the origin employee
     private String additionalInfo;
     private boolean ignoreCall = false;
+    private QuarantineErrorType errorType; // Holds the specific reason if ignored
     private boolean effectivelyIncoming = false; // If the call should be treated as incoming despite initial parsing
     private Employee originEmployee;
     private Employee destinationEmployee;
@@ -6372,10 +6370,10 @@ public enum ProcessingOutcome {
 ============================================================
 FILE: QuarantineErrorType.java
 PATH: E:/Github/abacox/abacox-telephony-pricing/src/main/java/com/infomedia/abacox/telephonypricing/component/cdrprocessing/QuarantineErrorType.java
-SIZE: 2.82 KB
-MODIFIED: 2025-06-04 13:40:58
+SIZE: 3.68 KB
+MODIFIED: 2026-02-27 10:41:57
 ============================================================
-// File: com/infomedia/abacox/telephonypricing/cdr/QuarantineErrorType.java
+// File: com/infomedia/abacox/telephonypricing/component/cdrprocessing/QuarantineErrorType.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
 import lombok.Getter;
@@ -6393,6 +6391,11 @@ public enum QuarantineErrorType {
     INTERNAL_SELF_CALL("IGUALDESTINO", "Internal call where origin and destination are the same"),
 
     // Additional types for Java context
+    INVALID_DATE("FECHANOVAL", "Origination date is missing, before minimum allowed, or too far in the future"),
+    INVALID_DURATION("TIEMPONOVAL", "Call duration is negative, less than minimum, or exceeds maximum allowed"),
+    INVALID_NUMBER_FORMAT("NUMNOVAL", "Calling or called party number contains invalid characters or spaces"),
+    INTERNAL_POLICY_IGNORE("IGNORAINTERNA", "Ignored due to specific internal call routing/policy rules"),
+    INSUFFICIENT_FIELDS("CAMPOSINSUF", "CDR line has fewer fields than the required minimum based on the header"),
     PARSER_ERROR("PARSER_ERROR", "Error during CDR line parsing"),
     ENRICHMENT_ERROR("ENRICHMENT_ERROR", "Error during CDR data enrichment"),
     ENRICHMENT_WARNING("ENRICHMENT_WARNING", "Warning during CDR data enrichment leading to quarantine"),
@@ -6400,7 +6403,6 @@ public enum QuarantineErrorType {
     MISSING_HEADER("MISSING_HEADER", "CDR data encountered before header was processed"),
     IO_EXCEPTION("IO_EXCEPTION", "Error reading CDR input stream"),
     PARSER_QUARANTINE("PARSER_QUARANTINE", "Marked for quarantine by the CDR parser directly");
-
 
     private final String phpEquivalent;
     private final String description;
@@ -6426,6 +6428,11 @@ public enum QuarantineErrorType {
             case "IGNORAPROPIOS": return CUSTOM_IGNORE;
             case "PENDIENTES": return PENDING_ASSOCIATION;
             case "IGUALDESTINO": return INTERNAL_SELF_CALL;
+            case "FECHANOVAL": return INVALID_DATE;
+            case "TIEMPONOVAL": return INVALID_DURATION;
+            case "NUMNOVAL": return INVALID_NUMBER_FORMAT;
+            case "IGNORAINTERNA": return INTERNAL_POLICY_IGNORE;
+            case "CAMPOSINSUF": return INSUFFICIENT_FIELDS;
             default:
                 return UNHANDLED_EXCEPTION; // Or a more generic "UNKNOWN_PHP_TYPE"
         }

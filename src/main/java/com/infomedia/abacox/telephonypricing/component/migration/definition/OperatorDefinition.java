@@ -16,7 +16,6 @@ public class OperatorDefinition implements MigrationTableDefinition {
                         entry("OPERADOR_ID", "id"),
                         entry("OPERADOR_NOMBRE", "name"),
                         entry("OPERADOR_MPORIGEN_ID", "originCountryId"),
-                        entry("OPERADOR_ACTIVO", "active"),
                         entry("OPERADOR_FCREACION", "createdDate"),
                         entry("OPERADOR_FMODIFICADO", "lastModifiedDate")))
                 .build();

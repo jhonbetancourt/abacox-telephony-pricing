@@ -18,7 +18,6 @@ public class OfficeDetailsDefinition implements MigrationTableDefinition {
                         entry("DATOSOFICINA_DIRECCION", "address"),
                         entry("DATOSOFICINA_TELEFONO", "phone"),
                         entry("DATOSOFICINA_INDICATIVO_ID", "indicatorId"),
-                        entry("DATOSOFICINA_ACTIVO", "active"),
                         entry("DATOSOFICINA_FCREACION", "createdDate"),
                         entry("DATOSOFICINA_FMODIFICADO", "lastModifiedDate")))
                 .build();

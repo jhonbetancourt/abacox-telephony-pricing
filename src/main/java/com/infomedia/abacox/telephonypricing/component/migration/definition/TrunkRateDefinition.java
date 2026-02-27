@@ -22,7 +22,6 @@ public class TrunkRateDefinition implements MigrationTableDefinition {
                         entry("TARIFATRONCAL_NOPREFIJOPBX", "noPbxPrefix"),
                         entry("TARIFATRONCAL_NOPREFIJO", "noPrefix"),
                         entry("TARIFATRONCAL_SEGUNDOS", "seconds"),
-                        entry("TARIFATRONCAL_ACTIVO", "active"),
                         entry("TARIFATRONCAL_FCREACION", "createdDate"),
                         entry("TARIFATRONCAL_FMODIFICADO", "lastModifiedDate")))
                 .specificValueReplacements(Map.of("telephonyTypeId", context.getTelephonyTypeReplacements()))

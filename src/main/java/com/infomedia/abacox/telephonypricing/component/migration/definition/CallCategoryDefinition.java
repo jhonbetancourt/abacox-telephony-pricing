@@ -15,7 +15,6 @@ public class CallCategoryDefinition implements MigrationTableDefinition {
                 .columnMapping(Map.ofEntries(
                         entry("CLASELLAMA_ID", "id"),
                         entry("CLASELLAMA_NOMBRE", "name"),
-                        entry("CLASELLAMA_ACTIVO", "active"),
                         entry("CLASELLAMA_FCREACION", "createdDate"),
                         entry("CLASELLAMA_FMODIFICADO", "lastModifiedDate")))
                 .build();

@@ -21,7 +21,6 @@ public class SpecialServiceDefinition implements MigrationTableDefinition {
                         entry("SERVESPECIAL_IVAINC", "vatIncluded"),
                         entry("SERVESPECIAL_DESCRIPCION", "description"),
                         entry("SERVESPECIAL_MPORIGEN_ID", "originCountryId"),
-                        entry("SERVESPECIAL_ACTIVO", "active"),
                         entry("SERVESPECIAL_FCREACION", "createdDate"),
                         entry("SERVESPECIAL_FMODIFICADO", "lastModifiedDate")))
                 .build();

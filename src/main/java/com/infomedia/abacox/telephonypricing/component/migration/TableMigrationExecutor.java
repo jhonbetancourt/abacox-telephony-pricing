@@ -47,7 +47,7 @@ public class TableMigrationExecutor {
         // Error handling for async threads
         AtomicReference<Exception> asyncError = new AtomicReference<>(null);
 
-        log.info("Executing migration for source table: {}", tableConfig.getSourceTableName());
+        log.debug("Executing migration for source table: {}", tableConfig.getSourceTableName());
 
         // --- METADATA ANALYSIS ---
         Class<?> targetEntityClass;
@@ -85,7 +85,7 @@ public class TableMigrationExecutor {
         }
 
         // --- PASS 1: INSERT ROWS (ASYNC PARALLEL WRITING) ---
-        log.info("Starting Pass 1: Streaming & Async Writing for table {} (Batch: {}, Threads: {})",
+        log.debug("Starting Pass 1: Streaming & Async Writing for table {} (Batch: {}, Threads: {})",
                 targetTableName, FETCH_BATCH_SIZE, WRITER_THREADS);
 
         ExecutorService writerPool = Executors.newFixedThreadPool(WRITER_THREADS);
@@ -154,7 +154,7 @@ public class TableMigrationExecutor {
             throw e;
         } finally {
             // Wait for all writers to finish remaining batches
-            log.info("Fetcher finished. Waiting for pending async writes to complete...");
+            log.debug("Fetcher finished. Waiting for pending async writes to complete...");
             writerPool.shutdown();
             writerPool.awaitTermination(1, TimeUnit.HOURS);
 
@@ -163,12 +163,12 @@ public class TableMigrationExecutor {
             }
         }
 
-        log.info("Finished Pass 1 (Async). Total Processed: {}, Failed/Skipped: {}",
+        log.debug("Finished Pass 1 (Async). Total Processed: {}, Failed/Skipped: {}",
                 processedCountPass1.get(), failedInsertCountPass1.get());
 
         // --- PASS 2: SELF-REFERENCING FK UPDATES (SYNC) ---
         if (isSelfReferencing) {
-            log.info("Starting Pass 2: Updating self-reference FK '{}' for table {} (Batch: {})",
+            log.debug("Starting Pass 2: Updating self-reference FK '{}' for table {} (Batch: {})",
                     selfReferenceFkInfo.getDbColumnName(), targetTableName, FETCH_BATCH_SIZE);
             try {
                 Consumer<List<Map<String, Object>>> pass2BatchProcessor = batch -> {
@@ -198,11 +198,13 @@ public class TableMigrationExecutor {
             } catch (Exception e) {
                 log.error("Fatal error during Pass 2: {}", e.getMessage(), e);
             }
-            log.info("Finished Pass 2. Total Updated FKs: {}", updatedFkCountPass2.get());
+            log.debug("Finished Pass 2. Total Updated FKs: {}", updatedFkCountPass2.get());
         }
 
         long duration = System.currentTimeMillis() - startTime;
-        log.info("Migration Complete for {}. Duration: {} ms", targetTableName, duration);
+        log.info("Migration Complete for {} -> {} (Processed: {}, Failed/Skipped: {}, FK Updates: {}). Duration: {} ms",
+                tableConfig.getSourceTableName(), targetTableName, processedCountPass1.get(),
+                failedInsertCountPass1.get(), updatedFkCountPass2.get(), duration);
     }
 
     private void logMetadata(String targetTableName, String idFieldName, String idColumnName, boolean isGeneratedId,

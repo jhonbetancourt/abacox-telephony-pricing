@@ -18,7 +18,6 @@ public class CostCenterDefinition implements MigrationTableDefinition {
                         entry("CENTROCOSTOS_OT", "workOrder"),
                         entry("CENTROCOSTOS_PERTENECE", "parentCostCenterId"),
                         entry("CENTROCOSTOS_MPORIGEN_ID", "originCountryId"),
-                        entry("CENTROCOSTOS_ACTIVO", "active"),
                         entry("CENTROCOSTOS_FCREACION", "createdDate"),
                         entry("CENTROCOSTOS_FMODIFICADO", "lastModifiedDate")))
                 .selfReferencing(true)

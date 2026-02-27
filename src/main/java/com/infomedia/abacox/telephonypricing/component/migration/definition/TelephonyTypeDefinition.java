@@ -17,7 +17,6 @@ public class TelephonyTypeDefinition implements MigrationTableDefinition {
                         entry("TIPOTELE_NOMBRE", "name"),
                         entry("TIPOTELE_CLASELLAMA_ID", "callCategoryId"),
                         entry("TIPOTELE_TRONCALES", "usesTrunks"),
-                        entry("TIPOTELE_ACTIVO", "active"),
                         entry("TIPOTELE_FCREACION", "createdDate"),
                         entry("TIPOTELE_FMODIFICADO", "lastModifiedDate")))
                 .build();

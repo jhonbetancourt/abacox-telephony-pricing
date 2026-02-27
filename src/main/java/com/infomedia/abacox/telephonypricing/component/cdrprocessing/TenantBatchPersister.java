@@ -1,6 +1,5 @@
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
-import com.infomedia.abacox.telephonypricing.component.utils.CompressionZipUtil;
 import com.infomedia.abacox.telephonypricing.db.entity.CallRecord;
 import com.infomedia.abacox.telephonypricing.db.entity.FailedCallRecord;
 import com.infomedia.abacox.telephonypricing.multitenancy.TenantContext;
@@ -12,7 +11,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.io.IOException;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -63,17 +61,60 @@ public class TenantBatchPersister {
     }
 
     private void processSuccessfulBatch(List<ProcessedCdrResult> results) {
-        // Changed Map Key to UUID
         Map<UUID, ProcessedCdrResult> uniqueBatch = new HashMap<>();
+        List<ProcessedCdrResult> inBatchDuplicates = new ArrayList<>();
+
+        // 1. Check for duplicates WITHIN the exact same batch
         for (ProcessedCdrResult res : results) {
-            uniqueBatch.put(res.getCdrData().getCtlHash(), res);
+            UUID hash = res.getCdrData().getCtlHash();
+            if (uniqueBatch.containsKey(hash)) {
+                // It's a duplicate of another line in this exact same batch
+                res.setOutcome(ProcessingOutcome.QUARANTINED);
+                res.setErrorType(QuarantineErrorType.DUPLICATE_RECORD);
+                res.setErrorMessage("Duplicate CDR detected within the same processing batch.");
+                res.setErrorStep("BATCH_DEDUPLICATION");
+                res.getCdrData().setMarkedForQuarantine(true);
+                inBatchDuplicates.add(res);
+            } else {
+                uniqueBatch.put(hash, res);
+            }
         }
 
-        // Changed List<Long> to List<UUID>
+        // Process the in-batch duplicates immediately
+        if (!inBatchDuplicates.isEmpty()) {
+            processFailedBatch(inBatchDuplicates);
+        }
+
+        if (uniqueBatch.isEmpty()) return;
+
+        // 2. Check for duplicates AGAINST the database
         List<UUID> hashesToCheck = new ArrayList<>(uniqueBatch.keySet());
         Set<UUID> existingInDb = callRecordService.findExistingHashes(hashesToCheck);
 
-        existingInDb.forEach(uniqueBatch::remove);
+        if (!existingInDb.isEmpty()) {
+            List<ProcessedCdrResult> dbDuplicates = new ArrayList<>();
+            
+            for (UUID duplicateHash : existingInDb) {
+                // Remove the duplicate from the success map
+                ProcessedCdrResult duplicateResult = uniqueBatch.remove(duplicateHash);
+                
+                if (duplicateResult != null) {
+                    // Alter its state to failed/quarantined
+                    duplicateResult.setOutcome(ProcessingOutcome.QUARANTINED);
+                    duplicateResult.setErrorType(QuarantineErrorType.DUPLICATE_RECORD);
+                    duplicateResult.setErrorMessage("Duplicate CDR detected. Hash already exists in database.");
+                    duplicateResult.setErrorStep("DB_INSERTION");
+                    duplicateResult.getCdrData().setMarkedForQuarantine(true);
+                    
+                    dbDuplicates.add(duplicateResult);
+                }
+            }
+            
+            // Route these DB duplicates to the failed batch processor
+            processFailedBatch(dbDuplicates);
+        }
+
+        // 3. Persist the remaining genuinely new records
         if (uniqueBatch.isEmpty()) return;
 
         for (ProcessedCdrResult res : uniqueBatch.values()) {

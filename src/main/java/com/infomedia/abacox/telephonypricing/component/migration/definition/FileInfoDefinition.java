@@ -30,7 +30,7 @@ public class FileInfoDefinition implements MigrationTableDefinition {
                     Object directorio = row.get("FILEINFO_DIRECTORIO");
                     Integer plantId = context.getDirectorioToPlantCache().getOrDefault(String.valueOf(directorio), 0);
                     row.put("DERIVED_PLANT_ID", plantId);
-                    row.put("LITERAL_STATUS", FileInfo.ProcessingStatus.MISSING.name());
+                    row.put("LITERAL_STATUS", FileInfo.ProcessingStatus.COMPLETED_MISSING.name());
                 })
                 .beforeMigrationAction(config -> {
                     if (context.getMigratedFileInfoIds().isEmpty()) {
@@ -38,7 +38,7 @@ public class FileInfoDefinition implements MigrationTableDefinition {
                         config.setWhereClause("1=0");
                     } else {
                         config.setSourceIdFilter(new java.util.HashSet<>(context.getMigratedFileInfoIds()));
-                        log.info("Filtering FileInfo migration to {} collected IDs via sourceIdFilter.",
+                        log.debug("Filtering FileInfo migration to {} collected IDs via sourceIdFilter.",
                                 context.getMigratedFileInfoIds().size());
                     }
                 })

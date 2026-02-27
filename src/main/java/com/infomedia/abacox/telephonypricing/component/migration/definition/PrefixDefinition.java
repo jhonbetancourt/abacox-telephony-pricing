@@ -21,7 +21,6 @@ public class PrefixDefinition implements MigrationTableDefinition {
                         entry("PREFIJO_BANDAOK", "bandOk"),
                         entry("PREFIJO_IVAINC", "vatIncluded"),
                         entry("PREFIJO_IVA", "vatValue"),
-                        entry("PREFIJO_ACTIVO", "active"),
                         entry("PREFIJO_FCREACION", "createdDate"),
                         entry("PREFIJO_FMODIFICADO", "lastModifiedDate")))
                 .specificValueReplacements(Map.of("telephonyTypeId", context.getTelephonyTypeReplacements()))

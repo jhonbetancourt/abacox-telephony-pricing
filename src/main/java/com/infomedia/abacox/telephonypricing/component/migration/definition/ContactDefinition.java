@@ -21,7 +21,6 @@ public class ContactDefinition implements MigrationTableDefinition {
                         entry("DIRECTORIO_NOMBRE", "name"),
                         entry("DIRECTORIO_DESCRIPCION", "description"),
                         entry("DIRECTORIO_INDICATIVO_ID", "indicatorId"),
-                        entry("DIRECTORIO_ACTIVO", "active"),
                         entry("DIRECTORIO_FCREACION", "createdDate"),
                         entry("DIRECTORIO_FMODIFICADO", "lastModifiedDate")))
                 .build();

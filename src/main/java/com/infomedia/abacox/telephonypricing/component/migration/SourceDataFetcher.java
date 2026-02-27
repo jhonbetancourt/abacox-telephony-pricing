@@ -100,7 +100,7 @@ public class SourceDataFetcher {
             throw new SQLException("JDBC Driver not found: " + config.getDriverClassName(), e);
         }
 
-        log.info("Connecting to source database: {}", config.getUrl());
+        log.debug("Connecting to source database: {}", config.getUrl());
         try (Connection connection = DriverManager.getConnection(config.getUrl(), config.getUsername(),
                 config.getPassword())) {
 
@@ -170,7 +170,7 @@ public class SourceDataFetcher {
                 String sql = buildStreamingQuery(dialect, tableName, columnsSql, whereClause, finalOrderByClause,
                         maxEntriesToMigrate);
 
-                log.info("Executing streaming query: {}", sql);
+                log.debug("Executing streaming query: {}", sql);
 
                 // Some drivers (e.g. Postgres) require autoCommit = false to honor setFetchSize
                 // as a cursor
@@ -208,7 +208,7 @@ public class SourceDataFetcher {
                                 }
 
                                 if (totalRowsFetched % (batchSize * 10) == 0) {
-                                    log.info("Streamed {} total rows from source table {}...", totalRowsFetched,
+                                    log.debug("Streamed {} total rows from source table {}...", totalRowsFetched,
                                             tableName);
                                 }
                             }
@@ -227,7 +227,7 @@ public class SourceDataFetcher {
                 }
             }
 
-            log.info("Finished streaming data for source table {}. Total rows fetched: {}", tableName,
+            log.debug("Finished streaming data for source table {}. Total rows fetched: {}", tableName,
                     totalRowsFetched);
 
         } catch (SQLException e) {
@@ -245,7 +245,7 @@ public class SourceDataFetcher {
         Set<Object> idFilter = tableConfig.getSourceIdFilter();
         List<Object> idList = new ArrayList<>(idFilter);
 
-        log.info("Fetching data from {} for {} specific IDs via sub-batching.", tableName, idList.size());
+        log.debug("Fetching data from {} for {} specific IDs via sub-batching.", tableName, idList.size());
 
         String columnsSql = buildColumnsSql(columnsToSelect, dialect);
         int maxParamsPerQuery = 2000;

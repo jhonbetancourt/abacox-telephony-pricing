@@ -20,7 +20,6 @@ public class BandDefinition implements MigrationTableDefinition {
                         entry("BANDA_INDICAORIGEN_ID", "originIndicatorId"),
                         entry("BANDA_IVAINC", "vatIncluded"),
                         entry("BANDA_REF", "reference"),
-                        entry("BANDA_ACTIVO", "active"),
                         entry("BANDA_FCREACION", "createdDate"),
                         entry("BANDA_FMODIFICADO", "lastModifiedDate")))
                 .build();
