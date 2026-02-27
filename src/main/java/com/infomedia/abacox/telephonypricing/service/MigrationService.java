@@ -941,6 +941,7 @@ public class MigrationService {
                                                 entry("ACUMTOTAL_CAUSA_TRANSFER", "transferCause"),
                                                 entry("ACUMTOTAL_CAUSA_ASIGNA", "assignmentCause"),
                                                 entry("ACUMTOTAL_FUNDESTINO_ID", "destinationEmployeeId"),
+                                                entry("ACUMTOTAL_FILEINFO_ID", "fileInfoId"),
                                                 entry("ACUMTOTAL_FCREACION", "createdDate"),
                                                 entry("ACUMTOTAL_FMODIFICADO", "lastModifiedDate")))
                                 .maxEntriesToMigrate(runRequest.getMaxCallRecordEntries())
@@ -966,6 +967,7 @@ public class MigrationService {
                                                 entry("ACUMFALLIDO_MENSAJE", "errorMessage"),
                                                 entry("ACUMFALLIDO_ACUMTOTAL_ID", "originalCallRecordId"),
                                                 entry("ACUMFALLIDO_COMUBICACION_ID", "commLocationId"),
+                                                entry("ACUMFALLIDO_FILEINFO_ID", "fileInfoId"),
                                                 entry("ACUMFALLIDO_CDR", "ctlHash"),
                                                 entry("ACUMFALLIDO_FCREACION", "createdDate"),
                                                 entry("ACUMFALLIDO_FMODIFICADO", "lastModifiedDate")))
@@ -978,7 +980,8 @@ public class MigrationService {
                                                                                 .getBytes(StandardCharsets.UTF_8))
                                                                 : null))
                                 .maxEntriesToMigrate(runRequest.getMaxFailedCallRecordEntries())
-                                .specificValueReplacements(Map.of("originalCallRecordId", originalCallRecordIdReplacements))
+                                .specificValueReplacements(
+                                                Map.of("originalCallRecordId", originalCallRecordIdReplacements))
                                 .orderByClause("ACUMFALLIDO_ID DESC")
                                 .build());
 

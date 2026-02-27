@@ -10,9 +10,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(
-    name = "call_record",
-    indexes = {
+@Table(name = "call_record", indexes = {
         // 1. Primary Date Range Filtering (Used in ALL reports)
         @Index(name = "idx_call_record_service_date", columnList = "service_date"),
 
@@ -29,18 +27,17 @@ import java.util.UUID;
 
         // 5. Telephony Type & Subdivision Reports
         @Index(name = "idx_call_record_tt_svc", columnList = "telephony_type_id, service_date"),
-        
+
         // 6. Foreign Key Optimization (Joins)
         @Index(name = "idx_call_record_employee", columnList = "employee_id"),
         @Index(name = "idx_call_record_comm_loc", columnList = "comm_location_id"),
         @Index(name = "idx_call_record_operator", columnList = "operator_id"),
         @Index(name = "idx_call_record_indicator", columnList = "indicator_id"),
         @Index(name = "idx_call_record_dest_emp", columnList = "destination_employee_id"),
-        
+
         // 7. File reprocessing / Cleanup
         @Index(name = "idx_call_record_file_info", columnList = "file_info_id"),
-    }
-)
+})
 @Getter
 @Setter
 @NoArgsConstructor
@@ -60,7 +57,7 @@ public class CallRecord extends AuditedEntity {
 
     @Column(name = "comm_location_id")
     private Long commLocationId;
-    
+
     @ManyToOne
     @JoinColumn(name = "comm_location_id", insertable = false, updatable = false, foreignKey = @ForeignKey(name = "fk_call_record_comm_location"))
     private CommunicationLocation commLocation;
@@ -70,7 +67,7 @@ public class CallRecord extends AuditedEntity {
 
     @Column(name = "operator_id")
     private Long operatorId;
-    
+
     @ManyToOne
     @JoinColumn(name = "operator_id", insertable = false, updatable = false, foreignKey = @ForeignKey(name = "fk_call_record_operator"))
     private Operator operator;
@@ -85,7 +82,7 @@ public class CallRecord extends AuditedEntity {
 
     @Column(name = "indicator_id")
     private Long indicatorId;
-    
+
     @ManyToOne
     @JoinColumn(name = "indicator_id", insertable = false, updatable = false, foreignKey = @ForeignKey(name = "fk_call_record_indicator"))
     private Indicator indicator;
@@ -104,7 +101,7 @@ public class CallRecord extends AuditedEntity {
 
     @Column(name = "telephony_type_id")
     private Long telephonyTypeId;
-    
+
     @ManyToOne
     @JoinColumn(name = "telephony_type_id", insertable = false, updatable = false, foreignKey = @ForeignKey(name = "fk_call_record_telephony_type"))
     private TelephonyType telephonyType;
@@ -135,7 +132,7 @@ public class CallRecord extends AuditedEntity {
 
     @Column(name = "employee_id")
     private Long employeeId;
-    
+
     @ManyToOne
     @JoinColumn(name = "employee_id", insertable = false, updatable = false, foreignKey = @ForeignKey(name = "fk_call_record_employee"))
     private Employee employee;
@@ -153,17 +150,13 @@ public class CallRecord extends AuditedEntity {
 
     @Column(name = "destination_employee_id")
     private Long destinationEmployeeId;
-    
+
     @ManyToOne
     @JoinColumn(name = "destination_employee_id", insertable = false, updatable = false, foreignKey = @ForeignKey(name = "fk_call_record_destination_employee"))
     private Employee destinationEmployee;
 
     @Column(name = "file_info_id")
     private Long fileInfoId;
-    
-    @ManyToOne
-    @JoinColumn(name = "file_info_id", insertable = false, updatable = false, foreignKey = @ForeignKey(name = "fk_call_record_file_info"))
-    private FileInfo fileInfo;
 
     @ToString.Exclude
     @Column(name = "ctl_hash", unique = true)
