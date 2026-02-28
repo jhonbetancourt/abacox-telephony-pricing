@@ -95,6 +95,32 @@ public class MinioStorageService {
             // RETURN the location details
             return new MinioUploadResult(bucketName, objectName);
 
+        } catch (ErrorResponseException e) {
+            // Bucket may have been deleted after our cached check — invalidate and retry once
+            if ("NoSuchBucket".equals(e.errorResponse().code())) {
+                log.warn("Bucket {} not found during upload (may have been deleted). Recreating and retrying.", bucketName);
+                checkedBuckets.remove(bucketName);
+                ensureBucketExists(bucketName);
+                try {
+                    long partSize = -1;
+                    if (size == -1) {
+                        partSize = 10485760;
+                    }
+                    minioClient.putObject(
+                            PutObjectArgs.builder()
+                                    .bucket(bucketName)
+                                    .object(objectName)
+                                    .stream(inputStream, size, partSize)
+                                    .contentType(contentType)
+                                    .build());
+                    return new MinioUploadResult(bucketName, objectName);
+                } catch (Exception retryEx) {
+                    log.error("Error uploading object {} to bucket {} on retry", objectName, bucketName, retryEx);
+                    throw new RuntimeException("MinIO upload failed", retryEx);
+                }
+            }
+            log.error("Error uploading object {} to bucket {}", objectName, bucketName, e);
+            throw new RuntimeException("MinIO upload failed", e);
         } catch (Exception e) {
             log.error("Error uploading object {} to bucket {}", objectName, bucketName, e);
             throw new RuntimeException("MinIO upload failed", e);
