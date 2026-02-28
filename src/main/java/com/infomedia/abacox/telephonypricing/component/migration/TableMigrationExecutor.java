@@ -254,7 +254,7 @@ public class TableMigrationExecutor {
 
             // If the batch failed but is still large enough, split it in half
             if (batchSize > MIN_SPLIT_BATCH_SIZE) {
-                log.warn("Batch of size {} failed. Splitting into halves. Reason: {}",
+                log.debug("Batch of size {} failed. Splitting into halves. Reason: {}",
                         batchSize, extractShortErrorMessage(batchEx));
 
                 int mid = batchSize / 2;
@@ -276,7 +276,7 @@ public class TableMigrationExecutor {
                 return failedCount;
             } else {
                 // If the batch is small enough, drop to row-by-row
-                log.warn("Sub-batch of size {} failed. Falling back to row-by-row processing. Reason: {}",
+                log.debug("Sub-batch of size {} failed. Falling back to row-by-row processing. Reason: {}",
                         batchSize, extractShortErrorMessage(batchEx));
 
                 int failedCount = 0;

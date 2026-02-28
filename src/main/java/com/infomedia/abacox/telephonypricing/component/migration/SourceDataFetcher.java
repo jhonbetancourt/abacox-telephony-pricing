@@ -208,7 +208,7 @@ public class SourceDataFetcher {
                                 }
 
                                 if (totalRowsFetched % (batchSize * 10) == 0) {
-                                    log.debug("Streamed {} total rows from source table {}...", totalRowsFetched,
+                                    log.info("Streamed {} total rows from source table {}...", totalRowsFetched,
                                             tableName);
                                 }
                             }
