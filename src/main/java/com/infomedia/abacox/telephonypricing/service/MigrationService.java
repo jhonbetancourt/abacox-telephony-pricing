@@ -23,7 +23,6 @@ import java.sql.ResultSet;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -328,9 +327,19 @@ public class MigrationService {
                                 .sourceClientId(sourceClientId)
                                 .telephonyTypeReplacements(telephonyTypeReplacements)
                                 .validEmployeeIdsCache(new AtomicReference<>(null))
-                                .employeeIdLoader(() -> new LongOpenHashSet((Collection<Long>) entityManager
-                                                .createQuery("SELECT e.id FROM Employee e", Long.class)
-                                                .getResultList()))
+                                .employeeIdLoader(() -> {
+                                        long s = System.currentTimeMillis();
+                                        log.info("Starting native query for Employee IDs...");
+                                        List<Number> list = entityManager.createNativeQuery("SELECT id FROM employee")
+                                                        .getResultList();
+                                        LongOpenHashSet set = new LongOpenHashSet(list.size());
+                                        for (Number n : list) {
+                                                set.add(n.longValue());
+                                        }
+                                        log.info("Finished loading {} Employee IDs in {} ms", set.size(),
+                                                        System.currentTimeMillis() - s);
+                                        return set;
+                                })
                                 .migratedFileInfoIds(Collections.synchronizedSet(new HashSet<>()))
                                 .directorioToPlantCache(fetchDirectorioToPlantCache(runRequest, sourceClientId))
                                 .controlDatabase(runRequest.getControlDatabase())

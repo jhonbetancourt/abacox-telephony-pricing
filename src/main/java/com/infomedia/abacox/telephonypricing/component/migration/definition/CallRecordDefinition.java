@@ -54,6 +54,13 @@ public class CallRecordDefinition implements MigrationTableDefinition {
                         }
                     }
                 })
+                .beforeMigrationAction(config -> {
+                    AtomicReference<LongOpenHashSet> cacheRef = context.getValidEmployeeIdsCache();
+                    if (cacheRef.get() == null) {
+                        log.info("Eager loading employee IDs for ACUMTOTAL migration...");
+                        cacheRef.set(context.getEmployeeIdLoader().get());
+                    }
+                })
                 .rowModifier(row -> mutateAcumtotalRow(row, context))
                 .build();
     }
@@ -103,14 +110,6 @@ public class CallRecordDefinition implements MigrationTableDefinition {
 
         if (empId != -1) {
             AtomicReference<LongOpenHashSet> cacheRef = context.getValidEmployeeIdsCache();
-            if (cacheRef.get() == null) {
-                synchronized (cacheRef) {
-                    if (cacheRef.get() == null) {
-                        log.info("Lazy loading employee IDs for ACUMTOTAL row modifier...");
-                        cacheRef.set(context.getEmployeeIdLoader().get());
-                    }
-                }
-            }
             if (cacheRef.get() != null && !cacheRef.get().contains(empId)) {
                 row.put(columnName, null);
             }
