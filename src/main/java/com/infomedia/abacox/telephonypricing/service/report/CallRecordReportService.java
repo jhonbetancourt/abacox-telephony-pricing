@@ -181,14 +181,16 @@ public class CallRecordReportService {
         // 1. Get Extension Limits once
         var limitsMap = employeeLookupService.getExtensionLimits();
 
-        // 2. Aggregate min/max lengths across all active plants
+        // 2. Aggregate min/max digit-lengths across all active plants.
+        // ExtensionLimits stores numeric range values (e.g. 100, 99999 for 3-5 digit extensions).
+        // We need the digit count (strlen equivalent), matching legacy: strlen($arreglo['min']).
         int minLength = limitsMap.values().stream()
-                .mapToInt(ExtensionLimits::getMinLength)
+                .mapToInt(v -> String.valueOf(v.getMinLength()).length())
                 .min()
                 .orElse(3); // Fallback to 3 if no limits found
 
         int maxLength = limitsMap.values().stream()
-                .mapToInt(ExtensionLimits::getMaxLength)
+                .mapToInt(v -> String.valueOf(v.getMaxLength()).length())
                 .max()
                 .orElse(5); // Fallback to 5 if no limits found
 

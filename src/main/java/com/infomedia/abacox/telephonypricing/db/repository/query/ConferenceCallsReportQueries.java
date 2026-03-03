@@ -38,7 +38,13 @@ public final class ConferenceCallsReportQueries {
       LEFT JOIN operator o ON o.id = cr.operator_id
       LEFT JOIN contact c ON cr.dial IS NOT NULL AND cr.dial != '' AND cr.dial = c.phone_number
       LEFT JOIN company co ON co.id = c.company_id
-      LEFT JOIN employee org ON org.extension = cr.dial AND org.active = true
+      LEFT JOIN LATERAL (
+          SELECT id, name, subdivision_id
+          FROM employee
+          WHERE extension = cr.dial AND active = true
+          ORDER BY id DESC
+          LIMIT 1
+      ) org ON true
       LEFT JOIN subdivision s_org ON s_org.id = org.subdivision_id
       WHERE cr.transfer_cause IN (10, 3)
         AND cr.employee_transfer IS NOT NULL AND cr.employee_transfer != ''
