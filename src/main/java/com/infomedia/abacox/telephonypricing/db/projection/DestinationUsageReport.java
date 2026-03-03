@@ -9,7 +9,6 @@ import java.math.BigDecimal;
  */
 public interface DestinationUsageReport {
     String getCityName();
-    String getDepartmentCountryName();
     String getTelephonyTypeName();
     Long getCallCount();
     Long getTotalDuration();

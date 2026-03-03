@@ -7,8 +7,10 @@ public final class DestinationUsageReportQueries {
     public static final String QUERY = """
             WITH report_data AS (
                 SELECT
-                    ind_dest.city_name AS cityName,
-                    ind_dest.department_country AS departmentCountryName,
+                    CASE WHEN ind_dest.city_name != '' AND ind_dest.department_country != ''
+                         THEN CONCAT(ind_dest.city_name, ' - ', ind_dest.department_country)
+                         ELSE COALESCE(NULLIF(ind_dest.city_name,''), ind_dest.department_country)
+                    END AS cityName,
                     tt.name AS telephonyTypeName,
                     COUNT(cr.id) AS callCount,
                     COALESCE(SUM(cr.duration), 0) AS totalDuration,
@@ -26,14 +28,15 @@ public final class DestinationUsageReportQueries {
                 WHERE
                     (cr.service_date BETWEEN :startDate AND :endDate)
                 GROUP BY
-                    ind_dest.city_name,
-                    ind_dest.department_country,
+                    CASE WHEN ind_dest.city_name != '' AND ind_dest.department_country != ''
+                         THEN CONCAT(ind_dest.city_name, ' - ', ind_dest.department_country)
+                         ELSE COALESCE(NULLIF(ind_dest.city_name,''), ind_dest.department_country)
+                    END,
                     ind_dest.id,
                     tt.name
             )
             SELECT
                 cityName,
-                departmentCountryName,
                 telephonyTypeName,
                 callCount,
                 totalDuration,
@@ -59,8 +62,10 @@ public final class DestinationUsageReportQueries {
                 WHERE
                     (cr.service_date BETWEEN :startDate AND :endDate)
                 GROUP BY
-                    ind_dest.city_name,
-                    ind_dest.department_country,
+                    CASE WHEN ind_dest.city_name != '' AND ind_dest.department_country != ''
+                         THEN CONCAT(ind_dest.city_name, ' - ', ind_dest.department_country)
+                         ELSE COALESCE(NULLIF(ind_dest.city_name,''), ind_dest.department_country)
+                    END,
                     ind_dest.id,
                     tt.name
             ) AS group_count
