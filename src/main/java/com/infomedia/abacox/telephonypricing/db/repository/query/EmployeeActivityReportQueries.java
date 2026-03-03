@@ -38,7 +38,8 @@ public final class EmployeeActivityReportQueries {
         COALESCE(agg.outgoing_calls, 0) AS outgoingCallCount,
         COALESCE(agg.incoming_calls, 0) AS incomingCallCount,
         agg.last_incoming AS lastIncomingCallDate,
-        agg.last_outgoing AS lastOutgoingCallDate
+        agg.last_outgoing AS lastOutgoingCallDate,
+        (agg.last_incoming IS NOT NULL OR agg.last_outgoing IS NOT NULL) AS isUsed
     FROM latest_employees f
     LEFT JOIN call_aggregates_in_range agg ON f.extension = agg.extension
     LEFT JOIN cost_center cc ON f.cost_center_id = cc.id
@@ -47,6 +48,7 @@ public final class EmployeeActivityReportQueries {
         (:employeeName IS NULL OR f.name ILIKE CONCAT('%', :employeeName, '%'))
     AND
         (:extension IS NULL OR f.extension ILIKE CONCAT('%', :extension, '%'))
+    ORDER BY f.extension
     """;
 
     public static final String COUNT_QUERY = """

@@ -19,4 +19,5 @@ public interface EmployeeActivityReport {
     Long getIncomingCallCount();
     LocalDateTime getLastIncomingCallDate();
     LocalDateTime getLastOutgoingCallDate();
+    Boolean getIsUsed();
 }

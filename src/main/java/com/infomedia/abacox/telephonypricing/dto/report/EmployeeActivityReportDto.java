@@ -26,4 +26,5 @@ public class EmployeeActivityReportDto {
     private LocalDateTime lastIncomingCallDate;
     @JsonFormat(pattern = DateTimePattern.DATE_TIME)
     private LocalDateTime lastOutgoingCallDate;
+    private Boolean isUsed;
 }
