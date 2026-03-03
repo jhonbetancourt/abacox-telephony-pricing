@@ -11,7 +11,6 @@ public interface HighestConsumptionEmployeeReport {
     String getEmployeeName();
     String getExtension();
     String getOriginCity();
-    String getOriginDepartmentCountry();
     Long getCallCount();
     Long getTotalDuration();
     BigDecimal getTotalBilledAmount();

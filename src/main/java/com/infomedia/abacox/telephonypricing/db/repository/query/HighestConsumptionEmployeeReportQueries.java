@@ -8,8 +8,10 @@ public final class HighestConsumptionEmployeeReportQueries {
         SELECT
             e.name AS employeeName,
             e.extension AS extension,
-            ind_origin.city_name AS originCity,
-            ind_origin.department_country AS originDepartmentCountry,
+            CASE WHEN ind_origin.city_name != '' AND ind_origin.department_country != ''
+                 THEN CONCAT(ind_origin.city_name, ' - ', ind_origin.department_country)
+                 ELSE COALESCE(NULLIF(ind_origin.city_name,''), ind_origin.department_country)
+            END AS originCity,
             COUNT(cr.id) AS callCount,
             COALESCE(SUM(cr.duration), 0) AS totalDuration,
             COALESCE(SUM(cr.billed_amount), 0) AS totalBilledAmount
@@ -29,13 +31,15 @@ public final class HighestConsumptionEmployeeReportQueries {
             e.active = true
         GROUP BY
             e.id, e.name, e.extension,
-            ind_origin.city_name, ind_origin.department_country
+            CASE WHEN ind_origin.city_name != '' AND ind_origin.department_country != ''
+                 THEN CONCAT(ind_origin.city_name, ' - ', ind_origin.department_country)
+                 ELSE COALESCE(NULLIF(ind_origin.city_name,''), ind_origin.department_country)
+            END
     )
     SELECT
         employeeName,
         extension,
         originCity,
-        originDepartmentCountry,
         callCount,
         totalDuration,
         totalBilledAmount
@@ -63,7 +67,10 @@ public final class HighestConsumptionEmployeeReportQueries {
             e.active = true
         GROUP BY
             e.id, e.name, e.extension,
-            ind_origin.city_name, ind_origin.department_country
+            CASE WHEN ind_origin.city_name != '' AND ind_origin.department_country != ''
+                 THEN CONCAT(ind_origin.city_name, ' - ', ind_origin.department_country)
+                 ELSE COALESCE(NULLIF(ind_origin.city_name,''), ind_origin.department_country)
+            END
     ) AS group_count
     """;
 }
