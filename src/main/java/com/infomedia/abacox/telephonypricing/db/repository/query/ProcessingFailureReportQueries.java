@@ -14,8 +14,8 @@ public final class ProcessingFailureReportQueries {
             COUNT(fr.id) AS failureCount
         FROM
             failed_call_record fr
-            JOIN communication_location cl ON fr.comm_location_id = cl.id
-            JOIN plant_type pt ON cl.plant_type_id = pt.id
+            LEFT JOIN communication_location cl ON fr.comm_location_id = cl.id
+            LEFT JOIN plant_type pt ON cl.plant_type_id = pt.id
         WHERE
             fr.created_date BETWEEN :startDate AND :endDate
             AND (:directory IS NULL OR cl.directory ILIKE CONCAT('%', :directory, '%'))
@@ -32,6 +32,7 @@ public final class ProcessingFailureReportQueries {
         failureCount
     FROM
         report_data
+    ORDER BY failureCount DESC, commLocationDirectory, plantTypeName
     """;
 
     public static final String COUNT_QUERY = """
@@ -39,8 +40,8 @@ public final class ProcessingFailureReportQueries {
         SELECT 1
         FROM
             failed_call_record fr
-            JOIN communication_location cl ON fr.comm_location_id = cl.id
-            JOIN plant_type pt ON cl.plant_type_id = pt.id
+            LEFT JOIN communication_location cl ON fr.comm_location_id = cl.id
+            LEFT JOIN plant_type pt ON cl.plant_type_id = pt.id
         WHERE
             fr.created_date BETWEEN :startDate AND :endDate
             AND (:directory IS NULL OR cl.directory ILIKE CONCAT('%', :directory, '%'))
