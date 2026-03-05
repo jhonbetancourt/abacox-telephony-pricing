@@ -1,7 +1,7 @@
 package com.infomedia.abacox.telephonypricing.service.report;
 
 import com.infomedia.abacox.telephonypricing.component.modeltools.ModelConverter;
-import com.infomedia.abacox.telephonypricing.component.utils.InMemorySortUtils;
+import com.infomedia.abacox.telephonypricing.component.utils.SortingUtils;
 import com.infomedia.abacox.telephonypricing.db.entity.ExtensionList;
 import com.infomedia.abacox.telephonypricing.db.repository.ExtensionListRepository;
 import com.infomedia.abacox.telephonypricing.db.repository.ReportRepository;
@@ -129,7 +129,7 @@ public class ExtensionGroupReportService {
                 .totalPercent(new BigDecimal("100.00"))
                 .build();
 
-        InMemorySortUtils.sort(groupDtos, pageable.getSort(), Sort.by("groupName"));
+        SortingUtils.sort(groupDtos, pageable.getSort(), Sort.by("groupName"));
 
         // 7. Paginate the group list using SliceImpl
         int start = (int) pageable.getOffset();

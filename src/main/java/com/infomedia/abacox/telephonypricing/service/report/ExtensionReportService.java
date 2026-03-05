@@ -2,7 +2,7 @@ package com.infomedia.abacox.telephonypricing.service.report;
 
 import com.infomedia.abacox.telephonypricing.component.export.excel.ExcelGeneratorBuilder;
 import com.infomedia.abacox.telephonypricing.component.modeltools.ModelConverter;
-import com.infomedia.abacox.telephonypricing.component.utils.InMemorySortUtils;
+import com.infomedia.abacox.telephonypricing.component.utils.SortingUtils;
 import com.infomedia.abacox.telephonypricing.db.repository.ReportRepository;
 import com.infomedia.abacox.telephonypricing.dto.report.UnusedExtensionReportDto;
 import lombok.RequiredArgsConstructor;
@@ -30,7 +30,7 @@ public class ExtensionReportService {
             Pageable pageable) {
         return modelConverter.mapSlice(
                 reportRepository.getUnusedExtensionReport(startDate, endDate, employeeName, extension,
-                        InMemorySortUtils.applyDefaultSort(pageable, Sort.by("extension"))),
+                        SortingUtils.applyDefaultSort(pageable, Sort.by("extension"))),
                 UnusedExtensionReportDto.class);
     }
 

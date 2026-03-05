@@ -2,7 +2,7 @@ package com.infomedia.abacox.telephonypricing.service.report;
 
 import com.infomedia.abacox.telephonypricing.component.export.excel.ExcelGeneratorBuilder;
 import com.infomedia.abacox.telephonypricing.component.modeltools.ModelConverter;
-import com.infomedia.abacox.telephonypricing.component.utils.InMemorySortUtils;
+import com.infomedia.abacox.telephonypricing.component.utils.SortingUtils;
 import com.infomedia.abacox.telephonypricing.db.projection.MonthlySubdivisionUsage;
 import com.infomedia.abacox.telephonypricing.db.repository.ReportRepository;
 import com.infomedia.abacox.telephonypricing.dto.report.MonthlyCostDto;
@@ -38,7 +38,7 @@ public class SubdivisionReportService {
             LocalDateTime startDate, LocalDateTime endDate, Long parentSubdivisionId, Pageable pageable) {
         return modelConverter.mapSlice(
                 reportRepository.getSubdivisionUsageReport(startDate, endDate, parentSubdivisionId,
-                        InMemorySortUtils.applyDefaultSort(pageable, Sort.by("subdivisionName"))),
+                        SortingUtils.applyDefaultSort(pageable, Sort.by("subdivisionName"))),
                 SubdivisionUsageReportDto.class);
     }
 
@@ -62,7 +62,7 @@ public class SubdivisionReportService {
             LocalDateTime startDate, LocalDateTime endDate, List<Long> subdivisionIds, Pageable pageable) {
         return modelConverter.mapSlice(
                 reportRepository.getSubdivisionUsageByTypeReport(startDate, endDate, subdivisionIds,
-                        InMemorySortUtils.applyDefaultSort(pageable, Sort.by("subdivisionName"))),
+                        SortingUtils.applyDefaultSort(pageable, Sort.by("subdivisionName"))),
                 SubdivisionUsageByTypeReportDto.class);
     }
 
@@ -153,7 +153,7 @@ public class SubdivisionReportService {
         });
 
         // Sort before abs conversion so signed values drive ordering (default: drops first, then increases)
-        InMemorySortUtils.sort(allDtos, pageable.getSort(),
+        SortingUtils.sort(allDtos, pageable.getSort(),
                 Sort.by("totalVariation").and(Sort.by("subdivisionName")));
 
         // Format variation as absolute value for display as requested ("always

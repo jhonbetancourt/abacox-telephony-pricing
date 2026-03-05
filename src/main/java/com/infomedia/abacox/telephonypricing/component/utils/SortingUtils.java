@@ -7,9 +7,9 @@ import org.springframework.data.domain.Sort;
 import java.util.Comparator;
 import java.util.List;
 
-public class InMemorySortUtils {
+public class SortingUtils {
 
-    private InMemorySortUtils() {}
+    private SortingUtils() {}
 
     /**
      * Returns a Pageable with the defaultSort applied when the requested Pageable has no sort.

@@ -2,7 +2,7 @@ package com.infomedia.abacox.telephonypricing.service.report;
 
 import com.infomedia.abacox.telephonypricing.component.export.excel.ExcelGeneratorBuilder;
 import com.infomedia.abacox.telephonypricing.component.modeltools.ModelConverter;
-import com.infomedia.abacox.telephonypricing.component.utils.InMemorySortUtils;
+import com.infomedia.abacox.telephonypricing.component.utils.SortingUtils;
 import com.infomedia.abacox.telephonypricing.db.repository.ReportRepository;
 import com.infomedia.abacox.telephonypricing.dto.report.EmployeeActivityReportDto;
 import com.infomedia.abacox.telephonypricing.dto.report.EmployeeCallReportDto;
@@ -39,7 +39,7 @@ public class EmployeeReportService {
             String employeeExtension,
             LocalDateTime startDate, LocalDateTime endDate, Pageable pageable) {
         return modelConverter.mapSlice(reportRepository.getEmployeeActivityReport(startDate, endDate, employeeName,
-                employeeExtension, InMemorySortUtils.applyDefaultSort(pageable, Sort.by("extension"))),
+                employeeExtension, SortingUtils.applyDefaultSort(pageable, Sort.by("extension"))),
                 EmployeeActivityReportDto.class);
     }
 
@@ -59,7 +59,7 @@ public class EmployeeReportService {
     @Transactional(readOnly = true)
     public Slice<EmployeeCallReportDto> generateEmployeeCallReport(String employeeName, String employeeExtension,
             LocalDateTime startDate, LocalDateTime endDate, Pageable pageable) {
-        Pageable effectivePageable = InMemorySortUtils.applyDefaultSort(pageable,
+        Pageable effectivePageable = SortingUtils.applyDefaultSort(pageable,
                 Sort.by(Sort.Order.desc("totalCost"), Sort.Order.asc("employeeName")));
         Slice<EmployeeCallReportDto> slice = modelConverter.mapSlice(
                 reportRepository.getEmployeeCallReport(startDate, endDate, employeeName, employeeExtension,
@@ -112,7 +112,7 @@ public class EmployeeReportService {
             LocalDateTime endDate, Integer minRingCount, Pageable pageable) {
         return modelConverter.mapSlice(
                 reportRepository.getMissedCallEmployeeReport(startDate, endDate, employeeName, minRingCount,
-                        InMemorySortUtils.applyDefaultSort(pageable, Sort.by(Sort.Direction.DESC, "missedCallCount"))),
+                        SortingUtils.applyDefaultSort(pageable, Sort.by(Sort.Direction.DESC, "missedCallCount"))),
                 MissedCallEmployeeReportDto.class);
     }
 
@@ -135,7 +135,7 @@ public class EmployeeReportService {
             LocalDateTime startDate, LocalDateTime endDate, Pageable pageable) {
         return modelConverter.mapSlice(
                 reportRepository.getEmployeeAuthCodeUsageReport(startDate, endDate,
-                        InMemorySortUtils.applyDefaultSort(pageable, Sort.by("employeeName"))),
+                        SortingUtils.applyDefaultSort(pageable, Sort.by("employeeName"))),
                 EmployeeAuthCodeUsageReportDto.class);
     }
 
@@ -157,7 +157,7 @@ public class EmployeeReportService {
             LocalDateTime startDate, LocalDateTime endDate, Pageable pageable) {
         return modelConverter.mapSlice(
                 reportRepository.getHighestConsumptionEmployeeReport(startDate, endDate,
-                        InMemorySortUtils.applyDefaultSort(pageable, Sort.by(Sort.Direction.DESC, "totalBilledAmount"))),
+                        SortingUtils.applyDefaultSort(pageable, Sort.by(Sort.Direction.DESC, "totalBilledAmount"))),
                 HighestConsumptionEmployeeReportDto.class);
     }
 

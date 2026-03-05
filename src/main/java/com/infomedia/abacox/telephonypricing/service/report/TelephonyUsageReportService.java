@@ -2,7 +2,7 @@ package com.infomedia.abacox.telephonypricing.service.report;
 
 import com.infomedia.abacox.telephonypricing.component.export.excel.ExcelGeneratorBuilder;
 import com.infomedia.abacox.telephonypricing.component.modeltools.ModelConverter;
-import com.infomedia.abacox.telephonypricing.component.utils.InMemorySortUtils;
+import com.infomedia.abacox.telephonypricing.component.utils.SortingUtils;
 import com.infomedia.abacox.telephonypricing.db.repository.ReportRepository;
 import com.infomedia.abacox.telephonypricing.dto.generic.SliceWithSummaries;
 import com.infomedia.abacox.telephonypricing.dto.report.*;
@@ -82,7 +82,7 @@ public class TelephonyUsageReportService {
                         groups.add(new TelephonyTypeUsageGroupDto(categoryName, items, subtotal));
                 }
 
-                InMemorySortUtils.sort(groups, pageable.getSort(), Sort.by("categoryName"));
+                SortingUtils.sort(groups, pageable.getSort(), Sort.by("categoryName"));
 
                 int start = (int) pageable.getOffset();
                 int end = Math.min((start + pageable.getPageSize()), groups.size());
@@ -166,7 +166,7 @@ public class TelephonyUsageReportService {
                         groups.add(new MonthlyTelephonyTypeUsageGroupDto(typeName, items, subtotal));
                 }
 
-                InMemorySortUtils.sort(groups, pageable.getSort(), Sort.by("telephonyTypeName"));
+                SortingUtils.sort(groups, pageable.getSort(), Sort.by("telephonyTypeName"));
 
                 int start = (int) pageable.getOffset();
                 int end = Math.min((start + pageable.getPageSize()), groups.size());
@@ -284,7 +284,7 @@ public class TelephonyUsageReportService {
                                 .build();
                 summaries.add(unrelatedSummary);
 
-                InMemorySortUtils.sort(assignedRows, pageable.getSort(), Sort.by(Sort.Direction.DESC, "totalBilledAmount"));
+                SortingUtils.sort(assignedRows, pageable.getSort(), Sort.by(Sort.Direction.DESC, "totalBilledAmount"));
 
                 // Paginate only the assigned rows as content using SliceImpl
                 int start = (int) pageable.getOffset();
@@ -328,7 +328,7 @@ public class TelephonyUsageReportService {
                         LocalDateTime startDate, LocalDateTime endDate, Pageable pageable) {
                 return modelConverter.mapSlice(
                                 reportRepository.getDialedNumberUsageReport(startDate, endDate,
-                                                InMemorySortUtils.applyDefaultSort(pageable,
+                                                SortingUtils.applyDefaultSort(pageable,
                                                                 Sort.by(Sort.Order.desc("totalBilledAmount"), Sort.Order.desc("totalDuration")))),
                                 DialedNumberUsageReportDto.class);
         }
@@ -352,7 +352,7 @@ public class TelephonyUsageReportService {
                         LocalDateTime startDate, LocalDateTime endDate, Pageable pageable) {
                 return modelConverter.mapSlice(
                                 reportRepository.getDestinationUsageReport(startDate, endDate,
-                                                InMemorySortUtils.applyDefaultSort(pageable,
+                                                SortingUtils.applyDefaultSort(pageable,
                                                                 Sort.by(Sort.Direction.DESC, "totalBilledAmount"))),
                                 DestinationUsageReportDto.class);
         }

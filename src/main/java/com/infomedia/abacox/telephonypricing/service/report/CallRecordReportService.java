@@ -3,7 +3,7 @@ package com.infomedia.abacox.telephonypricing.service.report;
 import com.infomedia.abacox.telephonypricing.component.cdrprocessing.EmployeeLookupService;
 import com.infomedia.abacox.telephonypricing.component.export.excel.ExcelGeneratorBuilder;
 import com.infomedia.abacox.telephonypricing.component.modeltools.ModelConverter;
-import com.infomedia.abacox.telephonypricing.component.utils.InMemorySortUtils;
+import com.infomedia.abacox.telephonypricing.component.utils.SortingUtils;
 import com.infomedia.abacox.telephonypricing.db.entity.CallRecord;
 import com.infomedia.abacox.telephonypricing.db.entity.FailedCallRecord;
 
@@ -208,7 +208,7 @@ public class CallRecordReportService {
         // 3. Query repository with parameters
         return modelConverter.mapSlice(reportRepository.getUnassignedCallReport(
                 startDate, endDate, extension, groupingType.name(), minLength, maxLength,
-                InMemorySortUtils.applyDefaultSort(pageable,
+                SortingUtils.applyDefaultSort(pageable,
                         Sort.by(Sort.Order.desc("totalCost"), Sort.Order.desc("callCount"), Sort.Order.desc("lastCallDate")))),
                 UnassignedCallReportDto.class);
     }
@@ -232,7 +232,7 @@ public class CallRecordReportService {
             LocalDateTime startDate, LocalDateTime endDate, Pageable pageable) {
         return modelConverter.mapSlice(
                 reportRepository.getProcessingFailureReport(startDate, endDate, directory, errorType,
-                        InMemorySortUtils.applyDefaultSort(pageable,
+                        SortingUtils.applyDefaultSort(pageable,
                                 Sort.by(Sort.Order.desc("failureCount"), Sort.Order.asc("commLocationDirectory"), Sort.Order.asc("plantTypeName")))),
                 ProcessingFailureReportDto.class);
     }

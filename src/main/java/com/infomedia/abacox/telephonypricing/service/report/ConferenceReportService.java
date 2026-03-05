@@ -2,7 +2,7 @@ package com.infomedia.abacox.telephonypricing.service.report;
 
 import com.infomedia.abacox.telephonypricing.component.export.excel.ExcelGeneratorBuilder;
 import com.infomedia.abacox.telephonypricing.component.modeltools.ModelConverter;
-import com.infomedia.abacox.telephonypricing.component.utils.InMemorySortUtils;
+import com.infomedia.abacox.telephonypricing.component.utils.SortingUtils;
 import com.infomedia.abacox.telephonypricing.db.projection.ConferenceCandidateProjection;
 import com.infomedia.abacox.telephonypricing.db.repository.ReportRepository;
 import com.infomedia.abacox.telephonypricing.dto.report.ConferenceCallsReportDto;
@@ -41,7 +41,7 @@ public class ConferenceReportService {
 
         List<ConferenceGroupDto> allGroups = groupCandidates(rows);
 
-        InMemorySortUtils.sort(allGroups, pageable.getSort(),
+        SortingUtils.sort(allGroups, pageable.getSort(),
                 Sort.by(Sort.Direction.DESC, "conferenceServiceDate"));
 
         int start = (int) pageable.getOffset();

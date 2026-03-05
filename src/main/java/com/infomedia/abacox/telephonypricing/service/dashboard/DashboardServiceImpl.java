@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Slice;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -34,7 +35,7 @@ public class DashboardServiceImpl implements DashboardService {
 
         // --- KPI totals from cost center summaries (includes grand totals) ---
         var costCenterReport = telephonyUsageReportService
-                .generateCostCenterUsageReport(startDate, endDate, null, PageRequest.of(0, 5));
+                .generateCostCenterUsageReport(startDate, endDate, null, PageRequest.of(0, 5, Sort.by(Sort.Direction.DESC, "totalBilledAmount")));
 
         BigDecimal totalCost = BigDecimal.ZERO;
         long totalDurationSeconds = 0;
@@ -73,7 +74,7 @@ public class DashboardServiceImpl implements DashboardService {
 
         // --- Telephony type breakdown (donut + in/out grouped bar) ---
         Slice<TelephonyTypeUsageGroupDto> telephonyReport = telephonyUsageReportService
-                .generateTelephonyTypeUsageReport(startDate, endDate, PageRequest.of(0, 100));
+                .generateTelephonyTypeUsageReport(startDate, endDate, PageRequest.of(0, 100, Sort.by(Sort.Direction.DESC, "totalBilledAmount")));
 
         List<DashboardOverviewDto.TelephonyTypeCostDto> costByTelephonyType = new ArrayList<>();
         for (TelephonyTypeUsageGroupDto group : telephonyReport.getContent()) {
@@ -86,7 +87,7 @@ public class DashboardServiceImpl implements DashboardService {
 
         // --- Top 5 subdivisions ---
         Slice<SubdivisionUsageReportDto> subdivisionsReport = subdivisionReportService
-                .generateSubdivisionUsageReport(startDate, endDate, null, PageRequest.of(0, 5));
+                .generateSubdivisionUsageReport(startDate, endDate, null, PageRequest.of(0, 5, Sort.by(Sort.Direction.DESC, "totalBilledAmount")));
 
         List<DashboardOverviewDto.SubdivisionSummaryDto> topSubdivisions = new ArrayList<>();
         for (SubdivisionUsageReportDto row : subdivisionsReport.getContent()) {
@@ -99,7 +100,7 @@ public class DashboardServiceImpl implements DashboardService {
 
         // --- Top 10 employees by consumption ---
         Slice<HighestConsumptionEmployeeReportDto> employeesReport = employeeReportService
-                .generateHighestConsumptionEmployeeReport(startDate, endDate, PageRequest.of(0, 10));
+                .generateHighestConsumptionEmployeeReport(startDate, endDate, PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "totalBilledAmount")));
 
         List<DashboardOverviewDto.EmployeeSummaryDto> topEmployees = new ArrayList<>();
         for (HighestConsumptionEmployeeReportDto row : employeesReport.getContent()) {
