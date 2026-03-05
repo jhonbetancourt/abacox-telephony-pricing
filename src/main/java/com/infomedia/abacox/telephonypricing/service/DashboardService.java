@@ -1,4 +1,4 @@
-package com.infomedia.abacox.telephonypricing.service.dashboard;
+package com.infomedia.abacox.telephonypricing.service;
 
 import com.infomedia.abacox.telephonypricing.dto.dashboard.DashboardOverviewDto;
 import com.infomedia.abacox.telephonypricing.db.repository.FailedCallRecordRepository;
@@ -22,17 +22,14 @@ import java.util.List;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class DashboardServiceImpl implements DashboardService {
+public class DashboardService {
 
     private final TelephonyUsageReportService telephonyUsageReportService;
     private final SubdivisionReportService subdivisionReportService;
     private final EmployeeReportService employeeReportService;
     private final FailedCallRecordRepository failedCallRecordRepository;
 
-    @Override
     public DashboardOverviewDto getDashboardOverview(LocalDateTime startDate, LocalDateTime endDate) {
-        log.info("Generating dashboard overview from {} to {}", startDate, endDate);
-
         // --- KPI totals from cost center summaries (includes grand totals) ---
         var costCenterReport = telephonyUsageReportService
                 .generateCostCenterUsageReport(startDate, endDate, null, PageRequest.of(0, 5, Sort.by(Sort.Direction.DESC, "totalBilledAmount")));

@@ -2,7 +2,7 @@ package com.infomedia.abacox.telephonypricing.controller;
 
 import com.infomedia.abacox.telephonypricing.constants.DateTimePattern;
 import com.infomedia.abacox.telephonypricing.dto.dashboard.DashboardOverviewDto;
-import com.infomedia.abacox.telephonypricing.service.dashboard.DashboardService;
+import com.infomedia.abacox.telephonypricing.service.DashboardService;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
