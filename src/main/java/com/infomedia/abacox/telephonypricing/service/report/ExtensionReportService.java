@@ -6,8 +6,8 @@ import com.infomedia.abacox.telephonypricing.db.repository.ReportRepository;
 import com.infomedia.abacox.telephonypricing.dto.report.UnusedExtensionReportDto;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.ByteArrayResource;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,10 +23,10 @@ public class ExtensionReportService {
     private final ModelConverter modelConverter;
 
     @Transactional(readOnly = true)
-    public Page<UnusedExtensionReportDto> generateUnusedExtensionReport(String employeeName, String extension,
+    public Slice<UnusedExtensionReportDto> generateUnusedExtensionReport(String employeeName, String extension,
             LocalDateTime startDate, LocalDateTime endDate,
             Pageable pageable) {
-        return modelConverter.mapPage(
+        return modelConverter.mapSlice(
                 reportRepository.getUnusedExtensionReport(startDate, endDate, employeeName, extension, pageable),
                 UnusedExtensionReportDto.class);
     }
@@ -35,7 +35,7 @@ public class ExtensionReportService {
     public ByteArrayResource exportExcelUnusedExtensionReport(String employeeName, String extension,
             LocalDateTime startDate, LocalDateTime endDate,
             Pageable pageable, ExcelGeneratorBuilder builder) {
-        Page<UnusedExtensionReportDto> collection = generateUnusedExtensionReport(employeeName, extension, startDate,
+        Slice<UnusedExtensionReportDto> collection = generateUnusedExtensionReport(employeeName, extension, startDate,
                 endDate, pageable);
         try {
             InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();

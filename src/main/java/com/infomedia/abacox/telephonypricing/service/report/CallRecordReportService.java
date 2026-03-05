@@ -1,7 +1,6 @@
 package com.infomedia.abacox.telephonypricing.service.report;
 
 import com.infomedia.abacox.telephonypricing.component.cdrprocessing.EmployeeLookupService;
-import com.infomedia.abacox.telephonypricing.component.cdrprocessing.ExtensionLimits;
 import com.infomedia.abacox.telephonypricing.component.export.excel.ExcelGeneratorBuilder;
 import com.infomedia.abacox.telephonypricing.component.modeltools.ModelConverter;
 import com.infomedia.abacox.telephonypricing.db.entity.CallRecord;
@@ -24,10 +23,9 @@ import com.infomedia.abacox.telephonypricing.dto.telephonytype.TelephonyTypeDto;
 import com.infomedia.abacox.telephonypricing.model.report.UnassignedCallGroupingType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.ByteArrayResource;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
+import org.springframework.data.domain.SliceImpl;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -89,21 +87,21 @@ public class CallRecordReportService {
     }
 
     @Transactional(readOnly = true)
-    public Page<CallRecordDto> generateCallRecordsReport(Specification<CallRecord> specification, Pageable pageable) {
-        Page<CallRecord> callRecords = callRecordRepository.findAll(specification, pageable);
+    public Slice<CallRecordDto> generateCallRecordsReport(Specification<CallRecord> specification, Pageable pageable) {
+        Slice<CallRecord> callRecords = callRecordRepository.findAllAsSlice(specification, pageable);
 
         List<CallRecordDto> dtos = callRecords.getContent()
                 .stream()
                 .map(this::callRecordDtoFromEntity)
                 .collect(Collectors.toList());
 
-        return new PageImpl<>(dtos, pageable, callRecords.getTotalElements());
+        return new SliceImpl<>(dtos, pageable, callRecords.hasNext());
     }
 
     @Transactional(readOnly = true)
     public ByteArrayResource exportExcelCallRecordsReport(Specification<CallRecord> specification, Pageable pageable,
             ExcelGeneratorBuilder builder) {
-        Page<CallRecordDto> collection = generateCallRecordsReport(specification, pageable);
+        Slice<CallRecordDto> collection = generateCallRecordsReport(specification, pageable);
         try {
             InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
             return new ByteArrayResource(inputStream.readAllBytes());
@@ -131,22 +129,22 @@ public class CallRecordReportService {
     }
 
     @Transactional(readOnly = true)
-    public Page<FailedCallRecordDto> generateFailedCallRecordsReport(Specification<FailedCallRecord> specification,
+    public Slice<FailedCallRecordDto> generateFailedCallRecordsReport(Specification<FailedCallRecord> specification,
             Pageable pageable) {
-        Page<FailedCallRecord> failedCallRecords = failedCallRecordRepository.findAll(specification, pageable);
+        Slice<FailedCallRecord> failedCallRecords = failedCallRecordRepository.findAllAsSlice(specification, pageable);
 
         List<FailedCallRecordDto> dtos = failedCallRecords.getContent()
                 .stream()
                 .map(this::failedCallRecordDtofromEntity)
                 .toList();
 
-        return new PageImpl<>(dtos, pageable, failedCallRecords.getTotalElements());
+        return new SliceImpl<>(dtos, pageable, failedCallRecords.hasNext());
     }
 
     @Transactional(readOnly = true)
     public ByteArrayResource exportExcelFailedCallRecordsReport(Specification<FailedCallRecord> specification,
             Pageable pageable, ExcelGeneratorBuilder builder) {
-        Page<FailedCallRecordDto> collection = generateFailedCallRecordsReport(specification, pageable);
+        Slice<FailedCallRecordDto> collection = generateFailedCallRecordsReport(specification, pageable);
         try {
             InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
             return new ByteArrayResource(inputStream.readAllBytes());
@@ -175,7 +173,7 @@ public class CallRecordReportService {
     }
 
     @Transactional(readOnly = true)
-    public Page<UnassignedCallReportDto> generateUnassignedCallReport(String extension,
+    public Slice<UnassignedCallReportDto> generateUnassignedCallReport(String extension,
             UnassignedCallGroupingType groupingType,
             LocalDateTime startDate, LocalDateTime endDate, Pageable pageable) {
 
@@ -183,8 +181,10 @@ public class CallRecordReportService {
         var limitsMap = employeeLookupService.getExtensionLimits();
 
         // 2. Aggregate min/max digit-lengths across all active plants.
-        // ExtensionLimits stores numeric range values (e.g. 100, 99999 for 3-5 digit extensions).
-        // We need the digit count (strlen equivalent), matching legacy: strlen($arreglo['min']).
+        // ExtensionLimits stores numeric range values (e.g. 100, 99999 for 3-5 digit
+        // extensions).
+        // We need the digit count (strlen equivalent), matching legacy:
+        // strlen($arreglo['min']).
         int minLength = limitsMap.values().stream()
                 .mapToInt(v -> String.valueOf(v.getMinLength()).length())
                 .min()
@@ -196,7 +196,7 @@ public class CallRecordReportService {
                 .orElse(5); // Fallback to 5 if no limits found
 
         // 3. Query repository with parameters
-        return modelConverter.mapPage(reportRepository.getUnassignedCallReport(
+        return modelConverter.mapSlice(reportRepository.getUnassignedCallReport(
                 startDate, endDate, extension, groupingType.name(), minLength, maxLength, pageable),
                 UnassignedCallReportDto.class);
     }
@@ -205,7 +205,7 @@ public class CallRecordReportService {
     public ByteArrayResource exportExcelUnassignedCallReport(String extension, UnassignedCallGroupingType groupingType,
             LocalDateTime startDate, LocalDateTime endDate, Pageable pageable,
             ExcelGeneratorBuilder builder) {
-        Page<UnassignedCallReportDto> collection = generateUnassignedCallReport(extension, groupingType, startDate,
+        Slice<UnassignedCallReportDto> collection = generateUnassignedCallReport(extension, groupingType, startDate,
                 endDate, pageable);
         try {
             InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
@@ -216,9 +216,9 @@ public class CallRecordReportService {
     }
 
     @Transactional(readOnly = true)
-    public Page<ProcessingFailureReportDto> generateProcessingFailureReport(String directory, String errorType,
+    public Slice<ProcessingFailureReportDto> generateProcessingFailureReport(String directory, String errorType,
             LocalDateTime startDate, LocalDateTime endDate, Pageable pageable) {
-        return modelConverter.mapPage(
+        return modelConverter.mapSlice(
                 reportRepository.getProcessingFailureReport(startDate, endDate, directory, errorType, pageable),
                 ProcessingFailureReportDto.class);
     }
@@ -226,7 +226,7 @@ public class CallRecordReportService {
     @Transactional(readOnly = true)
     public ByteArrayResource exportExcelProcessingFailureReport(String directory, String errorType,
             LocalDateTime startDate, LocalDateTime endDate, Pageable pageable, ExcelGeneratorBuilder builder) {
-        Page<ProcessingFailureReportDto> collection = generateProcessingFailureReport(directory, errorType, startDate,
+        Slice<ProcessingFailureReportDto> collection = generateProcessingFailureReport(directory, errorType, startDate,
                 endDate, pageable);
         try {
             InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();

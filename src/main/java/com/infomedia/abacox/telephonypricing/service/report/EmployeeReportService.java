@@ -12,8 +12,8 @@ import com.infomedia.abacox.telephonypricing.dto.report.TelephonyTypeCostDto;
 import com.infomedia.abacox.telephonypricing.db.projection.EmployeeTelephonyTypeBreakdown;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.ByteArrayResource;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,16 +33,17 @@ public class EmployeeReportService {
     private final ModelConverter modelConverter;
 
     @Transactional(readOnly = true)
-    public Page<EmployeeActivityReportDto> generateEmployeeActivityReport(String employeeName, String employeeExtension,
+    public Slice<EmployeeActivityReportDto> generateEmployeeActivityReport(String employeeName,
+            String employeeExtension,
             LocalDateTime startDate, LocalDateTime endDate, Pageable pageable) {
-        return modelConverter.mapPage(reportRepository.getEmployeeActivityReport(startDate, endDate, employeeName,
+        return modelConverter.mapSlice(reportRepository.getEmployeeActivityReport(startDate, endDate, employeeName,
                 employeeExtension, pageable), EmployeeActivityReportDto.class);
     }
 
     @Transactional(readOnly = true)
     public ByteArrayResource exportExcelEmployeeActivityReport(String employeeName, String employeeExtension,
             LocalDateTime startDate, LocalDateTime endDate, Pageable pageable, ExcelGeneratorBuilder builder) {
-        Page<EmployeeActivityReportDto> collection = generateEmployeeActivityReport(employeeName, employeeExtension,
+        Slice<EmployeeActivityReportDto> collection = generateEmployeeActivityReport(employeeName, employeeExtension,
                 startDate, endDate, pageable);
         try {
             InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
@@ -53,17 +54,17 @@ public class EmployeeReportService {
     }
 
     @Transactional(readOnly = true)
-    public Page<EmployeeCallReportDto> generateEmployeeCallReport(String employeeName, String employeeExtension,
+    public Slice<EmployeeCallReportDto> generateEmployeeCallReport(String employeeName, String employeeExtension,
             LocalDateTime startDate, LocalDateTime endDate, Pageable pageable) {
-        Page<EmployeeCallReportDto> page = modelConverter.mapPage(
+        Slice<EmployeeCallReportDto> slice = modelConverter.mapSlice(
                 reportRepository.getEmployeeCallReport(startDate, endDate, employeeName, employeeExtension, pageable),
                 EmployeeCallReportDto.class);
 
-        if (page.isEmpty()) {
-            return page;
+        if (slice.isEmpty()) {
+            return slice;
         }
 
-        List<Long> employeeIds = page.getContent().stream()
+        List<Long> employeeIds = slice.getContent().stream()
                 .map(EmployeeCallReportDto::getEmployeeId)
                 .collect(Collectors.toList());
 
@@ -76,17 +77,17 @@ public class EmployeeReportService {
                         Collectors.mapping(b -> new TelephonyTypeCostDto(b.getTelephonyTypeName(), b.getTotalCost()),
                                 Collectors.toList())));
 
-        page.getContent().forEach(dto -> {
+        slice.getContent().forEach(dto -> {
             dto.setTelephonyCosts(breakdownMap.getOrDefault(dto.getEmployeeId(), new ArrayList<>()));
         });
 
-        return page;
+        return slice;
     }
 
     @Transactional(readOnly = true)
     public ByteArrayResource exportExcelEmployeeCallReport(String employeeName, String employeeExtension,
             LocalDateTime startDate, LocalDateTime endDate, Pageable pageable, ExcelGeneratorBuilder builder) {
-        Page<EmployeeCallReportDto> collection = generateEmployeeCallReport(employeeName, employeeExtension, startDate,
+        Slice<EmployeeCallReportDto> collection = generateEmployeeCallReport(employeeName, employeeExtension, startDate,
                 endDate, pageable);
         try {
             InputStream inputStream = builder
@@ -100,10 +101,10 @@ public class EmployeeReportService {
     }
 
     @Transactional(readOnly = true)
-    public Page<MissedCallEmployeeReportDto> generateMissedCallEmployeeReport(String employeeName,
+    public Slice<MissedCallEmployeeReportDto> generateMissedCallEmployeeReport(String employeeName,
             LocalDateTime startDate,
             LocalDateTime endDate, Integer minRingCount, Pageable pageable) {
-        return modelConverter.mapPage(
+        return modelConverter.mapSlice(
                 reportRepository.getMissedCallEmployeeReport(startDate, endDate, employeeName, minRingCount, pageable),
                 MissedCallEmployeeReportDto.class);
     }
@@ -112,7 +113,7 @@ public class EmployeeReportService {
     public ByteArrayResource exportExcelMissedCallEmployeeReport(String employeeName, LocalDateTime startDate,
             LocalDateTime endDate, Integer minRingCount, Pageable pageable,
             ExcelGeneratorBuilder builder) {
-        Page<MissedCallEmployeeReportDto> collection = generateMissedCallEmployeeReport(employeeName, startDate,
+        Slice<MissedCallEmployeeReportDto> collection = generateMissedCallEmployeeReport(employeeName, startDate,
                 endDate, minRingCount, pageable);
         try {
             InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
@@ -123,16 +124,16 @@ public class EmployeeReportService {
     }
 
     @Transactional(readOnly = true)
-    public Page<EmployeeAuthCodeUsageReportDto> generateEmployeeAuthCodeUsageReport(
+    public Slice<EmployeeAuthCodeUsageReportDto> generateEmployeeAuthCodeUsageReport(
             LocalDateTime startDate, LocalDateTime endDate, Pageable pageable) {
-        return modelConverter.mapPage(reportRepository.getEmployeeAuthCodeUsageReport(startDate, endDate, pageable),
+        return modelConverter.mapSlice(reportRepository.getEmployeeAuthCodeUsageReport(startDate, endDate, pageable),
                 EmployeeAuthCodeUsageReportDto.class);
     }
 
     @Transactional(readOnly = true)
     public ByteArrayResource exportExcelEmployeeAuthCodeUsageReport(
             LocalDateTime startDate, LocalDateTime endDate, Pageable pageable, ExcelGeneratorBuilder builder) {
-        Page<EmployeeAuthCodeUsageReportDto> collection = generateEmployeeAuthCodeUsageReport(startDate, endDate,
+        Slice<EmployeeAuthCodeUsageReportDto> collection = generateEmployeeAuthCodeUsageReport(startDate, endDate,
                 pageable);
         try {
             InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
@@ -143,9 +144,9 @@ public class EmployeeReportService {
     }
 
     @Transactional(readOnly = true)
-    public Page<HighestConsumptionEmployeeReportDto> generateHighestConsumptionEmployeeReport(
+    public Slice<HighestConsumptionEmployeeReportDto> generateHighestConsumptionEmployeeReport(
             LocalDateTime startDate, LocalDateTime endDate, Pageable pageable) {
-        return modelConverter.mapPage(
+        return modelConverter.mapSlice(
                 reportRepository.getHighestConsumptionEmployeeReport(startDate, endDate, pageable),
                 HighestConsumptionEmployeeReportDto.class);
     }
@@ -153,7 +154,7 @@ public class EmployeeReportService {
     @Transactional(readOnly = true)
     public ByteArrayResource exportExcelHighestConsumptionEmployeeReport(
             LocalDateTime startDate, LocalDateTime endDate, Pageable pageable, ExcelGeneratorBuilder builder) {
-        Page<HighestConsumptionEmployeeReportDto> collection = generateHighestConsumptionEmployeeReport(startDate,
+        Slice<HighestConsumptionEmployeeReportDto> collection = generateHighestConsumptionEmployeeReport(startDate,
                 endDate, pageable);
         try {
             InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();

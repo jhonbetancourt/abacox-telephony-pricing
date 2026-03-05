@@ -8,9 +8,9 @@ import com.infomedia.abacox.telephonypricing.dto.report.ConferenceCallsReportDto
 import com.infomedia.abacox.telephonypricing.dto.report.ConferenceGroupDto;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.ByteArrayResource;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
+import org.springframework.data.domain.SliceImpl;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,7 +29,7 @@ public class ConferenceReportService {
     private final ModelConverter modelConverter;
 
     @Transactional(readOnly = true)
-    public Page<ConferenceGroupDto> generateConferenceCallsReport(
+    public Slice<ConferenceGroupDto> generateConferenceCallsReport(
             LocalDateTime startDate, LocalDateTime endDate,
             String extension, String employeeName,
             Pageable pageable) {
@@ -49,7 +49,8 @@ public class ConferenceReportService {
             pageContent = allGroups.subList(start, end);
         }
 
-        return new PageImpl<>(pageContent, pageable, allGroups.size());
+        boolean hasNext = end < allGroups.size();
+        return new SliceImpl<>(pageContent, pageable, hasNext);
     }
 
     private List<ConferenceGroupDto> groupCandidates(List<ConferenceCandidateProjection> rows) {
@@ -188,7 +189,7 @@ public class ConferenceReportService {
             LocalDateTime startDate, LocalDateTime endDate,
             String extension, String employeeName,
             Pageable pageable, ExcelGeneratorBuilder builder) {
-        Page<ConferenceGroupDto> collection = generateConferenceCallsReport(
+        Slice<ConferenceGroupDto> collection = generateConferenceCallsReport(
                 startDate, endDate, extension, employeeName, pageable);
         try {
             InputStream inputStream = builder

@@ -10,9 +10,9 @@ import com.infomedia.abacox.telephonypricing.dto.report.SubdivisionUsageByTypeRe
 import com.infomedia.abacox.telephonypricing.dto.report.SubdivisionUsageReportDto;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.ByteArrayResource;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
+import org.springframework.data.domain.SliceImpl;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,9 +32,9 @@ public class SubdivisionReportService {
     private final ModelConverter modelConverter;
 
     @Transactional(readOnly = true)
-    public Page<SubdivisionUsageReportDto> generateSubdivisionUsageReport(
+    public Slice<SubdivisionUsageReportDto> generateSubdivisionUsageReport(
             LocalDateTime startDate, LocalDateTime endDate, Long parentSubdivisionId, Pageable pageable) {
-        return modelConverter.mapPage(
+        return modelConverter.mapSlice(
                 reportRepository.getSubdivisionUsageReport(startDate, endDate, parentSubdivisionId, pageable),
                 SubdivisionUsageReportDto.class);
     }
@@ -43,7 +43,7 @@ public class SubdivisionReportService {
     public ByteArrayResource exportExcelSubdivisionUsageReport(
             LocalDateTime startDate, LocalDateTime endDate, Long parentSubdivisionId, Pageable pageable,
             ExcelGeneratorBuilder builder) {
-        Page<SubdivisionUsageReportDto> collection = generateSubdivisionUsageReport(startDate, endDate,
+        Slice<SubdivisionUsageReportDto> collection = generateSubdivisionUsageReport(startDate, endDate,
                 parentSubdivisionId,
                 pageable);
         try {
@@ -55,9 +55,9 @@ public class SubdivisionReportService {
     }
 
     @Transactional(readOnly = true)
-    public Page<SubdivisionUsageByTypeReportDto> generateSubdivisionUsageByTypeReport(
+    public Slice<SubdivisionUsageByTypeReportDto> generateSubdivisionUsageByTypeReport(
             LocalDateTime startDate, LocalDateTime endDate, List<Long> subdivisionIds, Pageable pageable) {
-        return modelConverter.mapPage(
+        return modelConverter.mapSlice(
                 reportRepository.getSubdivisionUsageByTypeReport(startDate, endDate, subdivisionIds, pageable),
                 SubdivisionUsageByTypeReportDto.class);
     }
@@ -66,7 +66,7 @@ public class SubdivisionReportService {
     public ByteArrayResource exportExcelSubdivisionUsageByTypeReport(
             LocalDateTime startDate, LocalDateTime endDate, List<Long> subdivisionIds, Pageable pageable,
             ExcelGeneratorBuilder builder) {
-        Page<SubdivisionUsageByTypeReportDto> collection = generateSubdivisionUsageByTypeReport(startDate, endDate,
+        Slice<SubdivisionUsageByTypeReportDto> collection = generateSubdivisionUsageByTypeReport(startDate, endDate,
                 subdivisionIds, pageable);
         try {
             InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
@@ -77,14 +77,14 @@ public class SubdivisionReportService {
     }
 
     @Transactional(readOnly = true)
-    public Page<MonthlySubdivisionUsageReportDto> generateMonthlySubdivisionUsageReport(
+    public Slice<MonthlySubdivisionUsageReportDto> generateMonthlySubdivisionUsageReport(
             LocalDateTime startDate, LocalDateTime endDate, List<Long> subdivisionIds, Pageable pageable) {
 
         List<MonthlySubdivisionUsage> rawList = reportRepository.getMonthlySubdivisionUsageReportAll(
                 startDate, endDate, subdivisionIds);
 
         if (rawList.isEmpty()) {
-            return Page.empty(pageable);
+            return new SliceImpl<>(Collections.emptyList(), pageable, false);
         }
 
         // Group the projections by subdivisionId
@@ -158,7 +158,7 @@ public class SubdivisionReportService {
         // positive")
         allDtos.forEach(dto -> dto.setTotalVariation(dto.getTotalVariation().abs()));
 
-        // Manually apply paging
+        // Manually apply paging using SliceImpl
         int start = (int) pageable.getOffset();
         int end = Math.min((start + pageable.getPageSize()), allDtos.size());
 
@@ -167,7 +167,8 @@ public class SubdivisionReportService {
             pageContent = allDtos.subList(start, end);
         }
 
-        return new PageImpl<>(pageContent, pageable, allDtos.size());
+        boolean hasNext = end < allDtos.size();
+        return new SliceImpl<>(pageContent, pageable, hasNext);
     }
 
     /**
@@ -203,7 +204,7 @@ public class SubdivisionReportService {
     public ByteArrayResource exportExcelMonthlySubdivisionUsageReport(
             LocalDateTime startDate, LocalDateTime endDate, List<Long> subdivisionIds, Pageable pageable,
             ExcelGeneratorBuilder builder) {
-        Page<MonthlySubdivisionUsageReportDto> collection = generateMonthlySubdivisionUsageReport(startDate, endDate,
+        Slice<MonthlySubdivisionUsageReportDto> collection = generateMonthlySubdivisionUsageReport(startDate, endDate,
                 subdivisionIds, pageable);
         try {
             InputStream inputStream = builder

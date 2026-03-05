@@ -4,14 +4,14 @@ import com.infomedia.abacox.telephonypricing.component.modeltools.ModelConverter
 import com.infomedia.abacox.telephonypricing.db.entity.ExtensionList;
 import com.infomedia.abacox.telephonypricing.db.repository.ExtensionListRepository;
 import com.infomedia.abacox.telephonypricing.db.repository.ReportRepository;
-import com.infomedia.abacox.telephonypricing.dto.generic.PageWithSummaries;
+import com.infomedia.abacox.telephonypricing.dto.generic.SliceWithSummaries;
 import com.infomedia.abacox.telephonypricing.dto.report.ExtensionGroupDto;
 import com.infomedia.abacox.telephonypricing.dto.report.ExtensionGroupReportDto;
 import com.infomedia.abacox.telephonypricing.dto.report.ExtensionGroupSummaryDto;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
+import org.springframework.data.domain.SliceImpl;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,11 +32,11 @@ public class ExtensionGroupReportService {
      * Generates the "Llamadas Grupo de Extensiones" report (legacy
      * grupo_valores.php).
      *
-     * Returns a page of ExtensionGroupDto (each with groupName + items list),
+     * Returns a slice of ExtensionGroupDto (each with groupName + items list),
      * plus a single TOTALES summary across all groups.
      */
     @Transactional(readOnly = true)
-    public PageWithSummaries<ExtensionGroupDto, ExtensionGroupSummaryDto> generateExtensionGroupReport(
+    public SliceWithSummaries<ExtensionGroupDto, ExtensionGroupSummaryDto> generateExtensionGroupReport(
             LocalDateTime startDate,
             LocalDateTime endDate,
             Long groupId,
@@ -48,8 +48,8 @@ public class ExtensionGroupReportService {
         List<ExtensionList> groups = extensionListRepository.findActiveByTypeAndOptionalId("EXT", groupId);
 
         if (groups.isEmpty()) {
-            Page<ExtensionGroupDto> emptyPage = new PageImpl<>(Collections.emptyList(), pageable, 0);
-            return PageWithSummaries.of(emptyPage, Collections.emptyList());
+            Slice<ExtensionGroupDto> emptySlice = new SliceImpl<>(Collections.emptyList(), pageable, false);
+            return SliceWithSummaries.of(emptySlice, Collections.emptyList());
         }
 
         // 2. Build extension → groupName mapping (preserving group declaration order)
@@ -70,8 +70,8 @@ public class ExtensionGroupReportService {
         List<String> allExtensions = new ArrayList<>(extensionToGroupName.keySet());
 
         if (allExtensions.isEmpty()) {
-            Page<ExtensionGroupDto> emptyPage = new PageImpl<>(Collections.emptyList(), pageable, 0);
-            return PageWithSummaries.of(emptyPage, Collections.emptyList());
+            Slice<ExtensionGroupDto> emptySlice = new SliceImpl<>(Collections.emptyList(), pageable, false);
+            return SliceWithSummaries.of(emptySlice, Collections.emptyList());
         }
 
         // 3. Run the SQL report for all extensions (unpaged for grouping)
@@ -127,14 +127,15 @@ public class ExtensionGroupReportService {
                 .totalPercent(new BigDecimal("100.00"))
                 .build();
 
-        // 7. Paginate the group list
+        // 7. Paginate the group list using SliceImpl
         int start = (int) pageable.getOffset();
         int end = Math.min((start + pageable.getPageSize()), groupDtos.size());
         List<ExtensionGroupDto> pageContent = start > groupDtos.size()
                 ? Collections.emptyList()
                 : groupDtos.subList(start, end);
 
-        Page<ExtensionGroupDto> page = new PageImpl<>(pageContent, pageable, groupDtos.size());
-        return PageWithSummaries.of(page, List.of(totales));
+        boolean hasNext = end < groupDtos.size();
+        Slice<ExtensionGroupDto> slice = new SliceImpl<>(pageContent, pageable, hasNext);
+        return SliceWithSummaries.of(slice, List.of(totales));
     }
 }

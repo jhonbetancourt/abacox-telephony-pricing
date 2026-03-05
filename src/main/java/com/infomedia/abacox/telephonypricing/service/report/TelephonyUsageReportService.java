@@ -3,13 +3,13 @@ package com.infomedia.abacox.telephonypricing.service.report;
 import com.infomedia.abacox.telephonypricing.component.export.excel.ExcelGeneratorBuilder;
 import com.infomedia.abacox.telephonypricing.component.modeltools.ModelConverter;
 import com.infomedia.abacox.telephonypricing.db.repository.ReportRepository;
-import com.infomedia.abacox.telephonypricing.dto.generic.PageWithSummaries;
+import com.infomedia.abacox.telephonypricing.dto.generic.SliceWithSummaries;
 import com.infomedia.abacox.telephonypricing.dto.report.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.ByteArrayResource;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
+import org.springframework.data.domain.SliceImpl;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,7 +29,7 @@ public class TelephonyUsageReportService {
         private final ModelConverter modelConverter;
 
         @Transactional(readOnly = true)
-        public Page<TelephonyTypeUsageGroupDto> generateTelephonyTypeUsageReport(
+        public Slice<TelephonyTypeUsageGroupDto> generateTelephonyTypeUsageReport(
                         LocalDateTime startDate, LocalDateTime endDate, Pageable pageable) {
 
                 List<com.infomedia.abacox.telephonypricing.db.projection.TelephonyTypeUsageReport> rows = reportRepository
@@ -90,14 +90,15 @@ public class TelephonyUsageReportService {
                         pageContent = groups.subList(start, end);
                 }
 
-                return new PageImpl<>(pageContent, pageable, groups.size());
+                boolean hasNext = end < groups.size();
+                return new SliceImpl<>(pageContent, pageable, hasNext);
         }
 
         @Transactional(readOnly = true)
         public ByteArrayResource exportExcelTelephonyTypeUsageReport(
                         LocalDateTime startDate, LocalDateTime endDate, Pageable pageable,
                         ExcelGeneratorBuilder builder) {
-                Page<TelephonyTypeUsageGroupDto> collection = generateTelephonyTypeUsageReport(startDate, endDate,
+                Slice<TelephonyTypeUsageGroupDto> collection = generateTelephonyTypeUsageReport(startDate, endDate,
                                 pageable);
                 try {
                         InputStream inputStream = builder.withEntities(collection.toList())
@@ -110,7 +111,7 @@ public class TelephonyUsageReportService {
         }
 
         @Transactional(readOnly = true)
-        public Page<MonthlyTelephonyTypeUsageGroupDto> generateMonthlyTelephonyTypeUsageReport(
+        public Slice<MonthlyTelephonyTypeUsageGroupDto> generateMonthlyTelephonyTypeUsageReport(
                         LocalDateTime startDate, LocalDateTime endDate, Pageable pageable) {
                 List<com.infomedia.abacox.telephonypricing.db.projection.MonthlyTelephonyTypeUsageReport> rows = reportRepository
                                 .getMonthlyTelephonyTypeUsageReport(startDate, endDate, Pageable.unpaged())
@@ -171,14 +172,15 @@ public class TelephonyUsageReportService {
                         pageContent = groups.subList(start, end);
                 }
 
-                return new PageImpl<>(pageContent, pageable, groups.size());
+                boolean hasNext = end < groups.size();
+                return new SliceImpl<>(pageContent, pageable, hasNext);
         }
 
         @Transactional(readOnly = true)
         public ByteArrayResource exportExcelMonthlyTelephonyTypeUsageReport(
                         LocalDateTime startDate, LocalDateTime endDate, Pageable pageable,
                         ExcelGeneratorBuilder builder) {
-                Page<MonthlyTelephonyTypeUsageGroupDto> collection = generateMonthlyTelephonyTypeUsageReport(
+                Slice<MonthlyTelephonyTypeUsageGroupDto> collection = generateMonthlyTelephonyTypeUsageReport(
                                 startDate,
                                 endDate, pageable);
                 try {
@@ -192,7 +194,7 @@ public class TelephonyUsageReportService {
         }
 
         @Transactional(readOnly = true)
-        public PageWithSummaries<CostCenterUsageReportDto, UsageReportSummaryDto> generateCostCenterUsageReport(
+        public SliceWithSummaries<CostCenterUsageReportDto, UsageReportSummaryDto> generateCostCenterUsageReport(
                         LocalDateTime startDate, LocalDateTime endDate, Long parentCostCenterId, Pageable pageable) {
                 // Fetch all rows unpaged to compute summaries
                 List<CostCenterUsageReportDto> allRows = reportRepository
@@ -276,7 +278,7 @@ public class TelephonyUsageReportService {
                                 .build();
                 summaries.add(unrelatedSummary);
 
-                // Paginate only the assigned rows as content
+                // Paginate only the assigned rows as content using SliceImpl
                 int start = (int) pageable.getOffset();
                 int end = Math.min((start + pageable.getPageSize()), assignedRows.size());
 
@@ -287,15 +289,16 @@ public class TelephonyUsageReportService {
                         pageContent = assignedRows.subList(start, end);
                 }
 
-                Page<CostCenterUsageReportDto> page = new PageImpl<>(pageContent, pageable, assignedRows.size());
-                return PageWithSummaries.of(page, summaries);
+                boolean hasNext = end < assignedRows.size();
+                Slice<CostCenterUsageReportDto> slice = new SliceImpl<>(pageContent, pageable, hasNext);
+                return SliceWithSummaries.of(slice, summaries);
         }
 
         @Transactional(readOnly = true)
         public ByteArrayResource exportExcelCostCenterUsageReport(
                         LocalDateTime startDate, LocalDateTime endDate, Long parentCostCenterId, Pageable pageable,
                         ExcelGeneratorBuilder builder) {
-                PageWithSummaries<CostCenterUsageReportDto, UsageReportSummaryDto> reportPage = generateCostCenterUsageReport(
+                SliceWithSummaries<CostCenterUsageReportDto, UsageReportSummaryDto> reportPage = generateCostCenterUsageReport(
                                 startDate,
                                 endDate,
                                 parentCostCenterId,
@@ -313,9 +316,10 @@ public class TelephonyUsageReportService {
         }
 
         @Transactional(readOnly = true)
-        public Page<DialedNumberUsageReportDto> generateDialedNumberUsageReport(
+        public Slice<DialedNumberUsageReportDto> generateDialedNumberUsageReport(
                         LocalDateTime startDate, LocalDateTime endDate, Pageable pageable) {
-                return modelConverter.mapPage(reportRepository.getDialedNumberUsageReport(startDate, endDate, pageable),
+                return modelConverter.mapSlice(
+                                reportRepository.getDialedNumberUsageReport(startDate, endDate, pageable),
                                 DialedNumberUsageReportDto.class);
         }
 
@@ -323,7 +327,7 @@ public class TelephonyUsageReportService {
         public ByteArrayResource exportExcelDialedNumberUsageReport(
                         LocalDateTime startDate, LocalDateTime endDate, Pageable pageable,
                         ExcelGeneratorBuilder builder) {
-                Page<DialedNumberUsageReportDto> collection = generateDialedNumberUsageReport(startDate, endDate,
+                Slice<DialedNumberUsageReportDto> collection = generateDialedNumberUsageReport(startDate, endDate,
                                 pageable);
                 try {
                         InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
@@ -334,9 +338,9 @@ public class TelephonyUsageReportService {
         }
 
         @Transactional(readOnly = true)
-        public Page<DestinationUsageReportDto> generateDestinationUsageReport(
+        public Slice<DestinationUsageReportDto> generateDestinationUsageReport(
                         LocalDateTime startDate, LocalDateTime endDate, Pageable pageable) {
-                return modelConverter.mapPage(reportRepository.getDestinationUsageReport(startDate, endDate, pageable),
+                return modelConverter.mapSlice(reportRepository.getDestinationUsageReport(startDate, endDate, pageable),
                                 DestinationUsageReportDto.class);
         }
 
@@ -344,7 +348,7 @@ public class TelephonyUsageReportService {
         public ByteArrayResource exportExcelDestinationUsageReport(
                         LocalDateTime startDate, LocalDateTime endDate, Pageable pageable,
                         ExcelGeneratorBuilder builder) {
-                Page<DestinationUsageReportDto> collection = generateDestinationUsageReport(startDate, endDate,
+                Slice<DestinationUsageReportDto> collection = generateDestinationUsageReport(startDate, endDate,
                                 pageable);
                 try {
                         InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
