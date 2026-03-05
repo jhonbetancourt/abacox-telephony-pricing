@@ -48,7 +48,6 @@ public final class EmployeeActivityReportQueries {
         (:employeeName IS NULL OR f.name ILIKE CONCAT('%', :employeeName, '%'))
     AND
         (:extension IS NULL OR f.extension ILIKE CONCAT('%', :extension, '%'))
-    ORDER BY f.extension
     """;
 
     public static final String COUNT_QUERY = """

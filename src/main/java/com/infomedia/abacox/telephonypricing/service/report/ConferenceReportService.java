@@ -2,6 +2,7 @@ package com.infomedia.abacox.telephonypricing.service.report;
 
 import com.infomedia.abacox.telephonypricing.component.export.excel.ExcelGeneratorBuilder;
 import com.infomedia.abacox.telephonypricing.component.modeltools.ModelConverter;
+import com.infomedia.abacox.telephonypricing.component.utils.InMemorySortUtils;
 import com.infomedia.abacox.telephonypricing.db.projection.ConferenceCandidateProjection;
 import com.infomedia.abacox.telephonypricing.db.repository.ReportRepository;
 import com.infomedia.abacox.telephonypricing.dto.report.ConferenceCallsReportDto;
@@ -11,6 +12,7 @@ import org.springframework.core.io.ByteArrayResource;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.SliceImpl;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,6 +40,9 @@ public class ConferenceReportService {
                 extension, employeeName);
 
         List<ConferenceGroupDto> allGroups = groupCandidates(rows);
+
+        InMemorySortUtils.sort(allGroups, pageable.getSort(),
+                Sort.by(Sort.Direction.DESC, "conferenceServiceDate"));
 
         int start = (int) pageable.getOffset();
         int end = Math.min((start + pageable.getPageSize()), allGroups.size());
@@ -118,7 +123,6 @@ public class ConferenceReportService {
         return allContexts.stream()
                 .map(ctx -> ctx.group)
                 .filter(g -> g.getParticipantCount() > 1)
-                .sorted(Comparator.comparing(ConferenceGroupDto::getConferenceServiceDate).reversed())
                 .collect(Collectors.toList());
     }
 

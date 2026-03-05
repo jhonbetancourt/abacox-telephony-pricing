@@ -100,7 +100,6 @@ public final class SubdivisionUsageReportQueries {
             LEFT JOIN
                 employee_counts ec ON rd.subdivisionId = ec.display_subdivision_id
             WHERE COALESCE(ec.totalEmployees, 0) > 0
-            ORDER BY rd.subdivisionName ASC
             """;
 
     public static final String COUNT_QUERY = """

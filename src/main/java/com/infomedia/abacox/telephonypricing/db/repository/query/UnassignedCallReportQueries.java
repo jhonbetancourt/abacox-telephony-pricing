@@ -48,7 +48,6 @@ public final class UnassignedCallReportQueries {
                 filtered_data
             GROUP BY
                 concept_val, plant, comm_location_id
-            ORDER BY totalCost DESC, callCount DESC, lastCallDate DESC
             """;
 
     public static final String COUNT_QUERY = """

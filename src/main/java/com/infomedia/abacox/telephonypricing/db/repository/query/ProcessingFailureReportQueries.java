@@ -32,7 +32,6 @@ public final class ProcessingFailureReportQueries {
         failureCount
     FROM
         report_data
-    ORDER BY failureCount DESC, commLocationDirectory, plantTypeName
     """;
 
     public static final String COUNT_QUERY = """

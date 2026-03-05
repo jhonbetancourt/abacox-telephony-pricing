@@ -56,7 +56,6 @@ public final class DialedNumberUsageReportQueries {
                 destinationSubdivisionId
             FROM
                 report_data
-            ORDER BY totalBilledAmount DESC, totalDuration DESC
             """;
 
     public static final String COUNT_QUERY = """
