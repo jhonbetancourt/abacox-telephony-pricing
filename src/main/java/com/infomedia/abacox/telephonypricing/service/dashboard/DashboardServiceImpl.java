@@ -2,8 +2,14 @@ package com.infomedia.abacox.telephonypricing.service.dashboard;
 
 import com.infomedia.abacox.telephonypricing.dto.dashboard.DashboardOverviewDto;
 import com.infomedia.abacox.telephonypricing.db.repository.FailedCallRecordRepository;
+import com.infomedia.abacox.telephonypricing.dto.report.*;
+import com.infomedia.abacox.telephonypricing.service.report.EmployeeReportService;
+import com.infomedia.abacox.telephonypricing.service.report.SubdivisionReportService;
+import com.infomedia.abacox.telephonypricing.service.report.TelephonyUsageReportService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Slice;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -11,89 +17,114 @@ import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import org.springframework.data.domain.PageRequest;
-import com.infomedia.abacox.telephonypricing.service.report.TelephonyUsageReportService;
-import com.infomedia.abacox.telephonypricing.dto.generic.SliceWithSummaries;
-import com.infomedia.abacox.telephonypricing.dto.report.CostCenterUsageReportDto;
-import com.infomedia.abacox.telephonypricing.dto.report.UsageReportSummaryDto;
-import com.infomedia.abacox.telephonypricing.dto.report.TelephonyTypeUsageGroupDto;
-import org.springframework.data.domain.Slice;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class DashboardServiceImpl implements DashboardService {
 
-        private final TelephonyUsageReportService telephonyUsageReportService;
-        private final FailedCallRecordRepository failedCallRecordRepository;
+    private final TelephonyUsageReportService telephonyUsageReportService;
+    private final SubdivisionReportService subdivisionReportService;
+    private final EmployeeReportService employeeReportService;
+    private final FailedCallRecordRepository failedCallRecordRepository;
 
-        @Override
-        public DashboardOverviewDto getDashboardOverview(LocalDateTime startDate, LocalDateTime endDate) {
-                log.info("Generating dashboard overview from {} to {} using real report services", startDate, endDate);
+    @Override
+    public DashboardOverviewDto getDashboardOverview(LocalDateTime startDate, LocalDateTime endDate) {
+        log.info("Generating dashboard overview from {} to {}", startDate, endDate);
 
-                // Use the CostCenterUsageReport to get both the top 5 cost centers AND the
-                // grand totals
-                // (assigned + unassigned)
-                SliceWithSummaries<CostCenterUsageReportDto, UsageReportSummaryDto> costCenterReport = telephonyUsageReportService
-                                .generateCostCenterUsageReport(startDate, endDate, null, PageRequest.of(0, 5));
+        // --- KPI totals from cost center summaries (includes grand totals) ---
+        var costCenterReport = telephonyUsageReportService
+                .generateCostCenterUsageReport(startDate, endDate, null, PageRequest.of(0, 5));
 
-                BigDecimal totalCost = BigDecimal.ZERO;
-                long totalDurationSeconds = 0;
-                long totalCalls = 0;
-                long unassignedCalls = 0;
+        BigDecimal totalCost = BigDecimal.ZERO;
+        long totalDurationSeconds = 0;
+        long totalIncomingCalls = 0;
+        long totalOutgoingCalls = 0;
+        long unassignedCalls = 0;
 
-                for (UsageReportSummaryDto summary : costCenterReport.getSummaries()) {
-                        totalCost = totalCost.add(summary.getTotalBilledAmount());
-                        totalDurationSeconds += summary.getTotalDuration();
-                        totalCalls += summary.getIncomingCallCount() + summary.getOutgoingCallCount();
-
-                        // Treat the UR (Unassigned Row) specifically if needed
-                        if ("UNASSIGNED".equals(summary.getRowType())) {
-                                unassignedCalls += summary.getIncomingCallCount() + summary.getOutgoingCallCount();
-                        }
-                }
-
-                BigDecimal avgCost = totalDurationSeconds > 0
-                                ? totalCost.divide(BigDecimal.valueOf(totalDurationSeconds / 60.0), 4,
-                                                RoundingMode.HALF_UP)
-                                : BigDecimal.ZERO;
-
-                // Processing failures
-                long processingFailures = failedCallRecordRepository
-                                .count((root, query, cb) -> cb.between(root.get("createdDate"), startDate, endDate));
-
-                // Map Top 5 Cost Centers from the slice content
-                List<DashboardOverviewDto.CostCenterUsageDto> topCostCenters = new ArrayList<>();
-                for (CostCenterUsageReportDto row : costCenterReport.getContent()) {
-                        String name = row.getCostCenterName() != null ? row.getCostCenterName() : "Unknown";
-                        BigDecimal cost = row.getTotalBilledAmount() != null ? row.getTotalBilledAmount()
-                                        : BigDecimal.ZERO;
-                        topCostCenters.add(new DashboardOverviewDto.CostCenterUsageDto(name, cost));
-                }
-
-                // Get Telephony Type Breakdown
-                Slice<TelephonyTypeUsageGroupDto> telephonyReport = telephonyUsageReportService
-                                .generateTelephonyTypeUsageReport(startDate, endDate, PageRequest.of(0, 100));
-
-                List<DashboardOverviewDto.TelephonyTypeCostDto> telephonyCost = new ArrayList<>();
-                for (TelephonyTypeUsageGroupDto group : telephonyReport.getContent()) {
-                        String name = group.getCategoryName();
-                        BigDecimal cost = group.getSubtotal() != null
-                                        && group.getSubtotal().getTotalBilledAmount() != null
-                                                        ? group.getSubtotal().getTotalBilledAmount()
-                                                        : BigDecimal.ZERO;
-                        telephonyCost.add(new DashboardOverviewDto.TelephonyTypeCostDto(name, cost));
-                }
-
-                return DashboardOverviewDto.builder()
-                                .totalCalls(totalCalls)
-                                .totalCost(totalCost)
-                                .totalDurationSeconds(totalDurationSeconds)
-                                .averageCostPerMinute(avgCost)
-                                .processingFailures(processingFailures)
-                                .unassignedCalls(unassignedCalls)
-                                .costByTelephonyType(telephonyCost)
-                                .topCostCenters(topCostCenters)
-                                .build();
+        for (UsageReportSummaryDto summary : costCenterReport.getSummaries()) {
+            long inCalls  = summary.getIncomingCallCount()  != null ? summary.getIncomingCallCount()  : 0L;
+            long outCalls = summary.getOutgoingCallCount()  != null ? summary.getOutgoingCallCount()  : 0L;
+            totalCost = totalCost.add(summary.getTotalBilledAmount() != null ? summary.getTotalBilledAmount() : BigDecimal.ZERO);
+            totalDurationSeconds += summary.getTotalDuration() != null ? summary.getTotalDuration() : 0L;
+            totalIncomingCalls += inCalls;
+            totalOutgoingCalls += outCalls;
+            if ("UNASSIGNED".equals(summary.getRowType())) {
+                unassignedCalls += inCalls + outCalls;
+            }
         }
+
+        long totalCalls = totalIncomingCalls + totalOutgoingCalls;
+        BigDecimal avgCost = totalDurationSeconds > 0
+                ? totalCost.divide(BigDecimal.valueOf(totalDurationSeconds / 60.0), 4, RoundingMode.HALF_UP)
+                : BigDecimal.ZERO;
+
+        // --- Processing failures ---
+        long processingFailures = failedCallRecordRepository
+                .count((root, query, cb) -> cb.between(root.get("createdDate"), startDate, endDate));
+
+        // --- Top 5 cost centers ---
+        List<DashboardOverviewDto.CostCenterUsageDto> topCostCenters = new ArrayList<>();
+        for (CostCenterUsageReportDto row : costCenterReport.getContent()) {
+            String name = row.getCostCenterName() != null ? row.getCostCenterName() : "Unknown";
+            BigDecimal cost = row.getTotalBilledAmount() != null ? row.getTotalBilledAmount() : BigDecimal.ZERO;
+            topCostCenters.add(new DashboardOverviewDto.CostCenterUsageDto(name, cost));
+        }
+
+        // --- Telephony type breakdown (donut + in/out grouped bar) ---
+        Slice<TelephonyTypeUsageGroupDto> telephonyReport = telephonyUsageReportService
+                .generateTelephonyTypeUsageReport(startDate, endDate, PageRequest.of(0, 100));
+
+        List<DashboardOverviewDto.TelephonyTypeCostDto> costByTelephonyType = new ArrayList<>();
+        for (TelephonyTypeUsageGroupDto group : telephonyReport.getContent()) {
+            TelephonyTypeUsageReportDto sub = group.getSubtotal();
+            BigDecimal cost   = sub != null && sub.getTotalBilledAmount()  != null ? sub.getTotalBilledAmount()  : BigDecimal.ZERO;
+            long inCalls      = sub != null && sub.getIncomingCallCount()  != null ? sub.getIncomingCallCount()  : 0L;
+            long outCalls     = sub != null && sub.getOutgoingCallCount()  != null ? sub.getOutgoingCallCount()  : 0L;
+            costByTelephonyType.add(new DashboardOverviewDto.TelephonyTypeCostDto(group.getCategoryName(), cost, inCalls, outCalls));
+        }
+
+        // --- Top 5 subdivisions ---
+        Slice<SubdivisionUsageReportDto> subdivisionsReport = subdivisionReportService
+                .generateSubdivisionUsageReport(startDate, endDate, null, PageRequest.of(0, 5));
+
+        List<DashboardOverviewDto.SubdivisionSummaryDto> topSubdivisions = new ArrayList<>();
+        for (SubdivisionUsageReportDto row : subdivisionsReport.getContent()) {
+            String name   = row.getSubdivisionName()    != null ? row.getSubdivisionName()    : "Unknown";
+            BigDecimal cost = row.getTotalBilledAmount() != null ? row.getTotalBilledAmount()  : BigDecimal.ZERO;
+            long calls    = (row.getIncomingCallCount() != null ? row.getIncomingCallCount() : 0L)
+                          + (row.getOutgoingCallCount() != null ? row.getOutgoingCallCount() : 0L);
+            topSubdivisions.add(new DashboardOverviewDto.SubdivisionSummaryDto(name, cost, calls));
+        }
+
+        // --- Top 10 employees by consumption ---
+        Slice<HighestConsumptionEmployeeReportDto> employeesReport = employeeReportService
+                .generateHighestConsumptionEmployeeReport(startDate, endDate, PageRequest.of(0, 10));
+
+        List<DashboardOverviewDto.EmployeeSummaryDto> topEmployees = new ArrayList<>();
+        for (HighestConsumptionEmployeeReportDto row : employeesReport.getContent()) {
+            topEmployees.add(new DashboardOverviewDto.EmployeeSummaryDto(
+                    row.getEmployeeName(),
+                    row.getExtension(),
+                    row.getCallCount(),
+                    row.getTotalDuration(),
+                    row.getTotalBilledAmount() != null ? row.getTotalBilledAmount() : BigDecimal.ZERO
+            ));
+        }
+
+        return DashboardOverviewDto.builder()
+                .totalCalls(totalCalls)
+                .totalIncomingCalls(totalIncomingCalls)
+                .totalOutgoingCalls(totalOutgoingCalls)
+                .totalCost(totalCost)
+                .totalDurationSeconds(totalDurationSeconds)
+                .averageCostPerMinute(avgCost)
+                .processingFailures(processingFailures)
+                .unassignedCalls(unassignedCalls)
+                .costByTelephonyType(costByTelephonyType)
+                .topCostCenters(topCostCenters)
+                .topSubdivisions(topSubdivisions)
+                .topEmployees(topEmployees)
+                .build();
+    }
 }

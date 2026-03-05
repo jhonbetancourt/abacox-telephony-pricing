@@ -15,14 +15,20 @@ import java.util.List;
 public class DashboardOverviewDto {
     private BigDecimal totalCost;
     private Long totalCalls;
+    private Long totalIncomingCalls;
+    private Long totalOutgoingCalls;
     private Long totalDurationSeconds;
     private BigDecimal averageCostPerMinute;
 
-    // Simple breakdown for the donut chart
+    // Donut chart — cost split by telephony category
     private List<TelephonyTypeCostDto> costByTelephonyType;
 
-    // Top 5 cost centers for the bar chart
+    // Horizontal bar charts
     private List<CostCenterUsageDto> topCostCenters;
+    private List<SubdivisionSummaryDto> topSubdivisions;
+
+    // Top employees table
+    private List<EmployeeSummaryDto> topEmployees;
 
     // System health
     private Long processingFailures;
@@ -35,6 +41,8 @@ public class DashboardOverviewDto {
     public static class TelephonyTypeCostDto {
         private String telephonyTypeName;
         private BigDecimal cost;
+        private Long incomingCalls;
+        private Long outgoingCalls;
     }
 
     @Data
@@ -44,5 +52,27 @@ public class DashboardOverviewDto {
     public static class CostCenterUsageDto {
         private String costCenterName;
         private BigDecimal cost;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class SubdivisionSummaryDto {
+        private String subdivisionName;
+        private BigDecimal totalCost;
+        private Long totalCalls;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class EmployeeSummaryDto {
+        private String employeeName;
+        private String extension;
+        private Long callCount;
+        private Long totalDuration;
+        private BigDecimal totalCost;
     }
 }
