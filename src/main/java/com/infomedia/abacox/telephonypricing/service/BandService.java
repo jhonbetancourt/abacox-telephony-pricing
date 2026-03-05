@@ -5,7 +5,7 @@ import com.infomedia.abacox.telephonypricing.dto.band.CreateBand;
 import com.infomedia.abacox.telephonypricing.dto.band.UpdateBand;
 import com.infomedia.abacox.telephonypricing.db.entity.Band;
 import com.infomedia.abacox.telephonypricing.db.repository.BandRepository;
-import com.infomedia.abacox.telephonypricing.service.common.SliceableCrudService;
+import com.infomedia.abacox.telephonypricing.service.common.CrudService;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
@@ -16,7 +16,7 @@ import java.io.IOException;
 import java.io.InputStream;
 
 @Service
-public class BandService extends SliceableCrudService<Band, Long, BandRepository> {
+public class BandService extends CrudService<Band, Long, BandRepository> {
     public BandService(BandRepository repository) {
         super(repository);
     }

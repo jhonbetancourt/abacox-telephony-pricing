@@ -5,7 +5,7 @@ import com.infomedia.abacox.telephonypricing.dto.trunkrate.CreateTrunkRate;
 import com.infomedia.abacox.telephonypricing.dto.trunkrate.UpdateTrunkRate;
 import com.infomedia.abacox.telephonypricing.db.entity.TrunkRate;
 import com.infomedia.abacox.telephonypricing.db.repository.TrunkRateRepository;
-import com.infomedia.abacox.telephonypricing.service.common.SliceableCrudService;
+import com.infomedia.abacox.telephonypricing.service.common.CrudService;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
@@ -16,7 +16,7 @@ import java.io.IOException;
 import java.io.InputStream;
 
 @Service
-public class TrunkRateService extends SliceableCrudService<TrunkRate, Long, TrunkRateRepository> {
+public class TrunkRateService extends CrudService<TrunkRate, Long, TrunkRateRepository> {
     public TrunkRateService(TrunkRateRepository repository) {
         super(repository);
     }

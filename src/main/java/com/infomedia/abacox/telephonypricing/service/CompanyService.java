@@ -5,7 +5,7 @@ import com.infomedia.abacox.telephonypricing.dto.company.CreateCompany;
 import com.infomedia.abacox.telephonypricing.dto.company.UpdateCompany;
 import com.infomedia.abacox.telephonypricing.db.entity.Company;
 import com.infomedia.abacox.telephonypricing.db.repository.CompanyRepository;
-import com.infomedia.abacox.telephonypricing.service.common.SliceableCrudService;
+import com.infomedia.abacox.telephonypricing.service.common.CrudService;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
@@ -16,7 +16,7 @@ import java.io.IOException;
 import java.io.InputStream;
 
 @Service
-public class CompanyService extends SliceableCrudService<Company, Long, CompanyRepository> {
+public class CompanyService extends CrudService<Company, Long, CompanyRepository> {
     public CompanyService(CompanyRepository repository) {
         super(repository);
     }

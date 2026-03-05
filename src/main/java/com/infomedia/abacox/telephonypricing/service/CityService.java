@@ -5,7 +5,7 @@ import com.infomedia.abacox.telephonypricing.dto.city.CreateCity;
 import com.infomedia.abacox.telephonypricing.dto.city.UpdateCity;
 import com.infomedia.abacox.telephonypricing.db.entity.City;
 import com.infomedia.abacox.telephonypricing.db.repository.CityRepository;
-import com.infomedia.abacox.telephonypricing.service.common.SliceableCrudService;
+import com.infomedia.abacox.telephonypricing.service.common.CrudService;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
@@ -16,7 +16,7 @@ import java.io.IOException;
 import java.io.InputStream;
 
 @Service
-public class CityService extends SliceableCrudService<City, Long, CityRepository> {
+public class CityService extends CrudService<City, Long, CityRepository> {
     public CityService(CityRepository repository) {
         super(repository);
     }

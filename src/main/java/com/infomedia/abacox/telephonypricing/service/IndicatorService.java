@@ -5,7 +5,7 @@ import com.infomedia.abacox.telephonypricing.dto.indicator.CreateIndicator;
 import com.infomedia.abacox.telephonypricing.dto.indicator.UpdateIndicator;
 import com.infomedia.abacox.telephonypricing.db.entity.Indicator;
 import com.infomedia.abacox.telephonypricing.db.repository.IndicatorRepository;
-import com.infomedia.abacox.telephonypricing.service.common.SliceableCrudService;
+import com.infomedia.abacox.telephonypricing.service.common.CrudService;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
@@ -16,7 +16,7 @@ import java.io.IOException;
 import java.io.InputStream;
 
 @Service
-public class IndicatorService extends SliceableCrudService<Indicator, Long, IndicatorRepository>{
+public class IndicatorService extends CrudService<Indicator, Long, IndicatorRepository>{
     public IndicatorService(IndicatorRepository repository) {
         super(repository);
     }

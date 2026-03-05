@@ -5,7 +5,7 @@ import com.infomedia.abacox.telephonypricing.dto.commlocation.CreateCommLocation
 import com.infomedia.abacox.telephonypricing.dto.commlocation.UpdateCommLocation;
 import com.infomedia.abacox.telephonypricing.db.entity.CommunicationLocation;
 import com.infomedia.abacox.telephonypricing.db.repository.CommunicationLocationRepository;
-import com.infomedia.abacox.telephonypricing.service.common.SliceableCrudService;
+import com.infomedia.abacox.telephonypricing.service.common.CrudService;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
@@ -16,7 +16,7 @@ import java.io.IOException;
 import java.io.InputStream;
 
 @Service
-public class CommLocationService extends SliceableCrudService<CommunicationLocation, Long, CommunicationLocationRepository> {
+public class CommLocationService extends CrudService<CommunicationLocation, Long, CommunicationLocationRepository> {
     public CommLocationService(CommunicationLocationRepository repository) {
         super(repository);
     }

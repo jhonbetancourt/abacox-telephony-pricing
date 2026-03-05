@@ -5,7 +5,7 @@ import com.infomedia.abacox.telephonypricing.db.entity.SpecialExtension;
 import com.infomedia.abacox.telephonypricing.dto.specialextension.CreateSpecialExtension;
 import com.infomedia.abacox.telephonypricing.dto.specialextension.UpdateSpecialExtension;
 import com.infomedia.abacox.telephonypricing.db.repository.SpecialExtensionRepository;
-import com.infomedia.abacox.telephonypricing.service.common.SliceableCrudService;
+import com.infomedia.abacox.telephonypricing.service.common.CrudService;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
@@ -16,7 +16,7 @@ import java.io.IOException;
 import java.io.InputStream;
 
 @Service
-public class SpecialExtensionService extends SliceableCrudService<SpecialExtension, Long, SpecialExtensionRepository> {
+public class SpecialExtensionService extends CrudService<SpecialExtension, Long, SpecialExtensionRepository> {
 
     public SpecialExtensionService(SpecialExtensionRepository repository) {
         super(repository);

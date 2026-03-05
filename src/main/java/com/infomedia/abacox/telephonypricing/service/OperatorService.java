@@ -5,7 +5,7 @@ import com.infomedia.abacox.telephonypricing.dto.operator.CreateOperator;
 import com.infomedia.abacox.telephonypricing.dto.operator.UpdateOperator;
 import com.infomedia.abacox.telephonypricing.db.entity.Operator;
 import com.infomedia.abacox.telephonypricing.db.repository.OperatorRepository;
-import com.infomedia.abacox.telephonypricing.service.common.SliceableCrudService;
+import com.infomedia.abacox.telephonypricing.service.common.CrudService;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
@@ -17,7 +17,7 @@ import java.io.InputStream;
 
 
 @Service
-public class OperatorService extends SliceableCrudService<Operator, Long, OperatorRepository> {
+public class OperatorService extends CrudService<Operator, Long, OperatorRepository> {
     public OperatorService(OperatorRepository repository) {
         super(repository);
     }

@@ -5,7 +5,7 @@ import com.infomedia.abacox.telephonypricing.dto.officedetails.CreateOfficeDetai
 import com.infomedia.abacox.telephonypricing.dto.officedetails.UpdateOfficeDetails;
 import com.infomedia.abacox.telephonypricing.db.entity.OfficeDetails;
 import com.infomedia.abacox.telephonypricing.db.repository.OfficeDetailsRepository;
-import com.infomedia.abacox.telephonypricing.service.common.SliceableCrudService;
+import com.infomedia.abacox.telephonypricing.service.common.CrudService;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
@@ -16,7 +16,7 @@ import java.io.IOException;
 import java.io.InputStream;
 
 @Service
-public class OfficeDetailsService extends SliceableCrudService<OfficeDetails, Long, OfficeDetailsRepository> {
+public class OfficeDetailsService extends CrudService<OfficeDetails, Long, OfficeDetailsRepository> {
     public OfficeDetailsService(OfficeDetailsRepository repository) {
         super(repository);
     }

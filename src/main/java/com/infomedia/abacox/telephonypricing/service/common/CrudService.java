@@ -4,16 +4,27 @@ import com.infomedia.abacox.telephonypricing.db.entity.superclass.ActivableEntit
 import com.infomedia.abacox.telephonypricing.exception.ResourceDeletionException;
 import com.infomedia.abacox.telephonypricing.exception.ResourceDisabledException;
 import com.infomedia.abacox.telephonypricing.exception.ResourceNotFoundException;
+
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Order;
+import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
+import org.springframework.data.domain.SliceImpl;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.lang.reflect.ParameterizedType;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -23,6 +34,8 @@ public abstract class CrudService<E, I, R extends JpaRepository<E, I> & JpaSpeci
 
     @Getter
     private final R repository;
+    @PersistenceContext
+    private EntityManager entityManager;
 
     public Optional<E> find(I id) {
         if (id == null) {
@@ -103,5 +116,38 @@ public abstract class CrudService<E, I, R extends JpaRepository<E, I> & JpaSpeci
 
     protected List<E> saveAll(Collection<E> entities) {
         return repository.saveAll(entities);
+    }
+
+    public Slice<E> findAsSlice(Specification<E> spec, Pageable pageable) {
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<E> query = cb.createQuery(getEntityClass());
+        Root<E> root = query.from(getEntityClass());
+
+        if (spec != null) {
+            Predicate predicate = spec.toPredicate(root, query, cb);
+            if (predicate != null) {
+                query.where(predicate);
+            }
+        }
+
+        if (pageable.getSort().isSorted()) {
+            List<Order> orders = new ArrayList<>();
+            pageable.getSort().forEach(order -> orders.add(order.isAscending()
+                    ? cb.asc(root.get(order.getProperty()))
+                    : cb.desc(root.get(order.getProperty()))));
+            query.orderBy(orders);
+        }
+
+        List<E> result = entityManager.createQuery(query)
+                .setFirstResult((int) pageable.getOffset())
+                .setMaxResults(pageable.getPageSize() + 1)
+                .getResultList();
+
+        boolean hasNext = result.size() > pageable.getPageSize();
+        if (hasNext) {
+            result = result.subList(0, pageable.getPageSize());
+        }
+
+        return new SliceImpl<>(result, pageable, hasNext);
     }
 }

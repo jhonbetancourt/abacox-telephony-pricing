@@ -6,7 +6,7 @@ import com.infomedia.abacox.telephonypricing.db.entity.ExtensionRange;
 import com.infomedia.abacox.telephonypricing.db.repository.ExtensionRangeRepository;
 import com.infomedia.abacox.telephonypricing.dto.extensionrange.CreateExtensionRange;
 import com.infomedia.abacox.telephonypricing.dto.extensionrange.UpdateExtensionRange;
-import com.infomedia.abacox.telephonypricing.service.common.SliceableCrudService;
+import com.infomedia.abacox.telephonypricing.service.common.CrudService;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
@@ -19,7 +19,7 @@ import java.io.InputStream;
 import java.util.Map;
 
 @Service
-public class ExtensionRangeService extends SliceableCrudService<ExtensionRange, Long, ExtensionRangeRepository> {
+public class ExtensionRangeService extends CrudService<ExtensionRange, Long, ExtensionRangeRepository> {
 
     private final HistoryControlService historyControlService;
 

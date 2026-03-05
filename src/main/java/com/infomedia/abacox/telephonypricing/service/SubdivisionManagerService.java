@@ -5,7 +5,7 @@ import com.infomedia.abacox.telephonypricing.dto.subdivisionmanager.CreateSubdiv
 import com.infomedia.abacox.telephonypricing.dto.subdivisionmanager.UpdateSubdivisionManager;
 import com.infomedia.abacox.telephonypricing.db.entity.SubdivisionManager;
 import com.infomedia.abacox.telephonypricing.db.repository.SubdivisionManagerRepository;
-import com.infomedia.abacox.telephonypricing.service.common.SliceableCrudService;
+import com.infomedia.abacox.telephonypricing.service.common.CrudService;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
@@ -16,7 +16,7 @@ import java.io.IOException;
 import java.io.InputStream;
 
 @Service
-public class SubdivisionManagerService extends SliceableCrudService<SubdivisionManager, Long, SubdivisionManagerRepository> {
+public class SubdivisionManagerService extends CrudService<SubdivisionManager, Long, SubdivisionManagerRepository> {
     public SubdivisionManagerService(SubdivisionManagerRepository repository) {
         super(repository);
     }

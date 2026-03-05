@@ -5,7 +5,7 @@ import com.infomedia.abacox.telephonypricing.dto.telephonytypeconfig.CreateTelep
 import com.infomedia.abacox.telephonypricing.dto.telephonytypeconfig.UpdateTelephonyTypeConfig;
 import com.infomedia.abacox.telephonypricing.db.entity.TelephonyTypeConfig;
 import com.infomedia.abacox.telephonypricing.db.repository.TelephonyTypeConfigRepository;
-import com.infomedia.abacox.telephonypricing.service.common.SliceableCrudService;
+import com.infomedia.abacox.telephonypricing.service.common.CrudService;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
@@ -16,7 +16,7 @@ import java.io.IOException;
 import java.io.InputStream;
 
 @Service
-public class TelephonyTypeConfigService extends SliceableCrudService<TelephonyTypeConfig, Long, TelephonyTypeConfigRepository> {
+public class TelephonyTypeConfigService extends CrudService<TelephonyTypeConfig, Long, TelephonyTypeConfigRepository> {
     public TelephonyTypeConfigService(TelephonyTypeConfigRepository repository) {
         super(repository);
     }

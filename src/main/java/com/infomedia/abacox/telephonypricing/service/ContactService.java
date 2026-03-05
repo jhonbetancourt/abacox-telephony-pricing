@@ -5,7 +5,7 @@ import com.infomedia.abacox.telephonypricing.dto.contact.CreateContact;
 import com.infomedia.abacox.telephonypricing.dto.contact.UpdateContact;
 import com.infomedia.abacox.telephonypricing.db.entity.Contact;
 import com.infomedia.abacox.telephonypricing.db.repository.ContactRepository;
-import com.infomedia.abacox.telephonypricing.service.common.SliceableCrudService;
+import com.infomedia.abacox.telephonypricing.service.common.CrudService;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
@@ -16,7 +16,7 @@ import java.io.IOException;
 import java.io.InputStream;
 
 @Service
-public class ContactService extends SliceableCrudService<Contact, Long, ContactRepository> {
+public class ContactService extends CrudService<Contact, Long, ContactRepository> {
     public ContactService(ContactRepository repository) {
         super(repository);
     }

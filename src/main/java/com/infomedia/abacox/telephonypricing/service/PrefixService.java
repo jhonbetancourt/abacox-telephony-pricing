@@ -5,7 +5,7 @@ import com.infomedia.abacox.telephonypricing.dto.prefix.CreatePrefix;
 import com.infomedia.abacox.telephonypricing.dto.prefix.UpdatePrefix;
 import com.infomedia.abacox.telephonypricing.db.entity.Prefix;
 import com.infomedia.abacox.telephonypricing.db.repository.PrefixRepository;
-import com.infomedia.abacox.telephonypricing.service.common.SliceableCrudService;
+import com.infomedia.abacox.telephonypricing.service.common.CrudService;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
@@ -16,7 +16,7 @@ import java.io.IOException;
 import java.io.InputStream;
 
 @Service
-public class PrefixService extends SliceableCrudService<Prefix, Long, PrefixRepository> {
+public class PrefixService extends CrudService<Prefix, Long, PrefixRepository> {
     public PrefixService(PrefixRepository repository) {
         super(repository);
     }

@@ -5,7 +5,7 @@ import com.infomedia.abacox.telephonypricing.dto.planttype.CreatePlantType;
 import com.infomedia.abacox.telephonypricing.dto.planttype.UpdatePlantType;
 import com.infomedia.abacox.telephonypricing.db.entity.PlantType;
 import com.infomedia.abacox.telephonypricing.db.repository.PlantTypeRepository;
-import com.infomedia.abacox.telephonypricing.service.common.SliceableCrudService;
+import com.infomedia.abacox.telephonypricing.service.common.CrudService;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
@@ -16,7 +16,7 @@ import java.io.IOException;
 import java.io.InputStream;
 
 @Service
-public class PlantTypeService extends SliceableCrudService<PlantType, Long, PlantTypeRepository> {
+public class PlantTypeService extends CrudService<PlantType, Long, PlantTypeRepository> {
     public PlantTypeService(PlantTypeRepository repository) {
         super(repository);
     }

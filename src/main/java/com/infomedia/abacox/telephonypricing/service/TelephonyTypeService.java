@@ -5,7 +5,7 @@ import com.infomedia.abacox.telephonypricing.dto.telephonytype.CreateTelephonyTy
 import com.infomedia.abacox.telephonypricing.dto.telephonytype.UpdateTelephonyType;
 import com.infomedia.abacox.telephonypricing.db.entity.TelephonyType;
 import com.infomedia.abacox.telephonypricing.db.repository.TelephonyTypeRepository;
-import com.infomedia.abacox.telephonypricing.service.common.SliceableCrudService;
+import com.infomedia.abacox.telephonypricing.service.common.CrudService;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
@@ -16,7 +16,7 @@ import java.io.IOException;
 import java.io.InputStream;
 
 @Service
-public class TelephonyTypeService extends SliceableCrudService<TelephonyType, Long, TelephonyTypeRepository> {
+public class TelephonyTypeService extends CrudService<TelephonyType, Long, TelephonyTypeRepository> {
     public TelephonyTypeService(TelephonyTypeRepository repository) {
         super(repository);
     }

@@ -5,7 +5,7 @@ import com.infomedia.abacox.telephonypricing.dto.specialratevalue.CreateSpecialR
 import com.infomedia.abacox.telephonypricing.dto.specialratevalue.UpdateSpecialRateValue;
 import com.infomedia.abacox.telephonypricing.db.entity.SpecialRateValue;
 import com.infomedia.abacox.telephonypricing.db.repository.SpecialRateValueRepository;
-import com.infomedia.abacox.telephonypricing.service.common.SliceableCrudService;
+import com.infomedia.abacox.telephonypricing.service.common.CrudService;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
@@ -16,7 +16,7 @@ import java.io.IOException;
 import java.io.InputStream;
 
 @Service
-public class SpecialRateValueService extends SliceableCrudService<SpecialRateValue, Long, SpecialRateValueRepository> {
+public class SpecialRateValueService extends CrudService<SpecialRateValue, Long, SpecialRateValueRepository> {
     public SpecialRateValueService(SpecialRateValueRepository repository) {
         super(repository);
     }

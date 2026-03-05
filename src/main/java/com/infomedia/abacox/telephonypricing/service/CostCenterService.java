@@ -5,7 +5,7 @@ import com.infomedia.abacox.telephonypricing.dto.costcenter.CreateCostCenter;
 import com.infomedia.abacox.telephonypricing.dto.costcenter.UpdateCostCenter;
 import com.infomedia.abacox.telephonypricing.db.entity.CostCenter;
 import com.infomedia.abacox.telephonypricing.db.repository.CostCenterRepository;
-import com.infomedia.abacox.telephonypricing.service.common.SliceableCrudService;
+import com.infomedia.abacox.telephonypricing.service.common.CrudService;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
@@ -16,7 +16,7 @@ import java.io.IOException;
 import java.io.InputStream;
 
 @Service
-public class CostCenterService extends SliceableCrudService<CostCenter,Long,CostCenterRepository> {
+public class CostCenterService extends CrudService<CostCenter,Long,CostCenterRepository> {
     public CostCenterService(CostCenterRepository repository) {
         super(repository);
     }

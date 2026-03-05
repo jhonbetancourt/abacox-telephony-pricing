@@ -6,7 +6,7 @@ import com.infomedia.abacox.telephonypricing.dto.bandindicator.CreateBandIndicat
 import com.infomedia.abacox.telephonypricing.dto.bandindicator.UpdateBandIndicator;
 import com.infomedia.abacox.telephonypricing.db.entity.BandIndicator;
 import com.infomedia.abacox.telephonypricing.db.repository.BandIndicatorRepository;
-import com.infomedia.abacox.telephonypricing.service.common.SliceableCrudService;
+import com.infomedia.abacox.telephonypricing.service.common.CrudService;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
@@ -17,7 +17,7 @@ import java.io.IOException;
 import java.io.InputStream;
 
 @Service
-public class BandIndicatorService extends SliceableCrudService<BandIndicator, Long, BandIndicatorRepository> {
+public class BandIndicatorService extends CrudService<BandIndicator, Long, BandIndicatorRepository> {
     public BandIndicatorService(BandIndicatorRepository repository) {
         super(repository);
     }

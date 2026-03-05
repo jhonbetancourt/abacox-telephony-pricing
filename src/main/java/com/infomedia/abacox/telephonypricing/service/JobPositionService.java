@@ -5,7 +5,7 @@ import com.infomedia.abacox.telephonypricing.dto.jobposition.CreateJobPosition;
 import com.infomedia.abacox.telephonypricing.dto.jobposition.UpdateJobPosition;
 import com.infomedia.abacox.telephonypricing.db.entity.JobPosition;
 import com.infomedia.abacox.telephonypricing.db.repository.JobPositionRepository;
-import com.infomedia.abacox.telephonypricing.service.common.SliceableCrudService;
+import com.infomedia.abacox.telephonypricing.service.common.CrudService;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
@@ -16,7 +16,7 @@ import java.io.IOException;
 import java.io.InputStream;
 
 @Service
-public class JobPositionService extends SliceableCrudService<JobPosition, Long, JobPositionRepository> {
+public class JobPositionService extends CrudService<JobPosition, Long, JobPositionRepository> {
     public JobPositionService(JobPositionRepository repository) {
         super(repository);
     }
