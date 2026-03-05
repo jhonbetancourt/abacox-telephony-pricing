@@ -19,7 +19,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
-import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpHeaders;
@@ -42,11 +42,11 @@ public class PrefixController {
     private final ModelConverter modelConverter;
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
-    public Page<PrefixDto> find(@Parameter(hidden = true) @Filter Specification<Prefix> spec
+    public Slice<PrefixDto> find(@Parameter(hidden = true) @Filter Specification<Prefix> spec
             , @Parameter(hidden = true) Pageable pageable
             , @RequestParam(required = false) String filter, @RequestParam(required = false) Integer page
             , @RequestParam(required = false) Integer size, @RequestParam(required = false) String sort) {
-        return modelConverter.mapPage(prefixService.find(spec, pageable), PrefixDto.class);
+        return modelConverter.mapSlice(prefixService.find(spec, pageable), PrefixDto.class);
     }
 
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)

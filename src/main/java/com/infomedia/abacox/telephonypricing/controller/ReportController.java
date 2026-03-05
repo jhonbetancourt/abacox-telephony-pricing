@@ -22,9 +22,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
@@ -58,7 +57,7 @@ public class ReportController {
         private final ExtensionGroupReportService extensionGroupReportService;
 
         @GetMapping(value = "failedCallRecords", produces = MediaType.APPLICATION_JSON_VALUE)
-        public Page<FailedCallRecordDto> getFailedCallRecords(@Parameter(hidden = true) Pageable pageable,
+        public Slice<FailedCallRecordDto> getFailedCallRecords(@Parameter(hidden = true) Pageable pageable,
                         @Parameter(hidden = true) @Filter Specification<FailedCallRecord> spec,
                         @ParameterObject FilterRequest filterRequest) {
                 return callRecordReportService.generateFailedCallRecordsReport(spec, pageable);
@@ -78,7 +77,7 @@ public class ReportController {
         }
 
         @GetMapping(value = "callRecords", produces = MediaType.APPLICATION_JSON_VALUE)
-        public Page<CallRecordDto> getCallRecords(@Parameter(hidden = true) Pageable pageable,
+        public Slice<CallRecordDto> getCallRecords(@Parameter(hidden = true) Pageable pageable,
                         @Parameter(hidden = true) @Filter Specification<CallRecord> spec,
                         @ParameterObject FilterRequest filterRequest) {
                 return callRecordReportService.generateCallRecordsReport(spec, pageable);
@@ -114,7 +113,7 @@ public class ReportController {
         }
 
         @GetMapping(value = "employeeActivity", produces = MediaType.APPLICATION_JSON_VALUE)
-        public Page<EmployeeActivityReportDto> getEmployeeActivityReport(@Parameter(hidden = true) Pageable pageable,
+        public Slice<EmployeeActivityReportDto> getEmployeeActivityReport(@Parameter(hidden = true) Pageable pageable,
                         @ParameterObject PageableRequest pageableRequest,
                         @RequestParam(required = false) String employeeName,
                         @RequestParam(required = false) String employeeExtension,
@@ -143,7 +142,7 @@ public class ReportController {
         }
 
         @GetMapping(value = "employeeCall", produces = MediaType.APPLICATION_JSON_VALUE)
-        public Page<EmployeeCallReportDto> getEmployeeCallReport(@Parameter(hidden = true) Pageable pageable,
+        public Slice<EmployeeCallReportDto> getEmployeeCallReport(@Parameter(hidden = true) Pageable pageable,
                         @ParameterObject PageableRequest pageableRequest,
                         @RequestParam(required = false) String employeeName,
                         @RequestParam(required = false) String employeeExtension,
@@ -173,7 +172,7 @@ public class ReportController {
         }
 
         @GetMapping(value = "unassignedCall", produces = MediaType.APPLICATION_JSON_VALUE)
-        public Page<UnassignedCallReportDto> getUnassignedCallReport(@Parameter(hidden = true) Pageable pageable,
+        public Slice<UnassignedCallReportDto> getUnassignedCallReport(@Parameter(hidden = true) Pageable pageable,
                         @ParameterObject PageableRequest pageableRequest,
                         @RequestParam(required = false) String extension,
                         @RequestParam(required = false, defaultValue = "EXTENSION") UnassignedCallGroupingType groupingType,
@@ -203,7 +202,7 @@ public class ReportController {
         }
 
         @GetMapping(value = "processingFailure", produces = MediaType.APPLICATION_JSON_VALUE)
-        public Page<ProcessingFailureReportDto> getProcessingFailureReport(@Parameter(hidden = true) Pageable pageable,
+        public Slice<ProcessingFailureReportDto> getProcessingFailureReport(@Parameter(hidden = true) Pageable pageable,
                         @ParameterObject PageableRequest pageableRequest,
                         @RequestParam(required = false) String directory,
                         @RequestParam(required = false) String errorType,
@@ -232,7 +231,7 @@ public class ReportController {
         }
 
         @GetMapping(value = "missedCallEmployee", produces = MediaType.APPLICATION_JSON_VALUE)
-        public Page<MissedCallEmployeeReportDto> getMissedCallEmployeeReport(
+        public Slice<MissedCallEmployeeReportDto> getMissedCallEmployeeReport(
                         @Parameter(hidden = true) Pageable pageable, @ParameterObject PageableRequest pageableRequest,
                         @RequestParam(required = false) String employeeName,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
@@ -263,7 +262,7 @@ public class ReportController {
         }
 
         @GetMapping(value = "unusedExtension", produces = MediaType.APPLICATION_JSON_VALUE)
-        public Page<UnusedExtensionReportDto> getUnusedExtensionReport(@Parameter(hidden = true) Pageable pageable,
+        public Slice<UnusedExtensionReportDto> getUnusedExtensionReport(@Parameter(hidden = true) Pageable pageable,
                         @ParameterObject PageableRequest pageableRequest,
                         @RequestParam(required = false) String employeeName,
                         @RequestParam(required = false) String extension,
@@ -294,7 +293,7 @@ public class ReportController {
         }
 
         @GetMapping(value = "subdivisionUsage", produces = MediaType.APPLICATION_JSON_VALUE)
-        public Page<SubdivisionUsageReportDto> getSubdivisionUsageReport(@Parameter(hidden = true) Pageable pageable,
+        public Slice<SubdivisionUsageReportDto> getSubdivisionUsageReport(@Parameter(hidden = true) Pageable pageable,
                         @ParameterObject PageableRequest pageableRequest,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate,
@@ -322,7 +321,7 @@ public class ReportController {
         }
 
         @GetMapping(value = "subdivisionUsageByType", produces = MediaType.APPLICATION_JSON_VALUE)
-        public Page<SubdivisionUsageByTypeReportDto> getSubdivisionUsageByTypeReport(
+        public Slice<SubdivisionUsageByTypeReportDto> getSubdivisionUsageByTypeReport(
                         @Parameter(hidden = true) Pageable pageable, @ParameterObject PageableRequest pageableRequest,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate,
@@ -349,7 +348,7 @@ public class ReportController {
         }
 
         @GetMapping(value = "telephonyTypeUsage", produces = MediaType.APPLICATION_JSON_VALUE)
-        public Page<TelephonyTypeUsageGroupDto> getTelephonyTypeUsageReport(
+        public Slice<TelephonyTypeUsageGroupDto> getTelephonyTypeUsageReport(
                         @Parameter(hidden = true) Pageable pageable, @ParameterObject PageableRequest pageableRequest,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate) {
@@ -374,7 +373,7 @@ public class ReportController {
         }
 
         @GetMapping(value = "monthlyTelephonyTypeUsage", produces = MediaType.APPLICATION_JSON_VALUE)
-        public Page<MonthlyTelephonyTypeUsageGroupDto> getMonthlyTelephonyTypeUsageReport(
+        public Slice<MonthlyTelephonyTypeUsageGroupDto> getMonthlyTelephonyTypeUsageReport(
                         @Parameter(hidden = true) Pageable pageable, @ParameterObject PageableRequest pageableRequest,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate) {
@@ -430,7 +429,7 @@ public class ReportController {
         }
 
         @GetMapping(value = "employeeAuthCodeUsage", produces = MediaType.APPLICATION_JSON_VALUE)
-        public Page<EmployeeAuthCodeUsageReportDto> getEmployeeAuthCodeUsageReport(
+        public Slice<EmployeeAuthCodeUsageReportDto> getEmployeeAuthCodeUsageReport(
                         @Parameter(hidden = true) Pageable pageable, @ParameterObject PageableRequest pageableRequest,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate) {
@@ -455,7 +454,7 @@ public class ReportController {
         }
 
         @GetMapping(value = "monthlySubdivisionUsage", produces = MediaType.APPLICATION_JSON_VALUE)
-        public Page<MonthlySubdivisionUsageReportDto> getMonthlySubdivisionUsageReport(
+        public Slice<MonthlySubdivisionUsageReportDto> getMonthlySubdivisionUsageReport(
                         @Parameter(hidden = true) Pageable pageable, @ParameterObject PageableRequest pageableRequest,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate,
@@ -484,7 +483,7 @@ public class ReportController {
         }
 
         @GetMapping(value = "dialedNumberUsage", produces = MediaType.APPLICATION_JSON_VALUE)
-        public Page<DialedNumberUsageReportDto> getDialedNumberUsageReport(@Parameter(hidden = true) Pageable pageable,
+        public Slice<DialedNumberUsageReportDto> getDialedNumberUsageReport(@Parameter(hidden = true) Pageable pageable,
                         @ParameterObject PageableRequest pageableRequest,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate) {
@@ -509,7 +508,7 @@ public class ReportController {
         }
 
         @GetMapping(value = "destinationUsage", produces = MediaType.APPLICATION_JSON_VALUE)
-        public Page<DestinationUsageReportDto> getDestinationUsageReport(@Parameter(hidden = true) Pageable pageable,
+        public Slice<DestinationUsageReportDto> getDestinationUsageReport(@Parameter(hidden = true) Pageable pageable,
                         @ParameterObject PageableRequest pageableRequest,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate) {
@@ -534,7 +533,7 @@ public class ReportController {
         }
 
         @GetMapping(value = "highestConsumptionEmployee", produces = MediaType.APPLICATION_JSON_VALUE)
-        public Page<HighestConsumptionEmployeeReportDto> getHighestConsumptionEmployeeReport(
+        public Slice<HighestConsumptionEmployeeReportDto> getHighestConsumptionEmployeeReport(
                         @Parameter(hidden = true) Pageable pageable, @ParameterObject PageableRequest pageableRequest,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate) {
@@ -559,7 +558,7 @@ public class ReportController {
         }
 
         @GetMapping(value = "conferenceCalls", produces = MediaType.APPLICATION_JSON_VALUE)
-        public Page<ConferenceGroupDto> getConferenceCallReport(@Parameter(hidden = true) Pageable pageable,
+        public Slice<ConferenceGroupDto> getConferenceCallReport(@Parameter(hidden = true) Pageable pageable,
                         @ParameterObject PageableRequest pageableRequest,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate,

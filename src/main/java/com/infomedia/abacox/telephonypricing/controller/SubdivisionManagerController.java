@@ -1,6 +1,6 @@
 package com.infomedia.abacox.telephonypricing.controller;
 
-import com.infomedia.abacox.telephonypricing.component.export.excel.ExcelGeneratorBuilder;
+
 import com.infomedia.abacox.telephonypricing.component.modeltools.ModelConverter;
 import com.infomedia.abacox.telephonypricing.dto.subdivisionmanager.SubdivisionManagerDto;
 import com.infomedia.abacox.telephonypricing.dto.subdivisionmanager.CreateSubdivisionManager;
@@ -20,7 +20,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
-import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpHeaders;
@@ -43,11 +43,11 @@ public class SubdivisionManagerController {
     private final ModelConverter modelConverter;
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
-    public Page<SubdivisionManagerDto> find(@Parameter(hidden = true) @Filter Specification<SubdivisionManager> spec
+    public Slice<SubdivisionManagerDto> find(@Parameter(hidden = true) @Filter Specification<SubdivisionManager> spec
             , @Parameter(hidden = true) Pageable pageable
             , @RequestParam(required = false) String filter, @RequestParam(required = false) Integer page
             , @RequestParam(required = false) Integer size, @RequestParam(required = false) String sort) {
-        return modelConverter.mapPage(subdivisionManagerService.find(spec, pageable), SubdivisionManagerDto.class);
+        return modelConverter.mapSlice(subdivisionManagerService.find(spec, pageable), SubdivisionManagerDto.class);
     }
 
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)

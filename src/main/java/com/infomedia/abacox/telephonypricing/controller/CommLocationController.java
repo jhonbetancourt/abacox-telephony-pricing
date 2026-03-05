@@ -1,6 +1,6 @@
 package com.infomedia.abacox.telephonypricing.controller;
 
-import com.infomedia.abacox.telephonypricing.component.export.excel.ExcelGeneratorBuilder;
+
 import com.infomedia.abacox.telephonypricing.component.modeltools.ModelConverter;
 import com.infomedia.abacox.telephonypricing.dto.commlocation.CommLocationDto;
 import com.infomedia.abacox.telephonypricing.dto.commlocation.CreateCommLocation;
@@ -20,7 +20,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
-import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpHeaders;
@@ -43,11 +43,11 @@ public class CommLocationController {
     private final ModelConverter modelConverter;
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
-    public Page<CommLocationDto> find(@Parameter(hidden = true) @Filter Specification<CommunicationLocation> spec
+    public Slice<CommLocationDto> find(@Parameter(hidden = true) @Filter Specification<CommunicationLocation> spec
             , @Parameter(hidden = true) Pageable pageable
             , @RequestParam(required = false) String filter, @RequestParam(required = false) Integer page
             , @RequestParam(required = false) Integer size, @RequestParam(required = false) String sort) {
-        return modelConverter.mapPage(commLocationService.find(spec, pageable), CommLocationDto.class);
+        return modelConverter.mapSlice(commLocationService.find(spec, pageable), CommLocationDto.class);
     }
 
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)

@@ -19,7 +19,7 @@ import lombok.RequiredArgsConstructor;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
-import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpHeaders;
@@ -42,10 +42,10 @@ public class SpecialExtensionController {
     private final ModelConverter modelConverter;
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
-    public Page<SpecialExtensionDto> find(@Parameter(hidden = true) @Filter Specification<SpecialExtension> spec,
+    public Slice<SpecialExtensionDto> find(@Parameter(hidden = true) @Filter Specification<SpecialExtension> spec,
                                           @Parameter(hidden = true) Pageable pageable,
                                           @ParameterObject FilterRequest filterRequest) {
-        return modelConverter.mapPage(specialExtensionService.find(spec, pageable), SpecialExtensionDto.class);
+        return modelConverter.mapSlice(specialExtensionService.find(spec, pageable), SpecialExtensionDto.class);
     }
 
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)

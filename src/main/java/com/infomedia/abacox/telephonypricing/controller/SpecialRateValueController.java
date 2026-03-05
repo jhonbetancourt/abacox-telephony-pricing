@@ -1,6 +1,6 @@
 package com.infomedia.abacox.telephonypricing.controller;
 
-import com.infomedia.abacox.telephonypricing.component.export.excel.ExcelGeneratorBuilder;
+
 import com.infomedia.abacox.telephonypricing.component.modeltools.ModelConverter;
 import com.infomedia.abacox.telephonypricing.dto.specialratevalue.SpecialRateValueDto;
 import com.infomedia.abacox.telephonypricing.dto.specialratevalue.CreateSpecialRateValue;
@@ -20,7 +20,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
-import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpHeaders;
@@ -43,11 +43,11 @@ public class SpecialRateValueController {
     private final ModelConverter modelConverter;
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
-    public Page<SpecialRateValueDto> find(@Parameter(hidden = true) @Filter Specification<SpecialRateValue> spec
+    public Slice<SpecialRateValueDto> find(@Parameter(hidden = true) @Filter Specification<SpecialRateValue> spec
             , @Parameter(hidden = true) Pageable pageable
             , @RequestParam(required = false) String filter, @RequestParam(required = false) Integer page
             , @RequestParam(required = false) Integer size, @RequestParam(required = false) String sort) {
-        return modelConverter.mapPage(specialRateValueService.find(spec, pageable), SpecialRateValueDto.class);
+        return modelConverter.mapSlice(specialRateValueService.find(spec, pageable), SpecialRateValueDto.class);
     }
 
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)

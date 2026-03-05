@@ -1,6 +1,6 @@
 package com.infomedia.abacox.telephonypricing.controller;
 
-import com.infomedia.abacox.telephonypricing.component.export.excel.ExcelGeneratorBuilder;
+
 import com.infomedia.abacox.telephonypricing.component.modeltools.ModelConverter;
 import com.infomedia.abacox.telephonypricing.dto.telephonytype.TelephonyTypeDto;
 import com.infomedia.abacox.telephonypricing.dto.telephonytype.CreateTelephonyType;
@@ -20,7 +20,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
-import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpHeaders;
@@ -43,11 +43,11 @@ public class TelephonyTypeController {
     private final ModelConverter modelConverter;
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
-    public Page<TelephonyTypeDto> find(@Parameter(hidden = true) @Filter Specification<TelephonyType> spec
+    public Slice<TelephonyTypeDto> find(@Parameter(hidden = true) @Filter Specification<TelephonyType> spec
             , @Parameter(hidden = true) Pageable pageable
             , @RequestParam(required = false) String filter, @RequestParam(required = false) Integer page
             , @RequestParam(required = false) Integer size, @RequestParam(required = false) String sort) {
-        return modelConverter.mapPage(telephonyTypeService.find(spec, pageable), TelephonyTypeDto.class);
+        return modelConverter.mapSlice(telephonyTypeService.find(spec, pageable), TelephonyTypeDto.class);
     }
 
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)

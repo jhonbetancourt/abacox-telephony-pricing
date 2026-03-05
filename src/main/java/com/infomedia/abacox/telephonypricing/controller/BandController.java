@@ -19,7 +19,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
-import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpHeaders;
@@ -43,10 +43,10 @@ public class BandController {
     private final ModelConverter modelConverter;
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
-    public Page<BandDto> find(@Parameter(hidden = true) @Filter Specification<Band> spec
+    public Slice<BandDto> find(@Parameter(hidden = true) @Filter Specification<Band> spec
             , @Parameter(hidden = true) Pageable pageable
             , @ParameterObject FilterRequest filterRequest) {
-        return modelConverter.mapPage(bandService.find(spec, pageable), BandDto.class);
+        return modelConverter.mapSlice(bandService.find(spec, pageable), BandDto.class);
     }
 
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)

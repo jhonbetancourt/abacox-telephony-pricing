@@ -15,7 +15,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springdoc.core.annotations.ParameterObject;
-import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.MediaType;
@@ -36,10 +36,10 @@ public class FileInfoController {
     private final ModelConverter modelConverter;
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
-    public Page<FileInfoDto> find(@Parameter(hidden = true) @Filter Specification<FileInfo> spec
+    public Slice<FileInfoDto> find(@Parameter(hidden = true) @Filter Specification<FileInfo> spec
             , @Parameter(hidden = true) Pageable pageable
             , @ParameterObject FilterRequest filterRequest) {
-        return modelConverter.mapPage(fileInfoService.find(spec, pageable), FileInfoDto.class);
+        return modelConverter.mapSlice(fileInfoService.find(spec, pageable), FileInfoDto.class);
     }
 
     @GetMapping(value = "{id}", produces = MediaType.APPLICATION_JSON_VALUE)
