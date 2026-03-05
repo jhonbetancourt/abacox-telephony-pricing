@@ -46,31 +46,4 @@ public final class HighestConsumptionEmployeeReportQueries {
     FROM
         report_data
     """;
-
-    public static final String COUNT_QUERY = """
-    SELECT COUNT(*) FROM (
-        SELECT
-            e.id
-        FROM
-            call_record cr
-        INNER JOIN
-            employee e ON cr.employee_id = e.id
-        INNER JOIN
-            communication_location cl ON cr.comm_location_id = cl.id
-        LEFT JOIN
-            indicator ind_origin ON cl.indicator_id = ind_origin.id
-        WHERE
-            (cr.service_date BETWEEN :startDate AND :endDate)
-        AND
-            cr.billed_amount > 0
-        AND
-            e.active = true
-        GROUP BY
-            e.id, e.name, e.extension,
-            CASE WHEN ind_origin.city_name != '' AND ind_origin.department_country != ''
-                 THEN CONCAT(ind_origin.city_name, ' - ', ind_origin.department_country)
-                 ELSE COALESCE(NULLIF(ind_origin.city_name,''), ind_origin.department_country)
-            END
-    ) AS group_count
-    """;
 }

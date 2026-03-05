@@ -51,29 +51,4 @@ public final class TelephonyTypeUsageReportQueries {
     ORDER BY
         rd.telephonyCategoryName, rd.telephonyTypeName
     """;
-
-    public static final String COUNT_QUERY = """
-    SELECT COUNT(*) FROM (
-        SELECT
-            tt.id
-        FROM
-            call_record cr
-        JOIN
-            telephony_type tt ON cr.telephony_type_id = tt.id
-        LEFT JOIN
-            call_category cc ON tt.call_category_id = cc.id
-        JOIN
-            employee e ON cr.employee_id = e.id
-        JOIN
-            subdivision s ON e.subdivision_id = s.id
-        JOIN
-            communication_location cl ON cr.comm_location_id = cl.id
-        WHERE
-            (cr.service_date BETWEEN :startDate AND :endDate)
-        AND
-            (cr.is_incoming = true OR (cr.is_incoming = false AND cr.operator_id > 0))
-        GROUP BY
-            tt.id
-    ) AS group_count
-    """;
 }

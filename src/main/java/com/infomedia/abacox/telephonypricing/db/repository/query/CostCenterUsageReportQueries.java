@@ -136,44 +136,4 @@ public final class CostCenterUsageReportQueries {
                 c.totalBilledAmount DESC,
                 c.costCenterName ASC
             """;
-
-    public static final String COUNT_QUERY = """
-            SELECT COUNT(*) FROM (
-                WITH RECURSIVE cost_center_tree AS (
-                    SELECT cc.id, cc.id AS display_cost_center_id
-                    FROM cost_center cc
-                    WHERE ((:#{#parentCostCenterId == null ? 1 : 0} = 1 AND cc.parent_cost_center_id IS NULL)
-                       OR cc.parent_cost_center_id = :parentCostCenterId)
-                    UNION ALL
-                    SELECT cc.id, ct.display_cost_center_id
-                    FROM cost_center cc
-                    INNER JOIN cost_center_tree ct ON cc.parent_cost_center_id = ct.id
-                )
-                SELECT ct.display_cost_center_id
-                FROM call_record cr
-                INNER JOIN employee e ON cr.employee_id = e.id
-                INNER JOIN cost_center_tree ct ON e.cost_center_id = ct.id
-                WHERE (cr.service_date BETWEEN :startDate AND :endDate)
-                GROUP BY ct.display_cost_center_id
-
-                UNION ALL
-
-                SELECT 0::bigint
-                FROM call_record cr
-                INNER JOIN employee e ON cr.employee_id = e.id
-                WHERE :#{#parentCostCenterId == null ? 1 : 0} = 1
-                  AND e.cost_center_id IS NULL
-                  AND (cr.service_date BETWEEN :startDate AND :endDate)
-                HAVING COUNT(*) > 0
-
-                UNION ALL
-
-                SELECT -1::bigint
-                FROM call_record cr
-                WHERE :#{#parentCostCenterId == null ? 1 : 0} = 1
-                  AND (cr.service_date BETWEEN :startDate AND :endDate)
-                  AND (cr.employee_id IS NULL OR (cr.is_incoming = false AND (cr.telephony_type_id IS NULL OR cr.operator_id IS NULL)))
-                HAVING COUNT(*) > 0
-            ) AS group_count
-            """;
 }

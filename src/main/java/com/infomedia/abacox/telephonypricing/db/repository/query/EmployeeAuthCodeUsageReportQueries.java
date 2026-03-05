@@ -52,27 +52,4 @@ public final class EmployeeAuthCodeUsageReportQueries {
     FROM
         report_data rd
     """;
-
-    public static final String COUNT_QUERY = """
-    SELECT COUNT(*) FROM (
-        SELECT
-            e.id, o.id, tt.id
-        FROM
-            call_record cr
-        JOIN
-            employee e ON cr.employee_id = e.id
-        JOIN
-            operator o ON cr.operator_id = o.id
-        JOIN
-            telephony_type tt ON cr.telephony_type_id = tt.id
-        WHERE
-            (cr.service_date BETWEEN :startDate AND :endDate)
-        AND
-            cr.is_incoming = false
-        AND
-            cr.assignment_cause = 1
-        GROUP BY
-            e.id, o.id, tt.id
-    ) AS group_count
-    """;
 }

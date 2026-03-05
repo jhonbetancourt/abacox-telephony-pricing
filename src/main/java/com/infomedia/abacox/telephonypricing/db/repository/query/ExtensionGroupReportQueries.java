@@ -108,11 +108,4 @@ public final class ExtensionGroupReportQueries {
                 e.id, s.name, i.city_name, i.department_country
             ORDER BY e.extension
             """;
-
-    public static final String COUNT_QUERY = """
-            SELECT COUNT(DISTINCT e.id)
-            FROM employee e
-            WHERE e.extension IN (:extensions)
-            AND (e.history_control_id IS NULL OR e.id IN (SELECT hc.ref_id FROM history_control hc WHERE hc.ref_table = 1))
-            """;
 }

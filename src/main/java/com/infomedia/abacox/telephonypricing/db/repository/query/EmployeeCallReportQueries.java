@@ -65,21 +65,4 @@ public final class EmployeeCallReportQueries {
             GROUP BY
                 COALESCE(e.history_control_id, e.id), tt.name
             """;
-
-    public static final String COUNT_QUERY = """
-            SELECT COUNT(*) FROM (
-                SELECT COALESCE(e.history_control_id, e.id)
-                FROM
-                    call_record c JOIN employee e ON c.employee_id = e.id
-                WHERE
-                    c.service_date BETWEEN :startDate AND :endDate
-                    AND c.billed_amount > 0
-                    AND (c.is_incoming = true OR c.operator_id > 0)
-                    AND (e.history_control_id IS NULL OR e.id IN (SELECT hc.ref_id FROM history_control hc WHERE hc.ref_table = 1))
-                    AND (:employeeName IS NULL OR e.name ILIKE CONCAT('%', :employeeName, '%'))
-                    AND (:employeeExtension IS NULL OR e.extension ILIKE CONCAT('%', :employeeExtension, '%'))
-                GROUP BY
-                    COALESCE(e.history_control_id, e.id)
-            ) AS count_subquery
-            """;
 }

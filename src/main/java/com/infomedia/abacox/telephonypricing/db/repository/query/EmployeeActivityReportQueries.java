@@ -49,19 +49,4 @@ public final class EmployeeActivityReportQueries {
     AND
         (:extension IS NULL OR f.extension ILIKE CONCAT('%', :extension, '%'))
     """;
-
-    public static final String COUNT_QUERY = """
-    WITH latest_employees AS (
-        SELECT DISTINCT ON (e.extension) e.name, e.extension
-        FROM employee e
-        WHERE e.active = true
-        ORDER BY e.extension, e.id DESC
-    )
-    SELECT COUNT(*)
-    FROM latest_employees f
-    WHERE
-        (:employeeName IS NULL OR f.name ILIKE CONCAT('%', :employeeName, '%'))
-    AND
-        (:extension IS NULL OR f.extension ILIKE CONCAT('%', :extension, '%'))
-    """;
 }

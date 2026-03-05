@@ -39,29 +39,4 @@ public final class SubdivisionUsageByTypeReportQueries {
     FROM
         report_data
     """;
-
-    public static final String COUNT_QUERY = """
-    SELECT COUNT(*) FROM (
-        SELECT
-            s.id, tt.name
-        FROM
-            call_record cr
-        JOIN
-            employee e ON cr.employee_id = e.id
-        JOIN
-            subdivision s ON e.subdivision_id = s.id
-        JOIN
-            telephony_type tt ON cr.telephony_type_id = tt.id
-        JOIN
-            call_category cc ON tt.call_category_id = cc.id
-        JOIN
-            communication_location cl ON cr.comm_location_id = cl.id
-        WHERE
-            (cr.service_date BETWEEN :startDate AND :endDate)
-        AND
-            (s.id IN (:subdivisionIds))
-        GROUP BY
-            s.id, tt.name
-    ) AS group_count
-    """;
 }
