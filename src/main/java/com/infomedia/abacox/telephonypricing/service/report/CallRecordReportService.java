@@ -53,19 +53,25 @@ public class CallRecordReportService {
         dto.setId(entity.getId());
         dto.setDial(entity.getDial());
         dto.setCommLocationId(entity.getCommLocationId());
-        dto.setCommLocation(modelConverter.map(entity.getCommLocation(), CommLocationDto.class));
+        dto.setCommLocation(
+                entity.getCommLocation() != null ? modelConverter.map(entity.getCommLocation(), CommLocationDto.class)
+                        : null);
         dto.setServiceDate(entity.getServiceDate());
         dto.setOperatorId(entity.getOperatorId());
-        dto.setOperator(modelConverter.map(entity.getOperator(), OperatorDto.class));
+        dto.setOperator(
+                entity.getOperator() != null ? modelConverter.map(entity.getOperator(), OperatorDto.class) : null);
         dto.setEmployeeExtension(entity.getEmployeeExtension());
         dto.setEmployeeAuthCode(entity.getEmployeeAuthCode());
         dto.setIndicatorId(entity.getIndicatorId());
-        dto.setIndicator(modelConverter.map(entity.getIndicator(), IndicatorDto.class));
+        dto.setIndicator(
+                entity.getIndicator() != null ? modelConverter.map(entity.getIndicator(), IndicatorDto.class) : null);
         dto.setDestinationPhone(entity.getDestinationPhone());
         dto.setDuration(entity.getDuration());
         dto.setRingCount(entity.getRingCount());
         dto.setTelephonyTypeId(entity.getTelephonyTypeId());
-        dto.setTelephonyType(modelConverter.map(entity.getTelephonyType(), TelephonyTypeDto.class));
+        dto.setTelephonyType(entity.getTelephonyType() != null
+                ? modelConverter.map(entity.getTelephonyType(), TelephonyTypeDto.class)
+                : null);
         dto.setBilledAmount(entity.getBilledAmount());
         dto.setPricePerMinute(entity.getPricePerMinute());
         dto.setInitialPrice(entity.getInitialPrice());
@@ -73,12 +79,15 @@ public class CallRecordReportService {
         dto.setTrunk(entity.getTrunk());
         dto.setInitialTrunk(entity.getInitialTrunk());
         dto.setEmployeeId(entity.getEmployeeId());
-        dto.setEmployee(modelConverter.map(entity.getEmployee(), EmployeeDto.class));
+        dto.setEmployee(
+                entity.getEmployee() != null ? modelConverter.map(entity.getEmployee(), EmployeeDto.class) : null);
         dto.setEmployeeTransfer(entity.getEmployeeTransfer());
         dto.setTransferCause(entity.getTransferCause());
         dto.setAssignmentCause(entity.getAssignmentCause());
         dto.setDestinationEmployeeId(entity.getDestinationEmployeeId());
-        dto.setDestinationEmployee(modelConverter.map(entity.getDestinationEmployee(), EmployeeDto.class));
+        dto.setDestinationEmployee(entity.getDestinationEmployee() != null
+                ? modelConverter.map(entity.getDestinationEmployee(), EmployeeDto.class)
+                : null);
         dto.setFileInfoId(entity.getFileInfoId());
         return dto;
     }
