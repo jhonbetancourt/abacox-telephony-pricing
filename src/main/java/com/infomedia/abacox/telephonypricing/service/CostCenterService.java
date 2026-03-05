@@ -5,10 +5,10 @@ import com.infomedia.abacox.telephonypricing.dto.costcenter.CreateCostCenter;
 import com.infomedia.abacox.telephonypricing.dto.costcenter.UpdateCostCenter;
 import com.infomedia.abacox.telephonypricing.db.entity.CostCenter;
 import com.infomedia.abacox.telephonypricing.db.repository.CostCenterRepository;
-import com.infomedia.abacox.telephonypricing.service.common.CrudService;
+import com.infomedia.abacox.telephonypricing.service.common.SliceableCrudService;
 import org.springframework.core.io.ByteArrayResource;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
@@ -16,7 +16,7 @@ import java.io.IOException;
 import java.io.InputStream;
 
 @Service
-public class CostCenterService extends CrudService<CostCenter,Long,CostCenterRepository> {
+public class CostCenterService extends SliceableCrudService<CostCenter,Long,CostCenterRepository> {
     public CostCenterService(CostCenterRepository repository) {
         super(repository);
     }
@@ -42,7 +42,7 @@ public class CostCenterService extends CrudService<CostCenter,Long,CostCenterRep
     }
 
     public ByteArrayResource exportExcel(Specification<CostCenter> specification, Pageable pageable, ExcelGeneratorBuilder builder) {
-        Page<CostCenter> collection = find(specification, pageable);
+        Slice<CostCenter> collection = findAsSlice(specification, pageable);
        try {
             InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
             return new ByteArrayResource(inputStream.readAllBytes());

@@ -5,10 +5,10 @@ import com.infomedia.abacox.telephonypricing.dto.city.CreateCity;
 import com.infomedia.abacox.telephonypricing.dto.city.UpdateCity;
 import com.infomedia.abacox.telephonypricing.db.entity.City;
 import com.infomedia.abacox.telephonypricing.db.repository.CityRepository;
-import com.infomedia.abacox.telephonypricing.service.common.CrudService;
+import com.infomedia.abacox.telephonypricing.service.common.SliceableCrudService;
 import org.springframework.core.io.ByteArrayResource;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
@@ -16,7 +16,7 @@ import java.io.IOException;
 import java.io.InputStream;
 
 @Service
-public class CityService extends CrudService<City, Long, CityRepository> {
+public class CityService extends SliceableCrudService<City, Long, CityRepository> {
     public CityService(CityRepository repository) {
         super(repository);
     }
@@ -54,7 +54,7 @@ public class CityService extends CrudService<City, Long, CityRepository> {
     }
 
     public ByteArrayResource exportExcel(Specification<City> specification, Pageable pageable, ExcelGeneratorBuilder builder) {
-        Page<City> collection = find(specification, pageable);
+        Slice<City> collection = findAsSlice(specification, pageable);
        try {
             InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
             return new ByteArrayResource(inputStream.readAllBytes());

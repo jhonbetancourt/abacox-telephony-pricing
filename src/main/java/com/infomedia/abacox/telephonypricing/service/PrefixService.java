@@ -5,10 +5,10 @@ import com.infomedia.abacox.telephonypricing.dto.prefix.CreatePrefix;
 import com.infomedia.abacox.telephonypricing.dto.prefix.UpdatePrefix;
 import com.infomedia.abacox.telephonypricing.db.entity.Prefix;
 import com.infomedia.abacox.telephonypricing.db.repository.PrefixRepository;
-import com.infomedia.abacox.telephonypricing.service.common.CrudService;
+import com.infomedia.abacox.telephonypricing.service.common.SliceableCrudService;
 import org.springframework.core.io.ByteArrayResource;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
@@ -16,7 +16,7 @@ import java.io.IOException;
 import java.io.InputStream;
 
 @Service
-public class PrefixService extends CrudService<Prefix, Long, PrefixRepository> {
+public class PrefixService extends SliceableCrudService<Prefix, Long, PrefixRepository> {
     public PrefixService(PrefixRepository repository) {
         super(repository);
     }
@@ -48,7 +48,7 @@ public class PrefixService extends CrudService<Prefix, Long, PrefixRepository> {
     }
 
     public ByteArrayResource exportExcel(Specification<Prefix> specification, Pageable pageable, ExcelGeneratorBuilder builder) {
-        Page<Prefix> collection = find(specification, pageable);
+        Slice<Prefix> collection = findAsSlice(specification, pageable);
        try {
             InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
             return new ByteArrayResource(inputStream.readAllBytes());

@@ -5,10 +5,10 @@ import com.infomedia.abacox.telephonypricing.dto.trunk.CreateTrunk;
 import com.infomedia.abacox.telephonypricing.dto.trunk.UpdateTrunk;
 import com.infomedia.abacox.telephonypricing.db.entity.Trunk;
 import com.infomedia.abacox.telephonypricing.db.repository.TrunkRepository;
-import com.infomedia.abacox.telephonypricing.service.common.CrudService;
+import com.infomedia.abacox.telephonypricing.service.common.SliceableCrudService;
 import org.springframework.core.io.ByteArrayResource;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
@@ -16,7 +16,7 @@ import java.io.IOException;
 import java.io.InputStream;
 
 @Service
-public class TrunkService extends CrudService<Trunk, Long, TrunkRepository> {
+public class TrunkService extends SliceableCrudService<Trunk, Long, TrunkRepository> {
     public TrunkService(TrunkRepository repository) {
         super(repository);
     }
@@ -47,7 +47,7 @@ public class TrunkService extends CrudService<Trunk, Long, TrunkRepository> {
     }
 
     public ByteArrayResource exportExcel(Specification<Trunk> specification, Pageable pageable, ExcelGeneratorBuilder builder) {
-        Page<Trunk> collection = find(specification, pageable);
+        Slice<Trunk> collection = findAsSlice(specification, pageable);
        try {
             InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
             return new ByteArrayResource(inputStream.readAllBytes());

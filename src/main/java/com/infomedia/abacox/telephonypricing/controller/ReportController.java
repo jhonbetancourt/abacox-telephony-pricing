@@ -24,6 +24,7 @@ import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
@@ -95,7 +96,7 @@ public class ReportController {
         }
 
         @GetMapping(value = "corporateReport", produces = MediaType.APPLICATION_JSON_VALUE)
-        public Page<CorporateReportDto> getCorporateReport(@Parameter(hidden = true) Pageable pageable,
+        public Slice<CorporateReportDto> getCorporateReport(@Parameter(hidden = true) Pageable pageable,
                         @Parameter(hidden = true) @Filter Specification<CorporateReportView> spec,
                         @ParameterObject FilterRequest filterRequest) {
                 return callRecordReportService.generateCorporateReport(spec, pageable);

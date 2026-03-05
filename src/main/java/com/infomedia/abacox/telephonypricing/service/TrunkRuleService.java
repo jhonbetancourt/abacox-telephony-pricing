@@ -5,10 +5,10 @@ import com.infomedia.abacox.telephonypricing.dto.trunkrule.CreateTrunkRule;
 import com.infomedia.abacox.telephonypricing.dto.trunkrule.UpdateTrunkRule;
 import com.infomedia.abacox.telephonypricing.db.entity.TrunkRule;
 import com.infomedia.abacox.telephonypricing.db.repository.TrunkRuleRepository;
-import com.infomedia.abacox.telephonypricing.service.common.CrudService;
+import com.infomedia.abacox.telephonypricing.service.common.SliceableCrudService;
 import org.springframework.core.io.ByteArrayResource;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
@@ -16,7 +16,7 @@ import java.io.IOException;
 import java.io.InputStream;
 
 @Service
-public class TrunkRuleService extends CrudService<TrunkRule, Long, TrunkRuleRepository> {
+public class TrunkRuleService extends SliceableCrudService<TrunkRule, Long, TrunkRuleRepository> {
     public TrunkRuleService(TrunkRuleRepository repository) {
         super(repository);
     }
@@ -52,7 +52,7 @@ public class TrunkRuleService extends CrudService<TrunkRule, Long, TrunkRuleRepo
     }
 
     public ByteArrayResource exportExcel(Specification<TrunkRule> specification, Pageable pageable, ExcelGeneratorBuilder builder) {
-        Page<TrunkRule> collection = find(specification, pageable);
+        Slice<TrunkRule> collection = findAsSlice(specification, pageable);
        try {
             InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
             return new ByteArrayResource(inputStream.readAllBytes());

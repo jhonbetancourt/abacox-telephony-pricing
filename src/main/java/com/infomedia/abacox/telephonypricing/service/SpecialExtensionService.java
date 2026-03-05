@@ -5,10 +5,10 @@ import com.infomedia.abacox.telephonypricing.db.entity.SpecialExtension;
 import com.infomedia.abacox.telephonypricing.dto.specialextension.CreateSpecialExtension;
 import com.infomedia.abacox.telephonypricing.dto.specialextension.UpdateSpecialExtension;
 import com.infomedia.abacox.telephonypricing.db.repository.SpecialExtensionRepository;
-import com.infomedia.abacox.telephonypricing.service.common.CrudService;
+import com.infomedia.abacox.telephonypricing.service.common.SliceableCrudService;
 import org.springframework.core.io.ByteArrayResource;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
@@ -16,7 +16,7 @@ import java.io.IOException;
 import java.io.InputStream;
 
 @Service
-public class SpecialExtensionService extends CrudService<SpecialExtension, Long, SpecialExtensionRepository> {
+public class SpecialExtensionService extends SliceableCrudService<SpecialExtension, Long, SpecialExtensionRepository> {
 
     public SpecialExtensionService(SpecialExtensionRepository repository) {
         super(repository);
@@ -67,7 +67,7 @@ public class SpecialExtensionService extends CrudService<SpecialExtension, Long,
      * @return A ByteArrayResource representing the generated Excel file.
      */
     public ByteArrayResource exportExcel(Specification<SpecialExtension> specification, Pageable pageable, ExcelGeneratorBuilder builder) {
-        Page<SpecialExtension> collection = find(specification, pageable);
+        Slice<SpecialExtension> collection = findAsSlice(specification, pageable);
         try {
             InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
             return new ByteArrayResource(inputStream.readAllBytes());

@@ -5,10 +5,10 @@ import com.infomedia.abacox.telephonypricing.dto.telephonytypeconfig.CreateTelep
 import com.infomedia.abacox.telephonypricing.dto.telephonytypeconfig.UpdateTelephonyTypeConfig;
 import com.infomedia.abacox.telephonypricing.db.entity.TelephonyTypeConfig;
 import com.infomedia.abacox.telephonypricing.db.repository.TelephonyTypeConfigRepository;
-import com.infomedia.abacox.telephonypricing.service.common.CrudService;
+import com.infomedia.abacox.telephonypricing.service.common.SliceableCrudService;
 import org.springframework.core.io.ByteArrayResource;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
@@ -16,7 +16,7 @@ import java.io.IOException;
 import java.io.InputStream;
 
 @Service
-public class TelephonyTypeConfigService extends CrudService<TelephonyTypeConfig, Long, TelephonyTypeConfigRepository> {
+public class TelephonyTypeConfigService extends SliceableCrudService<TelephonyTypeConfig, Long, TelephonyTypeConfigRepository> {
     public TelephonyTypeConfigService(TelephonyTypeConfigRepository repository) {
         super(repository);
     }
@@ -42,7 +42,7 @@ public class TelephonyTypeConfigService extends CrudService<TelephonyTypeConfig,
     }
 
     public ByteArrayResource exportExcel(Specification<TelephonyTypeConfig> specification, Pageable pageable, ExcelGeneratorBuilder builder) {
-        Page<TelephonyTypeConfig> collection = find(specification, pageable);
+        Slice<TelephonyTypeConfig> collection = findAsSlice(specification, pageable);
        try {
             InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
             return new ByteArrayResource(inputStream.readAllBytes());

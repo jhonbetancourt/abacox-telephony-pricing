@@ -27,6 +27,7 @@ import org.springframework.core.io.ByteArrayResource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -155,16 +156,16 @@ public class CallRecordReportService {
     }
 
     @Transactional(readOnly = true)
-    public Page<CorporateReportDto> generateCorporateReport(Specification<CorporateReportView> specification,
+    public Slice<CorporateReportDto> generateCorporateReport(Specification<CorporateReportView> specification,
             Pageable pageable) {
-        return modelConverter.mapPage(corporateReportViewRepository.findAll(specification, pageable),
+        return modelConverter.mapSlice(corporateReportViewRepository.findAllAsSlice(specification, pageable),
                 CorporateReportDto.class);
     }
 
     @Transactional(readOnly = true)
     public ByteArrayResource exportExcelCorporateReport(Specification<CorporateReportView> specification,
             Pageable pageable, ExcelGeneratorBuilder builder) {
-        Page<CorporateReportDto> collection = generateCorporateReport(specification, pageable);
+        Slice<CorporateReportDto> collection = generateCorporateReport(specification, pageable);
         try {
             InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
             return new ByteArrayResource(inputStream.readAllBytes());

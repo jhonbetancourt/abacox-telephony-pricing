@@ -4,5 +4,5 @@ import com.infomedia.abacox.telephonypricing.db.entity.PbxSpecialRule;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
-public interface PbxSpecialRuleRepository extends JpaRepository<PbxSpecialRule, Long>, JpaSpecificationExecutor<PbxSpecialRule> {
+public interface PbxSpecialRuleRepository extends JpaRepository<PbxSpecialRule, Long>, JpaSpecificationExecutor<PbxSpecialRule>, SliceableSpecificationExecutor<PbxSpecialRule> {
 }

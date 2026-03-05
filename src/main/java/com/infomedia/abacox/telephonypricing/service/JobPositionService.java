@@ -5,10 +5,10 @@ import com.infomedia.abacox.telephonypricing.dto.jobposition.CreateJobPosition;
 import com.infomedia.abacox.telephonypricing.dto.jobposition.UpdateJobPosition;
 import com.infomedia.abacox.telephonypricing.db.entity.JobPosition;
 import com.infomedia.abacox.telephonypricing.db.repository.JobPositionRepository;
-import com.infomedia.abacox.telephonypricing.service.common.CrudService;
+import com.infomedia.abacox.telephonypricing.service.common.SliceableCrudService;
 import org.springframework.core.io.ByteArrayResource;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
@@ -16,7 +16,7 @@ import java.io.IOException;
 import java.io.InputStream;
 
 @Service
-public class JobPositionService extends CrudService<JobPosition, Long, JobPositionRepository> {
+public class JobPositionService extends SliceableCrudService<JobPosition, Long, JobPositionRepository> {
     public JobPositionService(JobPositionRepository repository) {
         super(repository);
     }
@@ -36,7 +36,7 @@ public class JobPositionService extends CrudService<JobPosition, Long, JobPositi
     }
 
     public ByteArrayResource exportExcel(Specification<JobPosition> specification, Pageable pageable, ExcelGeneratorBuilder builder) {
-        Page<JobPosition> collection = find(specification, pageable);
+        Slice<JobPosition> collection = findAsSlice(specification, pageable);
        try {
             InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
             return new ByteArrayResource(inputStream.readAllBytes());

@@ -9,7 +9,7 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import java.util.List;
 import java.util.Set;
 
-public interface ContactRepository extends JpaRepository<Contact, Long>, JpaSpecificationExecutor<Contact> {
+public interface ContactRepository extends JpaRepository<Contact, Long>, JpaSpecificationExecutor<Contact>, SliceableSpecificationExecutor<Contact> {
     
     /**
      * Finds all Contact entities where the phone number is in the provided set.
