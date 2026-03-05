@@ -4,5 +4,5 @@ import com.infomedia.abacox.telephonypricing.db.entity.City;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
-public interface CityRepository extends JpaRepository<City, Long>, JpaSpecificationExecutor<City>, SliceableSpecificationExecutor<City> {
+public interface CityRepository extends JpaRepository<City, Long>, JpaSpecificationExecutor<City> {
 }

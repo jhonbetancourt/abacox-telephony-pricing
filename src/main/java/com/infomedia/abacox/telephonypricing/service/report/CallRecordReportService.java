@@ -5,10 +5,9 @@ import com.infomedia.abacox.telephonypricing.component.export.excel.ExcelGenerat
 import com.infomedia.abacox.telephonypricing.component.modeltools.ModelConverter;
 import com.infomedia.abacox.telephonypricing.db.entity.CallRecord;
 import com.infomedia.abacox.telephonypricing.db.entity.FailedCallRecord;
-import com.infomedia.abacox.telephonypricing.db.repository.CallRecordRepository;
-import com.infomedia.abacox.telephonypricing.db.repository.CorporateReportViewRepository;
-import com.infomedia.abacox.telephonypricing.db.repository.FailedCallRecordRepository;
+
 import com.infomedia.abacox.telephonypricing.db.repository.ReportRepository;
+import com.infomedia.abacox.telephonypricing.db.repository.SliceableRepository;
 import com.infomedia.abacox.telephonypricing.db.view.CorporateReportView;
 import com.infomedia.abacox.telephonypricing.dto.callrecord.CallRecordDto;
 import com.infomedia.abacox.telephonypricing.dto.commlocation.CommLocationDto;
@@ -40,9 +39,7 @@ import java.util.stream.Collectors;
 @Service
 public class CallRecordReportService {
 
-    private final CallRecordRepository callRecordRepository;
-    private final FailedCallRecordRepository failedCallRecordRepository;
-    private final CorporateReportViewRepository corporateReportViewRepository;
+    private final SliceableRepository sliceableRepository;
     private final ReportRepository reportRepository;
     private final ModelConverter modelConverter;
     private final EmployeeLookupService employeeLookupService;
@@ -88,7 +85,7 @@ public class CallRecordReportService {
 
     @Transactional(readOnly = true)
     public Slice<CallRecordDto> generateCallRecordsReport(Specification<CallRecord> specification, Pageable pageable) {
-        Slice<CallRecord> callRecords = callRecordRepository.findAllAsSlice(specification, pageable);
+        Slice<CallRecord> callRecords = sliceableRepository.findAllAsSlice(CallRecord.class, specification, pageable);
 
         List<CallRecordDto> dtos = callRecords.getContent()
                 .stream()
@@ -131,7 +128,8 @@ public class CallRecordReportService {
     @Transactional(readOnly = true)
     public Slice<FailedCallRecordDto> generateFailedCallRecordsReport(Specification<FailedCallRecord> specification,
             Pageable pageable) {
-        Slice<FailedCallRecord> failedCallRecords = failedCallRecordRepository.findAllAsSlice(specification, pageable);
+        Slice<FailedCallRecord> failedCallRecords = sliceableRepository.findAllAsSlice(FailedCallRecord.class,
+                specification, pageable);
 
         List<FailedCallRecordDto> dtos = failedCallRecords.getContent()
                 .stream()
@@ -156,7 +154,8 @@ public class CallRecordReportService {
     @Transactional(readOnly = true)
     public Slice<CorporateReportDto> generateCorporateReport(Specification<CorporateReportView> specification,
             Pageable pageable) {
-        return modelConverter.mapSlice(corporateReportViewRepository.findAllAsSlice(specification, pageable),
+        return modelConverter.mapSlice(
+                sliceableRepository.findAllAsSlice(CorporateReportView.class, specification, pageable),
                 CorporateReportDto.class);
     }
 

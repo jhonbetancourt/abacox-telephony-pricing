@@ -4,7 +4,6 @@ import com.infomedia.abacox.telephonypricing.db.entity.CallRecord;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
-public interface CallRecordRepository extends JpaRepository<CallRecord, Long>, JpaSpecificationExecutor<CallRecord>,
-        SliceableSpecificationExecutor<CallRecord> {
+public interface CallRecordRepository extends JpaRepository<CallRecord, Long>, JpaSpecificationExecutor<CallRecord> {
 
 }
