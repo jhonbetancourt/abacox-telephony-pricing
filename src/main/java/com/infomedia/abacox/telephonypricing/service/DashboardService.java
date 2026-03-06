@@ -1,13 +1,17 @@
 package com.infomedia.abacox.telephonypricing.service;
 
+import com.infomedia.abacox.telephonypricing.config.CacheConfig;
 import com.infomedia.abacox.telephonypricing.dto.dashboard.DashboardOverviewDto;
 import com.infomedia.abacox.telephonypricing.db.repository.FailedCallRecordRepository;
 import com.infomedia.abacox.telephonypricing.dto.report.*;
+import com.infomedia.abacox.telephonypricing.multitenancy.TenantContext;
 import com.infomedia.abacox.telephonypricing.service.report.EmployeeReportService;
 import com.infomedia.abacox.telephonypricing.service.report.SubdivisionReportService;
 import com.infomedia.abacox.telephonypricing.service.report.TelephonyUsageReportService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.Sort;
@@ -16,6 +20,7 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -28,8 +33,40 @@ public class DashboardService {
     private final SubdivisionReportService subdivisionReportService;
     private final EmployeeReportService employeeReportService;
     private final FailedCallRecordRepository failedCallRecordRepository;
+    private final CacheManager cacheManager;
 
     public DashboardOverviewDto getDashboardOverview(LocalDateTime startDate, LocalDateTime endDate) {
+        String tenant = TenantContext.getTenant();
+        String key    = cacheKey(tenant, startDate, endDate);
+        Cache  cache  = cacheManager.getCache(cacheName(endDate));
+
+        if (cache != null) {
+            Cache.ValueWrapper cached = cache.get(key);
+            if (cached != null) {
+                log.debug("Dashboard cache hit: key={}", key);
+                return (DashboardOverviewDto) cached.get();
+            }
+        }
+
+        DashboardOverviewDto result = computeDashboardOverview(startDate, endDate);
+
+        if (cache != null) {
+            cache.put(key, result);
+        }
+        return result;
+    }
+
+    private String cacheName(LocalDateTime endDate) {
+        YearMonth current = YearMonth.now();
+        YearMonth end     = YearMonth.from(endDate);
+        return end.isBefore(current) ? CacheConfig.DASHBOARD_HISTORICAL : CacheConfig.DASHBOARD_CURRENT;
+    }
+
+    private String cacheKey(String tenant, LocalDateTime start, LocalDateTime end) {
+        return (tenant != null ? tenant : "default") + ":" + start + ":" + end;
+    }
+
+    private DashboardOverviewDto computeDashboardOverview(LocalDateTime startDate, LocalDateTime endDate) {
         // --- KPI totals from cost center summaries (includes grand totals) ---
         var costCenterReport = telephonyUsageReportService
                 .generateCostCenterUsageReport(startDate, endDate, null, PageRequest.of(0, 5, Sort.by(Sort.Direction.DESC, "totalBilledAmount")));
