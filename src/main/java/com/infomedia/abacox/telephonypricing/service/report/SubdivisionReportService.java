@@ -2,6 +2,7 @@ package com.infomedia.abacox.telephonypricing.service.report;
 
 import com.infomedia.abacox.telephonypricing.component.export.excel.ExcelGeneratorBuilder;
 import com.infomedia.abacox.telephonypricing.component.modeltools.ModelConverter;
+import com.infomedia.abacox.telephonypricing.component.utils.SortingUtils;
 import com.infomedia.abacox.telephonypricing.db.projection.MonthlySubdivisionUsage;
 import com.infomedia.abacox.telephonypricing.db.repository.ReportRepository;
 import com.infomedia.abacox.telephonypricing.dto.report.MonthlyCostDto;
@@ -13,6 +14,7 @@ import org.springframework.core.io.ByteArrayResource;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.SliceImpl;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,7 +37,8 @@ public class SubdivisionReportService {
     public Slice<SubdivisionUsageReportDto> generateSubdivisionUsageReport(
             LocalDateTime startDate, LocalDateTime endDate, Long parentSubdivisionId, Pageable pageable) {
         return modelConverter.mapSlice(
-                reportRepository.getSubdivisionUsageReport(startDate, endDate, parentSubdivisionId, pageable),
+                reportRepository.getSubdivisionUsageReport(startDate, endDate, parentSubdivisionId,
+                        SortingUtils.applyDefaultSort(pageable, Sort.by("subdivisionName"))),
                 SubdivisionUsageReportDto.class);
     }
 
@@ -58,7 +61,8 @@ public class SubdivisionReportService {
     public Slice<SubdivisionUsageByTypeReportDto> generateSubdivisionUsageByTypeReport(
             LocalDateTime startDate, LocalDateTime endDate, List<Long> subdivisionIds, Pageable pageable) {
         return modelConverter.mapSlice(
-                reportRepository.getSubdivisionUsageByTypeReport(startDate, endDate, subdivisionIds, pageable),
+                reportRepository.getSubdivisionUsageByTypeReport(startDate, endDate, subdivisionIds,
+                        SortingUtils.applyDefaultSort(pageable, Sort.by("subdivisionName"))),
                 SubdivisionUsageByTypeReportDto.class);
     }
 
@@ -148,11 +152,9 @@ public class SubdivisionReportService {
                     .build());
         });
 
-        // Sort the ENTIRE list by variation ascending (to put drops first: -100, -90,
-        // ..., 0, ..., 100)
-        // Secondary sort by name for stable ordering
-        allDtos.sort(Comparator.comparing(MonthlySubdivisionUsageReportDto::getTotalVariation)
-                .thenComparing(MonthlySubdivisionUsageReportDto::getSubdivisionName));
+        // Sort before abs conversion so signed values drive ordering (default: drops first, then increases)
+        SortingUtils.sort(allDtos, pageable.getSort(),
+                Sort.by("totalVariation").and(Sort.by("subdivisionName")));
 
         // Format variation as absolute value for display as requested ("always
         // positive")

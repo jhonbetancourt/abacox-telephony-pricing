@@ -126,41 +126,4 @@ public final class UnusedExtensionReportQueries {
             )
             SELECT * FROM UnusedExtensions
             """;
-
-    public static final String COUNT_QUERY = """
-            WITH ActiveExtensions AS (
-                SELECT cr.employee_extension as extension FROM call_record cr
-                WHERE cr.service_date BETWEEN :startDate AND :endDate
-                  AND cr.comm_location_id IS NOT NULL
-                  AND cr.employee_extension IS NOT NULL AND cr.employee_extension != ''
-                UNION
-                SELECT cr.dial FROM call_record cr
-                WHERE cr.service_date BETWEEN :startDate AND :endDate
-                  AND cr.comm_location_id IS NOT NULL
-                  AND cr.dial IS NOT NULL AND cr.dial != ''
-                UNION
-                SELECT cr.employee_transfer FROM call_record cr
-                WHERE cr.service_date BETWEEN :startDate AND :endDate
-                  AND cr.comm_location_id IS NOT NULL
-                  AND cr.employee_transfer IS NOT NULL AND cr.employee_transfer != ''
-            ),
-            UnusedExtensions AS (
-                SELECT DISTINCT e.extension
-                FROM employee e
-                LEFT JOIN ActiveExtensions ae ON e.extension = ae.extension
-                WHERE
-                    ae.extension IS NULL
-                    AND (
-                        e.history_control_id = 0
-                        OR e.history_control_id IS NULL
-                        OR EXISTS (
-                            SELECT 1 FROM history_control hc
-                            WHERE hc.ref_table = 1 AND hc.ref_id = e.id
-                        )
-                    )
-                    AND (:employeeName IS NULL OR :employeeName = '' OR e.name ILIKE CONCAT('%', :employeeName, '%'))
-                    AND (:extension IS NULL OR :extension = '' OR e.extension ILIKE CONCAT('%', :extension, '%'))
-            )
-            SELECT COUNT(*) FROM UnusedExtensions
-            """;
 }

@@ -3,6 +3,7 @@ package com.infomedia.abacox.telephonypricing.service.report;
 import com.infomedia.abacox.telephonypricing.component.cdrprocessing.EmployeeLookupService;
 import com.infomedia.abacox.telephonypricing.component.export.excel.ExcelGeneratorBuilder;
 import com.infomedia.abacox.telephonypricing.component.modeltools.ModelConverter;
+import com.infomedia.abacox.telephonypricing.component.utils.SortingUtils;
 import com.infomedia.abacox.telephonypricing.db.entity.CallRecord;
 import com.infomedia.abacox.telephonypricing.db.entity.FailedCallRecord;
 
@@ -25,6 +26,7 @@ import org.springframework.core.io.ByteArrayResource;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.SliceImpl;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -205,7 +207,9 @@ public class CallRecordReportService {
 
         // 3. Query repository with parameters
         return modelConverter.mapSlice(reportRepository.getUnassignedCallReport(
-                startDate, endDate, extension, groupingType.name(), minLength, maxLength, pageable),
+                startDate, endDate, extension, groupingType.name(), minLength, maxLength,
+                SortingUtils.applyDefaultSort(pageable,
+                        Sort.by(Sort.Order.desc("totalCost"), Sort.Order.desc("callCount"), Sort.Order.desc("lastCallDate")))),
                 UnassignedCallReportDto.class);
     }
 
@@ -227,7 +231,9 @@ public class CallRecordReportService {
     public Slice<ProcessingFailureReportDto> generateProcessingFailureReport(String directory, String errorType,
             LocalDateTime startDate, LocalDateTime endDate, Pageable pageable) {
         return modelConverter.mapSlice(
-                reportRepository.getProcessingFailureReport(startDate, endDate, directory, errorType, pageable),
+                reportRepository.getProcessingFailureReport(startDate, endDate, directory, errorType,
+                        SortingUtils.applyDefaultSort(pageable,
+                                Sort.by(Sort.Order.desc("failureCount"), Sort.Order.asc("commLocationDirectory"), Sort.Order.asc("plantTypeName")))),
                 ProcessingFailureReportDto.class);
     }
 

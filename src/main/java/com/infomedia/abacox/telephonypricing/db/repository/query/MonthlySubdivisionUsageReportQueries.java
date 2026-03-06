@@ -98,36 +98,4 @@ public final class MonthlySubdivisionUsageReportQueries {
             ORDER BY
                 rd.subdivisionName ASC
             """;
-
-    public static final String COUNT_QUERY = """
-            WITH RECURSIVE subdivision_hierarchy AS (
-                SELECT
-                    s.id,
-                    s.id AS anchor_id
-                FROM subdivision s
-                WHERE
-                    (:#{#subdivisionIds == null || #subdivisionIds.isEmpty() ? 1 : 0} = 1 AND s.parent_subdivision_id IS NULL)
-                    OR s.id IN (:subdivisionIds)
-
-                UNION ALL
-
-                SELECT
-                    s.id,
-                    sh.anchor_id
-                FROM subdivision s
-                INNER JOIN subdivision_hierarchy sh ON s.parent_subdivision_id = sh.id
-            ),
-            employee_counts AS (
-                SELECT
-                    sh.anchor_id,
-                    COUNT(*) AS totalEmployees
-                FROM subdivision_hierarchy sh
-                INNER JOIN employee e ON sh.id = e.subdivision_id
-                WHERE (e.history_control_id IS NULL OR e.id IN (
-                    SELECT hc.ref_id FROM history_control hc WHERE hc.ref_table = 1
-                ))
-                GROUP BY sh.anchor_id
-            )
-            SELECT COUNT(*) FROM employee_counts WHERE totalEmployees > 0
-            """;
 }

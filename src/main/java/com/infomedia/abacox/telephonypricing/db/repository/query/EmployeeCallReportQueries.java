@@ -46,7 +46,6 @@ public final class EmployeeCallReportQueries {
             WHERE
                 (:employeeName IS NULL OR p.name ILIKE CONCAT('%', :employeeName, '%'))
                 AND (:employeeExtension IS NULL OR p.extension ILIKE CONCAT('%', :employeeExtension, '%'))
-            ORDER BY m.totalCost DESC, p.name ASC
             """;
 
     public static final String BREAKDOWN_QUERY = """
@@ -65,22 +64,5 @@ public final class EmployeeCallReportQueries {
                 AND (c.is_incoming = true OR c.operator_id > 0)
             GROUP BY
                 COALESCE(e.history_control_id, e.id), tt.name
-            """;
-
-    public static final String COUNT_QUERY = """
-            SELECT COUNT(*) FROM (
-                SELECT COALESCE(e.history_control_id, e.id)
-                FROM
-                    call_record c JOIN employee e ON c.employee_id = e.id
-                WHERE
-                    c.service_date BETWEEN :startDate AND :endDate
-                    AND c.billed_amount > 0
-                    AND (c.is_incoming = true OR c.operator_id > 0)
-                    AND (e.history_control_id IS NULL OR e.id IN (SELECT hc.ref_id FROM history_control hc WHERE hc.ref_table = 1))
-                    AND (:employeeName IS NULL OR e.name ILIKE CONCAT('%', :employeeName, '%'))
-                    AND (:employeeExtension IS NULL OR e.extension ILIKE CONCAT('%', :employeeExtension, '%'))
-                GROUP BY
-                    COALESCE(e.history_control_id, e.id)
-            ) AS count_subquery
             """;
 }

@@ -100,36 +100,5 @@ public final class SubdivisionUsageReportQueries {
             LEFT JOIN
                 employee_counts ec ON rd.subdivisionId = ec.display_subdivision_id
             WHERE COALESCE(ec.totalEmployees, 0) > 0
-            ORDER BY rd.subdivisionName ASC
-            """;
-
-    public static final String COUNT_QUERY = """
-            WITH RECURSIVE subdivision_descendants AS (
-                SELECT
-                    s.id,
-                    s.id AS display_subdivision_id
-                FROM subdivision s
-                WHERE
-                    (:#{#parentSubdivisionId == null ? 1 : 0} = 1 AND s.parent_subdivision_id IS NULL)
-                    OR s.parent_subdivision_id = :parentSubdivisionId
-
-                UNION ALL
-
-                SELECT
-                    s.id,
-                    sd.display_subdivision_id
-                FROM subdivision s
-                INNER JOIN subdivision_descendants sd ON s.parent_subdivision_id = sd.id
-            )
-            SELECT COUNT(*) FROM (
-                SELECT sd.display_subdivision_id
-                FROM subdivision_descendants sd
-                INNER JOIN employee e ON sd.id = e.subdivision_id
-                WHERE (e.history_control_id IS NULL OR e.id IN (
-                    SELECT hc.ref_id FROM history_control hc WHERE hc.ref_table = 1
-                ))
-                GROUP BY sd.display_subdivision_id
-                HAVING COUNT(*) > 0
-            ) AS counted
             """;
 }

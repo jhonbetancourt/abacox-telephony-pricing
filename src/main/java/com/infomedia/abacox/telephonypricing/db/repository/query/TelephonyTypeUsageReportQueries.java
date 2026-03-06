@@ -4,32 +4,47 @@ public final class TelephonyTypeUsageReportQueries {
     private TelephonyTypeUsageReportQueries() {} // Private constructor to prevent instantiation
 
     public static final String QUERY = """
-    WITH report_data AS (
+    WITH aggregated_calls AS (
+        -- OPTIMIZATION 1: Pre-aggregate the massive call_record table 
+        -- grouped strictly by the integer ID before joining lookup dictionary tables.
         SELECT
-            cc.name AS telephonyCategoryName,
-            tt.name AS telephonyTypeName,
+            cr.telephony_type_id,
             COALESCE(COUNT(cr.id) FILTER (WHERE cr.is_incoming = false), 0) AS outgoingCallCount,
             COALESCE(COUNT(cr.id) FILTER (WHERE cr.is_incoming = true), 0) AS incomingCallCount,
             COALESCE(SUM(cr.duration), 0) AS totalDuration,
             COALESCE(SUM(cr.billed_amount), 0) AS totalBilledAmount
         FROM
             call_record cr
-        JOIN
-            telephony_type tt ON cr.telephony_type_id = tt.id
-        LEFT JOIN
-            call_category cc ON tt.call_category_id = cc.id
-        JOIN
+        -- We keep these INNER JOINs to guarantee identical filtering behavior 
+        -- (e.g. dropping calls if the employee or subdivision was removed/null)
+        INNER JOIN
             employee e ON cr.employee_id = e.id
-        JOIN
+        INNER JOIN
             subdivision s ON e.subdivision_id = s.id
-        JOIN
+        INNER JOIN
             communication_location cl ON cr.comm_location_id = cl.id
         WHERE
             (cr.service_date BETWEEN :startDate AND :endDate)
         AND
             (cr.is_incoming = true OR (cr.is_incoming = false AND cr.operator_id > 0))
         GROUP BY
-            cc.name, tt.id, tt.name
+            cr.telephony_type_id
+    ),
+    report_data AS (
+        -- OPTIMIZATION 2: Attach the string names only to the final aggregated subset
+        SELECT
+            cc.name AS telephonyCategoryName,
+            tt.name AS telephonyTypeName,
+            ac.outgoingCallCount,
+            ac.incomingCallCount,
+            ac.totalDuration,
+            ac.totalBilledAmount
+        FROM
+            aggregated_calls ac
+        INNER JOIN
+            telephony_type tt ON ac.telephony_type_id = tt.id
+        LEFT JOIN
+            call_category cc ON tt.call_category_id = cc.id
     )
     SELECT
         rd.telephonyCategoryName,
@@ -50,30 +65,5 @@ public final class TelephonyTypeUsageReportQueries {
         report_data rd
     ORDER BY
         rd.telephonyCategoryName, rd.telephonyTypeName
-    """;
-
-    public static final String COUNT_QUERY = """
-    SELECT COUNT(*) FROM (
-        SELECT
-            tt.id
-        FROM
-            call_record cr
-        JOIN
-            telephony_type tt ON cr.telephony_type_id = tt.id
-        LEFT JOIN
-            call_category cc ON tt.call_category_id = cc.id
-        JOIN
-            employee e ON cr.employee_id = e.id
-        JOIN
-            subdivision s ON e.subdivision_id = s.id
-        JOIN
-            communication_location cl ON cr.comm_location_id = cl.id
-        WHERE
-            (cr.service_date BETWEEN :startDate AND :endDate)
-        AND
-            (cr.is_incoming = true OR (cr.is_incoming = false AND cr.operator_id > 0))
-        GROUP BY
-            tt.id
-    ) AS group_count
     """;
 }
