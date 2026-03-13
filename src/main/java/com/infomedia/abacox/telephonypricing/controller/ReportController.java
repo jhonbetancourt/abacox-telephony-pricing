@@ -325,9 +325,9 @@ public class ReportController {
                         @Parameter(hidden = true) Pageable pageable, @ParameterObject PageableRequest pageableRequest,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate,
-                        @RequestParam List<Long> subdivisionIds) {
-                return subdivisionReportService.generateSubdivisionUsageByTypeReport(startDate, endDate, subdivisionIds,
-                                pageable);
+                        @RequestParam(required = false) Long parentSubdivisionId) {
+                return subdivisionReportService.generateSubdivisionUsageByTypeReport(startDate, endDate,
+                                parentSubdivisionId, pageable);
         }
 
         @GetMapping(value = "subdivisionUsageByType/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
@@ -335,11 +335,11 @@ public class ReportController {
                         @Parameter(hidden = true) Pageable pageable, @ParameterObject PageableRequest pageableRequest,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate,
-                        @RequestParam List<Long> subdivisionIds, @ParameterObject ExcelRequest excelRequest) {
+                        @RequestParam(required = false) Long parentSubdivisionId,
+                        @ParameterObject ExcelRequest excelRequest) {
 
                 ByteArrayResource resource = subdivisionReportService.exportExcelSubdivisionUsageByTypeReport(startDate,
-                                endDate,
-                                subdivisionIds, pageable, excelRequest.toExcelGeneratorBuilder());
+                                endDate, parentSubdivisionId, pageable, excelRequest.toExcelGeneratorBuilder());
                 return ResponseEntity.ok()
                                 .header(HttpHeaders.CONTENT_DISPOSITION,
                                                 "attachment; filename=subdivision_usage_by_type_report.xlsx")

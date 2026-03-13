@@ -88,8 +88,14 @@ public interface ReportRepository extends JpaRepository<VirtualEntity, Long> {
         Slice<SubdivisionUsageByTypeReport> getSubdivisionUsageByTypeReport(
                         @Param("startDate") LocalDateTime startDate,
                         @Param("endDate") LocalDateTime endDate,
-                        @Param("subdivisionIds") List<Long> subdivisionIds,
+                        @Param("parentSubdivisionId") Long parentSubdivisionId,
                         Pageable pageable);
+
+        @Query(value = SubdivisionUsageByTypeReportQueries.BREAKDOWN_QUERY, nativeQuery = true)
+        List<SubdivisionTelephonyTypeBreakdown> getSubdivisionTelephonyTypeBreakdown(
+                        @Param("startDate") LocalDateTime startDate,
+                        @Param("endDate") LocalDateTime endDate,
+                        @Param("subdivisionIds") List<Long> subdivisionIds);
 
         @Query(value = TelephonyTypeUsageReportQueries.QUERY, nativeQuery = true)
         Slice<TelephonyTypeUsageReport> getTelephonyTypeUsageReport(

@@ -4,11 +4,13 @@ import com.infomedia.abacox.telephonypricing.component.export.excel.ExcelGenerat
 import com.infomedia.abacox.telephonypricing.component.modeltools.ModelConverter;
 import com.infomedia.abacox.telephonypricing.component.utils.SortingUtils;
 import com.infomedia.abacox.telephonypricing.db.projection.MonthlySubdivisionUsage;
+import com.infomedia.abacox.telephonypricing.db.projection.SubdivisionTelephonyTypeBreakdown;
 import com.infomedia.abacox.telephonypricing.db.repository.ReportRepository;
 import com.infomedia.abacox.telephonypricing.dto.report.MonthlyCostDto;
 import com.infomedia.abacox.telephonypricing.dto.report.MonthlySubdivisionUsageReportDto;
 import com.infomedia.abacox.telephonypricing.dto.report.SubdivisionUsageByTypeReportDto;
 import com.infomedia.abacox.telephonypricing.dto.report.SubdivisionUsageReportDto;
+import com.infomedia.abacox.telephonypricing.dto.report.TelephonyTypeCostDto;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.data.domain.Pageable;
@@ -59,21 +61,47 @@ public class SubdivisionReportService {
 
     @Transactional(readOnly = true)
     public Slice<SubdivisionUsageByTypeReportDto> generateSubdivisionUsageByTypeReport(
-            LocalDateTime startDate, LocalDateTime endDate, List<Long> subdivisionIds, Pageable pageable) {
-        return modelConverter.mapSlice(
-                reportRepository.getSubdivisionUsageByTypeReport(startDate, endDate, subdivisionIds,
+            LocalDateTime startDate, LocalDateTime endDate, Long parentSubdivisionId, Pageable pageable) {
+        Slice<SubdivisionUsageByTypeReportDto> slice = modelConverter.mapSlice(
+                reportRepository.getSubdivisionUsageByTypeReport(startDate, endDate, parentSubdivisionId,
                         SortingUtils.applyDefaultSort(pageable, Sort.by("subdivisionName"))),
                 SubdivisionUsageByTypeReportDto.class);
+
+        if (slice.isEmpty()) {
+            return slice;
+        }
+
+        List<Long> subdivisionIds = slice.getContent().stream()
+                .map(SubdivisionUsageByTypeReportDto::getSubdivisionId)
+                .collect(Collectors.toList());
+
+        List<SubdivisionTelephonyTypeBreakdown> breakdowns = reportRepository.getSubdivisionTelephonyTypeBreakdown(
+                startDate, endDate, subdivisionIds);
+
+        Map<Long, List<TelephonyTypeCostDto>> breakdownMap = breakdowns.stream()
+                .collect(Collectors.groupingBy(
+                        SubdivisionTelephonyTypeBreakdown::getSubdivisionId,
+                        Collectors.mapping(
+                                b -> new TelephonyTypeCostDto(b.getTelephonyTypeName(), b.getTotalBilledAmount()),
+                                Collectors.toList())));
+
+        slice.getContent().forEach(dto ->
+                dto.setTelephonyTypeCosts(breakdownMap.getOrDefault(dto.getSubdivisionId(), new ArrayList<>())));
+
+        return slice;
     }
 
     @Transactional(readOnly = true)
     public ByteArrayResource exportExcelSubdivisionUsageByTypeReport(
-            LocalDateTime startDate, LocalDateTime endDate, List<Long> subdivisionIds, Pageable pageable,
+            LocalDateTime startDate, LocalDateTime endDate, Long parentSubdivisionId, Pageable pageable,
             ExcelGeneratorBuilder builder) {
         Slice<SubdivisionUsageByTypeReportDto> collection = generateSubdivisionUsageByTypeReport(startDate, endDate,
-                subdivisionIds, pageable);
+                parentSubdivisionId, pageable);
         try {
-            InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
+            InputStream inputStream = builder
+                    .withEntities(collection.toList())
+                    .withFlattenedCollection("telephonyTypeCosts")
+                    .generateAsInputStream();
             return new ByteArrayResource(inputStream.readAllBytes());
         } catch (IOException e) {
             throw new RuntimeException(e);
