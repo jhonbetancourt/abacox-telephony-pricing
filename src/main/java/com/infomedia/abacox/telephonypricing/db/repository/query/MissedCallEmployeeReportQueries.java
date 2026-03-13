@@ -5,7 +5,7 @@ public final class MissedCallEmployeeReportQueries {
   }
 
   public static final String QUERY = """
-      WITH 
+      WITH
       -- Get internal operator IDs from prefix table (matching PHP _operador_Internas)
       internal_operators AS (
           SELECT DISTINCT o.id as operator_id
@@ -59,7 +59,7 @@ public final class MissedCallEmployeeReportQueries {
       -- Missed calls per employee (with ring filter, matching PHP default case)
       missed_calls AS (
           -- Query 1: Direct incoming calls with duration=0 and ring filter
-          SELECT 
+          SELECT
               e.id as employee_id,
               COUNT(*) as missed_call_count,
               SUM(cr.ring_count) as total_ring_count
@@ -77,7 +77,7 @@ public final class MissedCallEmployeeReportQueries {
           UNION ALL
 
           -- Query 2: Calls transferred to voicemail/employee with ring filter
-          SELECT 
+          SELECT
               e.id as employee_id,
               COUNT(*) as missed_call_count,
               SUM(cr.ring_count) as total_ring_count
@@ -99,7 +99,7 @@ public final class MissedCallEmployeeReportQueries {
           UNION ALL
 
           -- Query 3: Internal calls or voicemail dials with ring filter
-          SELECT 
+          SELECT
               e.id as employee_id,
               COUNT(*) as missed_call_count,
               SUM(cr.ring_count) as total_ring_count

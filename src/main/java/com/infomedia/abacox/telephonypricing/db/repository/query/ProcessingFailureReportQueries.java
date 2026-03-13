@@ -19,7 +19,7 @@ public final class ProcessingFailureReportQueries {
         WHERE
             fr.created_date BETWEEN :startDate AND :endDate
             AND (:directory IS NULL OR cl.directory ILIKE CONCAT('%', :directory, '%'))
-            AND (:errorType IS NULL OR fr.error_type ILIKE CONCAT('%', :errorType, '%'))
+            AND (:errorType IS NULL OR fr.error_type = :errorType)
         GROUP BY
             fr.error_type, cl.id, cl.directory, pt.id, pt.name
     )

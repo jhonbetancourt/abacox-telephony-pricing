@@ -69,7 +69,7 @@ public final class UnusedExtensionReportQueries {
                         )
                     )
                     AND (:employeeName IS NULL OR :employeeName = '' OR e.name ILIKE CONCAT('%', :employeeName, '%'))
-                    AND (:extension IS NULL OR :extension = '' OR e.extension ILIKE CONCAT('%', :extension, '%'))
+                    AND (:extension IS NULL OR :extension = '' OR e.extension = :extension)
                 ORDER BY e.extension, e.id DESC
             ),
             CallHistory AS (

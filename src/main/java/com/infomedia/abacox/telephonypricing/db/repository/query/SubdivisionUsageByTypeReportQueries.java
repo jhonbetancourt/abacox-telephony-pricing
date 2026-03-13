@@ -20,7 +20,7 @@ public final class SubdivisionUsageByTypeReportQueries {
                 FROM subdivision s
                 WHERE
                     (:#{#parentSubdivisionId == null ? 1 : 0} = 1 AND s.parent_subdivision_id IS NULL)
-                    OR s.parent_subdivision_id = :parentSubdivisionId
+                    OR s.id = :parentSubdivisionId
 
                 UNION ALL
 

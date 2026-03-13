@@ -34,7 +34,7 @@ public final class UnassignedCallReportQueries {
                             )
                         )
                     )
-                    AND (:extension IS NULL OR cr.employee_extension ILIKE CONCAT('%', :extension, '%'))
+                    AND (:extension IS NULL OR cr.employee_extension = :extension)
             )
             SELECT
                 concept_val as concept,

@@ -45,7 +45,7 @@ public final class EmployeeCallReportQueries {
                 LEFT JOIN indicator i ON cl.indicator_id = i.id
             WHERE
                 (:employeeName IS NULL OR p.name ILIKE CONCAT('%', :employeeName, '%'))
-                AND (:employeeExtension IS NULL OR p.extension ILIKE CONCAT('%', :employeeExtension, '%'))
+                AND (:employeeExtension IS NULL OR p.extension = :employeeExtension)
             """;
 
     public static final String BREAKDOWN_QUERY = """
