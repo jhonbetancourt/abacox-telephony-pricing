@@ -22,9 +22,9 @@ public class CacheConfig {
         CaffeineCacheManager manager = new CaffeineCacheManager();
         manager.setCacheNames(List.of(DASHBOARD_CURRENT, DASHBOARD_HISTORICAL));
         manager.registerCustomCache(DASHBOARD_CURRENT,
-                Caffeine.newBuilder().expireAfterWrite(1, TimeUnit.HOURS).maximumSize(500).build());
+                Caffeine.newBuilder().expireAfterWrite(1, TimeUnit.DAYS).maximumSize(500).build());
         manager.registerCustomCache(DASHBOARD_HISTORICAL,
-                Caffeine.newBuilder().expireAfterWrite(1, TimeUnit.DAYS).maximumSize(1000).build());
+                Caffeine.newBuilder().expireAfterWrite(7, TimeUnit.DAYS).maximumSize(1000).build());
         return manager;
     }
 }
