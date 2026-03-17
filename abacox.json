@@ -7,5 +7,6 @@
   "memoryLimit": "2048M",
   "coreModule": false,
   "dockerfilePath": "Dockerfile",
-  "contextPath": "."
+  "contextPath": ".",
+  "dependsOn": ["control", "core", "users"]
 }
