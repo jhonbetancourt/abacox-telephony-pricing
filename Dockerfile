@@ -5,7 +5,7 @@ RUN apt-get update && apt-get install -y maven && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
 COPY . .
-RUN mvn package -DskipTests -q
+RUN --mount=type=cache,target=/root/.m2 mvn package -DskipTests -q
 
 # --- Run stage ---
 FROM eclipse-temurin:21-jre-jammy
