@@ -44,6 +44,7 @@ public class CallRecordDefinition implements MigrationTableDefinition {
                         entry("ACUMTOTAL_FCREACION", "createdDate"),
                         entry("ACUMTOTAL_FMODIFICADO", "lastModifiedDate")))
                 .maxEntriesToMigrate(context.getRunRequest().getMaxCallRecordEntries())
+                .dropAndRebuildIndexes(true)
                 .orderByClause("ACUMTOTAL_FECHA_SERVICIO DESC")
                 .specificValueReplacements(Map.of("telephonyTypeId", context.getTelephonyTypeReplacements()))
                 .onBatchSuccess(batch -> {

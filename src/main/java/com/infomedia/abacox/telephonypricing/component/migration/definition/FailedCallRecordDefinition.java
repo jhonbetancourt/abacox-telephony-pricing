@@ -38,6 +38,7 @@ public class FailedCallRecordDefinition implements MigrationTableDefinition {
                                 ? XXHash128Util.hash(String.valueOf(val).getBytes(StandardCharsets.UTF_8))
                                 : null))
                 .maxEntriesToMigrate(context.getRunRequest().getMaxFailedCallRecordEntries())
+                .dropAndRebuildIndexes(true)
                 .specificValueReplacements(Map.of("originalCallRecordId", originalCallRecordIdReplacements))
                 .orderByClause("ACUMFALLIDO_ID DESC")
                 .onBatchSuccess(batch -> {

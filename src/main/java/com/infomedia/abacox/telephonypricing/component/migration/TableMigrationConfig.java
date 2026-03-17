@@ -129,6 +129,14 @@ public class TableMigrationConfig {
     private boolean assumeTargetIsEmpty = false;
 
     /**
+     * If true, all non-constraint indexes on the target table are dropped before
+     * migration and rebuilt with CREATE INDEX CONCURRENTLY after.
+     * This keeps INSERT cost constant regardless of table size.
+     */
+    @Builder.Default
+    private boolean dropAndRebuildIndexes = false;
+
+    /**
      * Columns that are populated manually (e.g. in rowModifier) and do not exist
      * in the source table. This prevents SourceDataFetcher from warning about them.
      */

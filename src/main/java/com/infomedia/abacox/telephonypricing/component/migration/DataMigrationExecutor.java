@@ -8,6 +8,17 @@ import lombok.extern.log4j.Log4j2;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
+import com.infomedia.abacox.telephonypricing.multitenancy.TenantContext;
+
+import javax.sql.DataSource;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.function.BiConsumer;
 
 @Component
@@ -16,6 +27,7 @@ import java.util.function.BiConsumer;
 public class DataMigrationExecutor {
 
     private final TableMigrationExecutor tableExecutor;
+    private final DataSource dataSource;
 
     private static final String HIBERNATE_SQL_EXCEPTION_HELPER = "org.hibernate.engine.jdbc.spi.SqlExceptionHelper";
 
@@ -50,6 +62,83 @@ public class DataMigrationExecutor {
         }
     }
 
+    private Connection tenantConnection() throws SQLException {
+        Connection conn = dataSource.getConnection();
+        String tenant = TenantContext.getTenant();
+        if (tenant != null && !tenant.isBlank()) {
+            conn.createStatement().execute("SET search_path TO \"" + tenant + "\"");
+        }
+        return conn;
+    }
+
+    /**
+     * Queries pg_indexes for all non-constraint indexes on the given table in the current schema.
+     */
+    private List<IndexInfo> fetchDroppableIndexes(String tableName) {
+        String sql = """
+                SELECT i.indexname, i.indexdef
+                FROM pg_indexes i
+                WHERE i.tablename = ?
+                AND i.schemaname = current_schema()
+                AND NOT EXISTS (
+                    SELECT 1 FROM pg_constraint c
+                    JOIN pg_class cl ON c.conrelid = cl.oid
+                    WHERE cl.relname = i.tablename
+                    AND c.conname = i.indexname
+                )
+                """;
+        List<IndexInfo> result = new ArrayList<>();
+        try (Connection conn = tenantConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, tableName);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    result.add(new IndexInfo(rs.getString("indexname"), rs.getString("indexdef")));
+                }
+            }
+        } catch (SQLException e) {
+            log.error("Failed to query indexes for table {}: {}", tableName, e.getMessage(), e);
+        }
+        return result;
+    }
+
+    private void dropIndexes(List<IndexInfo> indexes) {
+        if (indexes.isEmpty()) return;
+        try (Connection conn = tenantConnection();
+             Statement stmt = conn.createStatement()) {
+            for (IndexInfo idx : indexes) {
+                log.info("Dropping index '{}' before migration", idx.name());
+                stmt.execute("DROP INDEX IF EXISTS \"" + idx.name() + "\"");
+            }
+        } catch (SQLException e) {
+            log.error("Failed to drop indexes: {}", e.getMessage(), e);
+            throw new RuntimeException("Index drop failed", e);
+        }
+    }
+
+    private void rebuildIndexes(List<IndexInfo> indexes) {
+        if (indexes.isEmpty()) return;
+        // CREATE INDEX CONCURRENTLY must run outside a transaction (autoCommit = true)
+        try (Connection conn = tenantConnection()) {
+            conn.setAutoCommit(true);
+            try (Statement stmt = conn.createStatement()) {
+                for (IndexInfo idx : indexes) {
+                    // Convert to CONCURRENTLY to avoid locking the table for reads
+                    String concurrentDef = idx.definition().replace("CREATE INDEX", "CREATE INDEX CONCURRENTLY");
+                    log.info("Rebuilding index '{}' after migration...", idx.name());
+                    long start = System.currentTimeMillis();
+                    stmt.execute(concurrentDef);
+                    log.info("Rebuilt index '{}' in {}ms", idx.name(), System.currentTimeMillis() - start);
+                }
+            }
+        } catch (SQLException e) {
+            log.error("Failed to rebuild indexes: {}", e.getMessage(), e);
+            throw new RuntimeException("Index rebuild failed", e);
+        }
+    }
+
+    private record IndexInfo(String name, String definition) {}
+
     /**
      * Runs the migration for a list of tables, invoking a callback after each
      * table.
@@ -83,6 +172,7 @@ public class DataMigrationExecutor {
                         currentTableIndex, totalTables, tableConfig.getSourceTableName(),
                         simpleTargetName);
                 Exception tableException = null;
+                List<IndexInfo> droppedIndexes = Collections.emptyList();
                 try {
                     if (tableConfig.getBeforeMigrationAction() != null) {
                         log.debug("Executing before-migration action for table '{}'...",
@@ -90,10 +180,23 @@ public class DataMigrationExecutor {
                         tableConfig.getBeforeMigrationAction().accept(tableConfig);
                     }
 
+                    if (tableConfig.isDropAndRebuildIndexes()) {
+                        String targetTable = MigrationUtils.getTableName(
+                                Class.forName(tableConfig.getTargetEntityClassName()));
+                        droppedIndexes = fetchDroppableIndexes(targetTable);
+                        log.info("Dropping {} indexes on '{}' before migration", droppedIndexes.size(), targetTable);
+                        dropIndexes(droppedIndexes);
+                    }
+
                     // Call the method on the executor bean (this goes through the proxy)
                     tableExecutor.executeTableMigration(tableConfig, request.getSourceDbConfig());
                     log.debug("Successfully migrated table {}/{}: {}", currentTableIndex, totalTables,
                             tableConfig.getSourceTableName());
+
+                    if (tableConfig.isDropAndRebuildIndexes() && !droppedIndexes.isEmpty()) {
+                        log.info("Rebuilding {} indexes after migration", droppedIndexes.size());
+                        rebuildIndexes(droppedIndexes);
+                    }
 
                     if (tableConfig.getPostMigrationSuccessAction() != null) {
                         log.debug("Executing post-migration success action for table '{}'...",
@@ -113,6 +216,17 @@ public class DataMigrationExecutor {
                     tableException = e;
                     log.error("!!! CRITICAL ERROR migrating table {}/{}: {}. Stopping migration. !!!",
                             currentTableIndex, totalTables, tableConfig.getSourceTableName(), e.getMessage(), e);
+
+                    if (tableConfig.isDropAndRebuildIndexes() && !droppedIndexes.isEmpty()) {
+                        log.warn("Migration failed — attempting to restore {} dropped indexes anyway...",
+                                droppedIndexes.size());
+                        try {
+                            rebuildIndexes(droppedIndexes);
+                        } catch (Exception rebuildEx) {
+                            log.error("!!! Could not restore indexes after migration failure. Manual intervention required. !!!",
+                                    rebuildEx);
+                        }
+                    }
 
                 } finally {
                     if (progressCallback != null) {
