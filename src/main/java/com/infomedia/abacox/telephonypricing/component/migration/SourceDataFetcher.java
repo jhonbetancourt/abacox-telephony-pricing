@@ -166,7 +166,7 @@ public class SourceDataFetcher {
                 fetchDataWithIdFilter(connection, tableConfig, columnsToSelect, dialect, batchSize, batchProcessor);
             } else {
                 // 6. Build the Streaming SQL Query
-                String columnsSql = buildColumnsSql(columnsToSelect, dialect);
+                String columnsSql = buildColumnsSql(columnsToSelect, dialect, tableConfig.getSourceColumnExpressionOverrides());
                 String sql = buildStreamingQuery(dialect, tableName, columnsSql, whereClause, finalOrderByClause,
                         maxEntriesToMigrate);
 
@@ -339,8 +339,25 @@ public class SourceDataFetcher {
     }
 
     private String buildColumnsSql(Set<String> columnsToSelect, SqlDialect dialect) {
+        return buildColumnsSql(columnsToSelect, dialect, null);
+    }
+
+    private String buildColumnsSql(Set<String> columnsToSelect, SqlDialect dialect, Map<String, String> expressionOverrides) {
         return columnsToSelect.stream()
-                .map(col -> quoteIdentifier(col, dialect))
+                .map(col -> {
+                    if (expressionOverrides != null) {
+                        // Case-insensitive lookup
+                        String expr = expressionOverrides.entrySet().stream()
+                                .filter(e -> e.getKey().equalsIgnoreCase(col))
+                                .map(Map.Entry::getValue)
+                                .findFirst()
+                                .orElse(null);
+                        if (expr != null) {
+                            return expr + " AS " + quoteIdentifier(col, dialect);
+                        }
+                    }
+                    return quoteIdentifier(col, dialect);
+                })
                 .collect(Collectors.joining(", "));
     }
 

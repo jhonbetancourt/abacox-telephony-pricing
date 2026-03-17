@@ -137,6 +137,19 @@ public class TableMigrationConfig {
     private boolean dropAndRebuildIndexes = false;
 
     /**
+     * Overrides the SQL expression used to SELECT a specific source column.
+     * The key is the source column name; the value is the raw SQL expression.
+     * The expression is aliased back to the original column name automatically.
+     *
+     * Example: "ACUMFALLIDO_CDR" -> "CAST(ACUMFALLIDO_CDR AS varchar(max))"
+     * Results in: CAST(ACUMFALLIDO_CDR AS varchar(max)) AS [ACUMFALLIDO_CDR]
+     *
+     * Useful for casting legacy SQL Server text/ntext columns to varchar(max)
+     * to avoid tempdb materialization during streaming.
+     */
+    private Map<String, String> sourceColumnExpressionOverrides;
+
+    /**
      * Columns that are populated manually (e.g. in rowModifier) and do not exist
      * in the source table. This prevents SourceDataFetcher from warning about them.
      */

@@ -37,6 +37,9 @@ public class FailedCallRecordDefinition implements MigrationTableDefinition {
                         val -> val != null
                                 ? XXHash128Util.hash(String.valueOf(val).getBytes(StandardCharsets.UTF_8))
                                 : null))
+                .sourceColumnExpressionOverrides(Map.of(
+                        "ACUMFALLIDO_CDR", "CAST(ACUMFALLIDO_CDR AS varchar(max))",
+                        "ACUMFALLIDO_MENSAJE", "CAST(ACUMFALLIDO_MENSAJE AS varchar(max))"))
                 .maxEntriesToMigrate(context.getRunRequest().getMaxFailedCallRecordEntries())
                 .dropAndRebuildIndexes(true)
                 .specificValueReplacements(Map.of("originalCallRecordId", originalCallRecordIdReplacements))
