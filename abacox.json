@@ -1,0 +1,11 @@
+{
+  "name": "telephony-pricing",
+  "displayName": "Telephony Pricing",
+  "usesDatabase": true,
+  "usesObjectStorage": true,
+  "containerPort": 8080,
+  "memoryLimit": "2048M",
+  "coreModule": false,
+  "dockerfilePath": "Dockerfile",
+  "contextPath": "."
+}
