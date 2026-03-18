@@ -1,30 +1,41 @@
 package com.infomedia.abacox.telephonypricing.service.remote;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.infomedia.abacox.telephonypricing.dto.generic.PageDto;
 import com.infomedia.abacox.telephonypricing.dto.role.RoleDto;
 import com.infomedia.abacox.telephonypricing.dto.user.UserDto;
-import com.infomedia.abacox.telephonypricing.service.AuthService;
-import com.infomedia.abacox.telephonypricing.service.common.RemoteService;
+import com.infomedia.abacox.telephonypricing.exception.RemoteServiceException;
+import com.infomedia.abacox.telephonypricing.messaging.InternalMessage;
+import com.infomedia.abacox.telephonypricing.messaging.MessagingService;
+import com.infomedia.abacox.telephonypricing.multitenancy.TenantContext;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.util.HashMap;
 import java.util.Map;
 
 @Service
-public class UserService extends RemoteService {
+@RequiredArgsConstructor
+public class UserService {
 
-    private final ControlService controlService;
+    private static final long QUERY_TIMEOUT_MS = 10_000;
 
-    protected UserService(AuthService authService, ControlService controlService) {
-        super(authService);
-        this.controlService = controlService;
-    }
+    private final MessagingService messagingService;
+    private final ObjectMapper objectMapper;
 
     public PageDto<UserDto> findUsers(String filter, int page, int size, String sort) {
-        Map<String, Object> params = Map.of("filter", filter==null?"":filter
-                , "page", page, "size", size, "sort", sort==null?"":sort);
-        TypeReference<PageDto<UserDto>> typeReference = new TypeReference<>() {};
-        return get(params, "/api/user", typeReference);
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("filter", filter != null ? filter : "");
+        payload.put("page", page);
+        payload.put("size", size);
+        payload.put("sort", sort != null ? sort : "");
+        payload.put("tenant", TenantContext.getTenant());
+
+        InternalMessage response = messagingService.sendQuery(
+                "users", "USER_FIND_QUERY", payload, QUERY_TIMEOUT_MS);
+        return deserializePayload(response, "USER_FIND_QUERY",
+                new TypeReference<PageDto<UserDto>>() {});
     }
 
     public UserDto findUser(String filter) {
@@ -33,10 +44,17 @@ public class UserService extends RemoteService {
     }
 
     public PageDto<RoleDto> findRoles(String filter, int page, int size, String sort) {
-        Map<String, Object> params = Map.of("filter", filter==null?"":filter
-                , "page", page, "size", size, "sort", sort==null?"":sort);
-        TypeReference<PageDto<RoleDto>> typeReference = new TypeReference<>() {};
-        return get(params, "/api/role", typeReference);
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("filter", filter != null ? filter : "");
+        payload.put("page", page);
+        payload.put("size", size);
+        payload.put("sort", sort != null ? sort : "");
+        payload.put("tenant", TenantContext.getTenant());
+
+        InternalMessage response = messagingService.sendQuery(
+                "users", "ROLE_FIND_QUERY", payload, QUERY_TIMEOUT_MS);
+        return deserializePayload(response, "ROLE_FIND_QUERY",
+                new TypeReference<PageDto<RoleDto>>() {});
     }
 
     public RoleDto findRole(String filter) {
@@ -44,8 +62,17 @@ public class UserService extends RemoteService {
         return roles.getContent().isEmpty() ? null : roles.getContent().getFirst();
     }
 
-    @Override
-    public String getBaseUrl() {
-        return controlService.getUsersUrl();
+    private <T> T deserializePayload(InternalMessage response, String queryType, TypeReference<T> type) {
+        if (response == null) {
+            throw new RemoteServiceException("Query timed out: " + queryType, null);
+        }
+        if (response.getType().endsWith("_ERROR")) {
+            throw new RemoteServiceException("Query failed [" + queryType + "]: " + response.getPayload(), null);
+        }
+        try {
+            return objectMapper.convertValue(response.getPayload(), type);
+        } catch (Exception e) {
+            throw new RemoteServiceException("Failed to deserialize response for " + queryType, e);
+        }
     }
 }

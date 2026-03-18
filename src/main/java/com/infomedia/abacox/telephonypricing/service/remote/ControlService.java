@@ -1,27 +1,41 @@
 package com.infomedia.abacox.telephonypricing.service.remote;
 
-import com.infomedia.abacox.telephonypricing.component.events.EventsWebSocketServer;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.infomedia.abacox.telephonypricing.dto.module.ModuleInfo;
 import com.infomedia.abacox.telephonypricing.exception.RemoteServiceException;
+import com.infomedia.abacox.telephonypricing.messaging.InternalMessage;
+import com.infomedia.abacox.telephonypricing.messaging.MessagingService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import java.io.IOException;
 import java.util.Map;
-import java.util.concurrent.TimeoutException;
 
 @Service
 @RequiredArgsConstructor
 public class ControlService {
 
-    private final EventsWebSocketServer eventsWebSocketServer;
+    private static final long QUERY_TIMEOUT_MS = 10_000;
+
+    private final MessagingService messagingService;
+    private final ObjectMapper objectMapper;
 
     public ModuleInfo getInfoByPrefix(String prefix) {
+        InternalMessage response = messagingService.sendQuery(
+                "control",
+                "MODULE_INFO_BY_PREFIX_QUERY",
+                Map.of("prefix", prefix),
+                QUERY_TIMEOUT_MS
+        );
+        if (response == null) {
+            throw new RemoteServiceException("Query timed out: MODULE_INFO_BY_PREFIX_QUERY", null);
+        }
+        if (response.getType().endsWith("_ERROR")) {
+            throw new RemoteServiceException("Query failed: " + response.getPayload(), null);
+        }
         try {
-            return eventsWebSocketServer.sendCommandRequestAndAwaitResponse("getModuleInfoByPrefix"
-                    , Map.of("prefix", prefix)).getResultAs(ModuleInfo.class);
-        } catch (IOException | TimeoutException e) {
-            throw new RemoteServiceException("Error getting module info by prefix", e);
+            return objectMapper.convertValue(response.getPayload(), ModuleInfo.class);
+        } catch (Exception e) {
+            throw new RemoteServiceException("Failed to deserialize ModuleInfo", e);
         }
     }
 
