@@ -17,6 +17,8 @@ WORKDIR /app
 COPY --from=builder /build/target/*.jar app.jar
 
 EXPOSE 8080
+EXPOSE 2121
+EXPOSE 30000-30010
 
 ENV JAVA_OPTS="-XX:MaxRAMPercentage=80.0 -XX:+AlwaysPreTouch -XX:+UseG1GC -XX:MaxGCPauseMillis=200"
 
