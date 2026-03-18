@@ -8,5 +8,9 @@
   "coreModule": false,
   "dockerfilePath": "Dockerfile",
   "contextPath": ".",
-  "dependsOn": ["control", "core", "users"]
+  "dependsOn": ["control", "core", "users"],
+  "additionalPorts": [
+    "2121:2121",
+    "30000-30010:30000-30010"
+  ]
 }
