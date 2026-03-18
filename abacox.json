@@ -9,10 +9,10 @@
   "dockerfilePath": "Dockerfile",
   "contextPath": ".",
   "dependsOn": ["control", "core", "users"],
-  "additionalPorts": ["2121:2121", "30000-30010:30000-30010"],
   "requiresControlRegistration": true,
   "skipHealthCheck": false,
   "healthCheckPath": "/api/health",
   "jpaHibernateDdlAuto": "none",
-  "forwardHeadersNative": false
+  "forwardHeadersNative": false,
+  "volumes": ["${ABACOX_MODULE_DIR}:/app/data"]
 }
