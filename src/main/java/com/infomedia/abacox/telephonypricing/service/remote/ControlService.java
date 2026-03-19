@@ -14,7 +14,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class ControlService {
 
-    private static final long QUERY_TIMEOUT_MS = 10_000;
+    private static final long QUERY_TIMEOUT_MS = 30_000;
 
     private final MessagingService messagingService;
     private final ObjectMapper objectMapper;

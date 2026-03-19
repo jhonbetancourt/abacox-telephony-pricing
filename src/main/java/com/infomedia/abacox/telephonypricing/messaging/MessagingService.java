@@ -76,12 +76,15 @@ public class MessagingService {
                 .build();
 
         log.debug("Sending query [{}] to [{}]", type, targetModule);
-        rabbitTemplate.setReplyTimeout(timeoutMs);
 
         Object response = rabbitTemplate.convertSendAndReceive(
                 RabbitMQConfig.QUERIES_EXCHANGE,
                 targetModule,
-                request
+                request,
+                msg -> {
+                    msg.getMessageProperties().setExpiration(String.valueOf(timeoutMs));
+                    return msg;
+                }
         );
 
         if (response == null) {
