@@ -19,6 +19,7 @@ public final class SubdivisionUsageReportQueries {
      * ($funcionarios <= 0) continue")
      */
     public static final String QUERY = """
+            SELECT * FROM (
             WITH RECURSIVE subdivision_descendants AS (
                 SELECT
                     s.id,
@@ -100,5 +101,6 @@ public final class SubdivisionUsageReportQueries {
             LEFT JOIN
                 employee_counts ec ON rd.subdivisionId = ec.display_subdivision_id
             WHERE COALESCE(ec.totalEmployees, 0) > 0
+            ) AS rd
             """;
 }

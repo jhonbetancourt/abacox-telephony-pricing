@@ -5,6 +5,7 @@ public final class MissedCallEmployeeReportQueries {
   }
 
   public static final String QUERY = """
+      SELECT * FROM (
       WITH
       -- Get internal operator IDs from prefix table (matching PHP _operador_Internas)
       internal_operators AS (
@@ -150,5 +151,6 @@ public final class MissedCallEmployeeReportQueries {
       WHERE (e.history_control_id IS NULL OR e.id IN (SELECT hc.ref_id FROM history_control hc WHERE hc.ref_table = 1))
         AND (:employeeName IS NULL OR e.name ILIKE CONCAT('%', :employeeName, '%'))
         AND COALESCE(ma.missed_calls, 0) > 0
+      ) AS e
       """;
 }

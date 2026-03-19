@@ -12,6 +12,7 @@ public final class SubdivisionUsageByTypeReportQueries {
      * 5. Returns one row per display subdivision with aggregated totals (breakdown by type done separately)
      */
     public static final String QUERY = """
+            SELECT * FROM (
             WITH RECURSIVE subdivision_descendants AS (
                 SELECT
                     s.id,
@@ -64,6 +65,7 @@ public final class SubdivisionUsageByTypeReportQueries {
             LEFT JOIN employee_counts ec ON ds.display_subdivision_id = ec.display_subdivision_id
             WHERE COALESCE(ec.totalEmployees, 0) > 0
               AND COALESCE(cd.totalBilledAmount, 0) > 0
+            ) AS ds
             """;
 
     /**

@@ -4,6 +4,7 @@ public final class EmployeeAuthCodeUsageReportQueries {
     private EmployeeAuthCodeUsageReportQueries() {} // Private constructor to prevent instantiation
 
     public static final String QUERY = """
+    SELECT * FROM (
     WITH report_data AS (
         SELECT
             e.id AS employeeId,
@@ -51,5 +52,6 @@ public final class EmployeeAuthCodeUsageReportQueries {
         END AS billedAmountPercentage
     FROM
         report_data rd
+    ) AS rd
     """;
 }
