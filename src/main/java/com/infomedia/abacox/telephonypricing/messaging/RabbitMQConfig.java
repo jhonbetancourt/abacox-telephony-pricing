@@ -9,7 +9,8 @@ import org.springframework.amqp.core.TopicExchange;
 import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
-import org.springframework.amqp.support.converter.DefaultClassMapper;
+import org.springframework.amqp.core.MessageProperties;
+import org.springframework.amqp.support.converter.ClassMapper;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -56,9 +57,16 @@ public class RabbitMQConfig {
     @Bean
     public Jackson2JsonMessageConverter messageConverter(ObjectMapper objectMapper) {
         Jackson2JsonMessageConverter converter = new Jackson2JsonMessageConverter(objectMapper);
-        DefaultClassMapper classMapper = new DefaultClassMapper();
-        classMapper.setIdClassMapping(java.util.Map.of("InternalMessage", InternalMessage.class));
-        converter.setClassMapper(classMapper);
+        converter.setClassMapper(new ClassMapper() {
+            @Override
+            public void fromClass(Class<?> clazz, MessageProperties properties) {
+                properties.setHeader("__TypeId__", "InternalMessage");
+            }
+            @Override
+            public Class<?> toClass(MessageProperties properties) {
+                return InternalMessage.class;
+            }
+        });
         return converter;
     }
 
