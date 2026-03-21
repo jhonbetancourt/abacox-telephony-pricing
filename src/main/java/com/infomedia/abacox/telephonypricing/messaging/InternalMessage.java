@@ -17,6 +17,11 @@ public class InternalMessage {
     private String sourceModule;
     private String type;
     private Object payload;
+
+    /** True if this is a successful response; false if it represents an error. */
+    @Builder.Default
+    private boolean success = true;
+
     private String correlationId;
     private String replyTo;
 

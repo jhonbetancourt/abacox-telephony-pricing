@@ -113,8 +113,9 @@ public class MessagingService {
         log.warn("Received unhandled query [{}] from [{}]", request.getType(), request.getSourceModule());
         return InternalMessage.builder()
                 .sourceModule(moduleName)
-                .type(request.getType() + "_ERROR")
+                .type(request.getType())
                 .correlationId(request.getCorrelationId())
+                .success(false)
                 .payload("No handler registered for query type: " + request.getType())
                 .build();
     }

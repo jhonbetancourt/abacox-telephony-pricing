@@ -66,7 +66,7 @@ public class UserService {
         if (response == null) {
             throw new RemoteServiceException("Query timed out: " + queryType, null);
         }
-        if (response.getType().endsWith("_ERROR")) {
+        if (!response.isSuccess()) {
             throw new RemoteServiceException("Query failed [" + queryType + "]: " + response.getPayload(), null);
         }
         try {

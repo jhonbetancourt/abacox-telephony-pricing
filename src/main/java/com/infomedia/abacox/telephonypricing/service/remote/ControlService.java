@@ -29,7 +29,7 @@ public class ControlService {
         if (response == null) {
             throw new RemoteServiceException("Query timed out: MODULE_INFO_BY_PREFIX_QUERY", null);
         }
-        if (response.getType().endsWith("_ERROR")) {
+        if (!response.isSuccess()) {
             throw new RemoteServiceException("Query failed: " + response.getPayload(), null);
         }
         try {
