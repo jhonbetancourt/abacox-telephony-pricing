@@ -22,6 +22,9 @@ public class InternalMessage {
     @Builder.Default
     private boolean success = true;
 
+    /** Username of the user that triggered this message (from SecurityContext). */
+    private String actor;
+
     private String correlationId;
     private String replyTo;
 
