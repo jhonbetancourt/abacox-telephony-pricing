@@ -2,7 +2,8 @@ package com.infomedia.abacox.telephonypricing.constants;
 
 public enum RefTable {
     EMPLOYEE(1),
-    EXTENSION_RANGE(2);
+    EXTENSION_RANGE(2),
+    INVENTORY(3);
 
     private final int id;
 
@@ -32,4 +33,15 @@ public enum RefTable {
         }
         return false;
     }
+
+    /*
+    1	funcionario
+    2	rangoext
+    3	inventario
+    4	presufun
+    5	invelocal
+    6	inveper
+    7	personal
+    8	hdiinv
+     */
 }
