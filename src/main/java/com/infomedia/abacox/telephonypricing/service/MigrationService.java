@@ -353,9 +353,15 @@ public class MigrationService {
                                 new JobPositionDefinition(),
                                 new CallCategoryDefinition(),
                                 new ExtensionListDefinition(),
+                                new EquipmentTypeDefinition(),
+                                new InventoryWorkOrderTypeDefinition(),
+                                new InventoryOwnerDefinition(),
+                                new InventoryAdditionalServiceDefinition(),
+                                new InventoryUserTypeDefinition(),
                                 // Level 1
                                 new OperatorDefinition(),
                                 new TelephonyTypeDefinition(),
+                                new InventoryEquipmentDefinition(),
                                 // Level 2
                                 new IndicatorDefinition(),
                                 new PrefixDefinition(),
@@ -372,6 +378,8 @@ public class MigrationService {
                                 new BandIndicatorDefinition(),
                                 new SpecialRateValueDefinition(),
                                 new TrunkDefinition(),
+                                // Level 4b (depends on SubdivisionDefinition + InventoryEquipmentDefinition)
+                                new InventorySupplierDefinition(),
                                 // Level 5
                                 new EmployeeDefinition(),
                                 new ExtensionRangeDefinition(),
@@ -382,6 +390,8 @@ public class MigrationService {
                                 new ContactDefinition(),
                                 new TrunkRuleDefinition(),
                                 new SubdivisionManagerDefinition(),
+                                // Level 7 (depends on Employee, HistoryControl, all inventory catalogs)
+                                new InventoryDefinition(),
                                 // Final
                                 new CallRecordDefinition(),
                                 new FailedCallRecordDefinition(),
