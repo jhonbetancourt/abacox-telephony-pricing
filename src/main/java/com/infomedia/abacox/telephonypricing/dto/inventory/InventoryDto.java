@@ -6,7 +6,7 @@ import com.infomedia.abacox.telephonypricing.dto.equipmenttype.EquipmentTypeDto;
 import com.infomedia.abacox.telephonypricing.dto.inventoryadditionalservice.InventoryAdditionalServiceDto;
 import com.infomedia.abacox.telephonypricing.dto.inventoryequipment.InventoryEquipmentDto;
 import com.infomedia.abacox.telephonypricing.dto.inventoryowner.InventoryOwnerDto;
-import com.infomedia.abacox.telephonypricing.dto.inventorysupplier.InventorySupplierDto;
+import com.infomedia.abacox.telephonypricing.dto.inventoryds.InventoryDsDto;
 import com.infomedia.abacox.telephonypricing.dto.inventoryusertype.InventoryUserTypeDto;
 import com.infomedia.abacox.telephonypricing.dto.inventoryworkordertype.InventoryWorkOrderTypeDto;
 import com.infomedia.abacox.telephonypricing.dto.subdivision.SubdivisionDto;
@@ -57,7 +57,7 @@ public class InventoryDto extends ActivableDto {
     private SubdivisionDto subdivision;
     private CostCenterDto costCenter;
     private EquipmentTypeDto equipmentType;
-    private InventorySupplierDto inventorySupplier;
+    private InventoryDsDto inventorySupplier;
     private InventoryWorkOrderTypeDto inventoryWorkOrderType;
     private InventoryUserTypeDto inventoryUserType;
     private InventoryOwnerDto inventoryOwner;

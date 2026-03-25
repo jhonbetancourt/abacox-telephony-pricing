@@ -138,7 +138,7 @@ public class Inventory extends ActivableEntity implements HistoricalEntity {
 
     @ManyToOne
     @JoinColumn(name = "inventory_supplier_id", insertable = false, updatable = false, foreignKey = @ForeignKey(name = "fk_inventory_supplier"))
-    private InventorySupplier inventorySupplier;
+    private InventoryDs inventorySupplier;
 
     @Column(name = "installation_date")
     private LocalDate installationDate;

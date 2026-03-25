@@ -1,14 +1,14 @@
 package com.infomedia.abacox.telephonypricing.controller;
 
 import com.infomedia.abacox.telephonypricing.component.modeltools.ModelConverter;
-import com.infomedia.abacox.telephonypricing.db.entity.InventorySupplier;
-import com.infomedia.abacox.telephonypricing.dto.inventorysupplier.CreateInventorySupplier;
-import com.infomedia.abacox.telephonypricing.dto.inventorysupplier.InventorySupplierDto;
-import com.infomedia.abacox.telephonypricing.dto.inventorysupplier.UpdateInventorySupplier;
+import com.infomedia.abacox.telephonypricing.db.entity.InventoryDs;
+import com.infomedia.abacox.telephonypricing.dto.inventoryds.CreateInventoryDs;
+import com.infomedia.abacox.telephonypricing.dto.inventoryds.InventoryDsDto;
+import com.infomedia.abacox.telephonypricing.dto.inventoryds.UpdateInventoryDs;
 import com.infomedia.abacox.telephonypricing.dto.generic.ExcelRequest;
 import com.infomedia.abacox.telephonypricing.dto.generic.FilterRequest;
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivationDto;
-import com.infomedia.abacox.telephonypricing.service.InventorySupplierService;
+import com.infomedia.abacox.telephonypricing.service.InventoryDsService;
 import com.turkraft.springfilter.boot.Filter;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -29,52 +29,52 @@ import org.springframework.web.bind.annotation.*;
 
 @RequiredArgsConstructor
 @RestController
-@Tag(name = "InventorySupplier", description = "InventorySupplier API")
+@Tag(name = "InventoryDs", description = "InventoryDs API")
 @SecurityRequirements(value = {
         @SecurityRequirement(name = "JWT_Token"),
         @SecurityRequirement(name = "Username"),
         @SecurityRequirement(name = "Tenant_Id")
 })
-@RequestMapping("/api/inventorySupplier")
-public class InventorySupplierController {
+@RequestMapping("/api/inventoryDs")
+public class InventoryDsController {
 
-    private final InventorySupplierService inventorySupplierService;
+    private final InventoryDsService inventoryDsService;
     private final ModelConverter modelConverter;
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
-    public Slice<InventorySupplierDto> find(@Parameter(hidden = true) @Filter Specification<InventorySupplier> spec,
+    public Slice<InventoryDsDto> find(@Parameter(hidden = true) @Filter Specification<InventoryDs> spec,
             @Parameter(hidden = true) Pageable pageable,
             @RequestParam(required = false) String filter, @RequestParam(required = false) Integer page,
             @RequestParam(required = false) Integer size, @RequestParam(required = false) String sort) {
-        return modelConverter.mapSlice(inventorySupplierService.find(spec, pageable), InventorySupplierDto.class);
+        return modelConverter.mapSlice(inventoryDsService.find(spec, pageable), InventoryDsDto.class);
     }
 
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
-    public InventorySupplierDto create(@Valid @RequestBody CreateInventorySupplier cDto) {
-        return modelConverter.map(inventorySupplierService.create(cDto), InventorySupplierDto.class);
+    public InventoryDsDto create(@Valid @RequestBody CreateInventoryDs cDto) {
+        return modelConverter.map(inventoryDsService.create(cDto), InventoryDsDto.class);
     }
 
     @PatchMapping(value = "{id}", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
-    public InventorySupplierDto update(@PathVariable("id") Long id, @Valid @RequestBody UpdateInventorySupplier uDto) {
-        return modelConverter.map(inventorySupplierService.update(id, uDto), InventorySupplierDto.class);
+    public InventoryDsDto update(@PathVariable("id") Long id, @Valid @RequestBody UpdateInventoryDs uDto) {
+        return modelConverter.map(inventoryDsService.update(id, uDto), InventoryDsDto.class);
     }
 
     @GetMapping(value = "{id}", produces = MediaType.APPLICATION_JSON_VALUE)
-    public InventorySupplierDto get(@PathVariable("id") Long id) {
-        return modelConverter.map(inventorySupplierService.get(id), InventorySupplierDto.class);
+    public InventoryDsDto get(@PathVariable("id") Long id) {
+        return modelConverter.map(inventoryDsService.get(id), InventoryDsDto.class);
     }
 
     @PatchMapping(value = "/status/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
-    public InventorySupplierDto activate(@PathVariable("id") Long id, @Valid @RequestBody ActivationDto activationDto) {
-        return modelConverter.map(inventorySupplierService.changeActivation(id, activationDto.getActive()), InventorySupplierDto.class);
+    public InventoryDsDto activate(@PathVariable("id") Long id, @Valid @RequestBody ActivationDto activationDto) {
+        return modelConverter.map(inventoryDsService.changeActivation(id, activationDto.getActive()), InventoryDsDto.class);
     }
 
     @GetMapping(value = "/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
-    public ResponseEntity<Resource> exportExcel(@Parameter(hidden = true) @Filter Specification<InventorySupplier> spec,
+    public ResponseEntity<Resource> exportExcel(@Parameter(hidden = true) @Filter Specification<InventoryDs> spec,
             @Parameter(hidden = true) Pageable pageable,
             @ParameterObject FilterRequest filterRequest,
             @ParameterObject ExcelRequest excelRequest) {
-        ByteArrayResource resource = inventorySupplierService.exportExcel(spec, pageable, excelRequest.toExcelGeneratorBuilder());
+        ByteArrayResource resource = inventoryDsService.exportExcel(spec, pageable, excelRequest.toExcelGeneratorBuilder());
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment;filename=inventory_suppliers.xlsx")
                 .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))

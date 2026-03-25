@@ -5,6 +5,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
 
+
 /**
  * Entity representing inventory suppliers/distributors.
  * Original table name: inveds
@@ -20,7 +21,7 @@ import lombok.experimental.SuperBuilder;
 @NoArgsConstructor
 @AllArgsConstructor
 @SuperBuilder(toBuilder = true)
-public class InventorySupplier extends ActivableEntity {
+public class InventoryDs extends ActivableEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "inventory_supplier_id_seq")
@@ -53,4 +54,15 @@ public class InventorySupplier extends ActivableEntity {
 
     @Column(name = "address", length = 100)
     private String address;
+
+    @Builder.Default
+    @Enumerated(EnumType.ORDINAL)
+    @Column(name = "status", nullable = false)
+    private DsStatus status = DsStatus.ASSIGNED;
+
+    public enum DsStatus {
+        ASSIGNED,      // 0 - ASIGNADO
+        AVAILABLE,     // 1 - DISPONIBLE
+        DECOMMISSIONED // 2 - BAJA
+    }
 }

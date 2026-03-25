@@ -379,7 +379,7 @@ public class MigrationService {
                                 new SpecialRateValueDefinition(),
                                 new TrunkDefinition(),
                                 // Level 4b (depends on SubdivisionDefinition + InventoryEquipmentDefinition)
-                                new InventorySupplierDefinition(),
+                                new InventoryDsDefinition(),
                                 // Level 5
                                 new EmployeeDefinition(),
                                 new ExtensionRangeDefinition(),

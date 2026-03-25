@@ -5,12 +5,12 @@ import com.infomedia.abacox.telephonypricing.component.migration.TableMigrationC
 import java.util.Map;
 import static java.util.Map.entry;
 
-public class InventorySupplierDefinition implements MigrationTableDefinition {
+public class InventoryDsDefinition implements MigrationTableDefinition {
     @Override
     public TableMigrationConfig getTableMigrationConfig(MigrationContext context) {
         return TableMigrationConfig.builder()
                 .sourceTableName("inveds")
-                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.InventorySupplier")
+                .targetEntityClassName("com.infomedia.abacox.telephonypricing.db.entity.InventoryDs")
                 .sourceIdColumnName("INVEDS_ID")
                 .targetIdFieldName("id")
                 .columnMapping(Map.ofEntries(
@@ -21,6 +21,7 @@ public class InventorySupplierDefinition implements MigrationTableDefinition {
                         entry("INVEDS_NIT", "nit"),
                         entry("INVEDS_SUBDIRECCION_ID", "subdivisionId"),
                         entry("INVEDS_DIRECCION", "address"),
+                        entry("INVEDS_ESTADO", "status"),
                         entry("INVEDS_FCREACION", "createdDate"),
                         entry("INVEDS_FMODIFICADO", "lastModifiedDate")))
                 .build();
