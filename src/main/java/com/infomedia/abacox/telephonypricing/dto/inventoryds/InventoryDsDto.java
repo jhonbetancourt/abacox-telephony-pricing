@@ -1,6 +1,6 @@
 package com.infomedia.abacox.telephonypricing.dto.inventoryds;
 
-import com.infomedia.abacox.telephonypricing.db.entity.InventoryDs.DsStatus;
+
 import com.infomedia.abacox.telephonypricing.dto.inventoryequipment.InventoryEquipmentDto;
 import com.infomedia.abacox.telephonypricing.dto.subdivision.SubdivisionDto;
 import com.infomedia.abacox.telephonypricing.dto.superclass.AuditedDto;
@@ -26,5 +26,5 @@ public class InventoryDsDto extends AuditedDto {
     private String address;
     private InventoryEquipmentDto inventoryEquipment;
     private SubdivisionDto subdivision;
-    private DsStatus status;
+    private Integer status;
 }

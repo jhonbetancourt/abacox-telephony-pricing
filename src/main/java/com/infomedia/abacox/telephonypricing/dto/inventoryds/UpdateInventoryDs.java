@@ -1,6 +1,6 @@
 package com.infomedia.abacox.telephonypricing.dto.inventoryds;
 
-import com.infomedia.abacox.telephonypricing.db.entity.InventoryDs.DsStatus;
+
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -26,5 +26,5 @@ public class UpdateInventoryDs {
     private JsonNullable<Long> subdivisionId = JsonNullable.undefined();
     @Size(max = 100)
     private JsonNullable<String> address = JsonNullable.undefined();
-    private JsonNullable<DsStatus> status = JsonNullable.undefined();
+    private JsonNullable<Integer> status = JsonNullable.undefined();
 }

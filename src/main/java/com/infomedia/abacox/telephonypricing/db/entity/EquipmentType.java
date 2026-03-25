@@ -1,10 +1,9 @@
 package com.infomedia.abacox.telephonypricing.db.entity;
 
-import com.infomedia.abacox.telephonypricing.db.entity.superclass.ActivableEntity;
+import com.infomedia.abacox.telephonypricing.db.entity.superclass.AuditedEntity;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
-import org.hibernate.annotations.ColumnDefault;
 
 /**
  * Entity representing equipment types.
@@ -19,7 +18,7 @@ import org.hibernate.annotations.ColumnDefault;
 @NoArgsConstructor
 @AllArgsConstructor
 @SuperBuilder(toBuilder = true)
-public class EquipmentType extends ActivableEntity {
+public class EquipmentType extends AuditedEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "equipment_type_id_seq")

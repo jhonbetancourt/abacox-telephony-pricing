@@ -185,20 +185,22 @@ public class Inventory extends AuditedEntity implements HistoricalEntity {
     private Long permissionsExtId;
 
     @Builder.Default
-    @Enumerated(EnumType.ORDINAL)
     @Column(name = "status", nullable = false)
-    private InventoryStatus status = InventoryStatus.AVAILABLE;
+    private Integer status = 1; // InventoryStatus.AVAILABLE
 
     public enum InventoryStatus {
-        ASSIGNED,      // 0 - ASIGNADO
-        AVAILABLE,     // 1 - DISPONIBLE
-        IN_WAREHOUSE,  // 2 - ENBODEGA
-        INSTALLED,     // 3 - INSTALADO
-        DAMAGED,       // 4 - DANADO
-        LOST,          // 5 - PERDIDO
-        DECOMMISSIONED,// 6 - DE_BAJA
-        STOLEN,        // 7 - ROBADO
-        UNDER_REVIEW,  // 8 - ENREVISION
-        RETURNED       // 9 - DEVUELTO
+        ASSIGNED(0),      // ASIGNADO
+        AVAILABLE(1),     // DISPONIBLE
+        IN_WAREHOUSE(2),  // ENBODEGA
+        INSTALLED(3),     // INSTALADO
+        DAMAGED(4),       // DANADO
+        LOST(5),          // PERDIDO
+        DECOMMISSIONED(6),// DE_BAJA
+        STOLEN(7),        // ROBADO
+        UNDER_REVIEW(8),  // ENREVISION
+        RETURNED(9);      // DEVUELTO
+
+        public final int value;
+        InventoryStatus(int value) { this.value = value; }
     }
 }

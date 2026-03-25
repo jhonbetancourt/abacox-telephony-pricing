@@ -1,6 +1,6 @@
 package com.infomedia.abacox.telephonypricing.dto.inventoryds;
 
-import com.infomedia.abacox.telephonypricing.db.entity.InventoryDs.DsStatus;
+
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Data;
@@ -25,5 +25,5 @@ public class CreateInventoryDs {
     private Long subdivisionId;
     @Size(max = 100)
     private String address;
-    private DsStatus status;
+    private Integer status;
 }
