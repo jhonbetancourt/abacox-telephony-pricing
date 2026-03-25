@@ -5,6 +5,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.ColumnDefault;
+import java.math.BigDecimal;
 
 /**
  * Entity representing inventory equipment catalog.
@@ -13,7 +14,8 @@ import org.hibernate.annotations.ColumnDefault;
 @Entity
 @Table(name = "inventory_equipment", indexes = {
         @Index(name = "idx_inventory_equipment_name", columnList = "name"),
-        @Index(name = "idx_inventory_equipment_parent", columnList = "parent_equipment_id"),
+        @Index(name = "idx_inventory_equipment_parent", columnList = "parent_equipment_id")
+}, uniqueConstraints = {
         @UniqueConstraint(name = "udx_inventory_equipment_name_parent", columnNames = {"name", "parent_equipment_id"})
 })
 @Getter
@@ -40,11 +42,11 @@ public class InventoryEquipment extends ActivableEntity {
     @JoinColumn(name = "parent_equipment_id", insertable = false, updatable = false, foreignKey = @ForeignKey(name = "fk_inventory_equipment_parent"))
     private InventoryEquipment parentEquipment;
 
-    @Column(name = "value_tt")
+    @Column(name = "value_tt", precision = 10, scale = 4)
     @ColumnDefault("0")
-    private Float valueTt;
+    private BigDecimal valueTt;
 
-    @Column(name = "value_infomedia")
+    @Column(name = "value_infomedia", precision = 10, scale = 4)
     @ColumnDefault("0")
-    private Float valueInfomedia;
+    private BigDecimal valueInfomedia;
 }

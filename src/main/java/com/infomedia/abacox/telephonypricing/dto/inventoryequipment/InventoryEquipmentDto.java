@@ -3,6 +3,7 @@ package com.infomedia.abacox.telephonypricing.dto.inventoryequipment;
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivableDto;
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import java.math.BigDecimal;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 
@@ -17,7 +18,7 @@ public class InventoryEquipmentDto extends ActivableDto {
     private Long id;
     private String name;
     private Long parentEquipmentId;
-    private Float valueTt;
-    private Float valueInfomedia;
+    private BigDecimal valueTt;
+    private BigDecimal valueInfomedia;
     private InventoryEquipmentDto parentEquipment;
 }

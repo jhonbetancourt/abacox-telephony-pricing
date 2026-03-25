@@ -4,6 +4,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import java.math.BigDecimal;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 
@@ -19,6 +20,6 @@ public class CreateInventoryEquipment {
     @Size(max = 100)
     private String name;
     private Long parentEquipmentId;
-    private Float valueTt;
-    private Float valueInfomedia;
+    private BigDecimal valueTt;
+    private BigDecimal valueInfomedia;
 }
