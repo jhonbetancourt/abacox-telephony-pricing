@@ -1,6 +1,6 @@
 package com.infomedia.abacox.telephonypricing.dto.inventoryworkordertype;
 
-import com.infomedia.abacox.telephonypricing.dto.superclass.ActivableDto;
+import com.infomedia.abacox.telephonypricing.dto.superclass.AuditedDto;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -13,7 +13,7 @@ import lombok.NoArgsConstructor;
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-public class InventoryWorkOrderTypeDto extends ActivableDto {
+public class InventoryWorkOrderTypeDto extends AuditedDto {
     private Long id;
     private String name;
 }

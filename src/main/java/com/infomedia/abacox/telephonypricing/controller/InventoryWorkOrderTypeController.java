@@ -7,7 +7,7 @@ import com.infomedia.abacox.telephonypricing.dto.inventoryworkordertype.Inventor
 import com.infomedia.abacox.telephonypricing.dto.inventoryworkordertype.UpdateInventoryWorkOrderType;
 import com.infomedia.abacox.telephonypricing.dto.generic.ExcelRequest;
 import com.infomedia.abacox.telephonypricing.dto.generic.FilterRequest;
-import com.infomedia.abacox.telephonypricing.dto.superclass.ActivationDto;
+
 import com.infomedia.abacox.telephonypricing.service.InventoryWorkOrderTypeService;
 import com.turkraft.springfilter.boot.Filter;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -62,11 +62,6 @@ public class InventoryWorkOrderTypeController {
     @GetMapping(value = "{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public InventoryWorkOrderTypeDto get(@PathVariable("id") Long id) {
         return modelConverter.map(inventoryWorkOrderTypeService.get(id), InventoryWorkOrderTypeDto.class);
-    }
-
-    @PatchMapping(value = "/status/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
-    public InventoryWorkOrderTypeDto activate(@PathVariable("id") Long id, @Valid @RequestBody ActivationDto activationDto) {
-        return modelConverter.map(inventoryWorkOrderTypeService.changeActivation(id, activationDto.getActive()), InventoryWorkOrderTypeDto.class);
     }
 
     @GetMapping(value = "/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)

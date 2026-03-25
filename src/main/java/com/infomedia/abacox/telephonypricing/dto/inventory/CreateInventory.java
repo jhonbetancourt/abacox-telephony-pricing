@@ -50,4 +50,5 @@ public class CreateInventory {
     private Long inventoryAdditionalServiceId;
     private LocalDate permissionsExpiry;
     private Long permissionsExtId;
+    private com.infomedia.abacox.telephonypricing.db.entity.Inventory.InventoryStatus status;
 }

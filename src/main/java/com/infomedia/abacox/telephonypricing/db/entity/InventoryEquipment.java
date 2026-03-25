@@ -1,6 +1,6 @@
 package com.infomedia.abacox.telephonypricing.db.entity;
 
-import com.infomedia.abacox.telephonypricing.db.entity.superclass.ActivableEntity;
+import com.infomedia.abacox.telephonypricing.db.entity.superclass.AuditedEntity;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
@@ -23,7 +23,7 @@ import java.math.BigDecimal;
 @NoArgsConstructor
 @AllArgsConstructor
 @SuperBuilder(toBuilder = true)
-public class InventoryEquipment extends ActivableEntity {
+public class InventoryEquipment extends AuditedEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "inventory_equipment_id_seq")

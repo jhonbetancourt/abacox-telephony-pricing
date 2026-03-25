@@ -51,4 +51,5 @@ public class UpdateInventory {
     private JsonNullable<Long> inventoryAdditionalServiceId = JsonNullable.undefined();
     private JsonNullable<LocalDate> permissionsExpiry = JsonNullable.undefined();
     private JsonNullable<Long> permissionsExtId = JsonNullable.undefined();
+    private JsonNullable<com.infomedia.abacox.telephonypricing.db.entity.Inventory.InventoryStatus> status = JsonNullable.undefined();
 }

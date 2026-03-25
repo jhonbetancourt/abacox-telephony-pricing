@@ -43,6 +43,7 @@ public class InventoryDefinition implements MigrationTableDefinition {
                         entry("INVENTARIO_INVESERVICIOSADC_ID", "inventoryAdditionalServiceId"),
                         entry("INVENTARIO_VIGENCIAPERMISOS", "permissionsExpiry"),
                         entry("INVENTARIO_PERMISOSEXT_ID", "permissionsExtId"),
+                        entry("INVENTARIO_ESTADO", "status"),
                         entry("INVENTARIO_FCREACION", "createdDate"),
                         entry("INVENTARIO_FMODIFICADO", "lastModifiedDate")))
                 .build();

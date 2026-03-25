@@ -1,6 +1,6 @@
 package com.infomedia.abacox.telephonypricing.dto.inventoryequipment;
 
-import com.infomedia.abacox.telephonypricing.dto.superclass.ActivableDto;
+import com.infomedia.abacox.telephonypricing.dto.superclass.AuditedDto;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import java.math.BigDecimal;
@@ -14,7 +14,7 @@ import lombok.NoArgsConstructor;
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-public class InventoryEquipmentDto extends ActivableDto {
+public class InventoryEquipmentDto extends AuditedDto {
     private Long id;
     private String name;
     private Long parentEquipmentId;

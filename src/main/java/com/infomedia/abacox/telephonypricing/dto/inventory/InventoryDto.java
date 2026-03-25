@@ -10,7 +10,8 @@ import com.infomedia.abacox.telephonypricing.dto.inventoryds.InventoryDsDto;
 import com.infomedia.abacox.telephonypricing.dto.inventoryusertype.InventoryUserTypeDto;
 import com.infomedia.abacox.telephonypricing.dto.inventoryworkordertype.InventoryWorkOrderTypeDto;
 import com.infomedia.abacox.telephonypricing.dto.subdivision.SubdivisionDto;
-import com.infomedia.abacox.telephonypricing.dto.superclass.ActivableDto;
+import com.infomedia.abacox.telephonypricing.db.entity.Inventory.InventoryStatus;
+import com.infomedia.abacox.telephonypricing.dto.superclass.AuditedDto;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -25,7 +26,7 @@ import java.time.LocalDate;
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-public class InventoryDto extends ActivableDto {
+public class InventoryDto extends AuditedDto {
     private Long id;
     private String serialNumber;
     private String mac;
@@ -52,6 +53,7 @@ public class InventoryDto extends ActivableDto {
     private Long inventoryAdditionalServiceId;
     private LocalDate permissionsExpiry;
     private Long permissionsExtId;
+    private InventoryStatus status;
     private EmployeeDto employee;
     private InventoryEquipmentDto inventoryEquipment;
     private SubdivisionDto subdivision;

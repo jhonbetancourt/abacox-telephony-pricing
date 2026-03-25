@@ -1,6 +1,6 @@
 package com.infomedia.abacox.telephonypricing.db.entity;
 
-import com.infomedia.abacox.telephonypricing.db.entity.superclass.ActivableEntity;
+import com.infomedia.abacox.telephonypricing.db.entity.superclass.AuditedEntity;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
@@ -45,7 +45,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @SuperBuilder(toBuilder = true)
-public class Inventory extends ActivableEntity implements HistoricalEntity {
+public class Inventory extends AuditedEntity implements HistoricalEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "inventory_id_seq")
@@ -183,4 +183,22 @@ public class Inventory extends ActivableEntity implements HistoricalEntity {
 
     @Column(name = "permissions_ext_id")
     private Long permissionsExtId;
+
+    @Builder.Default
+    @Enumerated(EnumType.ORDINAL)
+    @Column(name = "status", nullable = false)
+    private InventoryStatus status = InventoryStatus.AVAILABLE;
+
+    public enum InventoryStatus {
+        ASSIGNED,      // 0 - ASIGNADO
+        AVAILABLE,     // 1 - DISPONIBLE
+        IN_WAREHOUSE,  // 2 - ENBODEGA
+        INSTALLED,     // 3 - INSTALADO
+        DAMAGED,       // 4 - DANADO
+        LOST,          // 5 - PERDIDO
+        DECOMMISSIONED,// 6 - DE_BAJA
+        STOLEN,        // 7 - ROBADO
+        UNDER_REVIEW,  // 8 - ENREVISION
+        RETURNED       // 9 - DEVUELTO
+    }
 }

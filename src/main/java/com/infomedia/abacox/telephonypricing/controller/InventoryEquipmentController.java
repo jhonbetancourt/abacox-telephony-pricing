@@ -7,7 +7,7 @@ import com.infomedia.abacox.telephonypricing.dto.inventoryequipment.InventoryEqu
 import com.infomedia.abacox.telephonypricing.dto.inventoryequipment.UpdateInventoryEquipment;
 import com.infomedia.abacox.telephonypricing.dto.generic.ExcelRequest;
 import com.infomedia.abacox.telephonypricing.dto.generic.FilterRequest;
-import com.infomedia.abacox.telephonypricing.dto.superclass.ActivationDto;
+
 import com.infomedia.abacox.telephonypricing.service.InventoryEquipmentService;
 import com.turkraft.springfilter.boot.Filter;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -62,11 +62,6 @@ public class InventoryEquipmentController {
     @GetMapping(value = "{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public InventoryEquipmentDto get(@PathVariable("id") Long id) {
         return modelConverter.map(inventoryEquipmentService.get(id), InventoryEquipmentDto.class);
-    }
-
-    @PatchMapping(value = "/status/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
-    public InventoryEquipmentDto activate(@PathVariable("id") Long id, @Valid @RequestBody ActivationDto activationDto) {
-        return modelConverter.map(inventoryEquipmentService.changeActivation(id, activationDto.getActive()), InventoryEquipmentDto.class);
     }
 
     @GetMapping(value = "/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
