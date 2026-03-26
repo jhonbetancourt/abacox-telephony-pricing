@@ -111,6 +111,12 @@ public class DashboardService {
         List<EmployeeActivityReportDto> all = employeeReportService.fetchAllEmployeeActivity(
                 employeeName, employeeExtension, subdivisionId, costCenterId, startDate, endDate);
 
+        // Totals
+        long totalExtensions  = all.size();
+        long totalIncoming    = all.stream().mapToLong(r -> r.getIncomingCallCount() != null ? r.getIncomingCallCount() : 0L).sum();
+        long totalOutgoing    = all.stream().mapToLong(r -> r.getOutgoingCallCount() != null ? r.getOutgoingCallCount() : 0L).sum();
+        long totalCalls       = totalIncoming + totalOutgoing;
+
         // 1. Usability distribution
         long usedCount   = all.stream().filter(r -> Boolean.TRUE.equals(r.getIsUsed())).count();
         long unusedCount = all.size() - usedCount;
@@ -223,6 +229,10 @@ public class DashboardService {
                 .collect(Collectors.toList());
 
         return EmployeeActivityDashboardDto.builder()
+                .totalExtensions(totalExtensions)
+                .totalIncomingCalls(totalIncoming)
+                .totalOutgoingCalls(totalOutgoing)
+                .totalCalls(totalCalls)
                 .usedCount(usedCount)
                 .unusedCount(unusedCount)
                 .equipmentDistribution(equipmentDistribution)

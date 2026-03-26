@@ -31,15 +31,6 @@ public interface ReportRepository extends JpaRepository<VirtualEntity, Long> {
                         @Param("costCenterId") Long costCenterId,
                         Pageable pageable);
 
-        @Query(value = EmployeeActivityReportQueries.QUERY, nativeQuery = true)
-        List<EmployeeActivityReport> getAllEmployeeActivityReport(
-                        @Param("startDate") LocalDateTime startDate,
-                        @Param("endDate") LocalDateTime endDate,
-                        @Param("employeeName") String employeeName,
-                        @Param("extension") String extension,
-                        @Param("subdivisionId") Long subdivisionId,
-                        @Param("costCenterId") Long costCenterId);
-
         @Query(value = EmployeeCallReportQueries.QUERY, nativeQuery = true)
         Slice<EmployeeCallReport> getEmployeeCallReport(
                         @Param("startDate") LocalDateTime startDate,

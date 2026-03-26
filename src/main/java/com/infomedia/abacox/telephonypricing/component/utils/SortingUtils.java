@@ -19,6 +19,9 @@ public class SortingUtils {
         if (pageable.getSort().isSorted()) {
             return pageable;
         }
+        if (!pageable.isPaged()) {
+            return Pageable.unpaged(defaultSort);
+        }
         return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), defaultSort);
     }
 

@@ -48,11 +48,8 @@ public class EmployeeReportService {
     public List<EmployeeActivityReportDto> fetchAllEmployeeActivity(String employeeName,
             String employeeExtension, Long subdivisionId, Long costCenterId,
             LocalDateTime startDate, LocalDateTime endDate) {
-        return reportRepository.getAllEmployeeActivityReport(startDate, endDate, employeeName,
-                employeeExtension, subdivisionId, costCenterId)
-                .stream()
-                .map(r -> modelConverter.map(r, EmployeeActivityReportDto.class))
-                .collect(Collectors.toList());
+        return generateEmployeeActivityReport(employeeName, employeeExtension, subdivisionId, costCenterId,
+                startDate, endDate, Pageable.unpaged()).toList();
     }
 
     @Transactional(readOnly = true)

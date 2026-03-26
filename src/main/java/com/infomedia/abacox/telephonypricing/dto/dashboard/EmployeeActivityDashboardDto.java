@@ -13,6 +13,12 @@ import java.util.List;
 @AllArgsConstructor
 public class EmployeeActivityDashboardDto {
 
+    // Totals
+    private long totalExtensions;
+    private long totalIncomingCalls;
+    private long totalOutgoingCalls;
+    private long totalCalls;
+
     // 1. Usability distribution (pie)
     private long usedCount;
     private long unusedCount;
