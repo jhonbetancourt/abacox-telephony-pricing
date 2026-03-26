@@ -45,6 +45,17 @@ public class EmployeeReportService {
     }
 
     @Transactional(readOnly = true)
+    public List<EmployeeActivityReportDto> fetchAllEmployeeActivity(String employeeName,
+            String employeeExtension, Long subdivisionId, Long costCenterId,
+            LocalDateTime startDate, LocalDateTime endDate) {
+        return reportRepository.getAllEmployeeActivityReport(startDate, endDate, employeeName,
+                employeeExtension, subdivisionId, costCenterId)
+                .stream()
+                .map(r -> modelConverter.map(r, EmployeeActivityReportDto.class))
+                .collect(Collectors.toList());
+    }
+
+    @Transactional(readOnly = true)
     public ByteArrayResource exportExcelEmployeeActivityReport(String employeeName, String employeeExtension,
             Long subdivisionId, Long costCenterId,
             LocalDateTime startDate, LocalDateTime endDate, Pageable pageable, ExcelGeneratorBuilder builder) {

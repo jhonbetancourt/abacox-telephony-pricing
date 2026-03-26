@@ -2,14 +2,12 @@ package com.infomedia.abacox.telephonypricing.controller;
 
 import com.infomedia.abacox.telephonypricing.constants.DateTimePattern;
 import com.infomedia.abacox.telephonypricing.dto.dashboard.DashboardOverviewDto;
-import com.infomedia.abacox.telephonypricing.dto.report.EmployeeActivityReportDto;
+import com.infomedia.abacox.telephonypricing.dto.dashboard.EmployeeActivityDashboardDto;
 import com.infomedia.abacox.telephonypricing.service.DashboardService;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Slice;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -41,16 +39,15 @@ public class DashboardController {
     }
 
     @GetMapping(value = "/employeeActivity", produces = MediaType.APPLICATION_JSON_VALUE)
-    public Slice<EmployeeActivityReportDto> getEmployeeActivity(
+    public EmployeeActivityDashboardDto getEmployeeActivity(
             @RequestParam(required = false) String employeeName,
             @RequestParam(required = false) String employeeExtension,
             @RequestParam(required = false) Long subdivisionId,
             @RequestParam(required = false) Long costCenterId,
             @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
-            @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate,
-            Pageable pageable) {
+            @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate) {
 
-        return dashboardService.getEmployeeActivityReport(employeeName, employeeExtension, subdivisionId, costCenterId,
-                startDate, endDate, pageable);
+        return dashboardService.getEmployeeActivityDashboard(employeeName, employeeExtension, subdivisionId,
+                costCenterId, startDate, endDate);
     }
 }
