@@ -140,8 +140,8 @@ public class ReportController {
                                                 "attachment; filename=employee_activity_report.xlsx")
                                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
                                 .body(employeeReportService.exportExcelEmployeeActivityReport(employeeName,
-                                                employeeExtension, subdivisionId, costCenterId, startDate, endDate,
-                                                pageable, excelRequest.toExcelGeneratorBuilder()));
+                                                employeeExtension, subdivisionId, costCenterId,
+                                                startDate, endDate, pageable, excelRequest.toExcelGeneratorBuilder()));
         }
 
         @GetMapping(value = "employeeCall", produces = MediaType.APPLICATION_JSON_VALUE)

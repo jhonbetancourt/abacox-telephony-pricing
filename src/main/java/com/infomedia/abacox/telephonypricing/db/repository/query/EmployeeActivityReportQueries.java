@@ -29,7 +29,6 @@ public final class EmployeeActivityReportQueries {
                         e.id, e.name, e.extension, e.cost_center_id, e.subdivision_id,
                         ROW_NUMBER() OVER (PARTITION BY e.extension ORDER BY e.id DESC) AS rn
                     FROM employee e
-                    WHERE e.active = true
                 ) ranked
                 WHERE rn = 1
             ),
@@ -85,7 +84,10 @@ public final class EmployeeActivityReportQueries {
             ) office_info ON true
             LEFT JOIN inventory inv ON inv.id = COALESCE(
                 (SELECT MAX(inv2.id) FROM inventory inv2 WHERE inv2.employee_id = f.id),
-                (SELECT MAX(inv3.id) FROM inventory inv3 WHERE inv3.subdivision_id = f.subdivision_id)
+                (SELECT MAX(inv3.id) FROM inventory inv3 WHERE inv3.subdivision_id = f.subdivision_id),
+                (SELECT MAX(inv4.id) FROM inventory inv4
+                 JOIN employee emp2 ON emp2.id = inv4.employee_id
+                 WHERE emp2.cost_center_id = f.cost_center_id)
             )
             LEFT JOIN equipment_type et ON et.id = inv.equipment_type_id
             LEFT JOIN inventory_equipment ie ON ie.id = inv.inventory_equipment_id
