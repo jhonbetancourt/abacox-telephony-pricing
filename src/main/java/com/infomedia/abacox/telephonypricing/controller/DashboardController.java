@@ -2,11 +2,14 @@ package com.infomedia.abacox.telephonypricing.controller;
 
 import com.infomedia.abacox.telephonypricing.constants.DateTimePattern;
 import com.infomedia.abacox.telephonypricing.dto.dashboard.DashboardOverviewDto;
+import com.infomedia.abacox.telephonypricing.dto.report.EmployeeActivityReportDto;
 import com.infomedia.abacox.telephonypricing.service.DashboardService;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -35,5 +38,16 @@ public class DashboardController {
             @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate) {
 
         return dashboardService.getDashboardOverview(startDate, endDate);
+    }
+
+    @GetMapping(value = "/employeeActivity", produces = MediaType.APPLICATION_JSON_VALUE)
+    public Slice<EmployeeActivityReportDto> getEmployeeActivity(
+            @RequestParam(required = false) String employeeName,
+            @RequestParam(required = false) String employeeExtension,
+            @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
+            @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate,
+            Pageable pageable) {
+
+        return dashboardService.getEmployeeActivityReport(employeeName, employeeExtension, startDate, endDate, pageable);
     }
 }

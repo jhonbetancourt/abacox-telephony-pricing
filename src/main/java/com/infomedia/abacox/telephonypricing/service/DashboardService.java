@@ -13,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -35,6 +36,32 @@ public class DashboardService {
     private final FailedCallRecordRepository failedCallRecordRepository;
     private final CacheManager cacheManager;
 
+    @SuppressWarnings("unchecked")
+    public Slice<EmployeeActivityReportDto> getEmployeeActivityReport(
+            String employeeName, String employeeExtension,
+            LocalDateTime startDate, LocalDateTime endDate, Pageable pageable) {
+        String tenant = TenantContext.getTenant();
+        String key = cacheKey(tenant, startDate, endDate)
+                + ":" + pageable.getPageNumber() + ":" + pageable.getPageSize() + ":" + pageable.getSort();
+        Cache cache = cacheManager.getCache(employeeActivityCacheName(endDate));
+
+        if (cache != null) {
+            Cache.ValueWrapper cached = cache.get(key);
+            if (cached != null) {
+                log.debug("Dashboard employee activity cache hit: key={}", key);
+                return (Slice<EmployeeActivityReportDto>) cached.get();
+            }
+        }
+
+        Slice<EmployeeActivityReportDto> result = employeeReportService
+                .generateEmployeeActivityReport(employeeName, employeeExtension, startDate, endDate, pageable);
+
+        if (cache != null) {
+            cache.put(key, result);
+        }
+        return result;
+    }
+
     public DashboardOverviewDto getDashboardOverview(LocalDateTime startDate, LocalDateTime endDate) {
         String tenant = TenantContext.getTenant();
         String key    = cacheKey(tenant, startDate, endDate);
@@ -54,6 +81,14 @@ public class DashboardService {
             cache.put(key, result);
         }
         return result;
+    }
+
+    private String employeeActivityCacheName(LocalDateTime endDate) {
+        YearMonth current = YearMonth.now();
+        YearMonth end     = YearMonth.from(endDate);
+        return end.isBefore(current)
+                ? CacheConfig.DASHBOARD_EMPLOYEE_ACTIVITY_HISTORICAL
+                : CacheConfig.DASHBOARD_EMPLOYEE_ACTIVITY_CURRENT;
     }
 
     private String cacheName(LocalDateTime endDate) {
