@@ -19,6 +19,7 @@ public interface EmployeeActivityReport {
     String getOfficeLocation();
     Long getOutgoingCallCount();
     Long getIncomingCallCount();
+    Long getTotalCallCount();
     LocalDateTime getLastIncomingCallDate();
     LocalDateTime getLastOutgoingCallDate();
     Boolean getIsUsed();

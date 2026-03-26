@@ -38,8 +38,9 @@ public class EmployeeReportService {
     public Slice<EmployeeActivityReportDto> generateEmployeeActivityReport(String employeeName,
             String employeeExtension,
             LocalDateTime startDate, LocalDateTime endDate, Pageable pageable) {
+        Pageable effectivePageable = SortingUtils.applyDefaultSort(pageable, Sort.by(Sort.Order.asc("extension")));
         return modelConverter.mapSlice(reportRepository.getEmployeeActivityReport(startDate, endDate, employeeName,
-                employeeExtension, SortingUtils.applyDefaultSort(pageable, Sort.by("extension"))),
+                employeeExtension, effectivePageable),
                 EmployeeActivityReportDto.class);
     }
 

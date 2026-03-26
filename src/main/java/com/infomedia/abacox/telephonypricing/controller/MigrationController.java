@@ -33,6 +33,12 @@ public class MigrationController {
         return new MessageResponse("Migration process initiated successfully. Check status endpoint for progress.");
     }
 
+    @PostMapping(value = "/startInventory", produces = MediaType.APPLICATION_JSON_VALUE)
+    public MessageResponse startInventoryMigration(@Valid @RequestBody MigrationStart runRequest) {
+        migrationService.startInventoryAsync(runRequest);
+        return new MessageResponse("Inventory migration initiated successfully. Check status endpoint for progress.");
+    }
+
     @GetMapping(value = "/status", produces = MediaType.APPLICATION_JSON_VALUE)
     public MigrationStatus getMigrationStatus() {
         return migrationService.getStatus();

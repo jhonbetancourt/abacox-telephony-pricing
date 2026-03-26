@@ -25,6 +25,7 @@ public class EmployeeActivityReportDto {
     private String officeLocation;
     private Long outgoingCallCount;
     private Long incomingCallCount;
+    private Long totalCallCount;
     private Long outgoingDuration;
     private Long incomingDuration;
     private Long outgoingRingDuration;

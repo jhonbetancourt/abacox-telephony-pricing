@@ -65,6 +65,17 @@ public class MigrationService {
                 submitMigrationTask(() -> start(runRequest, clientId));
         }
 
+        public void startInventoryAsync(MigrationStart runRequest) {
+                Integer clientId = validateAndGetClientId(runRequest);
+                submitMigrationTask(() -> startInventory(runRequest, clientId));
+        }
+
+        public void startInventory(MigrationStart runRequest, Integer sourceClientId) {
+                ensureRunning();
+                log.info("<<<<<<<<<< Starting Inventory-Only Data Migration >>>>>>>>>>");
+                executeMigration(runRequest, defineInventoryMigrationMappings(runRequest, sourceClientId));
+        }
+
         private void submitMigrationTask(Runnable migrationTask) {
                 if (!isMigrationRunning.compareAndSet(false, true)) {
                         throw new MigrationAlreadyInProgressException("A data migration is already in progress.");
@@ -397,6 +408,36 @@ public class MigrationService {
                                 new FailedCallRecordDefinition(),
                                 new CdrLoadControlDefinition(),
                                 new FileInfoDefinition());
+
+                return definitions.stream()
+                                .map(def -> def.getTableMigrationConfig(context))
+                                .toList();
+        }
+
+        private List<TableMigrationConfig> defineInventoryMigrationMappings(MigrationStart runRequest,
+                        Integer sourceClientId) {
+                log.info("Defining inventory-only migration mappings. CLIENTE_ID: {}", sourceClientId);
+
+                MigrationContext context = MigrationContext.builder()
+                                .runRequest(runRequest)
+                                .sourceClientId(sourceClientId)
+                                .telephonyTypeReplacements(Map.of())
+                                .validEmployeeIdsCache(new AtomicReference<>(null))
+                                .employeeIdLoader(() -> new LongOpenHashSet())
+                                .migratedFileInfoIds(Collections.synchronizedSet(new HashSet<>()))
+                                .directorioToPlantCache(Map.of())
+                                .controlDatabase(runRequest.getControlDatabase())
+                                .build();
+
+                List<MigrationTableDefinition> definitions = List.of(
+                                new EquipmentTypeDefinition(),
+                                new InventoryWorkOrderTypeDefinition(),
+                                new InventoryOwnerDefinition(),
+                                new InventoryAdditionalServiceDefinition(),
+                                new InventoryUserTypeDefinition(),
+                                new InventoryEquipmentDefinition(),
+                                new InventoryDsDefinition(),
+                                new InventoryDefinition());
 
                 return definitions.stream()
                                 .map(def -> def.getTableMigrationConfig(context))
