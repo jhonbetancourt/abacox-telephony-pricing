@@ -117,17 +117,20 @@ public class ReportController {
                         @ParameterObject PageableRequest pageableRequest,
                         @RequestParam(required = false) String employeeName,
                         @RequestParam(required = false) String employeeExtension,
+                        @RequestParam(required = false) Long subdivisionId,
+                        @RequestParam(required = false) Long costCenterId,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate) {
-                return employeeReportService.generateEmployeeActivityReport(employeeName, employeeExtension, startDate,
-                                endDate,
-                                pageable);
+                return employeeReportService.generateEmployeeActivityReport(employeeName, employeeExtension,
+                                subdivisionId, costCenterId, startDate, endDate, pageable);
         }
 
         @GetMapping(value = "employeeActivity/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
         public ResponseEntity<Resource> exportExcelEmployeeActivityReport(@Parameter(hidden = true) Pageable pageable,
                         @RequestParam(required = false) String employeeName,
                         @RequestParam(required = false) String employeeExtension,
+                        @RequestParam(required = false) Long subdivisionId,
+                        @RequestParam(required = false) Long costCenterId,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate,
                         @ParameterObject PageableRequest pageableRequest, @ParameterObject ExcelRequest excelRequest) {
@@ -137,8 +140,8 @@ public class ReportController {
                                                 "attachment; filename=employee_activity_report.xlsx")
                                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
                                 .body(employeeReportService.exportExcelEmployeeActivityReport(employeeName,
-                                                employeeExtension, startDate, endDate, pageable,
-                                                excelRequest.toExcelGeneratorBuilder()));
+                                                employeeExtension, subdivisionId, costCenterId, startDate, endDate,
+                                                pageable, excelRequest.toExcelGeneratorBuilder()));
         }
 
         @GetMapping(value = "employeeCall", produces = MediaType.APPLICATION_JSON_VALUE)

@@ -46,9 +46,11 @@ public final class EmployeeActivityReportQueries {
                 f.id AS employeeId,
                 f.name AS employeeName,
                 f.extension AS extension,
+                f.cost_center_id AS costCenterId,
                 cc.name AS costCenterName,
                 cc.work_order AS costCenterWorkOrder,
                 tcc.top_work_order AS nit,
+                f.subdivision_id AS subdivisionId,
                 sub.name AS subdivisionName,
                 office_info.department_country AS departmentCountry,
                 office_info.city_name AS cityName,
@@ -91,5 +93,9 @@ public final class EmployeeActivityReportQueries {
                 (:employeeName IS NULL OR f.name ILIKE CONCAT('%', :employeeName, '%'))
             AND
                 (:extension IS NULL OR f.extension = :extension)
+            AND
+                (:subdivisionId IS NULL OR f.subdivision_id = :subdivisionId)
+            AND
+                (:costCenterId IS NULL OR f.cost_center_id = :costCenterId)
             """;
 }

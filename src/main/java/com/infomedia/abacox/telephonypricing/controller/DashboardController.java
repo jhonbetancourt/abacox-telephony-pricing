@@ -44,10 +44,13 @@ public class DashboardController {
     public Slice<EmployeeActivityReportDto> getEmployeeActivity(
             @RequestParam(required = false) String employeeName,
             @RequestParam(required = false) String employeeExtension,
+            @RequestParam(required = false) Long subdivisionId,
+            @RequestParam(required = false) Long costCenterId,
             @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
             @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime endDate,
             Pageable pageable) {
 
-        return dashboardService.getEmployeeActivityReport(employeeName, employeeExtension, startDate, endDate, pageable);
+        return dashboardService.getEmployeeActivityReport(employeeName, employeeExtension, subdivisionId, costCenterId,
+                startDate, endDate, pageable);
     }
 }

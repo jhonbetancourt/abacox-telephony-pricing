@@ -38,11 +38,12 @@ public class DashboardService {
 
     @SuppressWarnings("unchecked")
     public Slice<EmployeeActivityReportDto> getEmployeeActivityReport(
-            String employeeName, String employeeExtension,
+            String employeeName, String employeeExtension, Long subdivisionId, Long costCenterId,
             LocalDateTime startDate, LocalDateTime endDate, Pageable pageable) {
         String tenant = TenantContext.getTenant();
         String key = cacheKey(tenant, startDate, endDate)
-                + ":" + pageable.getPageNumber() + ":" + pageable.getPageSize() + ":" + pageable.getSort();
+                + ":" + pageable.getPageNumber() + ":" + pageable.getPageSize() + ":" + pageable.getSort()
+                + ":" + subdivisionId + ":" + costCenterId;
         Cache cache = cacheManager.getCache(employeeActivityCacheName(endDate));
 
         if (cache != null) {
@@ -54,7 +55,8 @@ public class DashboardService {
         }
 
         Slice<EmployeeActivityReportDto> result = employeeReportService
-                .generateEmployeeActivityReport(employeeName, employeeExtension, startDate, endDate, pageable);
+                .generateEmployeeActivityReport(employeeName, employeeExtension, subdivisionId, costCenterId,
+                        startDate, endDate, pageable);
 
         if (cache != null) {
             cache.put(key, result);

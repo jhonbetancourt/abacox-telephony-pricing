@@ -27,6 +27,8 @@ public interface ReportRepository extends JpaRepository<VirtualEntity, Long> {
                         @Param("endDate") LocalDateTime endDate,
                         @Param("employeeName") String employeeName,
                         @Param("extension") String extension,
+                        @Param("subdivisionId") Long subdivisionId,
+                        @Param("costCenterId") Long costCenterId,
                         Pageable pageable);
 
         @Query(value = EmployeeCallReportQueries.QUERY, nativeQuery = true)

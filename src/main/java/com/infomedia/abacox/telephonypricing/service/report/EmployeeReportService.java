@@ -36,19 +36,20 @@ public class EmployeeReportService {
 
     @Transactional(readOnly = true)
     public Slice<EmployeeActivityReportDto> generateEmployeeActivityReport(String employeeName,
-            String employeeExtension,
+            String employeeExtension, Long subdivisionId, Long costCenterId,
             LocalDateTime startDate, LocalDateTime endDate, Pageable pageable) {
         Pageable effectivePageable = SortingUtils.applyDefaultSort(pageable, Sort.by(Sort.Order.asc("extension")));
         return modelConverter.mapSlice(reportRepository.getEmployeeActivityReport(startDate, endDate, employeeName,
-                employeeExtension, effectivePageable),
+                employeeExtension, subdivisionId, costCenterId, effectivePageable),
                 EmployeeActivityReportDto.class);
     }
 
     @Transactional(readOnly = true)
     public ByteArrayResource exportExcelEmployeeActivityReport(String employeeName, String employeeExtension,
+            Long subdivisionId, Long costCenterId,
             LocalDateTime startDate, LocalDateTime endDate, Pageable pageable, ExcelGeneratorBuilder builder) {
         Slice<EmployeeActivityReportDto> collection = generateEmployeeActivityReport(employeeName, employeeExtension,
-                startDate, endDate, pageable);
+                subdivisionId, costCenterId, startDate, endDate, pageable);
         try {
             InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
             return new ByteArrayResource(inputStream.readAllBytes());

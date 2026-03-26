@@ -19,9 +19,11 @@ public class EmployeeActivityReportDto {
     private LocalDate installationDate;
     private String equipmentTypeName;
     private String equipmentModelName;
+    private Long costCenterId;
     private String costCenterName;
     private String costCenterWorkOrder;
     private String nit;
+    private Long subdivisionId;
     private String subdivisionName;
     private String departmentCountry;
     private String cityName;

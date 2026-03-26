@@ -13,9 +13,11 @@ public interface EmployeeActivityReport {
     Long getEmployeeId();
     String getEmployeeName();
     String getExtension();
+    Long getCostCenterId();
     String getCostCenterName();
     String getCostCenterWorkOrder();
     String getNit();
+    Long getSubdivisionId();
     String getSubdivisionName();
     String getDepartmentCountry();
     String getCityName();
