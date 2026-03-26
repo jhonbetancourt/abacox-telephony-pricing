@@ -1,5 +1,6 @@
 package com.infomedia.abacox.telephonypricing.db.projection;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /**
@@ -14,10 +15,20 @@ public interface EmployeeActivityReport {
     String getExtension();
     String getCostCenterWorkOrder();
     String getSubdivisionName();
+    String getRegionalName();
     String getOfficeLocation();
     Long getOutgoingCallCount();
     Long getIncomingCallCount();
     LocalDateTime getLastIncomingCallDate();
     LocalDateTime getLastOutgoingCallDate();
     Boolean getIsUsed();
+    Long getIncomingDuration();
+    Long getOutgoingDuration();
+    Long getIncomingRingDuration();
+    Long getOutgoingRingDuration();
+    Long getTransferCount();
+    Long getConferenceCount();
+    LocalDate getInstallationDate();
+    String getEquipmentTypeName();
+    String getEquipmentModelName();
 }
