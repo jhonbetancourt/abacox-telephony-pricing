@@ -81,8 +81,10 @@ public final class EmployeeActivityReportQueries {
                 WHERE od.subdivision_id = f.subdivision_id
                 LIMIT 1
             ) office_info ON true
-            LEFT JOIN inventory inv ON inv.employee_id = f.id
-                AND inv.id = (SELECT MAX(inv2.id) FROM inventory inv2 WHERE inv2.employee_id = f.id)
+            LEFT JOIN inventory inv ON inv.id = COALESCE(
+                (SELECT MAX(inv2.id) FROM inventory inv2 WHERE inv2.employee_id = f.id),
+                (SELECT MAX(inv3.id) FROM inventory inv3 WHERE inv3.subdivision_id = f.subdivision_id)
+            )
             LEFT JOIN equipment_type et ON et.id = inv.equipment_type_id
             LEFT JOIN inventory_equipment ie ON ie.id = inv.inventory_equipment_id
             WHERE
