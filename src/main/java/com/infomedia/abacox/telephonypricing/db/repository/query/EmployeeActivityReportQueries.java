@@ -5,34 +5,7 @@ public final class EmployeeActivityReportQueries {
     } // Private constructor to prevent instantiation
 
     public static final String QUERY = """
-            WITH RECURSIVE call_aggregates_in_range AS (
-                SELECT
-                    cr.employee_extension AS extension,
-                    COUNT(*) FILTER (WHERE cr.is_incoming = false) AS outgoing_calls,
-                    COUNT(*) FILTER (WHERE cr.is_incoming = true) AS incoming_calls,
-                    MAX(cr.service_date) FILTER (WHERE cr.is_incoming = false) AS last_outgoing,
-                    MAX(cr.service_date) FILTER (WHERE cr.is_incoming = true) AS last_incoming,
-                    COALESCE(SUM(cr.duration) FILTER (WHERE cr.is_incoming = true), 0) AS incoming_duration,
-                    COALESCE(SUM(cr.duration) FILTER (WHERE cr.is_incoming = false), 0) AS outgoing_duration,
-                    COALESCE(SUM(cr.ring_count) FILTER (WHERE cr.is_incoming = true), 0) AS incoming_ring,
-                    COALESCE(SUM(cr.ring_count) FILTER (WHERE cr.is_incoming = false), 0) AS outgoing_ring,
-                    COUNT(*) FILTER (WHERE cr.transfer_cause IN (1, 2, 6, 7) AND cr.employee_transfer IS NOT NULL AND cr.employee_transfer != '') AS transfer_count,
-                    COUNT(*) FILTER (WHERE cr.transfer_cause IN (3, 10) AND cr.employee_transfer IS NOT NULL AND cr.employee_transfer != '') AS conference_count
-                FROM call_record cr
-                WHERE cr.service_date BETWEEN :startDate AND :endDate
-                GROUP BY cr.employee_extension
-            ),
-            latest_employees AS (
-                SELECT id, name, extension, cost_center_id, subdivision_id
-                FROM (
-                    SELECT
-                        e.id, e.name, e.extension, e.cost_center_id, e.subdivision_id,
-                        ROW_NUMBER() OVER (PARTITION BY e.extension ORDER BY e.id DESC) AS rn
-                    FROM employee e
-                ) ranked
-                WHERE rn = 1
-            ),
-            top_cost_centers AS (
+            WITH RECURSIVE top_cost_centers AS (
                 SELECT id, work_order AS top_work_order
                 FROM cost_center
                 WHERE parent_cost_center_id IS NULL
@@ -40,6 +13,48 @@ public final class EmployeeActivityReportQueries {
                 SELECT cc_child.id, tcc.top_work_order
                 FROM cost_center cc_child
                 JOIN top_cost_centers tcc ON cc_child.parent_cost_center_id = tcc.id
+            ),
+            call_aggregates_in_range AS (
+                SELECT
+                    cr.employee_extension AS extension,
+                    COUNT(*) FILTER (WHERE NOT cr.is_incoming) AS outgoing_calls,
+                    COUNT(*) FILTER (WHERE cr.is_incoming) AS incoming_calls,
+                    MAX(cr.service_date) FILTER (WHERE NOT cr.is_incoming) AS last_outgoing,
+                    MAX(cr.service_date) FILTER (WHERE cr.is_incoming) AS last_incoming,
+                    COALESCE(SUM(cr.duration) FILTER (WHERE cr.is_incoming), 0) AS incoming_duration,
+                    COALESCE(SUM(cr.duration) FILTER (WHERE NOT cr.is_incoming), 0) AS outgoing_duration,
+                    COALESCE(SUM(cr.ring_count) FILTER (WHERE cr.is_incoming), 0) AS incoming_ring,
+                    COALESCE(SUM(cr.ring_count) FILTER (WHERE NOT cr.is_incoming), 0) AS outgoing_ring,
+                    COUNT(*) FILTER (WHERE cr.transfer_cause IN (1, 2, 6, 7) AND cr.employee_transfer IS NOT NULL AND cr.employee_transfer != '') AS transfer_count,
+                    COUNT(*) FILTER (WHERE cr.transfer_cause IN (3, 10) AND cr.employee_transfer IS NOT NULL AND cr.employee_transfer != '') AS conference_count
+                FROM call_record cr
+                WHERE cr.service_date BETWEEN :startDate AND :endDate
+                GROUP BY cr.employee_extension
+            ),
+            latest_employees AS (
+                SELECT DISTINCT ON (e.extension)
+                    e.id, e.name, e.extension, e.cost_center_id, e.subdivision_id
+                FROM employee e
+                ORDER BY e.extension, e.id DESC
+            ),
+            inv_by_employee AS (
+                SELECT employee_id, MAX(id) AS inv_id
+                FROM inventory
+                WHERE employee_id IS NOT NULL
+                GROUP BY employee_id
+            ),
+            inv_by_subdivision AS (
+                SELECT subdivision_id, MAX(id) AS inv_id
+                FROM inventory
+                WHERE subdivision_id IS NOT NULL
+                GROUP BY subdivision_id
+            ),
+            inv_by_cost_center AS (
+                SELECT emp.cost_center_id, MAX(inv.id) AS inv_id
+                FROM inventory inv
+                JOIN employee emp ON emp.id = inv.employee_id
+                WHERE emp.cost_center_id IS NOT NULL
+                GROUP BY emp.cost_center_id
             )
             SELECT
                 f.id AS employeeId,
@@ -82,13 +97,10 @@ public final class EmployeeActivityReportQueries {
                 WHERE od.subdivision_id = f.subdivision_id
                 LIMIT 1
             ) office_info ON true
-            LEFT JOIN inventory inv ON inv.id = COALESCE(
-                (SELECT MAX(inv2.id) FROM inventory inv2 WHERE inv2.employee_id = f.id),
-                (SELECT MAX(inv3.id) FROM inventory inv3 WHERE inv3.subdivision_id = f.subdivision_id),
-                (SELECT MAX(inv4.id) FROM inventory inv4
-                 JOIN employee emp2 ON emp2.id = inv4.employee_id
-                 WHERE emp2.cost_center_id = f.cost_center_id)
-            )
+            LEFT JOIN inv_by_employee ibe ON ibe.employee_id = f.id
+            LEFT JOIN inv_by_subdivision ibs ON ibs.subdivision_id = f.subdivision_id
+            LEFT JOIN inv_by_cost_center ibc ON ibc.cost_center_id = f.cost_center_id
+            LEFT JOIN inventory inv ON inv.id = COALESCE(ibe.inv_id, ibs.inv_id, ibc.inv_id)
             LEFT JOIN equipment_type et ON et.id = inv.equipment_type_id
             LEFT JOIN inventory_equipment ie ON ie.id = inv.inventory_equipment_id
             WHERE
