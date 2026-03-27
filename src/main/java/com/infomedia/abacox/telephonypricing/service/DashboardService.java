@@ -22,7 +22,11 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -41,28 +45,29 @@ public class DashboardService {
             String employeeName, String employeeExtension, Long subdivisionId, Long costCenterId,
             LocalDateTime startDate, LocalDateTime endDate) {
         String tenant = TenantContext.getTenant();
-        String key = cacheKey(tenant, startDate, endDate)
-                + ":activity-dashboard"
-                + ":" + Objects.toString(employeeName, "")
-                + ":" + Objects.toString(employeeExtension, "")
-                + ":" + subdivisionId + ":" + costCenterId;
+        String key = cacheKey(tenant, startDate, endDate) + ":activity-dashboard";
         Cache cache = cacheManager.getCache(employeeActivityCacheName(endDate));
 
+        List<EmployeeActivityReportDto> all = null;
         if (cache != null) {
             Cache.ValueWrapper cached = cache.get(key);
             if (cached != null) {
                 log.debug("Dashboard employee activity cache hit: key={}", key);
-                return (EmployeeActivityDashboardDto) cached.get();
+                all = (List<EmployeeActivityReportDto>) cached.get();
             }
         }
 
-        EmployeeActivityDashboardDto result = computeEmployeeActivityDashboard(
-                employeeName, employeeExtension, subdivisionId, costCenterId, startDate, endDate);
-
-        if (cache != null) {
-            cache.put(key, result);
+        if (all == null) {
+            all = employeeReportService.fetchAllEmployeeActivity(null, null, null, null, startDate, endDate);
+            if (cache != null) {
+                cache.put(key, all);
+            }
         }
-        return result;
+
+        List<EmployeeActivityReportDto> filtered = applyEmployeeActivityFilters(
+                all, employeeName, employeeExtension, subdivisionId, costCenterId);
+
+        return computeEmployeeActivityDashboard(filtered);
     }
 
     public DashboardOverviewDto getDashboardOverview(LocalDateTime startDate, LocalDateTime endDate) {
@@ -104,12 +109,20 @@ public class DashboardService {
         return (tenant != null ? tenant : "default") + ":" + start + ":" + end;
     }
 
-    private EmployeeActivityDashboardDto computeEmployeeActivityDashboard(
-            String employeeName, String employeeExtension, Long subdivisionId, Long costCenterId,
-            LocalDateTime startDate, LocalDateTime endDate) {
+    private List<EmployeeActivityReportDto> applyEmployeeActivityFilters(
+            List<EmployeeActivityReportDto> all,
+            String employeeName, String employeeExtension, Long subdivisionId, Long costCenterId) {
+        return all.stream()
+                .filter(r -> employeeName == null || employeeName.isBlank()
+                        || (r.getEmployeeName() != null && r.getEmployeeName().toLowerCase().contains(employeeName.toLowerCase())))
+                .filter(r -> employeeExtension == null || employeeExtension.isBlank()
+                        || (r.getExtension() != null && r.getExtension().toLowerCase().contains(employeeExtension.toLowerCase())))
+                .filter(r -> subdivisionId == null || subdivisionId.equals(r.getSubdivisionId()))
+                .filter(r -> costCenterId == null || costCenterId.equals(r.getCostCenterId()))
+                .collect(Collectors.toList());
+    }
 
-        List<EmployeeActivityReportDto> all = employeeReportService.fetchAllEmployeeActivity(
-                employeeName, employeeExtension, subdivisionId, costCenterId, startDate, endDate);
+    private EmployeeActivityDashboardDto computeEmployeeActivityDashboard(List<EmployeeActivityReportDto> all) {
 
         // Totals
         long totalExtensions  = all.size();
