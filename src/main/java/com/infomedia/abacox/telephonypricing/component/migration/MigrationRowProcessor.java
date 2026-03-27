@@ -610,65 +610,80 @@ public class MigrationRowProcessor {
         Session session = entityManager.unwrap(Session.class);
         final int[] totalUpdatedInBatch = { 0 };
 
+        // Phase 1: Convert all IDs outside doWork to avoid mixing checked exceptions
+        record ConvertedRow(Object targetId, Object targetParentId) {}
+        List<ConvertedRow> convertedRows = new ArrayList<>();
+        String sourceParentCol = tableConfig.getColumnMapping().entrySet().stream()
+                .filter(e -> e.getValue().equals(selfRefFkField.getName()))
+                .map(Map.Entry::getKey)
+                .findFirst().orElse(null);
+
+        for (Map<String, Object> sourceRow : batchData) {
+            Object sourceIdValue = sourceRow.get(tableConfig.getSourceIdColumnName());
+            if (sourceIdValue == null || sourceParentCol == null || !sourceRow.containsKey(sourceParentCol)) {
+                continue;
+            }
+            Object sourceParentIdValue = sourceRow.get(sourceParentCol);
+            Object targetId = null;
+            Object targetParentId = null;
+            try {
+                targetId = convertValueByFieldLookup(sourceIdValue, idFieldName, targetEntityClass, tableConfig);
+                boolean treatParentAsNull = tableConfig.isTreatZeroIdAsNullForForeignKeys()
+                        && sourceParentIdValue instanceof Number
+                        && ((Number) sourceParentIdValue).longValue() == 0L;
+                if (!treatParentAsNull && sourceParentIdValue != null) {
+                    targetParentId = convertValueByType(sourceParentIdValue, selfRefFkField.getName(),
+                            selfRefFkType, tableConfig);
+                }
+                convertedRows.add(new ConvertedRow(targetId, targetParentId));
+            } catch (Exception e) {
+                log.error("Error converting self-ref IDs for table {} (Source ID: {}, Source Parent: {}): {}",
+                        tableName, sourceIdValue, sourceParentIdValue, e.getMessage(), e);
+            }
+        }
+
         try {
             session.doWork(connection -> {
+                // Phase 2: Batch-check which parent IDs actually exist to avoid FK violations
+                List<Object> candidateParentIds = convertedRows.stream()
+                        .map(ConvertedRow::targetParentId)
+                        .filter(Objects::nonNull)
+                        .distinct()
+                        .collect(java.util.stream.Collectors.toList());
+
+                Set<String> existingParentIdStrings = new HashSet<>();
+                if (!candidateParentIds.isEmpty()) {
+                    Set<Object> existingIds = MigrationUtils.checkExistingIds(connection, tableName, idColumnName,
+                            candidateParentIds);
+                    for (Object eid : existingIds) {
+                        if (eid != null) existingParentIdStrings.add(eid.toString());
+                    }
+                }
+
                 try (PreparedStatement updateStmt = connection.prepareStatement(updateSql)) {
                     int currentBatchCount = 0;
-                    for (Map<String, Object> sourceRow : batchData) {
-                        Object sourceIdValue = sourceRow.get(tableConfig.getSourceIdColumnName());
-                        String sourceParentCol = tableConfig.getColumnMapping().entrySet().stream()
-                                .filter(e -> e.getValue().equals(selfRefFkField.getName()))
-                                .map(Map.Entry::getKey)
-                                .findFirst().orElse(null);
+                    for (ConvertedRow row : convertedRows) {
+                        if (row.targetId() == null) continue;
 
-                        if (sourceIdValue == null || sourceParentCol == null
-                                || !sourceRow.containsKey(sourceParentCol)) {
-                            continue;
-                        }
+                        if (row.targetParentId() != null
+                                && existingParentIdStrings.contains(row.targetParentId().toString())) {
+                            MigrationUtils.setPreparedStatementParameters(updateStmt,
+                                    List.of(row.targetParentId(), row.targetId()));
+                            updateStmt.addBatch();
+                            currentBatchCount++;
 
-                        Object sourceParentIdValue = sourceRow.get(sourceParentCol);
-                        Object targetId = null;
-                        Object targetParentId = null;
-
-                        try {
-                            // Ensure ID conversion logic matches Insert Pass
-                            targetId = convertValueByFieldLookup(sourceIdValue, idFieldName, targetEntityClass,
-                                    tableConfig);
-
-                            boolean treatParentAsNull = false;
-                            if (tableConfig.isTreatZeroIdAsNullForForeignKeys()
-                                    && sourceParentIdValue instanceof Number
-                                    && ((Number) sourceParentIdValue).longValue() == 0L) {
-                                treatParentAsNull = true;
+                            if (currentBatchCount % updateBatchSize == 0) {
+                                log.trace("Executing intermediate self-ref update batch ({} statements)",
+                                        currentBatchCount);
+                                int[] batchResult = updateStmt.executeBatch();
+                                totalUpdatedInBatch[0] += Arrays.stream(batchResult)
+                                        .filter(i -> i >= 0 || i == Statement.SUCCESS_NO_INFO).count();
+                                updateStmt.clearBatch();
+                                currentBatchCount = 0;
                             }
-
-                            if (!treatParentAsNull && sourceParentIdValue != null) {
-                                // Apply conversion override for the Parent FK field using explicit type
-                                targetParentId = convertValueByType(sourceParentIdValue, selfRefFkField.getName(),
-                                        selfRefFkType, tableConfig);
-                            }
-
-                            if (targetParentId != null) {
-                                MigrationUtils.setPreparedStatementParameters(updateStmt,
-                                        List.of(targetParentId, targetId));
-                                updateStmt.addBatch();
-                                currentBatchCount++;
-
-                                if (currentBatchCount % updateBatchSize == 0) {
-                                    log.trace("Executing intermediate self-ref update batch ({} statements)",
-                                            currentBatchCount);
-                                    int[] batchResult = updateStmt.executeBatch();
-                                    totalUpdatedInBatch[0] += Arrays.stream(batchResult)
-                                            .filter(i -> i >= 0 || i == Statement.SUCCESS_NO_INFO).count();
-                                    updateStmt.clearBatch();
-                                    currentBatchCount = 0;
-                                }
-                            }
-                        } catch (Exception e) {
-                            log.error(
-                                    "Error preparing self-ref update for table {} (Target ID: {}, Source Parent Col: {}, Source Parent Val: {}): {}",
-                                    tableName, targetId != null ? targetId : sourceIdValue, sourceParentCol,
-                                    sourceParentIdValue, e.getMessage(), e);
+                        } else if (row.targetParentId() != null) {
+                            log.warn("Self-ref parent ID {} not found in table {} for row ID {}, keeping null",
+                                    row.targetParentId(), tableName, row.targetId());
                         }
                     }
 
