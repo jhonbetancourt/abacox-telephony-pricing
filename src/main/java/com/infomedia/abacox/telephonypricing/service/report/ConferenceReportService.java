@@ -8,7 +8,6 @@ import com.infomedia.abacox.telephonypricing.db.repository.ReportRepository;
 import com.infomedia.abacox.telephonypricing.dto.report.ConferenceCallsReportDto;
 import com.infomedia.abacox.telephonypricing.dto.report.ConferenceGroupDto;
 import lombok.RequiredArgsConstructor;
-import org.springframework.core.io.ByteArrayResource;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.SliceImpl;
@@ -17,7 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
-import java.io.InputStream;
+import java.io.OutputStream;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.*;
@@ -188,17 +187,14 @@ public class ConferenceReportService {
         }
     }
 
-    @Transactional(readOnly = true)
-    public ByteArrayResource exportExcelConferenceCallsReport(
+    public void exportExcelConferenceCallsReport(
             LocalDateTime startDate, LocalDateTime endDate,
             String extension, String employeeName,
-            Pageable pageable, ExcelGeneratorBuilder builder) {
-        Slice<ConferenceGroupDto> collection = generateConferenceCallsReport(
-                startDate, endDate, extension, employeeName, pageable);
+            Pageable pageable, OutputStream outputStream, ExcelGeneratorBuilder builder) {
+        List<ConferenceGroupDto> allGroups = generateConferenceCallsReport(
+                startDate, endDate, extension, employeeName, Pageable.unpaged()).getContent();
         try {
-            InputStream inputStream = builder
-                    .withEntities(collection.toList())
-                    .withFlattenedCollection("participants")
+            builder.withFlattenedCollection("participants")
                     .withIncludedFields(
                             "transferKey", "conferenceServiceDate", "participantCount", "totalBilled",
                             "organizerId", "organizerName", "organizerExtension", "organizerSubdivisionId",
@@ -208,8 +204,9 @@ public class ConferenceReportService {
                             "participants.subdivisionName", "participants.telephonyTypeName",
                             "participants.contactName",
                             "participants.companyName")
-                    .generateAsInputStream();
-            return new ByteArrayResource(inputStream.readAllBytes());
+                    .generateStreaming(outputStream, (page, size) ->
+                            page == 0 ? allGroups : Collections.emptyList(),
+                    allGroups.size() + 1);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

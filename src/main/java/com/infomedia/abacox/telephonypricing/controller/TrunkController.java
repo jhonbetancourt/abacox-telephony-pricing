@@ -18,8 +18,6 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.core.io.ByteArrayResource;
-import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -27,6 +25,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 @RequiredArgsConstructor
 @RestController
@@ -71,18 +70,19 @@ public class TrunkController {
     }
 
     @GetMapping(value = "/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
-    public ResponseEntity<Resource> exportExcel(@Parameter(hidden = true) @Filter Specification<Trunk> spec
+    public ResponseEntity<StreamingResponseBody> exportExcel(@Parameter(hidden = true) @Filter Specification<Trunk> spec
             , @Parameter(hidden = true) Pageable pageable
             , @ParameterObject FilterRequest filterRequest
             , @ParameterObject ExcelRequest excelRequest) {
 
         
-        ByteArrayResource resource = trunkService.exportExcel(spec, pageable, excelRequest.toExcelGeneratorBuilder());
+        StreamingResponseBody body = out ->
+            trunkService.exportExcelStreaming(spec, pageable, out, excelRequest.toExcelGeneratorBuilder());
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment;filename=trunks.xlsx")
                 .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
-                .body(resource);
+                .body(body);
     }
 
 }

@@ -7,7 +7,7 @@ import com.infomedia.abacox.telephonypricing.db.repository.ReportRepository;
 import com.infomedia.abacox.telephonypricing.dto.generic.SliceWithSummaries;
 import com.infomedia.abacox.telephonypricing.dto.report.*;
 import lombok.RequiredArgsConstructor;
-import org.springframework.core.io.ByteArrayResource;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.SliceImpl;
@@ -16,7 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
-import java.io.InputStream;
+import java.io.OutputStream;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.*;
@@ -98,17 +98,16 @@ public class TelephonyUsageReportService {
                 return new SliceImpl<>(pageContent, pageable, hasNext);
         }
 
-        @Transactional(readOnly = true)
-        public ByteArrayResource exportExcelTelephonyTypeUsageReport(
+        public void exportExcelTelephonyTypeUsageReport(
                         LocalDateTime startDate, LocalDateTime endDate, Pageable pageable,
-                        ExcelGeneratorBuilder builder) {
-                Slice<TelephonyTypeUsageGroupDto> collection = generateTelephonyTypeUsageReport(startDate, endDate,
-                                pageable);
+                        OutputStream outputStream, ExcelGeneratorBuilder builder) {
+                List<TelephonyTypeUsageGroupDto> allGroups = generateTelephonyTypeUsageReport(startDate, endDate,
+                                Pageable.unpaged()).getContent();
                 try {
-                        InputStream inputStream = builder.withEntities(collection.toList())
-                                        .withFlattenedCollection("items")
-                                        .generateAsInputStream();
-                        return new ByteArrayResource(inputStream.readAllBytes());
+                        builder.withFlattenedCollection("items")
+                                        .generateStreaming(outputStream, (page, size) ->
+                                                page == 0 ? allGroups : Collections.emptyList(),
+                                        allGroups.size() + 1);
                 } catch (IOException e) {
                         throw new RuntimeException(e);
                 }
@@ -182,18 +181,16 @@ public class TelephonyUsageReportService {
                 return new SliceImpl<>(pageContent, pageable, hasNext);
         }
 
-        @Transactional(readOnly = true)
-        public ByteArrayResource exportExcelMonthlyTelephonyTypeUsageReport(
+        public void exportExcelMonthlyTelephonyTypeUsageReport(
                         LocalDateTime startDate, LocalDateTime endDate, Pageable pageable,
-                        ExcelGeneratorBuilder builder) {
-                Slice<MonthlyTelephonyTypeUsageGroupDto> collection = generateMonthlyTelephonyTypeUsageReport(
-                                startDate,
-                                endDate, pageable);
+                        OutputStream outputStream, ExcelGeneratorBuilder builder) {
+                List<MonthlyTelephonyTypeUsageGroupDto> allGroups = generateMonthlyTelephonyTypeUsageReport(
+                                startDate, endDate, Pageable.unpaged()).getContent();
                 try {
-                        InputStream inputStream = builder.withEntities(collection.toList())
-                                        .withFlattenedCollection("items")
-                                        .generateAsInputStream();
-                        return new ByteArrayResource(inputStream.readAllBytes());
+                        builder.withFlattenedCollection("items")
+                                        .generateStreaming(outputStream, (page, size) ->
+                                                page == 0 ? allGroups : Collections.emptyList(),
+                                        allGroups.size() + 1);
                 } catch (IOException e) {
                         throw new RuntimeException(e);
                 }
@@ -302,22 +299,16 @@ public class TelephonyUsageReportService {
                 return SliceWithSummaries.of(slice, summaries);
         }
 
-        @Transactional(readOnly = true)
-        public ByteArrayResource exportExcelCostCenterUsageReport(
+        public void exportExcelCostCenterUsageReport(
                         LocalDateTime startDate, LocalDateTime endDate, Long parentCostCenterId, Pageable pageable,
-                        ExcelGeneratorBuilder builder) {
-                SliceWithSummaries<CostCenterUsageReportDto, UsageReportSummaryDto> reportPage = generateCostCenterUsageReport(
-                                startDate,
-                                endDate,
-                                parentCostCenterId,
-                                pageable);
-
+                        OutputStream outputStream, ExcelGeneratorBuilder builder) {
+                List<CostCenterUsageReportDto> allRows = generateCostCenterUsageReport(
+                                startDate, endDate, parentCostCenterId, Pageable.unpaged()).getContent();
                 try {
-                        InputStream inputStream = builder
-                                        .withEntities(reportPage.getContent())
-                                        .excludeField("originCountryId")
-                                        .generateAsInputStream();
-                        return new ByteArrayResource(inputStream.readAllBytes());
+                        builder.excludeField("originCountryId")
+                                        .generateStreaming(outputStream, (page, size) ->
+                                                page == 0 ? allRows : Collections.emptyList(),
+                                        allRows.size() + 1);
                 } catch (IOException e) {
                         throw new RuntimeException(e);
                 }
@@ -333,15 +324,15 @@ public class TelephonyUsageReportService {
                                 DialedNumberUsageReportDto.class);
         }
 
-        @Transactional(readOnly = true)
-        public ByteArrayResource exportExcelDialedNumberUsageReport(
+        public void exportExcelDialedNumberUsageReport(
                         LocalDateTime startDate, LocalDateTime endDate, Pageable pageable,
-                        ExcelGeneratorBuilder builder) {
-                Slice<DialedNumberUsageReportDto> collection = generateDialedNumberUsageReport(startDate, endDate,
-                                pageable);
+                        OutputStream outputStream, ExcelGeneratorBuilder builder) {
+                Sort sort = pageable.getSort();
                 try {
-                        InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
-                        return new ByteArrayResource(inputStream.readAllBytes());
+                        builder.generateStreaming(outputStream, (page, size) ->
+                                generateDialedNumberUsageReport(startDate, endDate,
+                                        PageRequest.of(page, size, sort)).getContent(),
+                                ExcelGeneratorBuilder.DEFAULT_STREAMING_PAGE_SIZE);
                 } catch (IOException e) {
                         throw new RuntimeException(e);
                 }
@@ -357,15 +348,15 @@ public class TelephonyUsageReportService {
                                 DestinationUsageReportDto.class);
         }
 
-        @Transactional(readOnly = true)
-        public ByteArrayResource exportExcelDestinationUsageReport(
+        public void exportExcelDestinationUsageReport(
                         LocalDateTime startDate, LocalDateTime endDate, Pageable pageable,
-                        ExcelGeneratorBuilder builder) {
-                Slice<DestinationUsageReportDto> collection = generateDestinationUsageReport(startDate, endDate,
-                                pageable);
+                        OutputStream outputStream, ExcelGeneratorBuilder builder) {
+                Sort sort = pageable.getSort();
                 try {
-                        InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
-                        return new ByteArrayResource(inputStream.readAllBytes());
+                        builder.generateStreaming(outputStream, (page, size) ->
+                                generateDestinationUsageReport(startDate, endDate,
+                                        PageRequest.of(page, size, sort)).getContent(),
+                                ExcelGeneratorBuilder.DEFAULT_STREAMING_PAGE_SIZE);
                 } catch (IOException e) {
                         throw new RuntimeException(e);
                 }

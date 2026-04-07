@@ -1,5 +1,6 @@
 package com.infomedia.abacox.telephonypricing.service.common;
 
+import com.infomedia.abacox.telephonypricing.component.export.excel.ExcelGeneratorBuilder;
 import com.infomedia.abacox.telephonypricing.db.entity.superclass.ActivableEntity;
 import com.infomedia.abacox.telephonypricing.exception.ResourceDeletionException;
 import com.infomedia.abacox.telephonypricing.exception.ResourceDisabledException;
@@ -15,14 +16,18 @@ import jakarta.persistence.criteria.Root;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.SliceImpl;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.IOException;
+import java.io.OutputStream;
 import java.lang.reflect.ParameterizedType;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -116,6 +121,18 @@ public abstract class CrudService<E, I, R extends JpaRepository<E, I> & JpaSpeci
 
     protected List<E> saveAll(Collection<E> entities) {
         return repository.saveAll(entities);
+    }
+
+    public void exportExcelStreaming(Specification<E> spec, Pageable pageable,
+                                      OutputStream outputStream, ExcelGeneratorBuilder builder) {
+        Sort sort = pageable.getSort();
+        try {
+            builder.generateStreaming(outputStream, (page, size) ->
+                    findAsSlice(spec, PageRequest.of(page, size, sort)).getContent(),
+                    ExcelGeneratorBuilder.DEFAULT_STREAMING_PAGE_SIZE);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     public Slice<E> findAsSlice(Specification<E> spec, Pageable pageable) {

@@ -18,6 +18,8 @@ import java.util.function.Consumer;
  * {@link GenericExcelGenerator#builder()}.
  */
 public class ExcelGeneratorBuilder {
+    public static final int DEFAULT_STREAMING_PAGE_SIZE = 5000;
+
     List<?> entities;
     Set<String> excludedFields = new HashSet<>();
     Set<String> includedFields = null;
@@ -203,5 +205,19 @@ public class ExcelGeneratorBuilder {
      */
     public InputStream generateAsInputStream() throws IOException {
         return GenericExcelGenerator.generateExcelInputStream(this);
+    }
+
+    /**
+     * Generates an Excel file in streaming mode, fetching data page by page via the supplier.
+     * Only one page of data is held in memory at a time. Uses SXSSFWorkbook internally.
+     *
+     * @param outputStream the stream to write the Excel file to
+     * @param supplier     provides pages of data on demand
+     * @param pageSize     number of rows to fetch per page (e.g., 5000)
+     * @throws IOException if an I/O error occurs during generation
+     */
+    public <T> void generateStreaming(java.io.OutputStream outputStream,
+                                      PagedDataSupplier<T> supplier, int pageSize) throws IOException {
+        GenericExcelGenerator.generateExcelStreaming(this, outputStream, supplier, pageSize);
     }
 }

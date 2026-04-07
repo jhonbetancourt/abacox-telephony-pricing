@@ -12,7 +12,7 @@ import com.infomedia.abacox.telephonypricing.dto.report.SubdivisionUsageByTypeRe
 import com.infomedia.abacox.telephonypricing.dto.report.SubdivisionUsageReportDto;
 import com.infomedia.abacox.telephonypricing.dto.report.TelephonyTypeCostDto;
 import lombok.RequiredArgsConstructor;
-import org.springframework.core.io.ByteArrayResource;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.SliceImpl;
@@ -21,7 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
-import java.io.InputStream;
+import java.io.OutputStream;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
@@ -44,16 +44,15 @@ public class SubdivisionReportService {
                 SubdivisionUsageReportDto.class);
     }
 
-    @Transactional(readOnly = true)
-    public ByteArrayResource exportExcelSubdivisionUsageReport(
+    public void exportExcelSubdivisionUsageReport(
             LocalDateTime startDate, LocalDateTime endDate, Long parentSubdivisionId, Pageable pageable,
-            ExcelGeneratorBuilder builder) {
-        Slice<SubdivisionUsageReportDto> collection = generateSubdivisionUsageReport(startDate, endDate,
-                parentSubdivisionId,
-                pageable);
+            OutputStream outputStream, ExcelGeneratorBuilder builder) {
+        Sort sort = pageable.getSort();
         try {
-            InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
-            return new ByteArrayResource(inputStream.readAllBytes());
+            builder.generateStreaming(outputStream, (page, size) ->
+                    generateSubdivisionUsageReport(startDate, endDate, parentSubdivisionId,
+                            PageRequest.of(page, size, sort)).getContent(),
+                    ExcelGeneratorBuilder.DEFAULT_STREAMING_PAGE_SIZE);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -91,18 +90,16 @@ public class SubdivisionReportService {
         return slice;
     }
 
-    @Transactional(readOnly = true)
-    public ByteArrayResource exportExcelSubdivisionUsageByTypeReport(
+    public void exportExcelSubdivisionUsageByTypeReport(
             LocalDateTime startDate, LocalDateTime endDate, Long parentSubdivisionId, Pageable pageable,
-            ExcelGeneratorBuilder builder) {
-        Slice<SubdivisionUsageByTypeReportDto> collection = generateSubdivisionUsageByTypeReport(startDate, endDate,
-                parentSubdivisionId, pageable);
+            OutputStream outputStream, ExcelGeneratorBuilder builder) {
+        Sort sort = pageable.getSort();
         try {
-            InputStream inputStream = builder
-                    .withEntities(collection.toList())
-                    .withFlattenedCollection("telephonyTypeCosts")
-                    .generateAsInputStream();
-            return new ByteArrayResource(inputStream.readAllBytes());
+            builder.withFlattenedCollection("telephonyTypeCosts")
+                    .generateStreaming(outputStream, (page, size) ->
+                            generateSubdivisionUsageByTypeReport(startDate, endDate, parentSubdivisionId,
+                                    PageRequest.of(page, size, sort)).getContent(),
+                    ExcelGeneratorBuilder.DEFAULT_STREAMING_PAGE_SIZE);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -230,18 +227,16 @@ public class SubdivisionReportService {
         return totalVar.setScale(2, RoundingMode.HALF_UP);
     }
 
-    @Transactional(readOnly = true)
-    public ByteArrayResource exportExcelMonthlySubdivisionUsageReport(
+    public void exportExcelMonthlySubdivisionUsageReport(
             LocalDateTime startDate, LocalDateTime endDate, List<Long> subdivisionIds, Pageable pageable,
-            ExcelGeneratorBuilder builder) {
-        Slice<MonthlySubdivisionUsageReportDto> collection = generateMonthlySubdivisionUsageReport(startDate, endDate,
-                subdivisionIds, pageable);
+            OutputStream outputStream, ExcelGeneratorBuilder builder) {
+        List<MonthlySubdivisionUsageReportDto> allRows = generateMonthlySubdivisionUsageReport(startDate, endDate,
+                subdivisionIds, Pageable.unpaged()).getContent();
         try {
-            InputStream inputStream = builder
-                    .withEntities(collection.toList())
-                    .withFlattenedCollection("monthlyCosts")
-                    .generateAsInputStream();
-            return new ByteArrayResource(inputStream.readAllBytes());
+            builder.withFlattenedCollection("monthlyCosts")
+                    .generateStreaming(outputStream, (page, size) ->
+                            page == 0 ? allRows : Collections.emptyList(),
+                    allRows.size() + 1);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

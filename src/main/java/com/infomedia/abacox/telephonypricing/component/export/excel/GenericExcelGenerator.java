@@ -164,6 +164,179 @@ public class GenericExcelGenerator {
         }
     }
 
+    /**
+     * Streaming generation: fetches data in pages via the supplier, writes each page's rows
+     * incrementally using SXSSFWorkbook, and writes the final result to the given OutputStream.
+     * Only one page of data is held in memory at a time.
+     *
+     * @param builder      the configured builder (entities field is ignored; data comes from supplier)
+     * @param outputStream the stream to write the Excel file to
+     * @param supplier     provides pages of data on demand
+     * @param pageSize     number of rows to fetch per page
+     */
+    static <T> void generateExcelStreaming(ExcelGeneratorBuilder builder, OutputStream outputStream,
+                                            PagedDataSupplier<T> supplier, int pageSize) throws IOException {
+        if (builder.includedFields != null && !builder.excludedFields.isEmpty()) {
+            throw new IllegalStateException(
+                    "Cannot use both withIncludedFields (whitelist) and excludeField (blacklist).");
+        }
+        if (builder.includedColumnNames != null && !builder.excludedColumnNames.isEmpty()) {
+            throw new IllegalStateException(
+                    "Cannot use both withIncludedColumnNames (whitelist) and excludeColumnByName (blacklist).");
+        }
+        if (builder.flattenedCollectionFieldName != null
+                && builder.collectionsAsStringFields.containsKey(builder.flattenedCollectionFieldName)) {
+            throw new IllegalStateException("Field '" + builder.flattenedCollectionFieldName
+                    + "' cannot be both flattened and formatted as a single string.");
+        }
+
+        // Fetch first page to determine entity class and fields
+        List<T> firstPage = supplier.getPage(0, pageSize);
+        if (firstPage == null || firstPage.isEmpty()) {
+            try (Workbook workbook = new XSSFWorkbook()) {
+                workbook.createSheet("Empty");
+                workbook.write(outputStream);
+            }
+            return;
+        }
+
+        // Force streaming mode for this builder
+        builder.streamingEnabled = true;
+        GeneratorContext context = new GeneratorContext(builder);
+        SXSSFWorkbook workbook = new SXSSFWorkbook(100);
+
+        try {
+            Class<?> entityClass = firstPage.get(0).getClass();
+
+            List<FieldInfo> fields;
+            // For field resolution, temporarily set entities so the builder context works
+            builder.entities = (List<?>) firstPage;
+            if (context.getFlattenedCollectionFieldName() != null) {
+                fields = getFieldsForFlattening(entityClass, context);
+            } else {
+                fields = getFieldsInDeclarationOrder(entityClass, "", null, context, new HashSet<>());
+            }
+
+            if (!context.getAlternativeHeaderNames().isEmpty()) {
+                fields.forEach(fieldInfo -> fieldInfo.displayName = context.getAlternativeHeaderNames().getOrDefault(
+                        fieldInfo.displayName, fieldInfo.displayName));
+            }
+
+            if (context.getIncludedColumnNames() != null) {
+                final Set<String> finalIncludedNames = context.getIncludedColumnNames();
+                fields = fields.stream()
+                        .filter(fieldInfo -> finalIncludedNames.contains(fieldInfo.displayName))
+                        .collect(Collectors.toList());
+            } else if (!context.getExcludedColumnNames().isEmpty()) {
+                final Set<String> finalExcludedNames = context.getExcludedColumnNames();
+                fields = fields.stream()
+                        .filter(fieldInfo -> !finalExcludedNames.contains(fieldInfo.displayName))
+                        .collect(Collectors.toList());
+            }
+
+            fields.sort(Comparator.comparingInt(fi -> fi.order));
+
+            Sheet sheet = workbook.createSheet(entityClass.getSimpleName());
+            createHeaderRow(workbook, sheet, fields, context);
+
+            CellStyle dataStyle = createDataStyle(workbook, context.getDataStyleCustomizer());
+            CellStyle wrappedDataStyle = createDataStyle(workbook, context.getDataStyleCustomizer());
+            wrappedDataStyle.setWrapText(true);
+
+            // Write first page
+            int rowNum;
+            if (context.getFlattenedCollectionFieldName() != null) {
+                rowNum = writeFlattenedPageRows(sheet, (List<?>) firstPage, fields, context, 2, dataStyle, wrappedDataStyle);
+            } else {
+                rowNum = writePageRows(sheet, (List<?>) firstPage, fields, context,
+                        context.getFlattenedCollectionFieldName() != null ? 2 : 1, dataStyle, wrappedDataStyle);
+            }
+
+            // Fetch and write remaining pages
+            int pageNumber = 1;
+            while (true) {
+                List<T> page = supplier.getPage(pageNumber, pageSize);
+                if (page == null || page.isEmpty()) {
+                    break;
+                }
+                if (context.getFlattenedCollectionFieldName() != null) {
+                    rowNum = writeFlattenedPageRows(sheet, (List<?>) page, fields, context, rowNum, dataStyle, wrappedDataStyle);
+                } else {
+                    rowNum = writePageRows(sheet, (List<?>) page, fields, context, rowNum, dataStyle, wrappedDataStyle);
+                }
+                pageNumber++;
+            }
+
+            // Note: autoSizeColumn is not supported with SXSSFWorkbook for streamed rows,
+            // so we set reasonable default widths instead
+            for (int i = 0; i < fields.size(); i++) {
+                sheet.setColumnWidth(i, 256 * 20); // 20 characters wide
+            }
+
+            workbook.write(outputStream);
+        } finally {
+            workbook.dispose();
+            workbook.close();
+        }
+    }
+
+    /**
+     * Writes a page of simple (non-flattened) rows and returns the next row number.
+     */
+    private static int writePageRows(Sheet sheet, List<?> entities, List<FieldInfo> fields,
+                                      GeneratorContext context, int startRowNum,
+                                      CellStyle dataStyle, CellStyle wrappedDataStyle) {
+        int rowNum = startRowNum;
+        for (Object entity : entities) {
+            Row row = sheet.createRow(rowNum++);
+            for (int i = 0; i < fields.size(); i++) {
+                Cell cell = row.createCell(i);
+                FieldInfo fieldInfo = fields.get(i);
+                cell.setCellStyle(fieldInfo.collectionAsStringAttributes != null ? wrappedDataStyle : dataStyle);
+                setFieldValue(cell, entity, fieldInfo, context);
+            }
+        }
+        return rowNum;
+    }
+
+    /**
+     * Writes a page of flattened rows (one row per collection element) and returns the next row number.
+     * Note: cell merging for parent fields is skipped in streaming mode because SXSSFWorkbook
+     * does not reliably support merging across flushed rows.
+     */
+    private static int writeFlattenedPageRows(Sheet sheet, List<?> entities, List<FieldInfo> fields,
+                                               GeneratorContext context, int startRowNum,
+                                               CellStyle dataStyle, CellStyle wrappedDataStyle) {
+        int rowNum = startRowNum;
+        String collectionFieldName = context.getFlattenedCollectionFieldName();
+
+        Field collectionField = null;
+        if (!entities.isEmpty()) {
+            collectionField = findField(entities.get(0).getClass(), collectionFieldName);
+            if (collectionField != null) collectionField.setAccessible(true);
+        }
+
+        for (Object rootEntity : entities) {
+            Collection<?> children = null;
+            try {
+                if (collectionField != null) {
+                    children = (Collection<?>) collectionField.get(rootEntity);
+                }
+            } catch (IllegalAccessException e) {
+                LOGGER.warning("Could not access flattened collection field: " + e.getMessage());
+            }
+
+            if (children == null || children.isEmpty()) {
+                createSingleFlattenedRow(sheet, rowNum++, rootEntity, null, fields, context, dataStyle, wrappedDataStyle);
+            } else {
+                for (Object childEntity : children) {
+                    createSingleFlattenedRow(sheet, rowNum++, rootEntity, childEntity, fields, context, dataStyle, wrappedDataStyle);
+                }
+            }
+        }
+        return rowNum;
+    }
+
     private static void setFieldValue(Cell cell, Object entity, FieldInfo fieldInfo, GeneratorContext context) {
         try {
             Object rawValue;

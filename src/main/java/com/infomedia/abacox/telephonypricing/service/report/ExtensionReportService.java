@@ -6,7 +6,7 @@ import com.infomedia.abacox.telephonypricing.component.utils.SortingUtils;
 import com.infomedia.abacox.telephonypricing.db.repository.ReportRepository;
 import com.infomedia.abacox.telephonypricing.dto.report.UnusedExtensionReportDto;
 import lombok.RequiredArgsConstructor;
-import org.springframework.core.io.ByteArrayResource;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.Sort;
@@ -14,7 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
-import java.io.InputStream;
+import java.io.OutputStream;
 import java.time.LocalDateTime;
 
 @RequiredArgsConstructor
@@ -34,15 +34,15 @@ public class ExtensionReportService {
                 UnusedExtensionReportDto.class);
     }
 
-    @Transactional(readOnly = true)
-    public ByteArrayResource exportExcelUnusedExtensionReport(String employeeName, String extension,
+    public void exportExcelUnusedExtensionReport(String employeeName, String extension,
             LocalDateTime startDate, LocalDateTime endDate,
-            Pageable pageable, ExcelGeneratorBuilder builder) {
-        Slice<UnusedExtensionReportDto> collection = generateUnusedExtensionReport(employeeName, extension, startDate,
-                endDate, pageable);
+            Pageable pageable, OutputStream outputStream, ExcelGeneratorBuilder builder) {
+        Sort sort = pageable.getSort();
         try {
-            InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
-            return new ByteArrayResource(inputStream.readAllBytes());
+            builder.generateStreaming(outputStream, (page, size) ->
+                    generateUnusedExtensionReport(employeeName, extension, startDate, endDate,
+                            PageRequest.of(page, size, sort)).getContent(),
+                    ExcelGeneratorBuilder.DEFAULT_STREAMING_PAGE_SIZE);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

@@ -7,7 +7,11 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 
-import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -49,40 +53,67 @@ public class ReportGenerationService {
         String url = urlBuilder.toString();
         log.debug("Calling internal endpoint: {}", url);
 
-        // Make the internal HTTP call to the export endpoint
-        byte[] reportBytes = restClient.get()
-                .uri(url)
-                .header("X-Tenant-ID", tenant)
-                .header("X-Username", "system")
-                .header("X-Internal-Api-Key", internalApiKey)
-                .header(HttpHeaders.ACCEPT, "application/octet-stream")
-                .retrieve()
-                .body(byte[].class);
-
-        if (reportBytes == null || reportBytes.length == 0) {
-            throw new RuntimeException("Report generation returned empty response");
+        // Stream the HTTP response to a temp file instead of holding in memory
+        Path tempFile;
+        try {
+            tempFile = Files.createTempFile("report-", ".xlsx");
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to create temp file for report", e);
         }
 
-        log.info("Report generated successfully, size: {} bytes", reportBytes.length);
+        try {
+            // Stream response body directly to temp file
+            restClient.get()
+                    .uri(url)
+                    .header("X-Tenant-ID", tenant)
+                    .header("X-Username", "system")
+                    .header("X-Internal-Api-Key", internalApiKey)
+                    .header(HttpHeaders.ACCEPT, "application/octet-stream")
+                    .exchange((request, response) -> {
+                        try (OutputStream out = Files.newOutputStream(tempFile);
+                             InputStream in = response.getBody()) {
+                            in.transferTo(out);
+                        }
+                        return null;
+                    });
 
-        // Upload to MinIO
-        String objectName = UUID.randomUUID() + "/" + fileName;
-        MinioStorageService.MinioUploadResult uploadResult = minioStorageService.uploadFile(
-                tenant,
-                StorageKey.REPORTS,
-                objectName,
-                new ByteArrayInputStream(reportBytes),
-                reportBytes.length,
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        );
+            long fileSize = Files.size(tempFile);
+            if (fileSize == 0) {
+                throw new RuntimeException("Report generation returned empty response");
+            }
 
-        log.info("Report uploaded to MinIO: bucket={}, object={}", uploadResult.bucketName(), uploadResult.objectName());
+            log.info("Report generated successfully, size: {} bytes", fileSize);
 
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("bucketName", uploadResult.bucketName());
-        result.put("objectName", uploadResult.objectName());
-        result.put("fileSize", reportBytes.length);
-        result.put("fileName", fileName);
-        return result;
+            // Upload temp file to MinIO
+            String objectName = UUID.randomUUID() + "/" + fileName;
+            MinioStorageService.MinioUploadResult uploadResult;
+            try (InputStream in = Files.newInputStream(tempFile)) {
+                uploadResult = minioStorageService.uploadFile(
+                        tenant,
+                        StorageKey.REPORTS,
+                        objectName,
+                        in,
+                        fileSize,
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                );
+            }
+
+            log.info("Report uploaded to MinIO: bucket={}, object={}", uploadResult.bucketName(), uploadResult.objectName());
+
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("bucketName", uploadResult.bucketName());
+            result.put("objectName", uploadResult.objectName());
+            result.put("fileSize", fileSize);
+            result.put("fileName", fileName);
+            return result;
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to process report file", e);
+        } finally {
+            try {
+                Files.deleteIfExists(tempFile);
+            } catch (IOException e) {
+                log.warn("Failed to delete temp file: {}", tempFile, e);
+            }
+        }
     }
 }

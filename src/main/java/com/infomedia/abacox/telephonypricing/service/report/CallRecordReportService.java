@@ -22,7 +22,7 @@ import com.infomedia.abacox.telephonypricing.dto.report.UnassignedCallReportDto;
 import com.infomedia.abacox.telephonypricing.dto.telephonytype.TelephonyTypeDto;
 import com.infomedia.abacox.telephonypricing.model.report.UnassignedCallGroupingType;
 import lombok.RequiredArgsConstructor;
-import org.springframework.core.io.ByteArrayResource;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.SliceImpl;
@@ -32,7 +32,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
-import java.io.InputStream;
+import java.io.OutputStream;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -106,13 +106,13 @@ public class CallRecordReportService {
         return new SliceImpl<>(dtos, pageable, callRecords.hasNext());
     }
 
-    @Transactional(readOnly = true)
-    public ByteArrayResource exportExcelCallRecordsReport(Specification<CallRecord> specification, Pageable pageable,
-            ExcelGeneratorBuilder builder) {
-        Slice<CallRecordDto> collection = generateCallRecordsReport(specification, pageable);
+    public void exportExcelCallRecordsReport(Specification<CallRecord> specification, Pageable pageable,
+            OutputStream outputStream, ExcelGeneratorBuilder builder) {
+        Sort sort = pageable.getSort();
         try {
-            InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
-            return new ByteArrayResource(inputStream.readAllBytes());
+            builder.generateStreaming(outputStream, (page, size) ->
+                    generateCallRecordsReport(specification, PageRequest.of(page, size, sort)).getContent(),
+                    ExcelGeneratorBuilder.DEFAULT_STREAMING_PAGE_SIZE);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -150,13 +150,13 @@ public class CallRecordReportService {
         return new SliceImpl<>(dtos, pageable, failedCallRecords.hasNext());
     }
 
-    @Transactional(readOnly = true)
-    public ByteArrayResource exportExcelFailedCallRecordsReport(Specification<FailedCallRecord> specification,
-            Pageable pageable, ExcelGeneratorBuilder builder) {
-        Slice<FailedCallRecordDto> collection = generateFailedCallRecordsReport(specification, pageable);
+    public void exportExcelFailedCallRecordsReport(Specification<FailedCallRecord> specification,
+            Pageable pageable, OutputStream outputStream, ExcelGeneratorBuilder builder) {
+        Sort sort = pageable.getSort();
         try {
-            InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
-            return new ByteArrayResource(inputStream.readAllBytes());
+            builder.generateStreaming(outputStream, (page, size) ->
+                    generateFailedCallRecordsReport(specification, PageRequest.of(page, size, sort)).getContent(),
+                    ExcelGeneratorBuilder.DEFAULT_STREAMING_PAGE_SIZE);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -170,13 +170,13 @@ public class CallRecordReportService {
                 CorporateReportDto.class);
     }
 
-    @Transactional(readOnly = true)
-    public ByteArrayResource exportExcelCorporateReport(Specification<CorporateReportView> specification,
-            Pageable pageable, ExcelGeneratorBuilder builder) {
-        Slice<CorporateReportDto> collection = generateCorporateReport(specification, pageable);
+    public void exportExcelCorporateReport(Specification<CorporateReportView> specification,
+            Pageable pageable, OutputStream outputStream, ExcelGeneratorBuilder builder) {
+        Sort sort = pageable.getSort();
         try {
-            InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
-            return new ByteArrayResource(inputStream.readAllBytes());
+            builder.generateStreaming(outputStream, (page, size) ->
+                    generateCorporateReport(specification, PageRequest.of(page, size, sort)).getContent(),
+                    ExcelGeneratorBuilder.DEFAULT_STREAMING_PAGE_SIZE);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -213,15 +213,15 @@ public class CallRecordReportService {
                 UnassignedCallReportDto.class);
     }
 
-    @Transactional(readOnly = true)
-    public ByteArrayResource exportExcelUnassignedCallReport(String extension, UnassignedCallGroupingType groupingType,
+    public void exportExcelUnassignedCallReport(String extension, UnassignedCallGroupingType groupingType,
             LocalDateTime startDate, LocalDateTime endDate, Pageable pageable,
-            ExcelGeneratorBuilder builder) {
-        Slice<UnassignedCallReportDto> collection = generateUnassignedCallReport(extension, groupingType, startDate,
-                endDate, pageable);
+            OutputStream outputStream, ExcelGeneratorBuilder builder) {
+        Sort sort = pageable.getSort();
         try {
-            InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
-            return new ByteArrayResource(inputStream.readAllBytes());
+            builder.generateStreaming(outputStream, (page, size) ->
+                    generateUnassignedCallReport(extension, groupingType, startDate, endDate,
+                            PageRequest.of(page, size, sort)).getContent(),
+                    ExcelGeneratorBuilder.DEFAULT_STREAMING_PAGE_SIZE);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -237,14 +237,15 @@ public class CallRecordReportService {
                 ProcessingFailureReportDto.class);
     }
 
-    @Transactional(readOnly = true)
-    public ByteArrayResource exportExcelProcessingFailureReport(String directory, String errorType,
-            LocalDateTime startDate, LocalDateTime endDate, Pageable pageable, ExcelGeneratorBuilder builder) {
-        Slice<ProcessingFailureReportDto> collection = generateProcessingFailureReport(directory, errorType, startDate,
-                endDate, pageable);
+    public void exportExcelProcessingFailureReport(String directory, String errorType,
+            LocalDateTime startDate, LocalDateTime endDate, Pageable pageable,
+            OutputStream outputStream, ExcelGeneratorBuilder builder) {
+        Sort sort = pageable.getSort();
         try {
-            InputStream inputStream = builder.withEntities(collection.toList()).generateAsInputStream();
-            return new ByteArrayResource(inputStream.readAllBytes());
+            builder.generateStreaming(outputStream, (page, size) ->
+                    generateProcessingFailureReport(directory, errorType, startDate, endDate,
+                            PageRequest.of(page, size, sort)).getContent(),
+                    ExcelGeneratorBuilder.DEFAULT_STREAMING_PAGE_SIZE);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

@@ -10,7 +10,12 @@
       "Bash(curl -s http://localhost:8000/service/colsanitas/core/api/generated-reports/853bd44f-d306-471d-884f-ffcc91f5131d -H 'Authorization: Bearer __TRACKED_VAR__' -H 'X-Tenant-Id: colsanitas' -H 'X-Username: admin')",
       "Bash(curl -s 'http://localhost:8000/service/colsanitas/core/api/notification/recipient/admin?channel=PUSH&unread=false' -H 'Authorization: Bearer eyJ0eXAiOiJKV1QiLCJtb2QiOiJBQ0NFU1MiLCJhbGciOiJIUzUxMiJ9.eyJsb2dpbklkIjoiNTZkNDQzY2QtMmI0MC00OTM4LWExOTItOWUzOWRkZWM1NDY2Iiwicm9sZUlkIjoiMjMyZDZiZjEtYjc0NS00ZjI4LTg0ZmItZTE4Mzg3Y2VjOTU4Iiwicm9sZW5hbWUiOiJBZG1pbmlzdHJhdG9yIiwidXNlcklkIjoiODFhNTViM2UtNWVhOC00YmRlLTliYmEtNmU3Y2Q5ZTk1MWNjIiwidXNlcm5hbWUiOiJhZG1pbiIsInRlbmFudCI6ImNvbHNhbml0YXMiLCJleHAiOjE3NzU1OTA4NDAsIm5iZiI6MTc3NTU4OTk0MCwiaWF0IjoxNzc1NTg5OTQwfQ.MO9wlQhQjBb8keGAxatDwqpFXOh1zA3Hm_yUY6Jo26njbggICANJ3q67bccX-YHAM8qbYIqydHrlAr0KQGmxrg' -H 'X-Tenant-Id: colsanitas' -H 'X-Username: admin')",
       "Bash(curl -s \"http://localhost:8000/service/colsanitas/telephony-pricing/v3/api-docs\")",
-      "Bash(curl -s http://localhost:8000/service/colsanitas/core/api/generated-reports/b743306e-df1d-433d-b5d7-544f4295b986 -H 'Authorization: Bearer __TRACKED_VAR__' -H 'X-Tenant-Id: colsanitas' -H 'X-Username: admin')"
+      "Bash(curl -s http://localhost:8000/service/colsanitas/core/api/generated-reports/b743306e-df1d-433d-b5d7-544f4295b986 -H 'Authorization: Bearer __TRACKED_VAR__' -H 'X-Tenant-Id: colsanitas' -H 'X-Username: admin')",
+      "Bash(grep -n \"collection.toList\\(\\)\" /e/Github/abacox/abacox-telephony-pricing/src/main/java/com/infomedia/abacox/telephonypricing/service/report/*.java)",
+      "Bash(grep -r \"Pageable.unpaged\\\\|fetchAll\\\\|UnPagedRepository\" /e/Github/abacox/abacox-telephony-pricing/src/main/java/com/infomedia/abacox/telephonypricing/service/report/*.java)",
+      "Bash(grep -n \"enableStreaming\\\\|withFlattenedCollection\\\\|withCollectionAsString\" /e/Github/abacox/abacox-telephony-pricing/src/main/java/com/infomedia/abacox/telephonypricing/service/report/*.java)",
+      "Bash(grep -l \"exportExcel\" *.java)",
+      "Bash(./mvnw compile:*)"
     ]
   }
 }
