@@ -1,7 +1,9 @@
 package com.infomedia.abacox.telephonypricing.messaging;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.infomedia.abacox.telephonypricing.service.AuthService;
+import com.infomedia.abacox.telephonypricing.service.ReportGenerationService;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -11,6 +13,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.util.Collections;
+import java.util.Map;
 
 /**
  * Central service for internal inter-module communication over RabbitMQ.
@@ -30,19 +33,24 @@ import java.util.Collections;
 @Log4j2
 public class MessagingService {
 
+    private static final String GENERATE_REPORT_QUERY = "GENERATE_REPORT";
+
     private final RabbitTemplate rabbitTemplate;
     private final ObjectMapper objectMapper;
     private final String moduleName;
     private final AuthService authService;
+    private final ReportGenerationService reportGenerationService;
 
     public MessagingService(RabbitTemplate rabbitTemplate,
                             ObjectMapper objectMapper,
                             @Value("${spring.application.name}") String moduleName,
-                            AuthService authService) {
+                            AuthService authService,
+                            ReportGenerationService reportGenerationService) {
         this.rabbitTemplate = rabbitTemplate;
         this.objectMapper = objectMapper;
         this.moduleName = moduleName;
         this.authService = authService;
+        this.reportGenerationService = reportGenerationService;
     }
 
     /**
@@ -116,11 +124,15 @@ public class MessagingService {
 
     /**
      * Handles inbound queries directed at telephony-pricing.
-     * Extend this to support module-specific query types.
      */
     @RabbitListener(queues = RabbitMQConfig.TELEPHONY_QUERIES_QUEUE)
     public Object handleQuery(InternalMessage request) {
         applyActor(request.getActor());
+
+        if (GENERATE_REPORT_QUERY.equals(request.getType())) {
+            return handleGenerateReport(request);
+        }
+
         log.warn("Received unhandled query [{}] from [{}]", request.getType(), request.getSourceModule());
         return InternalMessage.builder()
                 .sourceModule(moduleName)
@@ -129,6 +141,42 @@ public class MessagingService {
                 .success(false)
                 .payload("No handler registered for query type: " + request.getType())
                 .build();
+    }
+
+    private InternalMessage handleGenerateReport(InternalMessage request) {
+        try {
+            Map<String, Object> payload = objectMapper.convertValue(request.getPayload(), new TypeReference<>() {});
+            String endpointPath = (String) payload.get("endpointPath");
+            String fileName = (String) payload.getOrDefault("fileName", "report.xlsx");
+            String tenant = (String) payload.get("tenant");
+
+            Map<String, String> parameters = payload.containsKey("parameters")
+                    ? objectMapper.convertValue(payload.get("parameters"), new TypeReference<>() {})
+                    : null;
+
+            log.info("Handling GENERATE_REPORT: endpoint={}, tenant={}", endpointPath, tenant);
+
+            Map<String, Object> result = reportGenerationService.generateReport(
+                    endpointPath, parameters, fileName, tenant);
+
+            return InternalMessage.builder()
+                    .sourceModule(moduleName)
+                    .type(request.getType())
+                    .correlationId(request.getCorrelationId())
+                    .success(true)
+                    .payload(result)
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Error handling GENERATE_REPORT query", e);
+            return InternalMessage.builder()
+                    .sourceModule(moduleName)
+                    .type(request.getType())
+                    .correlationId(request.getCorrelationId())
+                    .success(false)
+                    .payload("Report generation failed: " + e.getMessage())
+                    .build();
+        }
     }
 
     /**
