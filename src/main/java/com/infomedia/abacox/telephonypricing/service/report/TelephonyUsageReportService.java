@@ -99,7 +99,7 @@ public class TelephonyUsageReportService {
         }
 
         public void exportExcelTelephonyTypeUsageReport(
-                        LocalDateTime startDate, LocalDateTime endDate, Pageable pageable,
+                        LocalDateTime startDate, LocalDateTime endDate,
                         OutputStream outputStream, ExcelGeneratorBuilder builder) {
                 List<TelephonyTypeUsageGroupDto> allGroups = generateTelephonyTypeUsageReport(startDate, endDate,
                                 Pageable.unpaged()).getContent();
@@ -182,7 +182,7 @@ public class TelephonyUsageReportService {
         }
 
         public void exportExcelMonthlyTelephonyTypeUsageReport(
-                        LocalDateTime startDate, LocalDateTime endDate, Pageable pageable,
+                        LocalDateTime startDate, LocalDateTime endDate,
                         OutputStream outputStream, ExcelGeneratorBuilder builder) {
                 List<MonthlyTelephonyTypeUsageGroupDto> allGroups = generateMonthlyTelephonyTypeUsageReport(
                                 startDate, endDate, Pageable.unpaged()).getContent();
@@ -300,7 +300,7 @@ public class TelephonyUsageReportService {
         }
 
         public void exportExcelCostCenterUsageReport(
-                        LocalDateTime startDate, LocalDateTime endDate, Long parentCostCenterId, Pageable pageable,
+                        LocalDateTime startDate, LocalDateTime endDate, Long parentCostCenterId,
                         OutputStream outputStream, ExcelGeneratorBuilder builder) {
                 List<CostCenterUsageReportDto> allRows = generateCostCenterUsageReport(
                                 startDate, endDate, parentCostCenterId, Pageable.unpaged()).getContent();
@@ -325,14 +325,13 @@ public class TelephonyUsageReportService {
         }
 
         public void exportExcelDialedNumberUsageReport(
-                        LocalDateTime startDate, LocalDateTime endDate, Pageable pageable,
+                        LocalDateTime startDate, LocalDateTime endDate, Sort sort, int maxRows,
                         OutputStream outputStream, ExcelGeneratorBuilder builder) {
-                Sort sort = pageable.getSort();
                 try {
                         builder.generateStreaming(outputStream, (page, size) ->
                                 generateDialedNumberUsageReport(startDate, endDate,
                                         PageRequest.of(page, size, sort)).getContent(),
-                                ExcelGeneratorBuilder.DEFAULT_STREAMING_PAGE_SIZE);
+                                ExcelGeneratorBuilder.DEFAULT_STREAMING_PAGE_SIZE, maxRows);
                 } catch (IOException e) {
                         throw new RuntimeException(e);
                 }
@@ -349,14 +348,13 @@ public class TelephonyUsageReportService {
         }
 
         public void exportExcelDestinationUsageReport(
-                        LocalDateTime startDate, LocalDateTime endDate, Pageable pageable,
+                        LocalDateTime startDate, LocalDateTime endDate, Sort sort, int maxRows,
                         OutputStream outputStream, ExcelGeneratorBuilder builder) {
-                Sort sort = pageable.getSort();
                 try {
                         builder.generateStreaming(outputStream, (page, size) ->
                                 generateDestinationUsageReport(startDate, endDate,
                                         PageRequest.of(page, size, sort)).getContent(),
-                                ExcelGeneratorBuilder.DEFAULT_STREAMING_PAGE_SIZE);
+                                ExcelGeneratorBuilder.DEFAULT_STREAMING_PAGE_SIZE, maxRows);
                 } catch (IOException e) {
                         throw new RuntimeException(e);
                 }

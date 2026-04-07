@@ -123,13 +123,12 @@ public abstract class CrudService<E, I, R extends JpaRepository<E, I> & JpaSpeci
         return repository.saveAll(entities);
     }
 
-    public void exportExcelStreaming(Specification<E> spec, Pageable pageable,
+    public void exportExcelStreaming(Specification<E> spec, Sort sort, int maxRows,
                                       OutputStream outputStream, ExcelGeneratorBuilder builder) {
-        Sort sort = pageable.getSort();
         try {
             builder.generateStreaming(outputStream, (page, size) ->
                     findAsSlice(spec, PageRequest.of(page, size, sort)).getContent(),
-                    ExcelGeneratorBuilder.DEFAULT_STREAMING_PAGE_SIZE);
+                    ExcelGeneratorBuilder.DEFAULT_STREAMING_PAGE_SIZE, maxRows);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

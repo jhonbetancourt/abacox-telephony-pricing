@@ -10,7 +10,9 @@ import com.infomedia.abacox.telephonypricing.db.entity.PbxSpecialRule;
 import com.infomedia.abacox.telephonypricing.service.PbxSpecialRuleService;
 import com.turkraft.springfilter.boot.Filter;
 import com.infomedia.abacox.telephonypricing.dto.generic.ExcelRequest;
+import com.infomedia.abacox.telephonypricing.dto.generic.ExportRequest;
 import com.infomedia.abacox.telephonypricing.dto.generic.FilterRequest;
+import com.infomedia.abacox.telephonypricing.dto.generic.PageableRequest;
 import io.swagger.v3.oas.annotations.Parameter;
 import org.springdoc.core.annotations.ParameterObject;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -44,8 +46,8 @@ public class PbxSpecialRuleController {
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public Slice<PbxSpecialRuleDto> find(@Parameter(hidden = true) @Filter Specification<PbxSpecialRule> spec
             , @Parameter(hidden = true) Pageable pageable
-            , @RequestParam(required = false) String filter, @RequestParam(required = false) Integer page
-            , @RequestParam(required = false) Integer size, @RequestParam(required = false) String sort) {
+            , @ParameterObject FilterRequest filterRequest
+            , @ParameterObject PageableRequest pageableRequest) {
         return modelConverter.mapSlice(pbxSpecialRuleService.find(spec, pageable), PbxSpecialRuleDto.class);
     }
 
@@ -70,14 +72,14 @@ public class PbxSpecialRuleController {
     }
 
     @GetMapping(value = "/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
-    public ResponseEntity<StreamingResponseBody> exportExcel(@Parameter(hidden = true) @Filter Specification<PbxSpecialRule> spec
-            , @Parameter(hidden = true) Pageable pageable
-            , @ParameterObject FilterRequest filterRequest
-            , @ParameterObject ExcelRequest excelRequest) {
+    public ResponseEntity<StreamingResponseBody> exportExcel(@Parameter(hidden = true) @Filter Specification<PbxSpecialRule> spec,
+            @ParameterObject FilterRequest filterRequest,
+            @ParameterObject ExportRequest exportRequest,
+            @ParameterObject ExcelRequest excelRequest) {
 
         
         StreamingResponseBody body = out ->
-            pbxSpecialRuleService.exportExcelStreaming(spec, pageable, out, excelRequest.toExcelGeneratorBuilder());
+            pbxSpecialRuleService.exportExcelStreaming(spec, exportRequest.getSortOrder(), exportRequest.getMaxRows(), out, excelRequest.toExcelGeneratorBuilder());
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment;filename=pbx_special_rules.xlsx")

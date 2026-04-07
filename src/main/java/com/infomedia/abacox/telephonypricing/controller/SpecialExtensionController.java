@@ -3,7 +3,9 @@ package com.infomedia.abacox.telephonypricing.controller;
 import com.infomedia.abacox.telephonypricing.component.modeltools.ModelConverter;
 import com.infomedia.abacox.telephonypricing.db.entity.SpecialExtension;
 import com.infomedia.abacox.telephonypricing.dto.generic.ExcelRequest;
+import com.infomedia.abacox.telephonypricing.dto.generic.ExportRequest;
 import com.infomedia.abacox.telephonypricing.dto.generic.FilterRequest;
+import com.infomedia.abacox.telephonypricing.dto.generic.PageableRequest;
 import com.infomedia.abacox.telephonypricing.dto.specialextension.CreateSpecialExtension;
 import com.infomedia.abacox.telephonypricing.dto.specialextension.SpecialExtensionDto;
 import com.infomedia.abacox.telephonypricing.dto.specialextension.UpdateSpecialExtension;
@@ -43,7 +45,8 @@ public class SpecialExtensionController {
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public Slice<SpecialExtensionDto> find(@Parameter(hidden = true) @Filter Specification<SpecialExtension> spec,
                                           @Parameter(hidden = true) Pageable pageable,
-                                          @ParameterObject FilterRequest filterRequest) {
+                                          @ParameterObject FilterRequest filterRequest
+            , @ParameterObject PageableRequest pageableRequest) {
         return modelConverter.mapSlice(specialExtensionService.find(spec, pageable), SpecialExtensionDto.class);
     }
 
@@ -69,12 +72,12 @@ public class SpecialExtensionController {
 
     @GetMapping(value = "/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
     public ResponseEntity<StreamingResponseBody> exportExcel(@Parameter(hidden = true) @Filter Specification<SpecialExtension> spec,
-                                                @Parameter(hidden = true) Pageable pageable,
                                                 @ParameterObject FilterRequest filterRequest,
+                                                @ParameterObject ExportRequest exportRequest,
                                                 @ParameterObject ExcelRequest excelRequest) {
 
         StreamingResponseBody body = out ->
-            specialExtensionService.exportExcelStreaming(spec, pageable, out, excelRequest.toExcelGeneratorBuilder());
+            specialExtensionService.exportExcelStreaming(spec, exportRequest.getSortOrder(), exportRequest.getMaxRows(), out, excelRequest.toExcelGeneratorBuilder());
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment;filename=special-extensions.xlsx")

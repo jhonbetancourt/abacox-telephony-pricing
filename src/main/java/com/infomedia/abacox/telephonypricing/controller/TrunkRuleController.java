@@ -10,7 +10,9 @@ import com.infomedia.abacox.telephonypricing.db.entity.TrunkRule;
 import com.infomedia.abacox.telephonypricing.service.TrunkRuleService;
 import com.turkraft.springfilter.boot.Filter;
 import com.infomedia.abacox.telephonypricing.dto.generic.ExcelRequest;
+import com.infomedia.abacox.telephonypricing.dto.generic.ExportRequest;
 import com.infomedia.abacox.telephonypricing.dto.generic.FilterRequest;
+import com.infomedia.abacox.telephonypricing.dto.generic.PageableRequest;
 import io.swagger.v3.oas.annotations.Parameter;
 import org.springdoc.core.annotations.ParameterObject;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -44,8 +46,8 @@ public class TrunkRuleController {
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public Slice<TrunkRuleDto> find(@Parameter(hidden = true) @Filter Specification<TrunkRule> spec
             , @Parameter(hidden = true) Pageable pageable
-            , @RequestParam(required = false) String filter, @RequestParam(required = false) Integer page
-            , @RequestParam(required = false) Integer size, @RequestParam(required = false) String sort) {
+            , @ParameterObject FilterRequest filterRequest
+            , @ParameterObject PageableRequest pageableRequest) {
         return modelConverter.mapSlice(trunkRuleService.find(spec, pageable), TrunkRuleDto.class);
     }
 
@@ -70,14 +72,14 @@ public class TrunkRuleController {
     }
 
     @GetMapping(value = "/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
-    public ResponseEntity<StreamingResponseBody> exportExcel(@Parameter(hidden = true) @Filter Specification<TrunkRule> spec
-            , @Parameter(hidden = true) Pageable pageable
-            , @ParameterObject FilterRequest filterRequest
-            , @ParameterObject ExcelRequest excelRequest) {
+    public ResponseEntity<StreamingResponseBody> exportExcel(@Parameter(hidden = true) @Filter Specification<TrunkRule> spec,
+            @ParameterObject FilterRequest filterRequest,
+            @ParameterObject ExportRequest exportRequest,
+            @ParameterObject ExcelRequest excelRequest) {
 
         
         StreamingResponseBody body = out ->
-            trunkRuleService.exportExcelStreaming(spec, pageable, out, excelRequest.toExcelGeneratorBuilder());
+            trunkRuleService.exportExcelStreaming(spec, exportRequest.getSortOrder(), exportRequest.getMaxRows(), out, excelRequest.toExcelGeneratorBuilder());
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment;filename=trunk_rules.xlsx")

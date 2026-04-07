@@ -218,6 +218,20 @@ public class ExcelGeneratorBuilder {
      */
     public <T> void generateStreaming(java.io.OutputStream outputStream,
                                       PagedDataSupplier<T> supplier, int pageSize) throws IOException {
-        GenericExcelGenerator.generateExcelStreaming(this, outputStream, supplier, pageSize);
+        GenericExcelGenerator.generateExcelStreaming(this, outputStream, supplier, pageSize, -1);
+    }
+
+    /**
+     * Generates an Excel file in streaming mode with a maximum row limit.
+     *
+     * @param outputStream the stream to write the Excel file to
+     * @param supplier     provides pages of data on demand
+     * @param pageSize     number of rows to fetch per page (e.g., 5000)
+     * @param maxRows      maximum total rows to export (-1 for unlimited)
+     * @throws IOException if an I/O error occurs during generation
+     */
+    public <T> void generateStreaming(java.io.OutputStream outputStream,
+                                      PagedDataSupplier<T> supplier, int pageSize, int maxRows) throws IOException {
+        GenericExcelGenerator.generateExcelStreaming(this, outputStream, supplier, pageSize, maxRows);
     }
 }

@@ -190,7 +190,7 @@ public class ConferenceReportService {
     public void exportExcelConferenceCallsReport(
             LocalDateTime startDate, LocalDateTime endDate,
             String extension, String employeeName,
-            Pageable pageable, OutputStream outputStream, ExcelGeneratorBuilder builder) {
+            OutputStream outputStream, ExcelGeneratorBuilder builder) {
         List<ConferenceGroupDto> allGroups = generateConferenceCallsReport(
                 startDate, endDate, extension, employeeName, Pageable.unpaged()).getContent();
         try {

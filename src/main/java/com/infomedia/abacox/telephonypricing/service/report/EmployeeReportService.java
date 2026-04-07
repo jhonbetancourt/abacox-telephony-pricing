@@ -54,14 +54,13 @@ public class EmployeeReportService {
 
     public void exportExcelEmployeeActivityReport(String employeeName, String employeeExtension,
             Long subdivisionId, Long costCenterId,
-            LocalDateTime startDate, LocalDateTime endDate, Pageable pageable,
+            LocalDateTime startDate, LocalDateTime endDate, Sort sort, int maxRows,
             OutputStream outputStream, ExcelGeneratorBuilder builder) {
-        Sort sort = pageable.getSort();
         try {
             builder.generateStreaming(outputStream, (page, size) ->
                     generateEmployeeActivityReport(employeeName, employeeExtension, subdivisionId, costCenterId,
                             startDate, endDate, PageRequest.of(page, size, sort)).getContent(),
-                    ExcelGeneratorBuilder.DEFAULT_STREAMING_PAGE_SIZE);
+                    ExcelGeneratorBuilder.DEFAULT_STREAMING_PAGE_SIZE, maxRows);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -102,15 +101,14 @@ public class EmployeeReportService {
     }
 
     public void exportExcelEmployeeCallReport(String employeeName, String employeeExtension,
-            LocalDateTime startDate, LocalDateTime endDate, Pageable pageable,
+            LocalDateTime startDate, LocalDateTime endDate, Sort sort, int maxRows,
             OutputStream outputStream, ExcelGeneratorBuilder builder) {
-        Sort sort = pageable.getSort();
         try {
             builder.withFlattenedCollection("telephonyCosts")
                     .generateStreaming(outputStream, (page, size) ->
                             generateEmployeeCallReport(employeeName, employeeExtension, startDate, endDate,
                                     PageRequest.of(page, size, sort)).getContent(),
-                    ExcelGeneratorBuilder.DEFAULT_STREAMING_PAGE_SIZE);
+                    ExcelGeneratorBuilder.DEFAULT_STREAMING_PAGE_SIZE, maxRows);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -127,14 +125,13 @@ public class EmployeeReportService {
     }
 
     public void exportExcelMissedCallEmployeeReport(String employeeName, LocalDateTime startDate,
-            LocalDateTime endDate, Integer minRingCount, Pageable pageable,
+            LocalDateTime endDate, Integer minRingCount, Sort sort, int maxRows,
             OutputStream outputStream, ExcelGeneratorBuilder builder) {
-        Sort sort = pageable.getSort();
         try {
             builder.generateStreaming(outputStream, (page, size) ->
                     generateMissedCallEmployeeReport(employeeName, startDate, endDate, minRingCount,
                             PageRequest.of(page, size, sort)).getContent(),
-                    ExcelGeneratorBuilder.DEFAULT_STREAMING_PAGE_SIZE);
+                    ExcelGeneratorBuilder.DEFAULT_STREAMING_PAGE_SIZE, maxRows);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -150,14 +147,13 @@ public class EmployeeReportService {
     }
 
     public void exportExcelEmployeeAuthCodeUsageReport(
-            LocalDateTime startDate, LocalDateTime endDate, Pageable pageable,
+            LocalDateTime startDate, LocalDateTime endDate, Sort sort, int maxRows,
             OutputStream outputStream, ExcelGeneratorBuilder builder) {
-        Sort sort = pageable.getSort();
         try {
             builder.generateStreaming(outputStream, (page, size) ->
                     generateEmployeeAuthCodeUsageReport(startDate, endDate,
                             PageRequest.of(page, size, sort)).getContent(),
-                    ExcelGeneratorBuilder.DEFAULT_STREAMING_PAGE_SIZE);
+                    ExcelGeneratorBuilder.DEFAULT_STREAMING_PAGE_SIZE, maxRows);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -173,14 +169,13 @@ public class EmployeeReportService {
     }
 
     public void exportExcelHighestConsumptionEmployeeReport(
-            LocalDateTime startDate, LocalDateTime endDate, Pageable pageable,
+            LocalDateTime startDate, LocalDateTime endDate, Sort sort, int maxRows,
             OutputStream outputStream, ExcelGeneratorBuilder builder) {
-        Sort sort = pageable.getSort();
         try {
             builder.generateStreaming(outputStream, (page, size) ->
                     generateHighestConsumptionEmployeeReport(startDate, endDate,
                             PageRequest.of(page, size, sort)).getContent(),
-                    ExcelGeneratorBuilder.DEFAULT_STREAMING_PAGE_SIZE);
+                    ExcelGeneratorBuilder.DEFAULT_STREAMING_PAGE_SIZE, maxRows);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

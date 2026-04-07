@@ -45,14 +45,13 @@ public class SubdivisionReportService {
     }
 
     public void exportExcelSubdivisionUsageReport(
-            LocalDateTime startDate, LocalDateTime endDate, Long parentSubdivisionId, Pageable pageable,
+            LocalDateTime startDate, LocalDateTime endDate, Long parentSubdivisionId, Sort sort, int maxRows,
             OutputStream outputStream, ExcelGeneratorBuilder builder) {
-        Sort sort = pageable.getSort();
         try {
             builder.generateStreaming(outputStream, (page, size) ->
                     generateSubdivisionUsageReport(startDate, endDate, parentSubdivisionId,
                             PageRequest.of(page, size, sort)).getContent(),
-                    ExcelGeneratorBuilder.DEFAULT_STREAMING_PAGE_SIZE);
+                    ExcelGeneratorBuilder.DEFAULT_STREAMING_PAGE_SIZE, maxRows);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -91,15 +90,14 @@ public class SubdivisionReportService {
     }
 
     public void exportExcelSubdivisionUsageByTypeReport(
-            LocalDateTime startDate, LocalDateTime endDate, Long parentSubdivisionId, Pageable pageable,
+            LocalDateTime startDate, LocalDateTime endDate, Long parentSubdivisionId, Sort sort, int maxRows,
             OutputStream outputStream, ExcelGeneratorBuilder builder) {
-        Sort sort = pageable.getSort();
         try {
             builder.withFlattenedCollection("telephonyTypeCosts")
                     .generateStreaming(outputStream, (page, size) ->
                             generateSubdivisionUsageByTypeReport(startDate, endDate, parentSubdivisionId,
                                     PageRequest.of(page, size, sort)).getContent(),
-                    ExcelGeneratorBuilder.DEFAULT_STREAMING_PAGE_SIZE);
+                    ExcelGeneratorBuilder.DEFAULT_STREAMING_PAGE_SIZE, maxRows);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -228,7 +226,7 @@ public class SubdivisionReportService {
     }
 
     public void exportExcelMonthlySubdivisionUsageReport(
-            LocalDateTime startDate, LocalDateTime endDate, List<Long> subdivisionIds, Pageable pageable,
+            LocalDateTime startDate, LocalDateTime endDate, List<Long> subdivisionIds,
             OutputStream outputStream, ExcelGeneratorBuilder builder) {
         List<MonthlySubdivisionUsageReportDto> allRows = generateMonthlySubdivisionUsageReport(startDate, endDate,
                 subdivisionIds, Pageable.unpaged()).getContent();

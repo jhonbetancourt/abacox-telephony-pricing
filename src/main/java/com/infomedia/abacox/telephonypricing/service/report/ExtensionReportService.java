@@ -36,13 +36,12 @@ public class ExtensionReportService {
 
     public void exportExcelUnusedExtensionReport(String employeeName, String extension,
             LocalDateTime startDate, LocalDateTime endDate,
-            Pageable pageable, OutputStream outputStream, ExcelGeneratorBuilder builder) {
-        Sort sort = pageable.getSort();
+            Sort sort, int maxRows, OutputStream outputStream, ExcelGeneratorBuilder builder) {
         try {
             builder.generateStreaming(outputStream, (page, size) ->
                     generateUnusedExtensionReport(employeeName, extension, startDate, endDate,
                             PageRequest.of(page, size, sort)).getContent(),
-                    ExcelGeneratorBuilder.DEFAULT_STREAMING_PAGE_SIZE);
+                    ExcelGeneratorBuilder.DEFAULT_STREAMING_PAGE_SIZE, maxRows);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }

@@ -6,7 +6,9 @@ import com.infomedia.abacox.telephonypricing.dto.inventory.CreateInventory;
 import com.infomedia.abacox.telephonypricing.dto.inventory.InventoryDto;
 import com.infomedia.abacox.telephonypricing.dto.inventory.UpdateInventory;
 import com.infomedia.abacox.telephonypricing.dto.generic.ExcelRequest;
+import com.infomedia.abacox.telephonypricing.dto.generic.ExportRequest;
 import com.infomedia.abacox.telephonypricing.dto.generic.FilterRequest;
+import com.infomedia.abacox.telephonypricing.dto.generic.PageableRequest;
 
 import com.infomedia.abacox.telephonypricing.service.InventoryService;
 import com.turkraft.springfilter.boot.Filter;
@@ -42,9 +44,9 @@ public class InventoryController {
 
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public Slice<InventoryDto> find(@Parameter(hidden = true) @Filter Specification<Inventory> spec,
-            @Parameter(hidden = true) Pageable pageable,
-            @RequestParam(required = false) String filter, @RequestParam(required = false) Integer page,
-            @RequestParam(required = false) Integer size, @RequestParam(required = false) String sort) {
+            @Parameter(hidden = true) Pageable pageable
+            , @ParameterObject FilterRequest filterRequest
+            , @ParameterObject PageableRequest pageableRequest) {
         return modelConverter.mapSlice(inventoryService.find(spec, pageable), InventoryDto.class);
     }
 
@@ -71,11 +73,11 @@ public class InventoryController {
 
     @GetMapping(value = "/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
     public ResponseEntity<StreamingResponseBody> exportExcel(@Parameter(hidden = true) @Filter Specification<Inventory> spec,
-            @Parameter(hidden = true) Pageable pageable,
             @ParameterObject FilterRequest filterRequest,
+            @ParameterObject ExportRequest exportRequest,
             @ParameterObject ExcelRequest excelRequest) {
         StreamingResponseBody body = out ->
-            inventoryService.exportExcelStreaming(spec, pageable, out, excelRequest.toExcelGeneratorBuilder());
+            inventoryService.exportExcelStreaming(spec, exportRequest.getSortOrder(), exportRequest.getMaxRows(), out, excelRequest.toExcelGeneratorBuilder());
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment;filename=inventory.xlsx")
                 .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))

@@ -175,7 +175,7 @@ public class GenericExcelGenerator {
      * @param pageSize     number of rows to fetch per page
      */
     static <T> void generateExcelStreaming(ExcelGeneratorBuilder builder, OutputStream outputStream,
-                                            PagedDataSupplier<T> supplier, int pageSize) throws IOException {
+                                            PagedDataSupplier<T> supplier, int pageSize, int maxRows) throws IOException {
         if (builder.includedFields != null && !builder.excludedFields.isEmpty()) {
             throw new IllegalStateException(
                     "Cannot use both withIncludedFields (whitelist) and excludeField (blacklist).");
@@ -254,7 +254,8 @@ public class GenericExcelGenerator {
 
             // Fetch and write remaining pages
             int pageNumber = 1;
-            while (true) {
+            // maxRows <= 0 means unlimited; rowNum includes header so data rows = rowNum - 1
+            while (maxRows <= 0 || (rowNum - 1) < maxRows) {
                 List<T> page = supplier.getPage(pageNumber, pageSize);
                 if (page == null || page.isEmpty()) {
                     break;

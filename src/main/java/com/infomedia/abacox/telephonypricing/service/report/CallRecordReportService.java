@@ -106,13 +106,12 @@ public class CallRecordReportService {
         return new SliceImpl<>(dtos, pageable, callRecords.hasNext());
     }
 
-    public void exportExcelCallRecordsReport(Specification<CallRecord> specification, Pageable pageable,
+    public void exportExcelCallRecordsReport(Specification<CallRecord> specification, Sort sort, int maxRows,
             OutputStream outputStream, ExcelGeneratorBuilder builder) {
-        Sort sort = pageable.getSort();
         try {
             builder.generateStreaming(outputStream, (page, size) ->
                     generateCallRecordsReport(specification, PageRequest.of(page, size, sort)).getContent(),
-                    ExcelGeneratorBuilder.DEFAULT_STREAMING_PAGE_SIZE);
+                    ExcelGeneratorBuilder.DEFAULT_STREAMING_PAGE_SIZE, maxRows);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -151,12 +150,11 @@ public class CallRecordReportService {
     }
 
     public void exportExcelFailedCallRecordsReport(Specification<FailedCallRecord> specification,
-            Pageable pageable, OutputStream outputStream, ExcelGeneratorBuilder builder) {
-        Sort sort = pageable.getSort();
+            Sort sort, int maxRows, OutputStream outputStream, ExcelGeneratorBuilder builder) {
         try {
             builder.generateStreaming(outputStream, (page, size) ->
                     generateFailedCallRecordsReport(specification, PageRequest.of(page, size, sort)).getContent(),
-                    ExcelGeneratorBuilder.DEFAULT_STREAMING_PAGE_SIZE);
+                    ExcelGeneratorBuilder.DEFAULT_STREAMING_PAGE_SIZE, maxRows);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -171,12 +169,11 @@ public class CallRecordReportService {
     }
 
     public void exportExcelCorporateReport(Specification<CorporateReportView> specification,
-            Pageable pageable, OutputStream outputStream, ExcelGeneratorBuilder builder) {
-        Sort sort = pageable.getSort();
+            Sort sort, int maxRows, OutputStream outputStream, ExcelGeneratorBuilder builder) {
         try {
             builder.generateStreaming(outputStream, (page, size) ->
                     generateCorporateReport(specification, PageRequest.of(page, size, sort)).getContent(),
-                    ExcelGeneratorBuilder.DEFAULT_STREAMING_PAGE_SIZE);
+                    ExcelGeneratorBuilder.DEFAULT_STREAMING_PAGE_SIZE, maxRows);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -214,14 +211,13 @@ public class CallRecordReportService {
     }
 
     public void exportExcelUnassignedCallReport(String extension, UnassignedCallGroupingType groupingType,
-            LocalDateTime startDate, LocalDateTime endDate, Pageable pageable,
+            LocalDateTime startDate, LocalDateTime endDate, Sort sort, int maxRows,
             OutputStream outputStream, ExcelGeneratorBuilder builder) {
-        Sort sort = pageable.getSort();
         try {
             builder.generateStreaming(outputStream, (page, size) ->
                     generateUnassignedCallReport(extension, groupingType, startDate, endDate,
                             PageRequest.of(page, size, sort)).getContent(),
-                    ExcelGeneratorBuilder.DEFAULT_STREAMING_PAGE_SIZE);
+                    ExcelGeneratorBuilder.DEFAULT_STREAMING_PAGE_SIZE, maxRows);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -238,14 +234,13 @@ public class CallRecordReportService {
     }
 
     public void exportExcelProcessingFailureReport(String directory, String errorType,
-            LocalDateTime startDate, LocalDateTime endDate, Pageable pageable,
+            LocalDateTime startDate, LocalDateTime endDate, Sort sort, int maxRows,
             OutputStream outputStream, ExcelGeneratorBuilder builder) {
-        Sort sort = pageable.getSort();
         try {
             builder.generateStreaming(outputStream, (page, size) ->
                     generateProcessingFailureReport(directory, errorType, startDate, endDate,
                             PageRequest.of(page, size, sort)).getContent(),
-                    ExcelGeneratorBuilder.DEFAULT_STREAMING_PAGE_SIZE);
+                    ExcelGeneratorBuilder.DEFAULT_STREAMING_PAGE_SIZE, maxRows);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
