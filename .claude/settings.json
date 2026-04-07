@@ -15,7 +15,9 @@
       "Bash(grep -r \"Pageable.unpaged\\\\|fetchAll\\\\|UnPagedRepository\" /e/Github/abacox/abacox-telephony-pricing/src/main/java/com/infomedia/abacox/telephonypricing/service/report/*.java)",
       "Bash(grep -n \"enableStreaming\\\\|withFlattenedCollection\\\\|withCollectionAsString\" /e/Github/abacox/abacox-telephony-pricing/src/main/java/com/infomedia/abacox/telephonypricing/service/report/*.java)",
       "Bash(grep -l \"exportExcel\" *.java)",
-      "Bash(./mvnw compile:*)"
+      "Bash(./mvnw compile:*)",
+      "Bash(curl -s -o /tmp/corporate_report.xlsx -w 'HTTP %{http_code}, Size: %{size_download} bytes, Time: %{time_total}s' 'http://localhost:3030/api/report/corporateReport/export/excel?size=100000' -H 'X-Tenant-Id: colsanitas' -H 'X-Username: admin' -H 'Accept: application/octet-stream')",
+      "Bash(curl -s -o /tmp/corporate_report.xlsx -w 'HTTP %{http_code}, Size: %{size_download} bytes, Time: %{time_total}s' 'http://localhost:8762/service/colsanitas/telephony-pricing/api/report/corporateReport/export/excel?size=100000' -H 'X-Tenant-Id: colsanitas' -H 'X-Username: admin' -H 'Accept: application/octet-stream')"
     ]
   }
 }
