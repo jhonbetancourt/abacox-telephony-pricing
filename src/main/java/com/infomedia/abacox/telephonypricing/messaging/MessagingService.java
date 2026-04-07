@@ -33,7 +33,8 @@ import java.util.Map;
 @Log4j2
 public class MessagingService {
 
-    private static final String GENERATE_REPORT_QUERY = "GENERATE_REPORT";
+    private static final String GENERATE_REPORT_COMMAND = "GENERATE_REPORT";
+    private static final String REPORT_GENERATED_EVENT = "REPORT_GENERATED";
 
     private final RabbitTemplate rabbitTemplate;
     private final ObjectMapper objectMapper;
@@ -93,7 +94,7 @@ public class MessagingService {
                 .actor(authService.getUsername())
                 .build();
 
-        log.debug("Sending query [{}] to [{}]", type, targetModule);
+        log.debug("Sending query [{}] to [{}] with timeout {}ms", type, targetModule, timeoutMs);
 
         Object response = rabbitTemplate.convertSendAndReceive(
                 RabbitMQConfig.QUERIES_EXCHANGE,
@@ -129,10 +130,6 @@ public class MessagingService {
     public Object handleQuery(InternalMessage request) {
         applyActor(request.getActor());
 
-        if (GENERATE_REPORT_QUERY.equals(request.getType())) {
-            return handleGenerateReport(request);
-        }
-
         log.warn("Received unhandled query [{}] from [{}]", request.getType(), request.getSourceModule());
         return InternalMessage.builder()
                 .sourceModule(moduleName)
@@ -143,50 +140,58 @@ public class MessagingService {
                 .build();
     }
 
-    private InternalMessage handleGenerateReport(InternalMessage request) {
-        try {
-            Map<String, Object> payload = objectMapper.convertValue(request.getPayload(), new TypeReference<>() {});
-            String endpointPath = (String) payload.get("endpointPath");
-            String fileName = (String) payload.getOrDefault("fileName", "report.xlsx");
-            String tenant = (String) payload.get("tenant");
-
-            Map<String, String> parameters = payload.containsKey("parameters")
-                    ? objectMapper.convertValue(payload.get("parameters"), new TypeReference<>() {})
-                    : null;
-
-            log.info("Handling GENERATE_REPORT: endpoint={}, tenant={}", endpointPath, tenant);
-
-            Map<String, Object> result = reportGenerationService.generateReport(
-                    endpointPath, parameters, fileName, tenant);
-
-            return InternalMessage.builder()
-                    .sourceModule(moduleName)
-                    .type(request.getType())
-                    .correlationId(request.getCorrelationId())
-                    .success(true)
-                    .payload(result)
-                    .build();
-
-        } catch (Exception e) {
-            log.error("Error handling GENERATE_REPORT query", e);
-            return InternalMessage.builder()
-                    .sourceModule(moduleName)
-                    .type(request.getType())
-                    .correlationId(request.getCorrelationId())
-                    .success(false)
-                    .payload("Report generation failed: " + e.getMessage())
-                    .build();
-        }
-    }
-
     /**
      * Observes all events from the platform.
+     * Dispatches GENERATE_REPORT commands to the report generation service.
      */
     @RabbitListener(queues = RabbitMQConfig.TELEPHONY_EVENTS_QUEUE)
     public void handleEvent(InternalMessage event) {
         applyActor(event.getActor());
         log.debug("Observed event [{}] from [{}] (tenant: {}, actor: {})",
                 event.getType(), event.getSourceModule(), event.getTenant(), event.getActor());
+
+        if (GENERATE_REPORT_COMMAND.equals(event.getType())) {
+            handleGenerateReport(event);
+        }
+    }
+
+    private void handleGenerateReport(InternalMessage event) {
+        try {
+            Map<String, Object> payload = objectMapper.convertValue(event.getPayload(), new TypeReference<>() {});
+            String endpointPath = (String) payload.get("endpointPath");
+            String fileName = (String) payload.getOrDefault("fileName", "report.xlsx");
+            String tenant = (String) payload.get("tenant");
+            Number reportId = (Number) payload.get("reportId");
+
+            Map<String, String> parameters = payload.containsKey("parameters")
+                    ? objectMapper.convertValue(payload.get("parameters"), new TypeReference<>() {})
+                    : null;
+
+            log.info("Handling GENERATE_REPORT: endpoint={}, tenant={}, reportId={}", endpointPath, tenant, reportId);
+
+            Map<String, Object> result = reportGenerationService.generateReport(
+                    endpointPath, parameters, fileName, tenant);
+
+            // Include reportId and success flag in the response event
+            result.put("reportId", reportId);
+            result.put("success", true);
+
+            publishEvent(tenant, REPORT_GENERATED_EVENT, result);
+
+        } catch (Exception e) {
+            log.error("Error handling GENERATE_REPORT command", e);
+
+            Map<String, Object> payload = objectMapper.convertValue(event.getPayload(), new TypeReference<>() {});
+            Number reportId = (Number) payload.get("reportId");
+            String tenant = (String) payload.get("tenant");
+
+            Map<String, Object> errorResult = new java.util.LinkedHashMap<>();
+            errorResult.put("reportId", reportId);
+            errorResult.put("success", false);
+            errorResult.put("errorMessage", "Report generation failed: " + e.getMessage());
+
+            publishEvent(tenant, REPORT_GENERATED_EVENT, errorResult);
+        }
     }
 
     /**
