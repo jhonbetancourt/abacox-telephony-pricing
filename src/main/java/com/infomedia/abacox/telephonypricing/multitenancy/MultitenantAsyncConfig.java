@@ -16,5 +16,6 @@ public class MultitenantAsyncConfig implements WebMvcConfigurer {
         executor.setTaskDecorator(new TenantAwareTaskDecorator());
         executor.initialize();
         configurer.setTaskExecutor(executor);
+        configurer.setDefaultTimeout(600_000); // 10 minutes for large exports
     }
 }
