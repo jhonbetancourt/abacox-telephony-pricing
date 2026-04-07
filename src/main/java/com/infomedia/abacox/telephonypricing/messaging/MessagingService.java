@@ -161,7 +161,7 @@ public class MessagingService {
             String endpointPath = (String) payload.get("endpointPath");
             String fileName = (String) payload.getOrDefault("fileName", "report.xlsx");
             String tenant = (String) payload.get("tenant");
-            Number reportId = (Number) payload.get("reportId");
+            String reportId = (String) payload.get("reportId");
 
             Map<String, String> parameters = payload.containsKey("parameters")
                     ? objectMapper.convertValue(payload.get("parameters"), new TypeReference<>() {})
@@ -172,7 +172,6 @@ public class MessagingService {
             Map<String, Object> result = reportGenerationService.generateReport(
                     endpointPath, parameters, fileName, tenant);
 
-            // Include reportId and success flag in the response event
             result.put("reportId", reportId);
             result.put("success", true);
 
@@ -182,7 +181,7 @@ public class MessagingService {
             log.error("Error handling GENERATE_REPORT command", e);
 
             Map<String, Object> payload = objectMapper.convertValue(event.getPayload(), new TypeReference<>() {});
-            Number reportId = (Number) payload.get("reportId");
+            String reportId = (String) payload.get("reportId");
             String tenant = (String) payload.get("tenant");
 
             Map<String, Object> errorResult = new java.util.LinkedHashMap<>();
