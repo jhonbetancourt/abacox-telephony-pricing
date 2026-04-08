@@ -111,11 +111,6 @@ public class GenericExcelGenerator {
                 fields = getFieldsInDeclarationOrder(entityClass, "", null, context, new HashSet<>());
             }
 
-            if (!context.getAlternativeHeaderNames().isEmpty()) {
-                fields.forEach(fieldInfo -> fieldInfo.displayName = context.getAlternativeHeaderNames().getOrDefault(
-                        fieldInfo.displayName, fieldInfo.displayName));
-            }
-
             if (context.getIncludedColumnNames() != null) {
                 final Set<String> finalIncludedNames = context.getIncludedColumnNames();
                 fields = fields.stream()
@@ -126,6 +121,11 @@ public class GenericExcelGenerator {
                 fields = fields.stream()
                         .filter(fieldInfo -> !finalExcludedNames.contains(fieldInfo.displayName))
                         .collect(Collectors.toList());
+            }
+
+            if (!context.getAlternativeHeaderNames().isEmpty()) {
+                fields.forEach(fieldInfo -> fieldInfo.displayName = context.getAlternativeHeaderNames().getOrDefault(
+                        fieldInfo.displayName, fieldInfo.displayName));
             }
 
             fields.sort(Comparator.comparingInt(fi -> fi.order));
@@ -217,11 +217,6 @@ public class GenericExcelGenerator {
                 fields = getFieldsInDeclarationOrder(entityClass, "", null, context, new HashSet<>());
             }
 
-            if (!context.getAlternativeHeaderNames().isEmpty()) {
-                fields.forEach(fieldInfo -> fieldInfo.displayName = context.getAlternativeHeaderNames().getOrDefault(
-                        fieldInfo.displayName, fieldInfo.displayName));
-            }
-
             if (context.getIncludedColumnNames() != null) {
                 final Set<String> finalIncludedNames = context.getIncludedColumnNames();
                 fields = fields.stream()
@@ -232,6 +227,11 @@ public class GenericExcelGenerator {
                 fields = fields.stream()
                         .filter(fieldInfo -> !finalExcludedNames.contains(fieldInfo.displayName))
                         .collect(Collectors.toList());
+            }
+
+            if (!context.getAlternativeHeaderNames().isEmpty()) {
+                fields.forEach(fieldInfo -> fieldInfo.displayName = context.getAlternativeHeaderNames().getOrDefault(
+                        fieldInfo.displayName, fieldInfo.displayName));
             }
 
             fields.sort(Comparator.comparingInt(fi -> fi.order));
