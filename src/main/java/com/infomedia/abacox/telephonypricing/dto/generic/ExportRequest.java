@@ -28,14 +28,28 @@ public class ExportRequest {
         if (sort == null || sort.isEmpty()) {
             return Sort.unsorted();
         }
+        // Spring may split comma-separated "property,direction" into separate list entries,
+        // so rejoin and re-parse as token pairs: property1,direction1,property2,direction2,...
+        String joined = String.join(",", sort);
+        String[] tokens = joined.split(",");
         List<Sort.Order> orders = new ArrayList<>();
-        for (String s : sort) {
-            String[] parts = s.split(",", 2);
-            String property = parts[0].trim();
-            if (property.isEmpty()) continue;
-            Sort.Direction direction = (parts.length > 1 && parts[1].trim().equalsIgnoreCase("desc"))
-                    ? Sort.Direction.DESC : Sort.Direction.ASC;
+        int i = 0;
+        while (i < tokens.length) {
+            String property = tokens[i].trim();
+            if (property.isEmpty() || property.equalsIgnoreCase("asc") || property.equalsIgnoreCase("desc")) {
+                i++;
+                continue;
+            }
+            Sort.Direction direction = Sort.Direction.ASC;
+            if (i + 1 < tokens.length) {
+                String next = tokens[i + 1].trim();
+                if (next.equalsIgnoreCase("asc") || next.equalsIgnoreCase("desc")) {
+                    direction = Sort.Direction.fromString(next);
+                    i++;
+                }
+            }
             orders.add(new Sort.Order(direction, property));
+            i++;
         }
         return orders.isEmpty() ? Sort.unsorted() : Sort.by(orders);
     }
