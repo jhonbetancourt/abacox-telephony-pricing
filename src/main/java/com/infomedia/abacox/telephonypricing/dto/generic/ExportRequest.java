@@ -14,14 +14,14 @@ import java.util.List;
 @Data
 public class ExportRequest {
 
-    @Schema(description = "Maximum number of rows to export", defaultValue = "10000")
+    @Schema(description = "Maximum number of rows to export", defaultValue = "1000000")
     private Integer size;
 
     @ArraySchema(schema = @Schema(description = "Sort expression (format: property,direction)", implementation = String.class))
     private List<String> sort;
 
     public int getMaxRows() {
-        return size != null && size > 0 ? size : 100000;
+        return size != null && size > 0 ? size : 1000000;
     }
 
     public Sort getSortOrder() {
