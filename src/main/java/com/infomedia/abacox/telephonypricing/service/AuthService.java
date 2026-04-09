@@ -9,6 +9,6 @@ public class AuthService {
 
     public String getUsername(){
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        return authentication.getName();
+        return authentication == null ? "anonymousUser" : authentication.getName();
     }
 }
