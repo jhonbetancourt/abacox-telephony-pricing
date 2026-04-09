@@ -1,0 +1,62 @@
+module: telephony-pricing
+permissions:
+  - resource: company
+    actions: [read, create, update, delete]
+    description: Company management
+  - resource: employee
+    actions: [read, create, update, delete]
+    description: Employee management
+  - resource: trunk
+    actions: [read, create, update, delete]
+    description: Trunk management
+  - resource: band
+    actions: [read, create, update, delete]
+    description: Band management
+  - resource: operator
+    actions: [read, create, update, delete]
+    description: Operator management
+  - resource: prefix
+    actions: [read, create, update, delete]
+    description: Prefix management
+  - resource: call-category
+    actions: [read, create, update, delete]
+    description: Call category management
+  - resource: cost-center
+    actions: [read, create, update, delete]
+    description: Cost center management
+  - resource: communication-location
+    actions: [read, create, update, delete]
+    description: Communication location management
+  - resource: extension-range
+    actions: [read, create, update, delete]
+    description: Extension range management
+  - resource: cdr
+    actions: [read, process]
+    description: CDR file management
+  - resource: tp-reports
+    actions: [read, export]
+    description: Telephony pricing reports
+  - resource: tp-dashboard
+    actions: [read]
+    description: Telephony pricing dashboard
+  - resource: trunk-rate
+    actions: [read, create, update, delete]
+    description: Trunk rate management
+  - resource: trunk-rule
+    actions: [read, create, update, delete]
+    description: Trunk rule management
+  - resource: inventory
+    actions: [read, create, update, delete]
+    description: Inventory management
+  - resource: subdivision
+    actions: [read, create, update, delete]
+    description: Subdivision management
+  - resource: job-position
+    actions: [read, create, update, delete]
+    description: Job position management
+  - resource: indicator
+    actions: [read, create, update, delete]
+    description: Indicator management
+  - resource: series
+    actions: [read, create, update, delete]
+    description: Series management
