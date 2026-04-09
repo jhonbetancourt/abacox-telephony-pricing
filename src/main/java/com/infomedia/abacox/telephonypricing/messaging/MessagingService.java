@@ -1,9 +1,7 @@
 package com.infomedia.abacox.telephonypricing.messaging;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.infomedia.abacox.telephonypricing.service.AuthService;
-import com.infomedia.abacox.telephonypricing.service.ReportGenerationService;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -13,7 +11,6 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.util.Collections;
-import java.util.Map;
 
 /**
  * Central service for internal inter-module communication over RabbitMQ.
@@ -33,25 +30,19 @@ import java.util.Map;
 @Log4j2
 public class MessagingService {
 
-    private static final String GENERATE_REPORT_COMMAND = "GENERATE_REPORT";
-    private static final String REPORT_GENERATED_EVENT = "REPORT_GENERATED";
-
     private final RabbitTemplate rabbitTemplate;
     private final ObjectMapper objectMapper;
     private final String moduleName;
     private final AuthService authService;
-    private final ReportGenerationService reportGenerationService;
 
     public MessagingService(RabbitTemplate rabbitTemplate,
                             ObjectMapper objectMapper,
                             @Value("${spring.application.name}") String moduleName,
-                            AuthService authService,
-                            ReportGenerationService reportGenerationService) {
+                            AuthService authService) {
         this.rabbitTemplate = rabbitTemplate;
         this.objectMapper = objectMapper;
         this.moduleName = moduleName;
         this.authService = authService;
-        this.reportGenerationService = reportGenerationService;
     }
 
     /**
@@ -142,55 +133,12 @@ public class MessagingService {
 
     /**
      * Observes all events from the platform.
-     * Dispatches GENERATE_REPORT commands to the report generation service.
      */
     @RabbitListener(queues = RabbitMQConfig.TELEPHONY_EVENTS_QUEUE)
     public void handleEvent(InternalMessage event) {
         applyActor(event.getActor());
         log.debug("Observed event [{}] from [{}] (tenant: {}, actor: {})",
                 event.getType(), event.getSourceModule(), event.getTenant(), event.getActor());
-
-        if (GENERATE_REPORT_COMMAND.equals(event.getType())) {
-            handleGenerateReport(event);
-        }
-    }
-
-    private void handleGenerateReport(InternalMessage event) {
-        try {
-            Map<String, Object> payload = objectMapper.convertValue(event.getPayload(), new TypeReference<>() {});
-            String endpointPath = (String) payload.get("endpointPath");
-            String fileName = (String) payload.getOrDefault("fileName", "report.xlsx");
-            String tenant = (String) payload.get("tenant");
-            String reportId = (String) payload.get("reportId");
-
-            Map<String, String> parameters = payload.containsKey("parameters")
-                    ? objectMapper.convertValue(payload.get("parameters"), new TypeReference<>() {})
-                    : null;
-
-            log.info("Handling GENERATE_REPORT: endpoint={}, tenant={}, reportId={}", endpointPath, tenant, reportId);
-
-            Map<String, Object> result = reportGenerationService.generateReport(
-                    endpointPath, parameters, fileName, tenant);
-
-            result.put("reportId", reportId);
-            result.put("success", true);
-
-            publishEvent(tenant, REPORT_GENERATED_EVENT, result);
-
-        } catch (Exception e) {
-            log.error("Error handling GENERATE_REPORT command", e);
-
-            Map<String, Object> payload = objectMapper.convertValue(event.getPayload(), new TypeReference<>() {});
-            String reportId = (String) payload.get("reportId");
-            String tenant = (String) payload.get("tenant");
-
-            Map<String, Object> errorResult = new java.util.LinkedHashMap<>();
-            errorResult.put("reportId", reportId);
-            errorResult.put("success", false);
-            errorResult.put("errorMessage", "Report generation failed: " + e.getMessage());
-
-            publishEvent(tenant, REPORT_GENERATED_EVENT, errorResult);
-        }
     }
 
     /**
