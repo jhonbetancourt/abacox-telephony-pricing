@@ -111,21 +111,25 @@ public class GenericExcelGenerator {
                 fields = getFieldsInDeclarationOrder(entityClass, "", null, context, new HashSet<>());
             }
 
+            final String childPrefix = context.getFlattenedCollectionFieldName() != null
+                    ? formatFieldName(context.getFlattenedCollectionFieldName()) + " - "
+                    : null;
+
             if (context.getIncludedColumnNames() != null) {
                 final Set<String> finalIncludedNames = context.getIncludedColumnNames();
                 fields = fields.stream()
-                        .filter(fieldInfo -> finalIncludedNames.contains(fieldInfo.displayName))
+                        .filter(fieldInfo -> matchesColumnName(fieldInfo, finalIncludedNames, childPrefix))
                         .collect(Collectors.toList());
             } else if (!context.getExcludedColumnNames().isEmpty()) {
                 final Set<String> finalExcludedNames = context.getExcludedColumnNames();
                 fields = fields.stream()
-                        .filter(fieldInfo -> !finalExcludedNames.contains(fieldInfo.displayName))
+                        .filter(fieldInfo -> !matchesColumnName(fieldInfo, finalExcludedNames, childPrefix))
                         .collect(Collectors.toList());
             }
 
             if (!context.getAlternativeHeaderNames().isEmpty()) {
-                fields.forEach(fieldInfo -> fieldInfo.displayName = context.getAlternativeHeaderNames().getOrDefault(
-                        fieldInfo.displayName, fieldInfo.displayName));
+                fields.forEach(fieldInfo -> fieldInfo.displayName = resolveAlternativeHeader(
+                        fieldInfo, context.getAlternativeHeaderNames(), childPrefix));
             }
 
             fields.sort(Comparator.comparingInt(fi -> fi.order));
@@ -217,21 +221,25 @@ public class GenericExcelGenerator {
                 fields = getFieldsInDeclarationOrder(entityClass, "", null, context, new HashSet<>());
             }
 
+            final String childPrefix = context.getFlattenedCollectionFieldName() != null
+                    ? formatFieldName(context.getFlattenedCollectionFieldName()) + " - "
+                    : null;
+
             if (context.getIncludedColumnNames() != null) {
                 final Set<String> finalIncludedNames = context.getIncludedColumnNames();
                 fields = fields.stream()
-                        .filter(fieldInfo -> finalIncludedNames.contains(fieldInfo.displayName))
+                        .filter(fieldInfo -> matchesColumnName(fieldInfo, finalIncludedNames, childPrefix))
                         .collect(Collectors.toList());
             } else if (!context.getExcludedColumnNames().isEmpty()) {
                 final Set<String> finalExcludedNames = context.getExcludedColumnNames();
                 fields = fields.stream()
-                        .filter(fieldInfo -> !finalExcludedNames.contains(fieldInfo.displayName))
+                        .filter(fieldInfo -> !matchesColumnName(fieldInfo, finalExcludedNames, childPrefix))
                         .collect(Collectors.toList());
             }
 
             if (!context.getAlternativeHeaderNames().isEmpty()) {
-                fields.forEach(fieldInfo -> fieldInfo.displayName = context.getAlternativeHeaderNames().getOrDefault(
-                        fieldInfo.displayName, fieldInfo.displayName));
+                fields.forEach(fieldInfo -> fieldInfo.displayName = resolveAlternativeHeader(
+                        fieldInfo, context.getAlternativeHeaderNames(), childPrefix));
             }
 
             fields.sort(Comparator.comparingInt(fi -> fi.order));
@@ -653,6 +661,34 @@ public class GenericExcelGenerator {
         List<FieldInfo> allFields = new ArrayList<>(rootFields);
         allFields.addAll(childFields);
         return allFields;
+    }
+
+    /**
+     * Match a field's display name against a set of column names.
+     * For flattened child fields, also matches against the unprefixed name (the same name shown in the header).
+     */
+    private static boolean matchesColumnName(FieldInfo fieldInfo, Set<String> columnNames, String childPrefix) {
+        if (columnNames.contains(fieldInfo.displayName)) {
+            return true;
+        }
+        if (childPrefix != null && fieldInfo.isFlattenedChildField && fieldInfo.displayName.startsWith(childPrefix)) {
+            return columnNames.contains(fieldInfo.displayName.substring(childPrefix.length()));
+        }
+        return false;
+    }
+
+    /**
+     * Resolve an alternative header name for a field, trying both the prefixed and unprefixed display name.
+     */
+    private static String resolveAlternativeHeader(FieldInfo fieldInfo, Map<String, String> alternativeHeaders, String childPrefix) {
+        String alt = alternativeHeaders.get(fieldInfo.displayName);
+        if (alt != null) return alt;
+        if (childPrefix != null && fieldInfo.isFlattenedChildField && fieldInfo.displayName.startsWith(childPrefix)) {
+            String unprefixed = fieldInfo.displayName.substring(childPrefix.length());
+            alt = alternativeHeaders.get(unprefixed);
+            if (alt != null) return alt;
+        }
+        return fieldInfo.displayName;
     }
 
     private static Field findField(Class<?> clazz, String fieldName) {
