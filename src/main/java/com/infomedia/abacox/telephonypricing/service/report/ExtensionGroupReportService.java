@@ -1,5 +1,6 @@
 package com.infomedia.abacox.telephonypricing.service.report;
 
+import com.infomedia.abacox.telephonypricing.component.export.excel.ExcelGeneratorBuilder;
 import com.infomedia.abacox.telephonypricing.component.modeltools.ModelConverter;
 import com.infomedia.abacox.telephonypricing.component.utils.SortingUtils;
 import com.infomedia.abacox.telephonypricing.db.entity.ExtensionList;
@@ -15,6 +16,8 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.IOException;
+import java.io.OutputStream;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -116,5 +119,28 @@ public class ExtensionGroupReportService {
 
         boolean hasNext = end < groupDtos.size();
         return new SliceImpl<>(pageContent, pageable, hasNext);
+    }
+
+    public void exportExcelExtensionGroupReport(
+            LocalDateTime startDate, LocalDateTime endDate,
+            Long groupId, String voicemailNumber, List<Long> operatorIds,
+            OutputStream outputStream, ExcelGeneratorBuilder builder) {
+        List<ExtensionGroupDto> allGroups = generateExtensionGroupReport(
+                startDate, endDate, groupId, voicemailNumber, operatorIds, Pageable.unpaged())
+                .getContent();
+        try {
+            builder.withFlattenedCollection("items")
+                    .withIncludedFields(
+                            "groupName",
+                            "items.employeeId", "items.employeeName", "items.extension",
+                            "items.subdivisionName", "items.city",
+                            "items.incomingCount", "items.outgoingCount", "items.voicemailCount",
+                            "items.total", "items.percent")
+                    .generateStreaming(outputStream, (page, size) ->
+                            page == 0 ? allGroups : Collections.emptyList(),
+                    allGroups.size() + 1);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 }

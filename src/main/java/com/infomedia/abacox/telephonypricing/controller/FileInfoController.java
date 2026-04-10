@@ -2,9 +2,9 @@ package com.infomedia.abacox.telephonypricing.controller;
 
 import com.infomedia.abacox.telephonypricing.component.modeltools.ModelConverter;
 import com.infomedia.abacox.telephonypricing.db.entity.FileInfo;
-import com.infomedia.abacox.telephonypricing.dto.fileinfo.CreateFileInfo;
 import com.infomedia.abacox.telephonypricing.dto.fileinfo.FileInfoDto;
-import com.infomedia.abacox.telephonypricing.dto.fileinfo.UpdateFileInfo;
+import com.infomedia.abacox.telephonypricing.dto.generic.ExcelRequest;
+import com.infomedia.abacox.telephonypricing.dto.generic.ExportRequest;
 import com.infomedia.abacox.telephonypricing.dto.generic.FilterRequest;
 import com.infomedia.abacox.telephonypricing.service.FileInfoService;
 import com.turkraft.springfilter.boot.Filter;
@@ -12,14 +12,16 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 @RequiredArgsConstructor
 @RestController
@@ -45,5 +47,22 @@ public class FileInfoController {
     @GetMapping(value = "{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     private FileInfoDto get(@PathVariable("id") Long id) {
         return modelConverter.map(fileInfoService.get(id), FileInfoDto.class);
+    }
+
+    @GetMapping(value = "/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
+    public ResponseEntity<StreamingResponseBody> exportExcel(
+            @Parameter(hidden = true) @Filter Specification<FileInfo> spec,
+            @ParameterObject FilterRequest filterRequest,
+            @ParameterObject ExportRequest exportRequest,
+            @ParameterObject ExcelRequest excelRequest) {
+
+        StreamingResponseBody body = out ->
+                fileInfoService.exportExcelStreaming(spec, exportRequest.getSortOrder(),
+                        exportRequest.getMaxRows(), out, excelRequest.toExcelGeneratorBuilder());
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=file_info.xlsx")
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .body(body);
     }
 }
