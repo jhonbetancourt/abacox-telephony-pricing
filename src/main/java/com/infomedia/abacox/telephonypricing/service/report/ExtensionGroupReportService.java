@@ -110,6 +110,10 @@ public class ExtensionGroupReportService {
 
         SortingUtils.sort(groupDtos, pageable.getSort(), Sort.by("groupName"));
 
+        if (pageable.isUnpaged()) {
+            return new SliceImpl<>(groupDtos, pageable, false);
+        }
+
         // 6. Paginate the group list using SliceImpl
         int start = (int) pageable.getOffset();
         int end = Math.min((start + pageable.getPageSize()), groupDtos.size());
