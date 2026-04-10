@@ -7,8 +7,10 @@ import com.infomedia.abacox.telephonypricing.dto.specialratevalue.CreateSpecialR
 import com.infomedia.abacox.telephonypricing.dto.specialratevalue.UpdateSpecialRateValue;
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivationDto;
 import com.infomedia.abacox.telephonypricing.db.entity.SpecialRateValue;
+import com.infomedia.abacox.telephonypricing.security.annotation.RequiresPermission;
 import com.infomedia.abacox.telephonypricing.service.SpecialRateValueService;
 import com.turkraft.springfilter.boot.Filter;
+import io.swagger.v3.oas.annotations.Operation;
 import com.infomedia.abacox.telephonypricing.dto.generic.ExcelRequest;
 import com.infomedia.abacox.telephonypricing.dto.generic.ExportRequest;
 import com.infomedia.abacox.telephonypricing.dto.generic.FilterRequest;
@@ -43,6 +45,8 @@ public class SpecialRateValueController {
     private final SpecialRateValueService specialRateValueService;
     private final ModelConverter modelConverter;
 
+    @RequiresPermission("pricing:read")
+    @Operation(summary = "List special rate values")
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public Slice<SpecialRateValueDto> find(@Parameter(hidden = true) @Filter Specification<SpecialRateValue> spec
             , @Parameter(hidden = true) Pageable pageable
@@ -51,26 +55,36 @@ public class SpecialRateValueController {
         return modelConverter.mapSlice(specialRateValueService.find(spec, pageable), SpecialRateValueDto.class);
     }
 
+    @RequiresPermission("pricing:create")
+    @Operation(summary = "Create a special rate value")
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public SpecialRateValueDto create(@Valid @RequestBody CreateSpecialRateValue createSpecialRateValue) {
         return modelConverter.map(specialRateValueService.create(createSpecialRateValue), SpecialRateValueDto.class);
     }
 
+    @RequiresPermission("pricing:update")
+    @Operation(summary = "Update a special rate value")
     @PatchMapping(value = "{id}", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public SpecialRateValueDto update(@PathVariable("id") Long id, @Valid @RequestBody UpdateSpecialRateValue uDto) {
         return modelConverter.map(specialRateValueService.update(id, uDto), SpecialRateValueDto.class);
     }
 
+    @RequiresPermission("pricing:update")
+    @Operation(summary = "Change special rate value activation status")
     @PatchMapping(value = "/status/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public SpecialRateValueDto activate(@PathVariable("id") Long id, @Valid @RequestBody ActivationDto activationDto) {
         return modelConverter.map(specialRateValueService.changeActivation(id, activationDto.getActive()), SpecialRateValueDto.class);
     }
 
+    @RequiresPermission("pricing:read")
+    @Operation(summary = "Get special rate value by ID")
     @GetMapping(value = "{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public SpecialRateValueDto get(@PathVariable("id") Long id) {
         return modelConverter.map(specialRateValueService.get(id), SpecialRateValueDto.class);
     }
 
+    @RequiresPermission("pricing:read")
+    @Operation(summary = "Export special rate values to Excel")
     @GetMapping(value = "/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
     public ResponseEntity<StreamingResponseBody> exportExcel(@Parameter(hidden = true) @Filter Specification<SpecialRateValue> spec,
             @ParameterObject FilterRequest filterRequest,

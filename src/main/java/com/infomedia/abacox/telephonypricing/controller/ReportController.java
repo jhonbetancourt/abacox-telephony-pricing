@@ -12,6 +12,7 @@ import com.infomedia.abacox.telephonypricing.dto.generic.ExcelRequest;
 import com.infomedia.abacox.telephonypricing.dto.generic.ExportRequest;
 import com.infomedia.abacox.telephonypricing.dto.generic.FilterRequest;
 import com.infomedia.abacox.telephonypricing.model.report.UnassignedCallGroupingType;
+import com.infomedia.abacox.telephonypricing.security.annotation.RequiresPermission;
 import com.infomedia.abacox.telephonypricing.service.report.*;
 import com.turkraft.springfilter.boot.Filter;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -57,6 +58,7 @@ public class ReportController {
 
         // ── failedCallRecords ──
 
+        @RequiresPermission("reports:read")
         @GetMapping(value = "failedCallRecords", produces = MediaType.APPLICATION_JSON_VALUE)
         public Slice<FailedCallRecordDto> getFailedCallRecords(@Parameter(hidden = true) Pageable pageable,
                         @Parameter(hidden = true) @Filter Specification<FailedCallRecord> spec,
@@ -64,6 +66,7 @@ public class ReportController {
                 return callRecordReportService.generateFailedCallRecordsReport(spec, pageable);
         }
 
+        @RequiresPermission("reports:export")
         @GetMapping(value = "failedCallRecords/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
         public ResponseEntity<StreamingResponseBody> exportExcelFailedCallRecords(
                         @Parameter(hidden = true) @Filter Specification<FailedCallRecord> spec,
@@ -83,6 +86,7 @@ public class ReportController {
 
         // ── callRecords ──
 
+        @RequiresPermission("reports:read")
         @GetMapping(value = "callRecords", produces = MediaType.APPLICATION_JSON_VALUE)
         public Slice<CallRecordDto> getCallRecords(@Parameter(hidden = true) Pageable pageable,
                         @Parameter(hidden = true) @Filter Specification<CallRecord> spec,
@@ -90,6 +94,7 @@ public class ReportController {
                 return callRecordReportService.generateCallRecordsReport(spec, pageable);
         }
 
+        @RequiresPermission("reports:export")
         @GetMapping(value = "callRecords/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
         public ResponseEntity<StreamingResponseBody> exportExcelCallRecords(
                         @Parameter(hidden = true) @Filter Specification<CallRecord> spec,
@@ -108,6 +113,7 @@ public class ReportController {
 
         // ── corporateReport ──
 
+        @RequiresPermission("reports:read")
         @GetMapping(value = "corporateReport", produces = MediaType.APPLICATION_JSON_VALUE)
         public Slice<CorporateReportDto> getCorporateReport(@Parameter(hidden = true) Pageable pageable,
                         @Parameter(hidden = true) @Filter Specification<CorporateReportView> spec,
@@ -115,6 +121,7 @@ public class ReportController {
                 return callRecordReportService.generateCorporateReport(spec, pageable);
         }
 
+        @RequiresPermission("reports:export")
         @GetMapping(value = "corporateReport/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
         public ResponseEntity<StreamingResponseBody> exportExcelCorporateReport(
                         @Parameter(hidden = true) @Filter Specification<CorporateReportView> spec,
@@ -133,6 +140,7 @@ public class ReportController {
 
         // ── employeeActivity ──
 
+        @RequiresPermission("reports:read")
         @GetMapping(value = "employeeActivity", produces = MediaType.APPLICATION_JSON_VALUE)
         public Slice<EmployeeActivityReportDto> getEmployeeActivityReport(@Parameter(hidden = true) Pageable pageable,
                         @ParameterObject PageableRequest pageableRequest,
@@ -146,6 +154,7 @@ public class ReportController {
                                 subdivisionId, costCenterId, startDate, endDate, pageable);
         }
 
+        @RequiresPermission("reports:export")
         @GetMapping(value = "employeeActivity/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
         public ResponseEntity<StreamingResponseBody> exportExcelEmployeeActivityReport(
                         @RequestParam(required = false) String employeeName,
@@ -171,6 +180,7 @@ public class ReportController {
 
         // ── employeeCall ──
 
+        @RequiresPermission("reports:read")
         @GetMapping(value = "employeeCall", produces = MediaType.APPLICATION_JSON_VALUE)
         public Slice<EmployeeCallReportDto> getEmployeeCallReport(@Parameter(hidden = true) Pageable pageable,
                         @ParameterObject PageableRequest pageableRequest,
@@ -183,6 +193,7 @@ public class ReportController {
                                 pageable);
         }
 
+        @RequiresPermission("reports:export")
         @GetMapping(value = "employeeCall/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
         public ResponseEntity<StreamingResponseBody> exportExcelEmployeeCallReport(
                         @RequestParam(required = false) String employeeName,
@@ -205,6 +216,7 @@ public class ReportController {
 
         // ── unassignedCall ──
 
+        @RequiresPermission("reports:read")
         @GetMapping(value = "unassignedCall", produces = MediaType.APPLICATION_JSON_VALUE)
         public Slice<UnassignedCallReportDto> getUnassignedCallReport(@Parameter(hidden = true) Pageable pageable,
                         @ParameterObject PageableRequest pageableRequest,
@@ -216,6 +228,7 @@ public class ReportController {
                                 pageable);
         }
 
+        @RequiresPermission("reports:export")
         @GetMapping(value = "unassignedCall/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
         public ResponseEntity<StreamingResponseBody> exportExcelUnassignedCallReport(
                         @RequestParam(required = false) String extension,
@@ -238,6 +251,7 @@ public class ReportController {
 
         // ── processingFailure ──
 
+        @RequiresPermission("reports:read")
         @GetMapping(value = "processingFailure", produces = MediaType.APPLICATION_JSON_VALUE)
         public Slice<ProcessingFailureReportDto> getProcessingFailureReport(@Parameter(hidden = true) Pageable pageable,
                         @ParameterObject PageableRequest pageableRequest,
@@ -249,6 +263,7 @@ public class ReportController {
                                 pageable);
         }
 
+        @RequiresPermission("reports:export")
         @GetMapping(value = "processingFailure/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
         public ResponseEntity<StreamingResponseBody> exportExcelProcessingFailureReport(
                         @RequestParam(required = false) String directory,
@@ -271,6 +286,7 @@ public class ReportController {
 
         // ── missedCallEmployee ──
 
+        @RequiresPermission("reports:read")
         @GetMapping(value = "missedCallEmployee", produces = MediaType.APPLICATION_JSON_VALUE)
         public Slice<MissedCallEmployeeReportDto> getMissedCallEmployeeReport(
                         @Parameter(hidden = true) Pageable pageable, @ParameterObject PageableRequest pageableRequest,
@@ -282,6 +298,7 @@ public class ReportController {
                                 minRingCount, pageable);
         }
 
+        @RequiresPermission("reports:export")
         @GetMapping(value = "missedCallEmployee/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
         public ResponseEntity<StreamingResponseBody> exportExcelMissedCallEmployeeReport(
                         @RequestParam(required = false) String employeeName,
@@ -304,6 +321,7 @@ public class ReportController {
 
         // ── unusedExtension ──
 
+        @RequiresPermission("reports:read")
         @GetMapping(value = "unusedExtension", produces = MediaType.APPLICATION_JSON_VALUE)
         public Slice<UnusedExtensionReportDto> getUnusedExtensionReport(@Parameter(hidden = true) Pageable pageable,
                         @ParameterObject PageableRequest pageableRequest,
@@ -315,6 +333,7 @@ public class ReportController {
                                 pageable);
         }
 
+        @RequiresPermission("reports:export")
         @GetMapping(value = "unusedExtension/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
         public ResponseEntity<StreamingResponseBody> exportExcelUnusedExtensionReport(
                         @RequestParam(required = false) String employeeName,
@@ -337,6 +356,7 @@ public class ReportController {
 
         // ── subdivisionUsage ──
 
+        @RequiresPermission("reports:read")
         @GetMapping(value = "subdivisionUsage", produces = MediaType.APPLICATION_JSON_VALUE)
         public Slice<SubdivisionUsageReportDto> getSubdivisionUsageReport(@Parameter(hidden = true) Pageable pageable,
                         @ParameterObject PageableRequest pageableRequest,
@@ -347,6 +367,7 @@ public class ReportController {
                                 pageable);
         }
 
+        @RequiresPermission("reports:export")
         @GetMapping(value = "subdivisionUsage/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
         public ResponseEntity<StreamingResponseBody> exportExcelSubdivisionUsageReport(
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
@@ -368,6 +389,7 @@ public class ReportController {
 
         // ── subdivisionUsageByType ──
 
+        @RequiresPermission("reports:read")
         @GetMapping(value = "subdivisionUsageByType", produces = MediaType.APPLICATION_JSON_VALUE)
         public Slice<SubdivisionUsageByTypeReportDto> getSubdivisionUsageByTypeReport(
                         @Parameter(hidden = true) Pageable pageable, @ParameterObject PageableRequest pageableRequest,
@@ -378,6 +400,7 @@ public class ReportController {
                                 parentSubdivisionId, pageable);
         }
 
+        @RequiresPermission("reports:export")
         @GetMapping(value = "subdivisionUsageByType/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
         public ResponseEntity<StreamingResponseBody> exportExcelSubdivisionUsageByTypeReport(
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
@@ -399,6 +422,7 @@ public class ReportController {
 
         // ── telephonyTypeUsage ──
 
+        @RequiresPermission("reports:read")
         @GetMapping(value = "telephonyTypeUsage", produces = MediaType.APPLICATION_JSON_VALUE)
         public Slice<TelephonyTypeUsageGroupDto> getTelephonyTypeUsageReport(
                         @Parameter(hidden = true) Pageable pageable, @ParameterObject PageableRequest pageableRequest,
@@ -407,6 +431,7 @@ public class ReportController {
                 return telephonyUsageReportService.generateTelephonyTypeUsageReport(startDate, endDate, pageable);
         }
 
+        @RequiresPermission("reports:export")
         @GetMapping(value = "telephonyTypeUsage/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
         public ResponseEntity<StreamingResponseBody> exportExcelTelephonyTypeUsageReport(
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
@@ -424,6 +449,7 @@ public class ReportController {
 
         // ── monthlyTelephonyTypeUsage ──
 
+        @RequiresPermission("reports:read")
         @GetMapping(value = "monthlyTelephonyTypeUsage", produces = MediaType.APPLICATION_JSON_VALUE)
         public Slice<MonthlyTelephonyTypeUsageGroupDto> getMonthlyTelephonyTypeUsageReport(
                         @Parameter(hidden = true) Pageable pageable, @ParameterObject PageableRequest pageableRequest,
@@ -433,6 +459,7 @@ public class ReportController {
                                 pageable);
         }
 
+        @RequiresPermission("reports:export")
         @GetMapping(value = "monthlyTelephonyTypeUsage/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
         public ResponseEntity<StreamingResponseBody> exportExcelMonthlyTelephonyTypeUsageReport(
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
@@ -450,6 +477,7 @@ public class ReportController {
 
         // ── costCenterUsage ──
 
+        @RequiresPermission("reports:read")
         @GetMapping(value = "costCenterUsage", produces = MediaType.APPLICATION_JSON_VALUE)
         public Slice<CostCenterUsageReportDto> getCostCenterUsageReport(
                         @Parameter(hidden = true) Pageable pageable,
@@ -461,6 +489,7 @@ public class ReportController {
                                 pageable);
         }
 
+        @RequiresPermission("reports:export")
         @GetMapping(value = "costCenterUsage/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
         public ResponseEntity<StreamingResponseBody> exportExcelCostCenterUsageReport(
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
@@ -479,6 +508,7 @@ public class ReportController {
 
         // ── employeeAuthCodeUsage ──
 
+        @RequiresPermission("reports:read")
         @GetMapping(value = "employeeAuthCodeUsage", produces = MediaType.APPLICATION_JSON_VALUE)
         public Slice<EmployeeAuthCodeUsageReportDto> getEmployeeAuthCodeUsageReport(
                         @Parameter(hidden = true) Pageable pageable, @ParameterObject PageableRequest pageableRequest,
@@ -487,6 +517,7 @@ public class ReportController {
                 return employeeReportService.generateEmployeeAuthCodeUsageReport(startDate, endDate, pageable);
         }
 
+        @RequiresPermission("reports:export")
         @GetMapping(value = "employeeAuthCodeUsage/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
         public ResponseEntity<StreamingResponseBody> exportExcelEmployeeAuthCodeUsageReport(
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
@@ -506,6 +537,7 @@ public class ReportController {
 
         // ── monthlySubdivisionUsage ──
 
+        @RequiresPermission("reports:read")
         @GetMapping(value = "monthlySubdivisionUsage", produces = MediaType.APPLICATION_JSON_VALUE)
         public Slice<MonthlySubdivisionUsageReportDto> getMonthlySubdivisionUsageReport(
                         @Parameter(hidden = true) Pageable pageable, @ParameterObject PageableRequest pageableRequest,
@@ -517,6 +549,7 @@ public class ReportController {
                                 pageable);
         }
 
+        @RequiresPermission("reports:export")
         @GetMapping(value = "monthlySubdivisionUsage/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
         public ResponseEntity<StreamingResponseBody> exportExcelMonthlySubdivisionUsageReport(
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
@@ -535,6 +568,7 @@ public class ReportController {
 
         // ── dialedNumberUsage ──
 
+        @RequiresPermission("reports:read")
         @GetMapping(value = "dialedNumberUsage", produces = MediaType.APPLICATION_JSON_VALUE)
         public Slice<DialedNumberUsageReportDto> getDialedNumberUsageReport(@Parameter(hidden = true) Pageable pageable,
                         @ParameterObject PageableRequest pageableRequest,
@@ -543,6 +577,7 @@ public class ReportController {
                 return telephonyUsageReportService.generateDialedNumberUsageReport(startDate, endDate, pageable);
         }
 
+        @RequiresPermission("reports:export")
         @GetMapping(value = "dialedNumberUsage/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
         public ResponseEntity<StreamingResponseBody> exportExcelDialedNumberUsageReport(
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
@@ -562,6 +597,7 @@ public class ReportController {
 
         // ── destinationUsage ──
 
+        @RequiresPermission("reports:read")
         @GetMapping(value = "destinationUsage", produces = MediaType.APPLICATION_JSON_VALUE)
         public Slice<DestinationUsageReportDto> getDestinationUsageReport(@Parameter(hidden = true) Pageable pageable,
                         @ParameterObject PageableRequest pageableRequest,
@@ -570,6 +606,7 @@ public class ReportController {
                 return telephonyUsageReportService.generateDestinationUsageReport(startDate, endDate, pageable);
         }
 
+        @RequiresPermission("reports:export")
         @GetMapping(value = "destinationUsage/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
         public ResponseEntity<StreamingResponseBody> exportExcelDestinationUsageReport(
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
@@ -589,6 +626,7 @@ public class ReportController {
 
         // ── highestConsumptionEmployee ──
 
+        @RequiresPermission("reports:read")
         @GetMapping(value = "highestConsumptionEmployee", produces = MediaType.APPLICATION_JSON_VALUE)
         public Slice<HighestConsumptionEmployeeReportDto> getHighestConsumptionEmployeeReport(
                         @Parameter(hidden = true) Pageable pageable, @ParameterObject PageableRequest pageableRequest,
@@ -597,6 +635,7 @@ public class ReportController {
                 return employeeReportService.generateHighestConsumptionEmployeeReport(startDate, endDate, pageable);
         }
 
+        @RequiresPermission("reports:export")
         @GetMapping(value = "highestConsumptionEmployee/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
         public ResponseEntity<StreamingResponseBody> exportExcelHighestConsumptionEmployeeReport(
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
@@ -616,6 +655,7 @@ public class ReportController {
 
         // ── conferenceCalls ──
 
+        @RequiresPermission("reports:read")
         @GetMapping(value = "conferenceCalls", produces = MediaType.APPLICATION_JSON_VALUE)
         public Slice<ConferenceGroupDto> getConferenceCallReport(@Parameter(hidden = true) Pageable pageable,
                         @ParameterObject PageableRequest pageableRequest,
@@ -627,6 +667,7 @@ public class ReportController {
                                 employeeName, pageable);
         }
 
+        @RequiresPermission("reports:export")
         @GetMapping(value = "conferenceCalls/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
         public ResponseEntity<StreamingResponseBody> exportExcelConferenceCallReport(
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
@@ -645,6 +686,7 @@ public class ReportController {
 
         // ── extensionGroup ──
 
+        @RequiresPermission("reports:read")
         @GetMapping(value = "extensionGroup", produces = MediaType.APPLICATION_JSON_VALUE)
         public Slice<ExtensionGroupDto> getExtensionGroupReport(
                         @Parameter(hidden = true) Pageable pageable,
@@ -658,6 +700,7 @@ public class ReportController {
                                 startDate, endDate, groupId, voicemailNumber, operatorIds, pageable);
         }
 
+        @RequiresPermission("reports:export")
         @GetMapping(value = "extensionGroup/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
         public ResponseEntity<StreamingResponseBody> exportExcelExtensionGroupReport(
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,

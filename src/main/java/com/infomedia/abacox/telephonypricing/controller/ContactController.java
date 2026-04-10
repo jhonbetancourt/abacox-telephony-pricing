@@ -7,8 +7,10 @@ import com.infomedia.abacox.telephonypricing.dto.contact.CreateContact;
 import com.infomedia.abacox.telephonypricing.dto.contact.UpdateContact;
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivationDto;
 import com.infomedia.abacox.telephonypricing.db.entity.Contact;
+import com.infomedia.abacox.telephonypricing.security.annotation.RequiresPermission;
 import com.infomedia.abacox.telephonypricing.service.ContactService;
 import com.turkraft.springfilter.boot.Filter;
+import io.swagger.v3.oas.annotations.Operation;
 import com.infomedia.abacox.telephonypricing.dto.generic.ExcelRequest;
 import com.infomedia.abacox.telephonypricing.dto.generic.ExportRequest;
 import com.infomedia.abacox.telephonypricing.dto.generic.FilterRequest;
@@ -43,6 +45,8 @@ public class ContactController {
     private final ContactService contactService;
     private final ModelConverter modelConverter;
 
+    @RequiresPermission("company:read")
+    @Operation(summary = "List contacts")
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public Slice<ContactDto> find(@Parameter(hidden = true) @Filter Specification<Contact> spec
             , @Parameter(hidden = true) Pageable pageable
@@ -51,26 +55,36 @@ public class ContactController {
         return modelConverter.mapSlice(contactService.find(spec, pageable), ContactDto.class);
     }
 
+    @RequiresPermission("company:create")
+    @Operation(summary = "Create a contact")
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public ContactDto create(@Valid @RequestBody CreateContact createContact) {
         return modelConverter.map(contactService.create(createContact), ContactDto.class);
     }
 
+    @RequiresPermission("company:update")
+    @Operation(summary = "Update a contact")
     @PatchMapping(value = "{id}", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public ContactDto update(@PathVariable("id") Long id, @Valid @RequestBody UpdateContact uDto) {
         return modelConverter.map(contactService.update(id, uDto), ContactDto.class);
     }
 
+    @RequiresPermission("company:update")
+    @Operation(summary = "Change contact activation status")
     @PatchMapping(value = "/status/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public ContactDto activate(@PathVariable("id") Long id, @Valid @RequestBody ActivationDto activationDto) {
         return modelConverter.map(contactService.changeActivation(id, activationDto.getActive()), ContactDto.class);
     }
 
+    @RequiresPermission("company:read")
+    @Operation(summary = "Get contact by ID")
     @GetMapping(value = "{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public ContactDto get(@PathVariable("id") Long id) {
         return modelConverter.map(contactService.get(id), ContactDto.class);
     }
 
+    @RequiresPermission("company:read")
+    @Operation(summary = "Export contacts to Excel")
     @GetMapping(value = "/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
     public ResponseEntity<StreamingResponseBody> exportExcel(@Parameter(hidden = true) @Filter Specification<Contact> spec,
             @ParameterObject FilterRequest filterRequest,

@@ -5,6 +5,8 @@ import com.infomedia.abacox.telephonypricing.component.configmanager.ConfigServi
 import com.infomedia.abacox.telephonypricing.component.modeltools.ModelConverter;
 import com.infomedia.abacox.telephonypricing.dto.configuration.ConfigurationDto;
 import com.infomedia.abacox.telephonypricing.dto.configuration.UpdateConfigurationDto;
+import com.infomedia.abacox.telephonypricing.security.annotation.RequiresPermission;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -29,12 +31,16 @@ public class ConfigController {
     private final ConfigService configService;
     private final ModelConverter modelConverter;
 
+    @RequiresPermission("configuration:read")
+    @Operation(summary = "Get CDR configuration")
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public ConfigurationDto getConfiguration() {
         Map<String, Object> configMap = configService.getConfigurationMap(ConfigGroup.CDR);
         return modelConverter.fromMap(configMap, ConfigurationDto.class);
     }
 
+    @RequiresPermission("configuration:update")
+    @Operation(summary = "Update CDR configuration")
     @PatchMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public ConfigurationDto updateConfiguration(@Valid @RequestBody UpdateConfigurationDto newConfig) {
         Map<String, Object> newConfigMap = modelConverter.toMap(newConfig);

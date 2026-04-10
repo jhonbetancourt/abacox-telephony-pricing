@@ -7,8 +7,10 @@ import com.infomedia.abacox.telephonypricing.dto.costcenter.CreateCostCenter;
 import com.infomedia.abacox.telephonypricing.dto.costcenter.UpdateCostCenter;
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivationDto;
 import com.infomedia.abacox.telephonypricing.db.entity.CostCenter;
+import com.infomedia.abacox.telephonypricing.security.annotation.RequiresPermission;
 import com.infomedia.abacox.telephonypricing.service.CostCenterService;
 import com.turkraft.springfilter.boot.Filter;
+import io.swagger.v3.oas.annotations.Operation;
 import com.infomedia.abacox.telephonypricing.dto.generic.ExcelRequest;
 import com.infomedia.abacox.telephonypricing.dto.generic.ExportRequest;
 import com.infomedia.abacox.telephonypricing.dto.generic.FilterRequest;
@@ -43,6 +45,8 @@ public class CostCenterController {
     private final CostCenterService costCenterService;
     private final ModelConverter modelConverter;
 
+    @RequiresPermission("cost-center:read")
+    @Operation(summary = "List cost centers")
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public Slice<CostCenterDto> find(@Parameter(hidden = true) @Filter Specification<CostCenter> spec
             , @Parameter(hidden = true) Pageable pageable
@@ -51,26 +55,36 @@ public class CostCenterController {
         return modelConverter.mapSlice(costCenterService.find(spec, pageable), CostCenterDto.class);
     }
 
+    @RequiresPermission("cost-center:create")
+    @Operation(summary = "Create a cost center")
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public CostCenterDto create(@Valid @RequestBody CreateCostCenter createCostCenter) {
         return modelConverter.map(costCenterService.create(createCostCenter), CostCenterDto.class);
     }
 
+    @RequiresPermission("cost-center:update")
+    @Operation(summary = "Update a cost center")
     @PatchMapping(value = "{id}", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public CostCenterDto update(@PathVariable("id") Long id, @Valid @RequestBody UpdateCostCenter uDto) {
         return modelConverter.map(costCenterService.update(id, uDto), CostCenterDto.class);
     }
 
+    @RequiresPermission("cost-center:read")
+    @Operation(summary = "Get cost center by ID")
     @GetMapping(value = "{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     private CostCenterDto get(@PathVariable("id") Long id) {
         return modelConverter.map(costCenterService.get(id), CostCenterDto.class);
     }
 
+    @RequiresPermission("cost-center:update")
+    @Operation(summary = "Change cost center activation status")
     @PatchMapping(value = "/status/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public CostCenterDto activate(@PathVariable("id") Long id, @Valid @RequestBody ActivationDto activationDto) {
         return modelConverter.map(costCenterService.changeActivation(id, activationDto.getActive()), CostCenterDto.class);
     }
 
+    @RequiresPermission("cost-center:read")
+    @Operation(summary = "Export cost centers to Excel")
     @GetMapping(value = "/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
     public ResponseEntity<StreamingResponseBody> exportExcel(@Parameter(hidden = true) @Filter Specification<CostCenter> spec,
             @ParameterObject FilterRequest filterRequest,

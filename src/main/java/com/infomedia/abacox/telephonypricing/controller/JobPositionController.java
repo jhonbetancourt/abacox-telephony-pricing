@@ -7,6 +7,7 @@ import com.infomedia.abacox.telephonypricing.dto.jobposition.CreateJobPosition;
 import com.infomedia.abacox.telephonypricing.dto.jobposition.UpdateJobPosition;
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivationDto;
 import com.infomedia.abacox.telephonypricing.db.entity.JobPosition;
+import com.infomedia.abacox.telephonypricing.security.annotation.RequiresPermission;
 import com.infomedia.abacox.telephonypricing.service.JobPositionService;
 import com.turkraft.springfilter.boot.Filter;
 import com.infomedia.abacox.telephonypricing.dto.generic.ExcelRequest;
@@ -19,6 +20,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.Pageable;
@@ -43,6 +45,8 @@ public class JobPositionController {
     private final JobPositionService jobPositionService;
     private final ModelConverter modelConverter;
 
+    @RequiresPermission("job-position:read")
+    @Operation(summary = "List job positions")
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public Slice<JobPositionDto> find(@Parameter(hidden = true) @Filter Specification<JobPosition> spec
             , @Parameter(hidden = true) Pageable pageable
@@ -51,26 +55,36 @@ public class JobPositionController {
         return modelConverter.mapSlice(jobPositionService.find(spec, pageable), JobPositionDto.class);
     }
 
+    @RequiresPermission("job-position:create")
+    @Operation(summary = "Create a job position")
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public JobPositionDto create(@Valid @RequestBody CreateJobPosition createJobPosition) {
         return modelConverter.map(jobPositionService.create(createJobPosition), JobPositionDto.class);
     }
 
+    @RequiresPermission("job-position:update")
+    @Operation(summary = "Update a job position")
     @PatchMapping(value = "{id}", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public JobPositionDto update(@PathVariable("id") Long id, @Valid @RequestBody UpdateJobPosition uDto) {
         return modelConverter.map(jobPositionService.update(id, uDto), JobPositionDto.class);
     }
 
+    @RequiresPermission("job-position:read")
+    @Operation(summary = "Get job position by ID")
     @GetMapping(value = "{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     private JobPositionDto get(@PathVariable("id") Long id) {
         return modelConverter.map(jobPositionService.get(id), JobPositionDto.class);
     }
 
+    @RequiresPermission("job-position:update")
+    @Operation(summary = "Change job position activation status")
     @PatchMapping(value = "/status/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public JobPositionDto activate(@PathVariable("id") Long id, @Valid @RequestBody ActivationDto activationDto) {
         return modelConverter.map(jobPositionService.changeActivation(id, activationDto.getActive()), JobPositionDto.class);
     }
 
+    @RequiresPermission("job-position:read")
+    @Operation(summary = "Export job positions to Excel")
     @GetMapping(value = "/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
     public ResponseEntity<StreamingResponseBody> exportExcel(@Parameter(hidden = true) @Filter Specification<JobPosition> spec,
             @ParameterObject FilterRequest filterRequest,

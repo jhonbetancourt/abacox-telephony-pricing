@@ -6,8 +6,10 @@ import com.infomedia.abacox.telephonypricing.dto.trunkrate.CreateTrunkRate;
 import com.infomedia.abacox.telephonypricing.dto.trunkrate.UpdateTrunkRate;
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivationDto;
 import com.infomedia.abacox.telephonypricing.db.entity.TrunkRate;
+import com.infomedia.abacox.telephonypricing.security.annotation.RequiresPermission;
 import com.infomedia.abacox.telephonypricing.service.TrunkRateService;
 import com.turkraft.springfilter.boot.Filter;
+import io.swagger.v3.oas.annotations.Operation;
 import com.infomedia.abacox.telephonypricing.dto.generic.ExcelRequest;
 import com.infomedia.abacox.telephonypricing.dto.generic.ExportRequest;
 import com.infomedia.abacox.telephonypricing.dto.generic.FilterRequest;
@@ -42,6 +44,8 @@ public class TrunkRateController {
     private final TrunkRateService trunkRateService;
     private final ModelConverter modelConverter;
 
+    @RequiresPermission("pricing:read")
+    @Operation(summary = "List trunk rates")
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public Slice<TrunkRateDto> find(@Parameter(hidden = true) @Filter Specification<TrunkRate> spec
             , @Parameter(hidden = true) Pageable pageable
@@ -50,26 +54,36 @@ public class TrunkRateController {
         return modelConverter.mapSlice(trunkRateService.find(spec, pageable), TrunkRateDto.class);
     }
 
+    @RequiresPermission("pricing:create")
+    @Operation(summary = "Create a trunk rate")
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public TrunkRateDto create(@Valid @RequestBody CreateTrunkRate createTrunkRate) {
         return modelConverter.map(trunkRateService.create(createTrunkRate), TrunkRateDto.class);
     }
 
+    @RequiresPermission("pricing:update")
+    @Operation(summary = "Update a trunk rate")
     @PatchMapping(value = "{id}", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public TrunkRateDto update(@PathVariable("id") Long id, @Valid @RequestBody UpdateTrunkRate uDto) {
         return modelConverter.map(trunkRateService.update(id, uDto), TrunkRateDto.class);
     }
 
+    @RequiresPermission("pricing:update")
+    @Operation(summary = "Change trunk rate activation status")
     @PatchMapping(value = "/status/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public TrunkRateDto activate(@PathVariable("id") Long id, @Valid @RequestBody ActivationDto activationDto) {
         return modelConverter.map(trunkRateService.changeActivation(id, activationDto.getActive()), TrunkRateDto.class);
     }
 
+    @RequiresPermission("pricing:read")
+    @Operation(summary = "Get trunk rate by ID")
     @GetMapping(value = "{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public TrunkRateDto get(@PathVariable("id") Long id) {
         return modelConverter.map(trunkRateService.get(id), TrunkRateDto.class);
     }
 
+    @RequiresPermission("pricing:read")
+    @Operation(summary = "Export trunk rates to Excel")
     @GetMapping(value = "/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
     public ResponseEntity<StreamingResponseBody> exportExcel(@Parameter(hidden = true) @Filter Specification<TrunkRate> spec,
             @ParameterObject FilterRequest filterRequest,

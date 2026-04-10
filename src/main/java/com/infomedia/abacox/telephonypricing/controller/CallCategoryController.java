@@ -6,8 +6,10 @@ import com.infomedia.abacox.telephonypricing.dto.callcategory.CreateCallCategory
 import com.infomedia.abacox.telephonypricing.dto.callcategory.UpdateCallCategory;
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivationDto;
 import com.infomedia.abacox.telephonypricing.db.entity.CallCategory;
+import com.infomedia.abacox.telephonypricing.security.annotation.RequiresPermission;
 import com.infomedia.abacox.telephonypricing.service.CallCategoryService;
 import com.turkraft.springfilter.boot.Filter;
+import io.swagger.v3.oas.annotations.Operation;
 import com.infomedia.abacox.telephonypricing.dto.generic.ExcelRequest;
 import com.infomedia.abacox.telephonypricing.dto.generic.ExportRequest;
 import com.infomedia.abacox.telephonypricing.dto.generic.FilterRequest;
@@ -42,6 +44,8 @@ public class CallCategoryController {
     private final CallCategoryService callCategoryService;
     private final ModelConverter modelConverter;
 
+    @RequiresPermission("pricing:read")
+    @Operation(summary = "List call categories")
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public Slice<CallCategoryDto> find(@Parameter(hidden = true) @Filter Specification<CallCategory> spec
             , @Parameter(hidden = true) Pageable pageable
@@ -50,26 +54,36 @@ public class CallCategoryController {
         return modelConverter.mapSlice(callCategoryService.findAsSlice(spec, pageable), CallCategoryDto.class);
     }
 
+    @RequiresPermission("pricing:create")
+    @Operation(summary = "Create a call category")
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public CallCategoryDto create(@Valid @RequestBody CreateCallCategory createCallCategory) {
         return modelConverter.map(callCategoryService.create(createCallCategory), CallCategoryDto.class);
     }
 
+    @RequiresPermission("pricing:update")
+    @Operation(summary = "Update a call category")
     @PatchMapping(value = "{id}", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public CallCategoryDto update(@PathVariable("id") Long id, @Valid @RequestBody UpdateCallCategory uDto) {
         return modelConverter.map(callCategoryService.update(id, uDto), CallCategoryDto.class);
     }
 
+    @RequiresPermission("pricing:read")
+    @Operation(summary = "Get call category by ID")
     @GetMapping(value = "{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public CallCategoryDto get(@PathVariable("id") Long id) {
         return modelConverter.map(callCategoryService.get(id), CallCategoryDto.class);
     }
 
+    @RequiresPermission("pricing:update")
+    @Operation(summary = "Change call category activation status")
     @PatchMapping(value = "/status/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public CallCategoryDto activate(@PathVariable("id") Long id, @Valid @RequestBody ActivationDto activationDto) {
         return modelConverter.map(callCategoryService.changeActivation(id, activationDto.getActive()), CallCategoryDto.class);
     }
 
+    @RequiresPermission("pricing:read")
+    @Operation(summary = "Export call categories to Excel")
     @GetMapping(value = "/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
     public ResponseEntity<StreamingResponseBody> exportExcel(@Parameter(hidden = true) @Filter Specification<CallCategory> spec,
             @ParameterObject FilterRequest filterRequest,

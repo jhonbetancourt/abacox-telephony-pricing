@@ -7,8 +7,10 @@ import com.infomedia.abacox.telephonypricing.dto.planttype.CreatePlantType;
 import com.infomedia.abacox.telephonypricing.dto.planttype.UpdatePlantType;
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivationDto;
 import com.infomedia.abacox.telephonypricing.db.entity.PlantType;
+import com.infomedia.abacox.telephonypricing.security.annotation.RequiresPermission;
 import com.infomedia.abacox.telephonypricing.service.PlantTypeService;
 import com.turkraft.springfilter.boot.Filter;
+import io.swagger.v3.oas.annotations.Operation;
 import com.infomedia.abacox.telephonypricing.dto.generic.ExcelRequest;
 import com.infomedia.abacox.telephonypricing.dto.generic.ExportRequest;
 import com.infomedia.abacox.telephonypricing.dto.generic.FilterRequest;
@@ -43,6 +45,8 @@ public class PlantTypeController {
     private final PlantTypeService plantTypeService;
     private final ModelConverter modelConverter;
 
+    @RequiresPermission("telephony-config:read")
+    @Operation(summary = "List plant types")
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public Slice<PlantTypeDto> find(@Parameter(hidden = true) @Filter Specification<PlantType> spec
             , @Parameter(hidden = true) Pageable pageable
@@ -51,26 +55,36 @@ public class PlantTypeController {
         return modelConverter.mapSlice(plantTypeService.find(spec, pageable), PlantTypeDto.class);
     }
 
+    @RequiresPermission("telephony-config:create")
+    @Operation(summary = "Create a plant type")
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public PlantTypeDto create(@Valid @RequestBody CreatePlantType createPlantType) {
         return modelConverter.map(plantTypeService.create(createPlantType), PlantTypeDto.class);
     }
 
+    @RequiresPermission("telephony-config:update")
+    @Operation(summary = "Update a plant type")
     @PatchMapping(value = "{id}", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public PlantTypeDto update(@PathVariable("id") Long id, @Valid @RequestBody UpdatePlantType uDto) {
         return modelConverter.map(plantTypeService.update(id, uDto), PlantTypeDto.class);
     }
 
+    @RequiresPermission("telephony-config:read")
+    @Operation(summary = "Get plant type by ID")
     @GetMapping(value = "{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     private PlantTypeDto get(@PathVariable("id") Long id) {
         return modelConverter.map(plantTypeService.get(id), PlantTypeDto.class);
     }
 
+    @RequiresPermission("telephony-config:update")
+    @Operation(summary = "Change plant type activation status")
     @PatchMapping(value = "/status/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public PlantTypeDto activate(@PathVariable("id") Long id, @Valid @RequestBody ActivationDto activationDto) {
         return modelConverter.map(plantTypeService.changeActivation(id, activationDto.getActive()), PlantTypeDto.class);
     }
 
+    @RequiresPermission("telephony-config:read")
+    @Operation(summary = "Export plant types to Excel")
     @GetMapping(value = "/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
     public ResponseEntity<StreamingResponseBody> exportExcel(@Parameter(hidden = true) @Filter Specification<PlantType> spec,
             @ParameterObject FilterRequest filterRequest,

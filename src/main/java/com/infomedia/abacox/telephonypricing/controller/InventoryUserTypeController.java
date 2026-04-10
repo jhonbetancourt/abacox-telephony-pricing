@@ -10,8 +10,10 @@ import com.infomedia.abacox.telephonypricing.dto.generic.ExportRequest;
 import com.infomedia.abacox.telephonypricing.dto.generic.FilterRequest;
 import com.infomedia.abacox.telephonypricing.dto.generic.PageableRequest;
 
+import com.infomedia.abacox.telephonypricing.security.annotation.RequiresPermission;
 import com.infomedia.abacox.telephonypricing.service.InventoryUserTypeService;
 import com.turkraft.springfilter.boot.Filter;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
@@ -42,6 +44,8 @@ public class InventoryUserTypeController {
     private final InventoryUserTypeService inventoryUserTypeService;
     private final ModelConverter modelConverter;
 
+    @RequiresPermission("inventory:read")
+    @Operation(summary = "List inventory user types")
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public Slice<InventoryUserTypeDto> find(@Parameter(hidden = true) @Filter Specification<InventoryUserType> spec,
             @Parameter(hidden = true) Pageable pageable
@@ -50,21 +54,29 @@ public class InventoryUserTypeController {
         return modelConverter.mapSlice(inventoryUserTypeService.find(spec, pageable), InventoryUserTypeDto.class);
     }
 
+    @RequiresPermission("inventory:create")
+    @Operation(summary = "Create an inventory user type")
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public InventoryUserTypeDto create(@Valid @RequestBody CreateInventoryUserType cDto) {
         return modelConverter.map(inventoryUserTypeService.create(cDto), InventoryUserTypeDto.class);
     }
 
+    @RequiresPermission("inventory:update")
+    @Operation(summary = "Update an inventory user type")
     @PatchMapping(value = "{id}", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public InventoryUserTypeDto update(@PathVariable("id") Long id, @Valid @RequestBody UpdateInventoryUserType uDto) {
         return modelConverter.map(inventoryUserTypeService.update(id, uDto), InventoryUserTypeDto.class);
     }
 
+    @RequiresPermission("inventory:read")
+    @Operation(summary = "Get inventory user type by ID")
     @GetMapping(value = "{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public InventoryUserTypeDto get(@PathVariable("id") Long id) {
         return modelConverter.map(inventoryUserTypeService.get(id), InventoryUserTypeDto.class);
     }
 
+    @RequiresPermission("inventory:read")
+    @Operation(summary = "Export inventory user types to Excel")
     @GetMapping(value = "/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
     public ResponseEntity<StreamingResponseBody> exportExcel(@Parameter(hidden = true) @Filter Specification<InventoryUserType> spec,
             @ParameterObject FilterRequest filterRequest,

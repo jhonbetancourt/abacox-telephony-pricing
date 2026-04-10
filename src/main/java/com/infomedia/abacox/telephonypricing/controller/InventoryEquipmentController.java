@@ -10,8 +10,10 @@ import com.infomedia.abacox.telephonypricing.dto.generic.ExportRequest;
 import com.infomedia.abacox.telephonypricing.dto.generic.FilterRequest;
 import com.infomedia.abacox.telephonypricing.dto.generic.PageableRequest;
 
+import com.infomedia.abacox.telephonypricing.security.annotation.RequiresPermission;
 import com.infomedia.abacox.telephonypricing.service.InventoryEquipmentService;
 import com.turkraft.springfilter.boot.Filter;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
@@ -42,6 +44,8 @@ public class InventoryEquipmentController {
     private final InventoryEquipmentService inventoryEquipmentService;
     private final ModelConverter modelConverter;
 
+    @RequiresPermission("inventory:read")
+    @Operation(summary = "List inventory equipment")
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public Slice<InventoryEquipmentDto> find(@Parameter(hidden = true) @Filter Specification<InventoryEquipment> spec,
             @Parameter(hidden = true) Pageable pageable
@@ -50,21 +54,29 @@ public class InventoryEquipmentController {
         return modelConverter.mapSlice(inventoryEquipmentService.find(spec, pageable), InventoryEquipmentDto.class);
     }
 
+    @RequiresPermission("inventory:create")
+    @Operation(summary = "Create inventory equipment")
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public InventoryEquipmentDto create(@Valid @RequestBody CreateInventoryEquipment cDto) {
         return modelConverter.map(inventoryEquipmentService.create(cDto), InventoryEquipmentDto.class);
     }
 
+    @RequiresPermission("inventory:update")
+    @Operation(summary = "Update inventory equipment")
     @PatchMapping(value = "{id}", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public InventoryEquipmentDto update(@PathVariable("id") Long id, @Valid @RequestBody UpdateInventoryEquipment uDto) {
         return modelConverter.map(inventoryEquipmentService.update(id, uDto), InventoryEquipmentDto.class);
     }
 
+    @RequiresPermission("inventory:read")
+    @Operation(summary = "Get inventory equipment by ID")
     @GetMapping(value = "{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public InventoryEquipmentDto get(@PathVariable("id") Long id) {
         return modelConverter.map(inventoryEquipmentService.get(id), InventoryEquipmentDto.class);
     }
 
+    @RequiresPermission("inventory:read")
+    @Operation(summary = "Export inventory equipment to Excel")
     @GetMapping(value = "/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
     public ResponseEntity<StreamingResponseBody> exportExcel(@Parameter(hidden = true) @Filter Specification<InventoryEquipment> spec,
             @ParameterObject FilterRequest filterRequest,

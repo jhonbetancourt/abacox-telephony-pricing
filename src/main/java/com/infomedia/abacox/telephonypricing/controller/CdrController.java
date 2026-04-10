@@ -5,6 +5,7 @@ import com.infomedia.abacox.telephonypricing.component.configmanager.ConfigKey;
 import com.infomedia.abacox.telephonypricing.component.configmanager.ConfigService;
 import com.infomedia.abacox.telephonypricing.dto.generic.MessageResponse;
 import com.infomedia.abacox.telephonypricing.multitenancy.TenantContext;
+import com.infomedia.abacox.telephonypricing.security.annotation.RequiresPermission;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -44,6 +45,7 @@ public class CdrController {
     private final List<CdrProcessor> cdrProcessors;
     private final TestCdrProcessingService testCdrProcessingService;
 
+    @RequiresPermission("cdr:upload")
     @PostMapping(value = "/process", consumes = MediaType.MULTIPART_FORM_DATA_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     @Operation(summary = "Queue a CDR file for processing", description = "Submits a CDR file for a specific plant type. The file is saved and queued for reliable, asynchronous processing.")
     public MessageResponse processCdr(
@@ -62,6 +64,7 @@ public class CdrController {
         return new MessageResponse(String.format("%d file(s) queued for processing successfully.", filesQueued));
     }
 
+    @RequiresPermission("cdr:upload")
     @PostMapping(value = "/processSingle", consumes = MediaType.MULTIPART_FORM_DATA_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     @Operation(summary = "Process a single CDR file synchronously", description = "Submits a single CDR file for immediate, synchronous processing for a specific plant type. The result summary is returned in the response. Fails if the file has been processed before.")
     public ResponseEntity<CdrProcessingResultDto> processCdrSync(
@@ -196,6 +199,7 @@ public class CdrController {
                 .orElseThrow(() -> new ValidationException("No CDR processor found for plant type ID: " + plantTypeId));
     }
 
+    @RequiresPermission("cdr:reprocess")
     @PostMapping("/reprocess/files")
     @Operation(summary = "Reprocess one or more previously processed files", description = "Submits a task to reprocess files based on their FileInfo IDs.")
     public MessageResponse reprocessFiles(@RequestBody List<Long> fileInfoIds) {
@@ -210,6 +214,7 @@ public class CdrController {
         return new MessageResponse(String.format("Reprocessing task submitted for %d file(s).", fileInfoIds.size()));
     }
 
+    @RequiresPermission("cdr:reprocess")
     @PostMapping("/reprocess/callRecords")
     @Operation(summary = "Reprocess one or more existing call records", description = "Submits a task to reprocess individual call records based on their IDs.")
     public MessageResponse reprocessCallRecords(@RequestBody List<Long> callRecordIds) {
@@ -224,6 +229,7 @@ public class CdrController {
                 String.format("Reprocessing task submitted for %d call record(s).", callRecordIds.size()));
     }
 
+    @RequiresPermission("cdr:reprocess")
     @PostMapping("/reprocess/failedCallRecords")
     @Operation(summary = "Reprocess one or more failed/quarantined call records", description = "Submits a task to reprocess individual failed call records based on their IDs.")
     public MessageResponse reprocessFailedCallRecords(@RequestBody List<Long> failedCallRecordIds) {
@@ -238,6 +244,7 @@ public class CdrController {
                 String.format("Reprocessing task submitted for %d failed call record(s).", failedCallRecordIds.size()));
     }
 
+    @RequiresPermission("cdr:read")
     @GetMapping("/download/{fileInfoId}")
     @Operation(summary = "Download the original CDR file", description = "Retrieves the original, unprocessed CDR file content based on its FileInfo ID.")
     public ResponseEntity<StreamingResponseBody> downloadCdrFile(@PathVariable Long fileInfoId) {
@@ -284,6 +291,7 @@ public class CdrController {
         return new ResponseEntity<>(responseBody, headers, HttpStatus.OK);
     }
 
+    @RequiresPermission("cdr:upload")
     @PostMapping(value = "/test", consumes = MediaType.MULTIPART_FORM_DATA_VALUE, produces = "application/zip")
     @Operation(summary = "Test process a CDR file (No Persistence)", description = "Processes a CDR file and returns a ZIP containing successful and failed records in CSV format. Does NOT save to database.")
     public ResponseEntity<StreamingResponseBody> testProcessCdr(

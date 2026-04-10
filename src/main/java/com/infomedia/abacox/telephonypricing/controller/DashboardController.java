@@ -3,7 +3,9 @@ package com.infomedia.abacox.telephonypricing.controller;
 import com.infomedia.abacox.telephonypricing.constants.DateTimePattern;
 import com.infomedia.abacox.telephonypricing.dto.dashboard.DashboardOverviewDto;
 import com.infomedia.abacox.telephonypricing.dto.dashboard.EmployeeActivityDashboardDto;
+import com.infomedia.abacox.telephonypricing.security.annotation.RequiresPermission;
 import com.infomedia.abacox.telephonypricing.service.DashboardService;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -30,6 +32,8 @@ public class DashboardController {
 
     private final DashboardService dashboardService;
 
+    @RequiresPermission("dashboard:read")
+    @Operation(summary = "Get dashboard overview")
     @GetMapping(value = "/overview", produces = MediaType.APPLICATION_JSON_VALUE)
     public DashboardOverviewDto getOverview(
             @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
@@ -38,6 +42,8 @@ public class DashboardController {
         return dashboardService.getDashboardOverview(startDate, endDate);
     }
 
+    @RequiresPermission("dashboard:read")
+    @Operation(summary = "Get employee activity dashboard")
     @GetMapping(value = "/employeeActivity", produces = MediaType.APPLICATION_JSON_VALUE)
     public EmployeeActivityDashboardDto getEmployeeActivity(
             @RequestParam(required = false) String employeeName,

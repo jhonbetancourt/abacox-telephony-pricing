@@ -3,7 +3,9 @@ package com.infomedia.abacox.telephonypricing.controller;
 import com.infomedia.abacox.telephonypricing.dto.generic.MessageResponse;
 import com.infomedia.abacox.telephonypricing.dto.migration.MigrationStart;
 import com.infomedia.abacox.telephonypricing.dto.migration.MigrationStatus;
+import com.infomedia.abacox.telephonypricing.security.annotation.RequiresPermission;
 import com.infomedia.abacox.telephonypricing.service.MigrationService;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -27,18 +29,24 @@ public class MigrationController {
 
     private final MigrationService migrationService;
 
+    @RequiresPermission("migration:execute")
+    @Operation(summary = "Start data migration")
     @PostMapping(value = "/start", produces = MediaType.APPLICATION_JSON_VALUE)
     public MessageResponse startMigration(@Valid @RequestBody MigrationStart runRequest) {
         migrationService.startAsync(runRequest);
         return new MessageResponse("Migration process initiated successfully. Check status endpoint for progress.");
     }
 
+    @RequiresPermission("migration:execute")
+    @Operation(summary = "Start inventory migration")
     @PostMapping(value = "/startInventory", produces = MediaType.APPLICATION_JSON_VALUE)
     public MessageResponse startInventoryMigration(@Valid @RequestBody MigrationStart runRequest) {
         migrationService.startInventoryAsync(runRequest);
         return new MessageResponse("Inventory migration initiated successfully. Check status endpoint for progress.");
     }
 
+    @RequiresPermission("migration:read")
+    @Operation(summary = "Get migration status")
     @GetMapping(value = "/status", produces = MediaType.APPLICATION_JSON_VALUE)
     public MigrationStatus getMigrationStatus() {
         return migrationService.getStatus();

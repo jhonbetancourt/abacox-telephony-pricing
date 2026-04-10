@@ -6,8 +6,10 @@ import com.infomedia.abacox.telephonypricing.dto.fileinfo.FileInfoDto;
 import com.infomedia.abacox.telephonypricing.dto.generic.ExcelRequest;
 import com.infomedia.abacox.telephonypricing.dto.generic.ExportRequest;
 import com.infomedia.abacox.telephonypricing.dto.generic.FilterRequest;
+import com.infomedia.abacox.telephonypricing.security.annotation.RequiresPermission;
 import com.infomedia.abacox.telephonypricing.service.FileInfoService;
 import com.turkraft.springfilter.boot.Filter;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
@@ -37,6 +39,8 @@ public class FileInfoController {
     private final FileInfoService fileInfoService;
     private final ModelConverter modelConverter;
 
+    @RequiresPermission("cdr:read")
+    @Operation(summary = "List CDR file info records")
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public Slice<FileInfoDto> find(@Parameter(hidden = true) @Filter Specification<FileInfo> spec
             , @Parameter(hidden = true) Pageable pageable
@@ -44,11 +48,15 @@ public class FileInfoController {
         return modelConverter.mapSlice(fileInfoService.find(spec, pageable), FileInfoDto.class);
     }
 
+    @RequiresPermission("cdr:read")
+    @Operation(summary = "Get CDR file info by ID")
     @GetMapping(value = "{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     private FileInfoDto get(@PathVariable("id") Long id) {
         return modelConverter.map(fileInfoService.get(id), FileInfoDto.class);
     }
 
+    @RequiresPermission("cdr:read")
+    @Operation(summary = "Export CDR file info to Excel")
     @GetMapping(value = "/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
     public ResponseEntity<StreamingResponseBody> exportExcel(
             @Parameter(hidden = true) @Filter Specification<FileInfo> spec,

@@ -6,8 +6,10 @@ import com.infomedia.abacox.telephonypricing.dto.prefix.CreatePrefix;
 import com.infomedia.abacox.telephonypricing.dto.prefix.UpdatePrefix;
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivationDto;
 import com.infomedia.abacox.telephonypricing.db.entity.Prefix;
+import com.infomedia.abacox.telephonypricing.security.annotation.RequiresPermission;
 import com.infomedia.abacox.telephonypricing.service.PrefixService;
 import com.turkraft.springfilter.boot.Filter;
+import io.swagger.v3.oas.annotations.Operation;
 import com.infomedia.abacox.telephonypricing.dto.generic.ExcelRequest;
 import com.infomedia.abacox.telephonypricing.dto.generic.ExportRequest;
 import com.infomedia.abacox.telephonypricing.dto.generic.FilterRequest;
@@ -42,6 +44,8 @@ public class PrefixController {
     private final PrefixService prefixService;
     private final ModelConverter modelConverter;
 
+    @RequiresPermission("numbering:read")
+    @Operation(summary = "List prefixes")
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public Slice<PrefixDto> find(@Parameter(hidden = true) @Filter Specification<Prefix> spec
             , @Parameter(hidden = true) Pageable pageable
@@ -50,26 +54,36 @@ public class PrefixController {
         return modelConverter.mapSlice(prefixService.find(spec, pageable), PrefixDto.class);
     }
 
+    @RequiresPermission("numbering:create")
+    @Operation(summary = "Create a prefix")
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public PrefixDto create(@Valid @RequestBody CreatePrefix createPrefix) {
         return modelConverter.map(prefixService.create(createPrefix), PrefixDto.class);
     }
 
+    @RequiresPermission("numbering:update")
+    @Operation(summary = "Update a prefix")
     @PatchMapping(value = "{id}", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public PrefixDto update(@PathVariable("id") Long id, @Valid @RequestBody UpdatePrefix uDto) {
         return modelConverter.map(prefixService.update(id, uDto), PrefixDto.class);
     }
 
+    @RequiresPermission("numbering:read")
+    @Operation(summary = "Get prefix by ID")
     @GetMapping(value = "{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public PrefixDto get(@PathVariable("id") Long id) {
         return modelConverter.map(prefixService.get(id), PrefixDto.class);
     }
 
+    @RequiresPermission("numbering:update")
+    @Operation(summary = "Change prefix activation status")
     @PatchMapping(value = "/status/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public PrefixDto activate(@PathVariable("id") Long id, @Valid @RequestBody ActivationDto activationDto) {
         return modelConverter.map(prefixService.changeActivation(id, activationDto.getActive()), PrefixDto.class);
     }
 
+    @RequiresPermission("numbering:read")
+    @Operation(summary = "Export prefixes to Excel")
     @GetMapping(value = "/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
     public ResponseEntity<StreamingResponseBody> exportExcel(@Parameter(hidden = true) @Filter Specification<Prefix> spec,
             @ParameterObject FilterRequest filterRequest,

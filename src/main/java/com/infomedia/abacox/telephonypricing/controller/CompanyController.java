@@ -7,8 +7,10 @@ import com.infomedia.abacox.telephonypricing.dto.company.CreateCompany;
 import com.infomedia.abacox.telephonypricing.dto.company.UpdateCompany;
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivationDto;
 import com.infomedia.abacox.telephonypricing.db.entity.Company;
+import com.infomedia.abacox.telephonypricing.security.annotation.RequiresPermission;
 import com.infomedia.abacox.telephonypricing.service.CompanyService;
 import com.turkraft.springfilter.boot.Filter;
+import io.swagger.v3.oas.annotations.Operation;
 import com.infomedia.abacox.telephonypricing.dto.generic.ExcelRequest;
 import com.infomedia.abacox.telephonypricing.dto.generic.ExportRequest;
 import com.infomedia.abacox.telephonypricing.dto.generic.FilterRequest;
@@ -43,6 +45,8 @@ public class CompanyController {
     private final CompanyService companyService;
     private final ModelConverter modelConverter;
 
+    @RequiresPermission("company:read")
+    @Operation(summary = "List companies")
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public Slice<CompanyDto> find(@Parameter(hidden = true) @Filter Specification<Company> spec
             , @Parameter(hidden = true) Pageable pageable
@@ -51,26 +55,36 @@ public class CompanyController {
         return modelConverter.mapSlice(companyService.find(spec, pageable), CompanyDto.class);
     }
 
+    @RequiresPermission("company:create")
+    @Operation(summary = "Create a company")
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public CompanyDto create(@Valid @RequestBody CreateCompany createCompany) {
         return modelConverter.map(companyService.create(createCompany), CompanyDto.class);
     }
 
+    @RequiresPermission("company:update")
+    @Operation(summary = "Update a company")
     @PatchMapping(value = "{id}", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public CompanyDto update(@PathVariable("id") Long id, @Valid @RequestBody UpdateCompany uDto) {
         return modelConverter.map(companyService.update(id, uDto), CompanyDto.class);
     }
 
+    @RequiresPermission("company:update")
+    @Operation(summary = "Change company activation status")
     @PatchMapping(value = "/status/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public CompanyDto activate(@PathVariable("id") Long id, @Valid @RequestBody ActivationDto activationDto) {
         return modelConverter.map(companyService.changeActivation(id, activationDto.getActive()), CompanyDto.class);
     }
 
+    @RequiresPermission("company:read")
+    @Operation(summary = "Get company by ID")
     @GetMapping(value = "{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public CompanyDto get(@PathVariable("id") Long id) {
         return modelConverter.map(companyService.get(id), CompanyDto.class);
     }
 
+    @RequiresPermission("company:read")
+    @Operation(summary = "Export companies to Excel")
     @GetMapping(value = "/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
     public ResponseEntity<StreamingResponseBody> exportExcel(@Parameter(hidden = true) @Filter Specification<Company> spec,
             @ParameterObject FilterRequest filterRequest,

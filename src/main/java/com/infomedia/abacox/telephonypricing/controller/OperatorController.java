@@ -7,8 +7,10 @@ import com.infomedia.abacox.telephonypricing.dto.operator.CreateOperator;
 import com.infomedia.abacox.telephonypricing.dto.operator.UpdateOperator;
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivationDto;
 import com.infomedia.abacox.telephonypricing.db.entity.Operator;
+import com.infomedia.abacox.telephonypricing.security.annotation.RequiresPermission;
 import com.infomedia.abacox.telephonypricing.service.OperatorService;
 import com.turkraft.springfilter.boot.Filter;
+import io.swagger.v3.oas.annotations.Operation;
 import com.infomedia.abacox.telephonypricing.dto.generic.ExcelRequest;
 import com.infomedia.abacox.telephonypricing.dto.generic.ExportRequest;
 import com.infomedia.abacox.telephonypricing.dto.generic.FilterRequest;
@@ -43,6 +45,8 @@ public class OperatorController {
     private final OperatorService operatorService;
     private final ModelConverter modelConverter;
 
+    @RequiresPermission("telephony-config:read")
+    @Operation(summary = "List operators")
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public Slice<OperatorDto> find(@Parameter(hidden = true) @Filter Specification<Operator> spec
             , @Parameter(hidden = true) Pageable pageable
@@ -51,26 +55,36 @@ public class OperatorController {
         return modelConverter.mapSlice(operatorService.find(spec, pageable), OperatorDto.class);
     }
 
+    @RequiresPermission("telephony-config:create")
+    @Operation(summary = "Create an operator")
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public OperatorDto create(@Valid @RequestBody CreateOperator createOperator) {
         return modelConverter.map(operatorService.create(createOperator), OperatorDto.class);
     }
 
+    @RequiresPermission("telephony-config:update")
+    @Operation(summary = "Update an operator")
     @PatchMapping(value = "{id}", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public OperatorDto update(@PathVariable("id") Long id, @Valid @RequestBody UpdateOperator uDto) {
         return modelConverter.map(operatorService.update(id, uDto), OperatorDto.class);
     }
 
+    @RequiresPermission("telephony-config:read")
+    @Operation(summary = "Get operator by ID")
     @GetMapping(value = "{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public OperatorDto get(@PathVariable("id") Long id) {
         return modelConverter.map(operatorService.get(id), OperatorDto.class);
     }
 
+    @RequiresPermission("telephony-config:update")
+    @Operation(summary = "Change operator activation status")
     @PatchMapping(value = "/status/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public OperatorDto activate(@PathVariable("id") Long id, @Valid @RequestBody ActivationDto activationDto) {
         return modelConverter.map(operatorService.changeActivation(id, activationDto.getActive()), OperatorDto.class);
     }
 
+    @RequiresPermission("telephony-config:read")
+    @Operation(summary = "Export operators to Excel")
     @GetMapping(value = "/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
     public ResponseEntity<StreamingResponseBody> exportExcel(@Parameter(hidden = true) @Filter Specification<Operator> spec,
             @ParameterObject FilterRequest filterRequest,
