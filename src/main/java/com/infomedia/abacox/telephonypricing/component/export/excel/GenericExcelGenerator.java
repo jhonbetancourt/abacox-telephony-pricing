@@ -863,7 +863,9 @@ public class GenericExcelGenerator {
             // Merge Collection Name in Row 0
             if (childStartIndex != -1 && childEndIndex != -1) {
                 Cell collectionNameCell = row0.getCell(childStartIndex);
-                collectionNameCell.setCellValue(formatFieldName(context.getFlattenedCollectionFieldName()));
+                String collectionLabel = formatFieldName(context.getFlattenedCollectionFieldName());
+                String translatedCollectionLabel = context.getAlternativeHeaderNames().get(collectionLabel);
+                collectionNameCell.setCellValue(translatedCollectionLabel != null ? translatedCollectionLabel : collectionLabel);
                 if (childEndIndex > childStartIndex) {
                     sheet.addMergedRegion(
                             new org.apache.poi.ss.util.CellRangeAddress(0, 0, childStartIndex, childEndIndex));
