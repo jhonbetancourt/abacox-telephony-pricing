@@ -43,6 +43,10 @@ public class ConferenceReportService {
         SortingUtils.sort(allGroups, pageable.getSort(),
                 Sort.by(Sort.Direction.DESC, "conferenceServiceDate"));
 
+        if (pageable.isUnpaged()) {
+            return new SliceImpl<>(allGroups, pageable, false);
+        }
+
         int start = (int) pageable.getOffset();
         int end = Math.min((start + pageable.getPageSize()), allGroups.size());
 

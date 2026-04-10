@@ -84,6 +84,10 @@ public class TelephonyUsageReportService {
 
                 SortingUtils.sort(groups, pageable.getSort(), Sort.by("categoryName"));
 
+                if (pageable.isUnpaged()) {
+                        return new SliceImpl<>(groups, pageable, false);
+                }
+
                 int start = (int) pageable.getOffset();
                 int end = Math.min((start + pageable.getPageSize()), groups.size());
 
@@ -166,6 +170,10 @@ public class TelephonyUsageReportService {
                 }
 
                 SortingUtils.sort(groups, pageable.getSort(), Sort.by("telephonyTypeName"));
+
+                if (pageable.isUnpaged()) {
+                        return new SliceImpl<>(groups, pageable, false);
+                }
 
                 int start = (int) pageable.getOffset();
                 int end = Math.min((start + pageable.getPageSize()), groups.size());
@@ -283,19 +291,24 @@ public class TelephonyUsageReportService {
 
                 SortingUtils.sort(assignedRows, pageable.getSort(), Sort.by(Sort.Direction.DESC, "totalBilledAmount"));
 
-                // Paginate only the assigned rows as content using SliceImpl
-                int start = (int) pageable.getOffset();
-                int end = Math.min((start + pageable.getPageSize()), assignedRows.size());
-
-                List<CostCenterUsageReportDto> pageContent;
-                if (start > assignedRows.size()) {
-                        pageContent = Collections.emptyList();
+                Slice<CostCenterUsageReportDto> slice;
+                if (pageable.isUnpaged()) {
+                        slice = new SliceImpl<>(assignedRows, pageable, false);
                 } else {
-                        pageContent = assignedRows.subList(start, end);
-                }
+                        // Paginate only the assigned rows as content using SliceImpl
+                        int start = (int) pageable.getOffset();
+                        int end = Math.min((start + pageable.getPageSize()), assignedRows.size());
 
-                boolean hasNext = end < assignedRows.size();
-                Slice<CostCenterUsageReportDto> slice = new SliceImpl<>(pageContent, pageable, hasNext);
+                        List<CostCenterUsageReportDto> pageContent;
+                        if (start > assignedRows.size()) {
+                                pageContent = Collections.emptyList();
+                        } else {
+                                pageContent = assignedRows.subList(start, end);
+                        }
+
+                        boolean hasNext = end < assignedRows.size();
+                        slice = new SliceImpl<>(pageContent, pageable, hasNext);
+                }
                 return SliceWithSummaries.of(slice, summaries);
         }
 

@@ -183,6 +183,10 @@ public class SubdivisionReportService {
         // positive")
         allDtos.forEach(dto -> dto.setTotalVariation(dto.getTotalVariation().abs()));
 
+        if (pageable.isUnpaged()) {
+            return new SliceImpl<>(allDtos, pageable, false);
+        }
+
         // Manually apply paging using SliceImpl
         int start = (int) pageable.getOffset();
         int end = Math.min((start + pageable.getPageSize()), allDtos.size());
