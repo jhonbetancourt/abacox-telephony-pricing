@@ -257,27 +257,15 @@ public class DashboardService {
     }
 
     private DashboardOverviewDto computeDashboardOverview(LocalDateTime startDate, LocalDateTime endDate) {
-        // --- KPI totals from cost center summaries (includes grand totals) ---
-        var costCenterReport = telephonyUsageReportService
-                .generateCostCenterUsageReport(startDate, endDate, null, PageRequest.of(0, 5, Sort.by(Sort.Direction.DESC, "totalBilledAmount")));
+        // --- KPI totals (includes the synthetic unassigned row) ---
+        CostCenterUsageTotalsDto totals = telephonyUsageReportService
+                .getCostCenterUsageTotals(startDate, endDate, null);
 
-        BigDecimal totalCost = BigDecimal.ZERO;
-        long totalDurationSeconds = 0;
-        long totalIncomingCalls = 0;
-        long totalOutgoingCalls = 0;
-        long unassignedCalls = 0;
-
-        for (UsageReportSummaryDto summary : costCenterReport.getSummaries()) {
-            long inCalls  = summary.getIncomingCallCount()  != null ? summary.getIncomingCallCount()  : 0L;
-            long outCalls = summary.getOutgoingCallCount()  != null ? summary.getOutgoingCallCount()  : 0L;
-            totalCost = totalCost.add(summary.getTotalBilledAmount() != null ? summary.getTotalBilledAmount() : BigDecimal.ZERO);
-            totalDurationSeconds += summary.getTotalDuration() != null ? summary.getTotalDuration() : 0L;
-            totalIncomingCalls += inCalls;
-            totalOutgoingCalls += outCalls;
-            if ("UNASSIGNED".equals(summary.getRowType())) {
-                unassignedCalls += inCalls + outCalls;
-            }
-        }
+        BigDecimal totalCost = totals.getTotalBilledAmount() != null ? totals.getTotalBilledAmount() : BigDecimal.ZERO;
+        long totalDurationSeconds = totals.getTotalDurationSeconds();
+        long totalIncomingCalls = totals.getTotalIncomingCalls();
+        long totalOutgoingCalls = totals.getTotalOutgoingCalls();
+        long unassignedCalls = totals.getUnassignedCalls();
 
         long totalCalls = totalIncomingCalls + totalOutgoingCalls;
         BigDecimal avgCost = totalDurationSeconds > 0
@@ -289,6 +277,9 @@ public class DashboardService {
                 .count((root, query, cb) -> cb.between(root.get("createdDate"), startDate, endDate));
 
         // --- Top 5 cost centers ---
+        var costCenterReport = telephonyUsageReportService
+                .generateCostCenterUsageReport(startDate, endDate, null, PageRequest.of(0, 5, Sort.by(Sort.Direction.DESC, "totalBilledAmount")));
+
         List<DashboardOverviewDto.CostCenterUsageDto> topCostCenters = new ArrayList<>();
         for (CostCenterUsageReportDto row : costCenterReport.getContent()) {
             String name = row.getCostCenterName() != null ? row.getCostCenterName() : "Unknown";

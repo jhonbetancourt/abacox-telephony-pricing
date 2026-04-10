@@ -5,10 +5,8 @@ import com.infomedia.abacox.telephonypricing.component.utils.SortingUtils;
 import com.infomedia.abacox.telephonypricing.db.entity.ExtensionList;
 import com.infomedia.abacox.telephonypricing.db.repository.ExtensionListRepository;
 import com.infomedia.abacox.telephonypricing.db.repository.ReportRepository;
-import com.infomedia.abacox.telephonypricing.dto.generic.SliceWithSummaries;
 import com.infomedia.abacox.telephonypricing.dto.report.ExtensionGroupDto;
 import com.infomedia.abacox.telephonypricing.dto.report.ExtensionGroupReportDto;
-import com.infomedia.abacox.telephonypricing.dto.report.ExtensionGroupSummaryDto;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
@@ -17,7 +15,6 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -34,11 +31,10 @@ public class ExtensionGroupReportService {
      * Generates the "Llamadas Grupo de Extensiones" report (legacy
      * grupo_valores.php).
      *
-     * Returns a slice of ExtensionGroupDto (each with groupName + items list),
-     * plus a single TOTALES summary across all groups.
+     * Returns a slice of ExtensionGroupDto (each with groupName + items list).
      */
     @Transactional(readOnly = true)
-    public SliceWithSummaries<ExtensionGroupDto, ExtensionGroupSummaryDto> generateExtensionGroupReport(
+    public Slice<ExtensionGroupDto> generateExtensionGroupReport(
             LocalDateTime startDate,
             LocalDateTime endDate,
             Long groupId,
@@ -50,8 +46,7 @@ public class ExtensionGroupReportService {
         List<ExtensionList> groups = extensionListRepository.findActiveByTypeAndOptionalId("EXT", groupId);
 
         if (groups.isEmpty()) {
-            Slice<ExtensionGroupDto> emptySlice = new SliceImpl<>(Collections.emptyList(), pageable, false);
-            return SliceWithSummaries.of(emptySlice, Collections.emptyList());
+            return new SliceImpl<>(Collections.emptyList(), pageable, false);
         }
 
         // 2. Build extension → groupName mapping (preserving group declaration order)
@@ -72,8 +67,7 @@ public class ExtensionGroupReportService {
         List<String> allExtensions = new ArrayList<>(extensionToGroupName.keySet());
 
         if (allExtensions.isEmpty()) {
-            Slice<ExtensionGroupDto> emptySlice = new SliceImpl<>(Collections.emptyList(), pageable, false);
-            return SliceWithSummaries.of(emptySlice, Collections.emptyList());
+            return new SliceImpl<>(Collections.emptyList(), pageable, false);
         }
 
         // 3. Run the SQL report for all extensions (unpaged for grouping)
@@ -111,27 +105,9 @@ public class ExtensionGroupReportService {
                     .build());
         }
 
-        // 6. Calculate grand TOTALES summary
-        int totalIncoming = allRows.stream().mapToInt(r -> r.getIncomingCount() != null ? r.getIncomingCount() : 0)
-                .sum();
-        int totalOutgoing = allRows.stream().mapToInt(r -> r.getOutgoingCount() != null ? r.getOutgoingCount() : 0)
-                .sum();
-        int totalVoicemail = allRows.stream().mapToInt(r -> r.getVoicemailCount() != null ? r.getVoicemailCount() : 0)
-                .sum();
-        int grandTotal = allRows.stream().mapToInt(r -> r.getTotal() != null ? r.getTotal() : 0).sum();
-
-        ExtensionGroupSummaryDto totales = ExtensionGroupSummaryDto.builder()
-                .label("TOTALES")
-                .totalIncoming(totalIncoming)
-                .totalOutgoing(totalOutgoing)
-                .totalVoicemail(totalVoicemail)
-                .total(grandTotal)
-                .totalPercent(new BigDecimal("100.00"))
-                .build();
-
         SortingUtils.sort(groupDtos, pageable.getSort(), Sort.by("groupName"));
 
-        // 7. Paginate the group list using SliceImpl
+        // 6. Paginate the group list using SliceImpl
         int start = (int) pageable.getOffset();
         int end = Math.min((start + pageable.getPageSize()), groupDtos.size());
         List<ExtensionGroupDto> pageContent = start > groupDtos.size()
@@ -139,7 +115,6 @@ public class ExtensionGroupReportService {
                 : groupDtos.subList(start, end);
 
         boolean hasNext = end < groupDtos.size();
-        Slice<ExtensionGroupDto> slice = new SliceImpl<>(pageContent, pageable, hasNext);
-        return SliceWithSummaries.of(slice, List.of(totales));
+        return new SliceImpl<>(pageContent, pageable, hasNext);
     }
 }

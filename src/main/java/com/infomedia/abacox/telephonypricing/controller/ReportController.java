@@ -7,7 +7,6 @@ import com.infomedia.abacox.telephonypricing.db.view.CorporateReportView;
 import com.infomedia.abacox.telephonypricing.dto.callrecord.CallRecordDto;
 import com.infomedia.abacox.telephonypricing.dto.failedcallrecord.FailedCallRecordDto;
 import com.infomedia.abacox.telephonypricing.dto.generic.PageableRequest;
-import com.infomedia.abacox.telephonypricing.dto.generic.SliceWithSummaries;
 import com.infomedia.abacox.telephonypricing.dto.report.*;
 import com.infomedia.abacox.telephonypricing.dto.generic.ExcelRequest;
 import com.infomedia.abacox.telephonypricing.dto.generic.ExportRequest;
@@ -452,7 +451,7 @@ public class ReportController {
         // ── costCenterUsage ──
 
         @GetMapping(value = "costCenterUsage", produces = MediaType.APPLICATION_JSON_VALUE)
-        public SliceWithSummaries<CostCenterUsageReportDto, UsageReportSummaryDto> getCostCenterUsageReport(
+        public Slice<CostCenterUsageReportDto> getCostCenterUsageReport(
                         @Parameter(hidden = true) Pageable pageable,
                         @ParameterObject PageableRequest pageableRequest,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,
@@ -647,7 +646,7 @@ public class ReportController {
         // ── extensionGroup ──
 
         @GetMapping(value = "extensionGroup", produces = MediaType.APPLICATION_JSON_VALUE)
-        public SliceWithSummaries<ExtensionGroupDto, ExtensionGroupSummaryDto> getExtensionGroupReport(
+        public Slice<ExtensionGroupDto> getExtensionGroupReport(
                         @Parameter(hidden = true) Pageable pageable,
                         @ParameterObject PageableRequest pageableRequest,
                         @RequestParam @DateTimeFormat(pattern = DateTimePattern.DATE_TIME) LocalDateTime startDate,

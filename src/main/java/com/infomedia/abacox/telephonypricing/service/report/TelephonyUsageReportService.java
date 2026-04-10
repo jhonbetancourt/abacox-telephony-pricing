@@ -4,7 +4,6 @@ import com.infomedia.abacox.telephonypricing.component.export.excel.ExcelGenerat
 import com.infomedia.abacox.telephonypricing.component.modeltools.ModelConverter;
 import com.infomedia.abacox.telephonypricing.component.utils.SortingUtils;
 import com.infomedia.abacox.telephonypricing.db.repository.ReportRepository;
-import com.infomedia.abacox.telephonypricing.dto.generic.SliceWithSummaries;
 import com.infomedia.abacox.telephonypricing.dto.report.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -20,7 +19,6 @@ import java.io.OutputStream;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
@@ -204,10 +202,13 @@ public class TelephonyUsageReportService {
                 }
         }
 
+        /**
+         * Computes aggregate totals across all cost-center rows (including the synthetic
+         * "unassigned" row, costCenterId == -1) for the given period. Used by dashboard KPIs.
+         */
         @Transactional(readOnly = true)
-        public SliceWithSummaries<CostCenterUsageReportDto, UsageReportSummaryDto> generateCostCenterUsageReport(
-                        LocalDateTime startDate, LocalDateTime endDate, Long parentCostCenterId, Pageable pageable) {
-                // Fetch all rows unpaged to compute summaries
+        public CostCenterUsageTotalsDto getCostCenterUsageTotals(
+                        LocalDateTime startDate, LocalDateTime endDate, Long parentCostCenterId) {
                 List<CostCenterUsageReportDto> allRows = reportRepository
                                 .getCostCenterUsageReport(startDate, endDate, parentCostCenterId, Pageable.unpaged())
                                 .getContent()
@@ -215,101 +216,66 @@ public class TelephonyUsageReportService {
                                 .map(row -> modelConverter.map(row, CostCenterUsageReportDto.class))
                                 .collect(Collectors.toList());
 
-                // Separate assigned rows and unrelated info row
+                BigDecimal totalBilled = BigDecimal.ZERO;
+                long totalDuration = 0L;
+                long totalIncoming = 0L;
+                long totalOutgoing = 0L;
+                long unassigned = 0L;
+
+                for (CostCenterUsageReportDto row : allRows) {
+                        long inCalls  = row.getIncomingCallCount() != null ? row.getIncomingCallCount() : 0L;
+                        long outCalls = row.getOutgoingCallCount() != null ? row.getOutgoingCallCount() : 0L;
+                        totalBilled = totalBilled.add(row.getTotalBilledAmount() != null ? row.getTotalBilledAmount() : BigDecimal.ZERO);
+                        totalDuration += row.getTotalDuration() != null ? row.getTotalDuration() : 0L;
+                        totalIncoming += inCalls;
+                        totalOutgoing += outCalls;
+                        if (row.getCostCenterId() != null && row.getCostCenterId() == -1L) {
+                                unassigned += inCalls + outCalls;
+                        }
+                }
+
+                return CostCenterUsageTotalsDto.builder()
+                                .totalBilledAmount(totalBilled)
+                                .totalDurationSeconds(totalDuration)
+                                .totalIncomingCalls(totalIncoming)
+                                .totalOutgoingCalls(totalOutgoing)
+                                .unassignedCalls(unassigned)
+                                .build();
+        }
+
+        @Transactional(readOnly = true)
+        public Slice<CostCenterUsageReportDto> generateCostCenterUsageReport(
+                        LocalDateTime startDate, LocalDateTime endDate, Long parentCostCenterId, Pageable pageable) {
+                List<CostCenterUsageReportDto> allRows = reportRepository
+                                .getCostCenterUsageReport(startDate, endDate, parentCostCenterId, Pageable.unpaged())
+                                .getContent()
+                                .stream()
+                                .map(row -> modelConverter.map(row, CostCenterUsageReportDto.class))
+                                .collect(Collectors.toList());
+
+                // Drop the synthetic unrelated/unassigned row (costCenterId == -1)
                 List<CostCenterUsageReportDto> assignedRows = allRows.stream()
                                 .filter(r -> r.getCostCenterId() == null || r.getCostCenterId() != -1L)
                                 .collect(Collectors.toList());
 
-                CostCenterUsageReportDto unrelatedRow = allRows.stream()
-                                .filter(r -> r.getCostCenterId() != null && r.getCostCenterId() == -1L)
-                                .findFirst()
-                                .orElse(null);
-
-                // Calculate grand totals for accurate percentage calculation in summaries
-                BigDecimal grandTotalBilled = allRows.stream()
-                                .map(r -> r.getTotalBilledAmount() != null ? r.getTotalBilledAmount() : BigDecimal.ZERO)
-                                .reduce(BigDecimal.ZERO, BigDecimal::add);
-                BigDecimal grandTotalDuration = allRows.stream()
-                                .map(r -> r.getTotalDuration() != null ? BigDecimal.valueOf(r.getTotalDuration())
-                                                : BigDecimal.ZERO)
-                                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-                // Build summaries list
-                List<UsageReportSummaryDto> summaries = new ArrayList<>();
-
-                // Helper to calculate percentages consistently
-                BiFunction<BigDecimal, BigDecimal, BigDecimal> calcPercent = (val, tot) -> {
-                        if (tot.compareTo(BigDecimal.ZERO) == 0)
-                                return BigDecimal.ZERO;
-                        return val.multiply(new java.math.BigDecimal("100")).divide(tot, 2,
-                                        java.math.RoundingMode.HALF_UP);
-                };
-
-                // "Subtotal (Assigned Calls)" summary row
-                BigDecimal subtotalBilled = assignedRows.stream()
-                                .map(r -> r.getTotalBilledAmount() != null ? r.getTotalBilledAmount() : BigDecimal.ZERO)
-                                .reduce(BigDecimal.ZERO, BigDecimal::add);
-                BigDecimal subtotalDuration = assignedRows.stream()
-                                .map(r -> r.getTotalDuration() != null ? BigDecimal.valueOf(r.getTotalDuration())
-                                                : BigDecimal.ZERO)
-                                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-                UsageReportSummaryDto subtotalRow = UsageReportSummaryDto.builder()
-                                .rowType("SUBTOTAL")
-                                .label("Subtotal (Assigned Calls)")
-                                .incomingCallCount(assignedRows.stream().mapToLong(
-                                                r -> r.getIncomingCallCount() != null ? r.getIncomingCallCount() : 0L)
-                                                .sum())
-                                .outgoingCallCount(assignedRows.stream().mapToLong(
-                                                r -> r.getOutgoingCallCount() != null ? r.getOutgoingCallCount() : 0L)
-                                                .sum())
-                                .totalDuration(subtotalDuration.longValue())
-                                .totalBilledAmount(subtotalBilled)
-                                .durationPercentage(calcPercent.apply(subtotalDuration, grandTotalDuration))
-                                .billedAmountPercentage(calcPercent.apply(subtotalBilled, grandTotalBilled))
-                                .build();
-                summaries.add(subtotalRow);
-
-                // "Unassigned Information" row (always present)
-                BigDecimal unrelatedBilled = unrelatedRow != null ? unrelatedRow.getTotalBilledAmount()
-                                : BigDecimal.ZERO;
-                BigDecimal unrelatedDuration = unrelatedRow != null && unrelatedRow.getTotalDuration() != null
-                                ? BigDecimal.valueOf(unrelatedRow.getTotalDuration())
-                                : BigDecimal.ZERO;
-
-                UsageReportSummaryDto unrelatedSummary = UsageReportSummaryDto.builder()
-                                .rowType("UNASSIGNED")
-                                .label("Unassigned Information")
-                                .incomingCallCount(unrelatedRow != null ? unrelatedRow.getIncomingCallCount() : 0L)
-                                .outgoingCallCount(unrelatedRow != null ? unrelatedRow.getOutgoingCallCount() : 0L)
-                                .totalDuration(unrelatedDuration.longValue())
-                                .totalBilledAmount(unrelatedBilled)
-                                .durationPercentage(calcPercent.apply(unrelatedDuration, grandTotalDuration))
-                                .billedAmountPercentage(calcPercent.apply(unrelatedBilled, grandTotalBilled))
-                                .build();
-                summaries.add(unrelatedSummary);
-
                 SortingUtils.sort(assignedRows, pageable.getSort(), Sort.by(Sort.Direction.DESC, "totalBilledAmount"));
 
-                Slice<CostCenterUsageReportDto> slice;
                 if (pageable.isUnpaged()) {
-                        slice = new SliceImpl<>(assignedRows, pageable, false);
-                } else {
-                        // Paginate only the assigned rows as content using SliceImpl
-                        int start = (int) pageable.getOffset();
-                        int end = Math.min((start + pageable.getPageSize()), assignedRows.size());
-
-                        List<CostCenterUsageReportDto> pageContent;
-                        if (start > assignedRows.size()) {
-                                pageContent = Collections.emptyList();
-                        } else {
-                                pageContent = assignedRows.subList(start, end);
-                        }
-
-                        boolean hasNext = end < assignedRows.size();
-                        slice = new SliceImpl<>(pageContent, pageable, hasNext);
+                        return new SliceImpl<>(assignedRows, pageable, false);
                 }
-                return SliceWithSummaries.of(slice, summaries);
+
+                int start = (int) pageable.getOffset();
+                int end = Math.min((start + pageable.getPageSize()), assignedRows.size());
+
+                List<CostCenterUsageReportDto> pageContent;
+                if (start > assignedRows.size()) {
+                        pageContent = Collections.emptyList();
+                } else {
+                        pageContent = assignedRows.subList(start, end);
+                }
+
+                boolean hasNext = end < assignedRows.size();
+                return new SliceImpl<>(pageContent, pageable, hasNext);
         }
 
         public void exportExcelCostCenterUsageReport(
