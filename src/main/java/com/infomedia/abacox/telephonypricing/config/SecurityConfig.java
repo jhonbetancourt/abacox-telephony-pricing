@@ -23,6 +23,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.util.AntPathMatcher;
 
 import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -55,9 +56,10 @@ public class SecurityConfig {
     /**
      * Custom JWT → Authentication converter. Reads the {@code tenant} claim
      * into the multi-tenant thread local so downstream DB queries target the
-     * right schema, then uses the {@code rolename} claim to look up the
-     * effective permissions for that role (cached, with event-based
-     * invalidation) and maps them into Spring Security authorities.
+     * right schema, then uses the {@code rolenames} claim to look up the
+     * effective permissions for every role the user holds (each role is
+     * cached independently, with event-based invalidation) and unions them
+     * into Spring Security authorities.
      * <p>
      * This is deliberately a private helper — not a {@code @Bean} — so
      * Spring Boot's {@code ApplicationConversionService} doesn't try to
@@ -71,20 +73,26 @@ public class SecurityConfig {
                 TenantContext.setTenant(tenant);
             }
 
-            String rolename = jwt.getClaimAsString("rolename");
-            Collection<GrantedAuthority> authorities = loadAuthorities(rolename);
+            List<String> rolenames = jwt.getClaimAsStringList("rolenames");
+            Collection<GrantedAuthority> authorities = loadAuthorities(rolenames);
 
             String username = jwt.getClaimAsString("username");
             return new JwtAuthenticationToken(jwt, authorities, username);
         };
     }
 
-    private Collection<GrantedAuthority> loadAuthorities(String rolename) {
-        if (rolename == null || rolename.isBlank()) {
+    private Collection<GrantedAuthority> loadAuthorities(List<String> rolenames) {
+        if (rolenames == null || rolenames.isEmpty()) {
             return List.of();
         }
-        Set<String> permissions = rolePermissionCache.get(rolename);
-        return permissions.stream()
+        Set<String> union = new HashSet<>();
+        for (String rolename : rolenames) {
+            if (rolename == null || rolename.isBlank()) {
+                continue;
+            }
+            union.addAll(rolePermissionCache.get(rolename));
+        }
+        return union.stream()
                 .map(SimpleGrantedAuthority::new)
                 .map(GrantedAuthority.class::cast)
                 .toList();
