@@ -20,5 +20,5 @@ public class UpdateCdrLoadControl {
     @Size(max = 64)
     private JsonNullable<String> name = JsonNullable.undefined();
 
-    private JsonNullable<Integer> plantTypeId = JsonNullable.undefined();
+    private JsonNullable<Long> plantTypeId = JsonNullable.undefined();
 }

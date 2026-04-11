@@ -21,5 +21,5 @@ public class CreateCdrLoadControl {
     private String name;
 
     @NotNull
-    private Integer plantTypeId;
+    private Long plantTypeId;
 }

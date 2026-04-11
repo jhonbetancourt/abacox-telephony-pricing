@@ -147,7 +147,7 @@ public class CdrFolderPollingWorker implements TenantInitializer {
 
     private void processFile(File file, CdrLoadControl entry) {
         String filename = file.getName();
-        Long plantTypeId = entry.getPlantTypeId().longValue();
+        Long plantTypeId = entry.getPlantTypeId();
         log.info("CDR folder poller picked up file '{}' for plantTypeId={}", filename, plantTypeId);
 
         try {

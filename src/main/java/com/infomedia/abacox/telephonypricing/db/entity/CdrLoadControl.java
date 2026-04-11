@@ -43,5 +43,14 @@ public class CdrLoadControl extends ActivableEntity {
      */
     @Column(name = "plant_type_id", nullable = false)
     @ColumnDefault("0")
-    private Integer plantTypeId;
+    private Long plantTypeId;
+
+    @ManyToOne
+    @JoinColumn(
+            name = "plant_type_id",
+            insertable = false,
+            updatable = false,
+            foreignKey = @ForeignKey(name = "fk_cdr_load_control_plant_type")
+    )
+    private PlantType plantType;
 }
