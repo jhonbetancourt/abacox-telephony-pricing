@@ -60,9 +60,13 @@ public class SecurityConfig {
      * right schema, then uses the {@code rolename} claim to look up the
      * effective permissions for that role (cached, with event-based
      * invalidation) and maps them into Spring Security authorities.
+     * <p>
+     * This is deliberately a private helper — not a {@code @Bean} — so
+     * Spring Boot's {@code ApplicationConversionService} doesn't try to
+     * register it as an MVC formatter (which fails because lambdas
+     * lose their generic type parameters at runtime).
      */
-    @Bean
-    public Converter<Jwt, AbstractAuthenticationToken> jwtAuthenticationConverter() {
+    private Converter<Jwt, AbstractAuthenticationToken> jwtAuthenticationConverter() {
         return jwt -> {
             String tenant = jwt.getClaimAsString("tenant");
             if (tenant != null && !tenant.isBlank()) {
