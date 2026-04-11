@@ -41,6 +41,7 @@ public class SecurityConfig {
     @Autowired
     private TenantFilter tenantFilter;
     @Autowired
+    @Lazy
     private RolePermissionCache rolePermissionCache;
 
     @Bean
