@@ -1,33 +1,30 @@
 package com.infomedia.abacox.telephonypricing.config;
 
+import com.infomedia.abacox.telephonypricing.multitenancy.TenantContext;
 import com.infomedia.abacox.telephonypricing.multitenancy.TenantFilter;
 import com.infomedia.abacox.telephonypricing.security.cache.RolePermissionCache;
-import jakarta.servlet.FilterChain;
-import jakarta.servlet.ServletException;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.*;
+import org.springframework.core.convert.converter.Converter;
+import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AuthenticationServiceException;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.core.context.SecurityContext;
-import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.util.AntPathMatcher;
-import org.springframework.web.filter.OncePerRequestFilter;
 
-import java.io.IOException;
+import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 
@@ -51,9 +48,44 @@ public class SecurityConfig {
                 .sessionManagement(manager -> manager.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .addFilterBefore(internalApiKeyFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(tenantFilter, UsernamePasswordAuthenticationFilter.class)
-                .addFilterBefore(new UsernameAuthenticationFilter(rolePermissionCache), UsernamePasswordAuthenticationFilter.class)
+                .oauth2ResourceServer(oauth2 -> oauth2
+                        .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())))
                 .csrf(AbstractHttpConfigurer::disable);
         return http.build();
+    }
+
+    /**
+     * Custom JWT → Authentication converter. Reads the {@code tenant} claim
+     * into the multi-tenant thread local so downstream DB queries target the
+     * right schema, then uses the {@code rolename} claim to look up the
+     * effective permissions for that role (cached, with event-based
+     * invalidation) and maps them into Spring Security authorities.
+     */
+    @Bean
+    public Converter<Jwt, AbstractAuthenticationToken> jwtAuthenticationConverter() {
+        return jwt -> {
+            String tenant = jwt.getClaimAsString("tenant");
+            if (tenant != null && !tenant.isBlank()) {
+                TenantContext.setTenant(tenant);
+            }
+
+            String rolename = jwt.getClaimAsString("rolename");
+            Collection<GrantedAuthority> authorities = loadAuthorities(rolename);
+
+            String username = jwt.getClaimAsString("username");
+            return new JwtAuthenticationToken(jwt, authorities, username);
+        };
+    }
+
+    private Collection<GrantedAuthority> loadAuthorities(String rolename) {
+        if (rolename == null || rolename.isBlank()) {
+            return List.of();
+        }
+        Set<String> permissions = rolePermissionCache.get(rolename);
+        return permissions.stream()
+                .map(SimpleGrantedAuthority::new)
+                .map(GrantedAuthority.class::cast)
+                .toList();
     }
 
     @Bean
@@ -81,50 +113,5 @@ public class SecurityConfig {
             }
         }
         return false;
-    }
-
-    public static class UsernameAuthenticationFilter extends OncePerRequestFilter {
-
-        private final RolePermissionCache rolePermissionCache;
-
-        public UsernameAuthenticationFilter(RolePermissionCache rolePermissionCache) {
-            this.rolePermissionCache = rolePermissionCache;
-        }
-
-        @Override
-        protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
-                FilterChain filterChain)
-                throws ServletException, IOException {
-
-            String headerUsername = request.getHeader("X-Username");
-            String username = "anonymousUser";
-
-            if (headerUsername != null) {
-                username = headerUsername;
-            }
-
-            if (!username.equals("anonymousUser")) {
-                String rolename = request.getHeader("X-Role");
-                List<SimpleGrantedAuthority> authorities = loadAuthorities(rolename);
-                SecurityContext context = SecurityContextHolder.createEmptyContext();
-                UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(username, null,
-                        authorities);
-                authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-                context.setAuthentication(authToken);
-                SecurityContextHolder.setContext(context);
-            }
-
-            filterChain.doFilter(request, response);
-        }
-
-        private List<SimpleGrantedAuthority> loadAuthorities(String rolename) {
-            if (rolename == null || rolename.isBlank()) {
-                return List.of();
-            }
-            Set<String> permissions = rolePermissionCache.get(rolename);
-            return permissions.stream()
-                    .map(SimpleGrantedAuthority::new)
-                    .toList();
-        }
     }
 }
