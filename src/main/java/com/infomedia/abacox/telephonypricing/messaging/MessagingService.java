@@ -1,16 +1,19 @@
 package com.infomedia.abacox.telephonypricing.messaging;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.infomedia.abacox.telephonypricing.security.cache.RolePermissionCache;
 import com.infomedia.abacox.telephonypricing.service.AuthService;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.util.Collections;
+import java.util.Map;
 
 /**
  * Central service for internal inter-module communication over RabbitMQ.
@@ -30,19 +33,25 @@ import java.util.Collections;
 @Log4j2
 public class MessagingService {
 
+    /** RabbitMQ event broadcast by users when a role's permissions change. */
+    public static final String ROLE_PERMISSIONS_CHANGED_EVENT = "ROLE_PERMISSIONS_CHANGED";
+
     private final RabbitTemplate rabbitTemplate;
     private final ObjectMapper objectMapper;
     private final String moduleName;
     private final AuthService authService;
+    private final RolePermissionCache rolePermissionCache;
 
     public MessagingService(RabbitTemplate rabbitTemplate,
                             ObjectMapper objectMapper,
                             @Value("${spring.application.name}") String moduleName,
-                            AuthService authService) {
+                            AuthService authService,
+                            @Lazy RolePermissionCache rolePermissionCache) {
         this.rabbitTemplate = rabbitTemplate;
         this.objectMapper = objectMapper;
         this.moduleName = moduleName;
         this.authService = authService;
+        this.rolePermissionCache = rolePermissionCache;
     }
 
     /**
@@ -139,6 +148,29 @@ public class MessagingService {
         applyActor(event.getActor());
         log.debug("Observed event [{}] from [{}] (tenant: {}, actor: {})",
                 event.getType(), event.getSourceModule(), event.getTenant(), event.getActor());
+
+        if (ROLE_PERMISSIONS_CHANGED_EVENT.equals(event.getType())) {
+            handleRolePermissionsChanged(event);
+        }
+    }
+
+    /**
+     * Drops the local role-permission cache entry for the (tenant, rolename)
+     * carried in the event so method-level enforcement stays in sync with
+     * the source of truth in the users module.
+     */
+    @SuppressWarnings("unchecked")
+    private void handleRolePermissionsChanged(InternalMessage event) {
+        Object payload = event.getPayload();
+        if (!(payload instanceof Map)) {
+            return;
+        }
+        Map<String, Object> map = (Map<String, Object>) payload;
+        String tenant = (String) map.get("tenant");
+        String rolename = (String) map.get("rolename");
+        if (rolename != null) {
+            rolePermissionCache.invalidate(tenant, rolename);
+        }
     }
 
     /**

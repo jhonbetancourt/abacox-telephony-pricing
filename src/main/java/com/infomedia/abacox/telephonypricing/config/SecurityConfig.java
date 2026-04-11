@@ -1,6 +1,7 @@
 package com.infomedia.abacox.telephonypricing.config;
 
 import com.infomedia.abacox.telephonypricing.multitenancy.TenantFilter;
+import com.infomedia.abacox.telephonypricing.security.cache.RolePermissionCache;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -11,6 +12,7 @@ import org.springframework.context.annotation.*;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.AuthenticationServiceException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -26,6 +28,8 @@ import org.springframework.util.AntPathMatcher;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.List;
+import java.util.Set;
 
 @Configuration
 @EnableWebSecurity
@@ -36,6 +40,8 @@ public class SecurityConfig {
     private InternalApiKeyFilter internalApiKeyFilter;
     @Autowired
     private TenantFilter tenantFilter;
+    @Autowired
+    private RolePermissionCache rolePermissionCache;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -44,7 +50,7 @@ public class SecurityConfig {
                 .sessionManagement(manager -> manager.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .addFilterBefore(internalApiKeyFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(tenantFilter, UsernamePasswordAuthenticationFilter.class)
-                .addFilterBefore(new UsernameAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class)
+                .addFilterBefore(new UsernameAuthenticationFilter(rolePermissionCache), UsernamePasswordAuthenticationFilter.class)
                 .csrf(AbstractHttpConfigurer::disable);
         return http.build();
     }
@@ -76,7 +82,13 @@ public class SecurityConfig {
         return false;
     }
 
-    public class UsernameAuthenticationFilter extends OncePerRequestFilter {
+    public static class UsernameAuthenticationFilter extends OncePerRequestFilter {
+
+        private final RolePermissionCache rolePermissionCache;
+
+        public UsernameAuthenticationFilter(RolePermissionCache rolePermissionCache) {
+            this.rolePermissionCache = rolePermissionCache;
+        }
 
         @Override
         protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
@@ -91,15 +103,27 @@ public class SecurityConfig {
             }
 
             if (!username.equals("anonymousUser")) {
+                String rolename = request.getHeader("X-Role");
+                List<SimpleGrantedAuthority> authorities = loadAuthorities(rolename);
                 SecurityContext context = SecurityContextHolder.createEmptyContext();
                 UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(username, null,
-                        null);
+                        authorities);
                 authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                 context.setAuthentication(authToken);
                 SecurityContextHolder.setContext(context);
             }
 
             filterChain.doFilter(request, response);
+        }
+
+        private List<SimpleGrantedAuthority> loadAuthorities(String rolename) {
+            if (rolename == null || rolename.isBlank()) {
+                return List.of();
+            }
+            Set<String> permissions = rolePermissionCache.get(rolename);
+            return permissions.stream()
+                    .map(SimpleGrantedAuthority::new)
+                    .toList();
         }
     }
 }
