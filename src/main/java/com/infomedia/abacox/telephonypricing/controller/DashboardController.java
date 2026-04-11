@@ -25,7 +25,6 @@ import java.time.LocalDateTime;
 @Tag(name = "Dashboard", description = "Dashboard Aggregation API")
 @SecurityRequirements(value = {
         @SecurityRequirement(name = "JWT_Token"),
-        @SecurityRequirement(name = "Username"),
         @SecurityRequirement(name = "Tenant_Id")
 })
 @RequestMapping("/api/dashboard")

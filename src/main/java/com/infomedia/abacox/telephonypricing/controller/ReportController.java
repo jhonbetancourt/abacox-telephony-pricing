@@ -43,7 +43,6 @@ import java.util.List;
 @Tag(name = "Report", description = "Report API")
 @SecurityRequirements(value = {
                 @SecurityRequirement(name = "JWT_Token"),
-                @SecurityRequirement(name = "Username"),
                 @SecurityRequirement(name = "Tenant_Id")
 })
 @RequestMapping("/api/report")

@@ -31,12 +31,6 @@ import java.util.Map;
                 scheme = "bearer"
         ),
         @SecurityScheme(
-                name = "Username",
-                type = SecuritySchemeType.APIKEY,
-                paramName = "X-Username",
-                in = SecuritySchemeIn.HEADER
-        ),
-        @SecurityScheme(
                 name = "Tenant_Id",
                 type = SecuritySchemeType.APIKEY,
                 paramName = "X-Tenant-Id",

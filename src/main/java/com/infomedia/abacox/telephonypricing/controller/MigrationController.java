@@ -21,7 +21,6 @@ import org.springframework.web.bind.annotation.*;
 @Tag(name = "Migration", description = "Migration API")
 @SecurityRequirements(value = {
         @SecurityRequirement(name = "JWT_Token"),
-        @SecurityRequirement(name = "Username"),
         @SecurityRequirement(name = "Tenant_Id")
 })
 @Log4j2

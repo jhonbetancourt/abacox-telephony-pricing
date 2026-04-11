@@ -36,7 +36,6 @@ import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBo
 @Tag(name = "CallCategory", description = "CallCategory API")
 @SecurityRequirements(value = {
         @SecurityRequirement(name = "JWT_Token"),
-        @SecurityRequirement(name = "Username"),
         @SecurityRequirement(name = "Tenant_Id")
 })
 @RequestMapping("/api/callCategory")

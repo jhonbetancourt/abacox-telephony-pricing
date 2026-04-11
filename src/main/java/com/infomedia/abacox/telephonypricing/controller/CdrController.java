@@ -32,7 +32,6 @@ import java.util.List;
 @Tag(name = "CdrController", description = "CDR Controller")
 @SecurityRequirements(value = {
         @SecurityRequirement(name = "JWT_Token"),
-        @SecurityRequirement(name = "Username"),
         @SecurityRequirement(name = "Tenant_Id")
 })
 @Log4j2

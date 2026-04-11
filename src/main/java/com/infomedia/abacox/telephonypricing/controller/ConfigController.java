@@ -23,7 +23,6 @@ import java.util.Map;
 @Tag(name = "Configuration", description = "Configuration controller")
 @SecurityRequirements(value = {
         @SecurityRequirement(name = "JWT_Token"),
-        @SecurityRequirement(name = "Username"),
         @SecurityRequirement(name = "Tenant_Id")
 })
 @RequestMapping("/api/configuration")

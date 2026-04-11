@@ -7,8 +7,6 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.infomedia.abacox.telephonypricing.exception.RemoteServiceException;
-import com.infomedia.abacox.telephonypricing.service.AuthService;
-import lombok.Setter;
 import okhttp3.*;
 import okhttp3.logging.HttpLoggingInterceptor;
 
@@ -17,22 +15,15 @@ import java.util.Collection;
 import java.util.Map;
 
 public abstract class RemoteService {
-    private final AuthService authService;
     private OkHttpClient client;
     private HttpLoggingInterceptor loggingInterceptor;
     private ObjectMapper objectMapper;
-    @Setter
-    private String testUsername;
 
-    protected RemoteService(AuthService authService) {
-        this.authService = authService;
+    protected RemoteService() {
         this.loggingInterceptor = new HttpLoggingInterceptor();
         loggingInterceptor.setLevel(HttpLoggingInterceptor.Level.BASIC);
         this.client = new OkHttpClient.Builder()
                 .addInterceptor(loggingInterceptor)
-                .addInterceptor(chain -> chain.proceed(chain.request().newBuilder()
-                                .addHeader("X-Username", testUsername!=null?testUsername:authService.getUsername())
-                        .build()))
                 .build();
         this.objectMapper = new ObjectMapper();
         objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
