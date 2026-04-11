@@ -7,6 +7,7 @@ import com.infomedia.abacox.telephonypricing.dto.employee.UpdateEmployee;
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivationDto;
 import com.infomedia.abacox.telephonypricing.db.entity.Employee;
 import com.infomedia.abacox.telephonypricing.security.annotation.RequiresPermission;
+import com.infomedia.abacox.telephonypricing.security.permissions.Permissions;
 import com.infomedia.abacox.telephonypricing.service.EmployeeService;
 import com.turkraft.springfilter.boot.Filter;
 import com.infomedia.abacox.telephonypricing.dto.generic.ExcelRequest;
@@ -44,7 +45,7 @@ public class EmployeeController {
     private final EmployeeService employeeService;
     private final ModelConverter modelConverter;
 
-    @RequiresPermission("employee:read")
+    @RequiresPermission(Permissions.EMPLOYEE_READ)
     @Operation(summary = "List employees")
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public Slice<EmployeeDto> find(@Parameter(hidden = true) @Filter Specification<Employee> spec,
@@ -54,28 +55,28 @@ public class EmployeeController {
         return modelConverter.mapSlice(employeeService.find(spec, pageable), EmployeeDto.class);
     }
 
-    @RequiresPermission("employee:create")
+    @RequiresPermission(Permissions.EMPLOYEE_CREATE)
     @Operation(summary = "Create an employee")
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public EmployeeDto create(@Valid @RequestBody CreateEmployee createEmployee) {
         return modelConverter.map(employeeService.create(createEmployee), EmployeeDto.class);
     }
 
-    @RequiresPermission("employee:update")
+    @RequiresPermission(Permissions.EMPLOYEE_UPDATE)
     @Operation(summary = "Update an employee")
     @PatchMapping(value = "{id}", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public EmployeeDto update(@PathVariable("id") Long id, @Valid @RequestBody UpdateEmployee uDto) {
         return modelConverter.map(employeeService.update(id, uDto), EmployeeDto.class);
     }
 
-    @RequiresPermission("employee:update")
+    @RequiresPermission(Permissions.EMPLOYEE_UPDATE)
     @Operation(summary = "Change employee activation status")
     @PatchMapping(value = "/status/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public EmployeeDto activate(@PathVariable("id") Long id, @Valid @RequestBody ActivationDto activationDto) {
         return modelConverter.map(employeeService.changeActivation(id, activationDto.getActive()), EmployeeDto.class);
     }
 
-    @RequiresPermission("employee:update")
+    @RequiresPermission(Permissions.EMPLOYEE_UPDATE)
     @Operation(summary = "Retire an employee")
     @PatchMapping(value = "/retire/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<Void> retire(@PathVariable("id") Long id) {
@@ -83,14 +84,14 @@ public class EmployeeController {
         return ResponseEntity.noContent().build();
     }
 
-    @RequiresPermission("employee:read")
+    @RequiresPermission(Permissions.EMPLOYEE_READ)
     @Operation(summary = "Get employee by ID")
     @GetMapping(value = "{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     private EmployeeDto get(@PathVariable("id") Long id) {
         return modelConverter.map(employeeService.get(id), EmployeeDto.class);
     }
 
-    @RequiresPermission("employee:read")
+    @RequiresPermission(Permissions.EMPLOYEE_READ)
     @Operation(summary = "Export employees to Excel")
     @GetMapping(value = "/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
     public ResponseEntity<StreamingResponseBody> exportExcel(@Parameter(hidden = true) @Filter Specification<Employee> spec,

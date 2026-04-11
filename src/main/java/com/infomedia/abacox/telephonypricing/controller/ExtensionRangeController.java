@@ -7,6 +7,7 @@ import com.infomedia.abacox.telephonypricing.dto.extensionrange.UpdateExtensionR
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivationDto;
 import com.infomedia.abacox.telephonypricing.db.entity.ExtensionRange;
 import com.infomedia.abacox.telephonypricing.security.annotation.RequiresPermission;
+import com.infomedia.abacox.telephonypricing.security.permissions.Permissions;
 import com.infomedia.abacox.telephonypricing.service.ExtensionRangeService;
 import com.turkraft.springfilter.boot.Filter;
 import io.swagger.v3.oas.annotations.Operation;
@@ -44,7 +45,7 @@ public class ExtensionRangeController {
     private final ExtensionRangeService extensionRangeService;
     private final ModelConverter modelConverter;
 
-    @RequiresPermission("telephony-config:read")
+    @RequiresPermission(Permissions.TELEPHONY_CONFIG_READ)
     @Operation(summary = "List extension ranges")
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public Slice<ExtensionRangeDto> find(@Parameter(hidden = true) @Filter Specification<ExtensionRange> spec,
@@ -54,14 +55,14 @@ public class ExtensionRangeController {
         return modelConverter.mapSlice(extensionRangeService.find(spec, pageable), ExtensionRangeDto.class);
     }
 
-    @RequiresPermission("telephony-config:create")
+    @RequiresPermission(Permissions.TELEPHONY_CONFIG_CREATE)
     @Operation(summary = "Create an extension range")
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public ExtensionRangeDto create(@Valid @RequestBody CreateExtensionRange createExtensionRange) {
         return modelConverter.map(extensionRangeService.create(createExtensionRange), ExtensionRangeDto.class);
     }
 
-    @RequiresPermission("telephony-config:update")
+    @RequiresPermission(Permissions.TELEPHONY_CONFIG_UPDATE)
     @Operation(summary = "Update an extension range")
     @PatchMapping(value = "{id}", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public ExtensionRangeDto update(@PathVariable("id") Long id,
@@ -69,7 +70,7 @@ public class ExtensionRangeController {
         return modelConverter.map(extensionRangeService.update(id, updateExtensionRange), ExtensionRangeDto.class);
     }
 
-    @RequiresPermission("telephony-config:update")
+    @RequiresPermission(Permissions.TELEPHONY_CONFIG_UPDATE)
     @Operation(summary = "Change extension range activation status")
     @PatchMapping(value = "/status/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public ExtensionRangeDto activate(@PathVariable("id") Long id, @Valid @RequestBody ActivationDto activationDto) {
@@ -77,7 +78,7 @@ public class ExtensionRangeController {
                 ExtensionRangeDto.class);
     }
 
-    @RequiresPermission("telephony-config:update")
+    @RequiresPermission(Permissions.TELEPHONY_CONFIG_UPDATE)
     @Operation(summary = "Retire an extension range")
     @PatchMapping(value = "/retire/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<Void> retire(@PathVariable("id") Long id) {
@@ -85,14 +86,14 @@ public class ExtensionRangeController {
         return ResponseEntity.noContent().build();
     }
 
-    @RequiresPermission("telephony-config:read")
+    @RequiresPermission(Permissions.TELEPHONY_CONFIG_READ)
     @Operation(summary = "Get extension range by ID")
     @GetMapping(value = "{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public ExtensionRangeDto get(@PathVariable("id") Long id) {
         return modelConverter.map(extensionRangeService.get(id), ExtensionRangeDto.class);
     }
 
-    @RequiresPermission("telephony-config:read")
+    @RequiresPermission(Permissions.TELEPHONY_CONFIG_READ)
     @Operation(summary = "Export extension ranges to Excel")
     @GetMapping(value = "/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
     public ResponseEntity<StreamingResponseBody> exportExcel(@Parameter(hidden = true) @Filter Specification<ExtensionRange> spec,

@@ -8,6 +8,7 @@ import com.infomedia.abacox.telephonypricing.dto.pbxspecialrule.UpdatePbxSpecial
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivationDto;
 import com.infomedia.abacox.telephonypricing.db.entity.PbxSpecialRule;
 import com.infomedia.abacox.telephonypricing.security.annotation.RequiresPermission;
+import com.infomedia.abacox.telephonypricing.security.permissions.Permissions;
 import com.infomedia.abacox.telephonypricing.service.PbxSpecialRuleService;
 import com.turkraft.springfilter.boot.Filter;
 import io.swagger.v3.oas.annotations.Operation;
@@ -45,7 +46,7 @@ public class PbxSpecialRuleController {
     private final PbxSpecialRuleService pbxSpecialRuleService;
     private final ModelConverter modelConverter;
 
-    @RequiresPermission("telephony-config:read")
+    @RequiresPermission(Permissions.TELEPHONY_CONFIG_READ)
     @Operation(summary = "List PBX special rules")
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public Slice<PbxSpecialRuleDto> find(@Parameter(hidden = true) @Filter Specification<PbxSpecialRule> spec
@@ -55,35 +56,35 @@ public class PbxSpecialRuleController {
         return modelConverter.mapSlice(pbxSpecialRuleService.find(spec, pageable), PbxSpecialRuleDto.class);
     }
 
-    @RequiresPermission("telephony-config:create")
+    @RequiresPermission(Permissions.TELEPHONY_CONFIG_CREATE)
     @Operation(summary = "Create a PBX special rule")
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public PbxSpecialRuleDto create(@Valid @RequestBody CreatePbxSpecialRule createPbxSpecialRule) {
         return modelConverter.map(pbxSpecialRuleService.create(createPbxSpecialRule), PbxSpecialRuleDto.class);
     }
 
-    @RequiresPermission("telephony-config:update")
+    @RequiresPermission(Permissions.TELEPHONY_CONFIG_UPDATE)
     @Operation(summary = "Update a PBX special rule")
     @PatchMapping(value = "{id}", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public PbxSpecialRuleDto update(@PathVariable("id") Long id, @Valid @RequestBody UpdatePbxSpecialRule uDto) {
         return modelConverter.map(pbxSpecialRuleService.update(id, uDto), PbxSpecialRuleDto.class);
     }
 
-    @RequiresPermission("telephony-config:update")
+    @RequiresPermission(Permissions.TELEPHONY_CONFIG_UPDATE)
     @Operation(summary = "Change PBX special rule activation status")
     @PatchMapping(value = "/status/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public PbxSpecialRuleDto activate(@PathVariable("id") Long id, @Valid @RequestBody ActivationDto activationDto) {
         return modelConverter.map(pbxSpecialRuleService.changeActivation(id, activationDto.getActive()), PbxSpecialRuleDto.class);
     }
 
-    @RequiresPermission("telephony-config:read")
+    @RequiresPermission(Permissions.TELEPHONY_CONFIG_READ)
     @Operation(summary = "Get PBX special rule by ID")
     @GetMapping(value = "{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public PbxSpecialRuleDto get(@PathVariable("id") Long id) {
         return modelConverter.map(pbxSpecialRuleService.get(id), PbxSpecialRuleDto.class);
     }
 
-    @RequiresPermission("telephony-config:read")
+    @RequiresPermission(Permissions.TELEPHONY_CONFIG_READ)
     @Operation(summary = "Export PBX special rules to Excel")
     @GetMapping(value = "/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
     public ResponseEntity<StreamingResponseBody> exportExcel(@Parameter(hidden = true) @Filter Specification<PbxSpecialRule> spec,

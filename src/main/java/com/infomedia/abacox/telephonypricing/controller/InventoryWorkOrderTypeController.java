@@ -11,6 +11,7 @@ import com.infomedia.abacox.telephonypricing.dto.generic.FilterRequest;
 import com.infomedia.abacox.telephonypricing.dto.generic.PageableRequest;
 
 import com.infomedia.abacox.telephonypricing.security.annotation.RequiresPermission;
+import com.infomedia.abacox.telephonypricing.security.permissions.Permissions;
 import com.infomedia.abacox.telephonypricing.service.InventoryWorkOrderTypeService;
 import com.turkraft.springfilter.boot.Filter;
 import io.swagger.v3.oas.annotations.Operation;
@@ -44,7 +45,7 @@ public class InventoryWorkOrderTypeController {
     private final InventoryWorkOrderTypeService inventoryWorkOrderTypeService;
     private final ModelConverter modelConverter;
 
-    @RequiresPermission("inventory:read")
+    @RequiresPermission(Permissions.INVENTORY_READ)
     @Operation(summary = "List inventory work order types")
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public Slice<InventoryWorkOrderTypeDto> find(@Parameter(hidden = true) @Filter Specification<InventoryWorkOrderType> spec,
@@ -54,28 +55,28 @@ public class InventoryWorkOrderTypeController {
         return modelConverter.mapSlice(inventoryWorkOrderTypeService.find(spec, pageable), InventoryWorkOrderTypeDto.class);
     }
 
-    @RequiresPermission("inventory:create")
+    @RequiresPermission(Permissions.INVENTORY_CREATE)
     @Operation(summary = "Create an inventory work order type")
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public InventoryWorkOrderTypeDto create(@Valid @RequestBody CreateInventoryWorkOrderType cDto) {
         return modelConverter.map(inventoryWorkOrderTypeService.create(cDto), InventoryWorkOrderTypeDto.class);
     }
 
-    @RequiresPermission("inventory:update")
+    @RequiresPermission(Permissions.INVENTORY_UPDATE)
     @Operation(summary = "Update an inventory work order type")
     @PatchMapping(value = "{id}", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public InventoryWorkOrderTypeDto update(@PathVariable("id") Long id, @Valid @RequestBody UpdateInventoryWorkOrderType uDto) {
         return modelConverter.map(inventoryWorkOrderTypeService.update(id, uDto), InventoryWorkOrderTypeDto.class);
     }
 
-    @RequiresPermission("inventory:read")
+    @RequiresPermission(Permissions.INVENTORY_READ)
     @Operation(summary = "Get inventory work order type by ID")
     @GetMapping(value = "{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public InventoryWorkOrderTypeDto get(@PathVariable("id") Long id) {
         return modelConverter.map(inventoryWorkOrderTypeService.get(id), InventoryWorkOrderTypeDto.class);
     }
 
-    @RequiresPermission("inventory:read")
+    @RequiresPermission(Permissions.INVENTORY_READ)
     @Operation(summary = "Export inventory work order types to Excel")
     @GetMapping(value = "/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
     public ResponseEntity<StreamingResponseBody> exportExcel(@Parameter(hidden = true) @Filter Specification<InventoryWorkOrderType> spec,

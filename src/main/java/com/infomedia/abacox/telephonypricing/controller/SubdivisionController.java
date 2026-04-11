@@ -8,6 +8,7 @@ import com.infomedia.abacox.telephonypricing.dto.subdivision.UpdateSubdivision;
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivationDto;
 import com.infomedia.abacox.telephonypricing.db.entity.Subdivision;
 import com.infomedia.abacox.telephonypricing.security.annotation.RequiresPermission;
+import com.infomedia.abacox.telephonypricing.security.permissions.Permissions;
 import com.infomedia.abacox.telephonypricing.service.SubdivisionService;
 import com.turkraft.springfilter.boot.Filter;
 import io.swagger.v3.oas.annotations.Operation;
@@ -45,7 +46,7 @@ public class SubdivisionController {
     private final SubdivisionService subdivisionService;
     private final ModelConverter modelConverter;
 
-    @RequiresPermission("subdivision:read")
+    @RequiresPermission(Permissions.SUBDIVISION_READ)
     @Operation(summary = "List subdivisions")
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public Slice<SubdivisionDto> find(@Parameter(hidden = true) @Filter Specification<Subdivision> spec
@@ -55,35 +56,35 @@ public class SubdivisionController {
         return modelConverter.mapSlice(subdivisionService.find(spec, pageable), SubdivisionDto.class);
     }
 
-    @RequiresPermission("subdivision:create")
+    @RequiresPermission(Permissions.SUBDIVISION_CREATE)
     @Operation(summary = "Create a subdivision")
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public SubdivisionDto create(@Valid @RequestBody CreateSubdivision createSubdivision) {
         return modelConverter.map(subdivisionService.create(createSubdivision), SubdivisionDto.class);
     }
 
-    @RequiresPermission("subdivision:update")
+    @RequiresPermission(Permissions.SUBDIVISION_UPDATE)
     @Operation(summary = "Update a subdivision")
     @PatchMapping(value = "{id}", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public SubdivisionDto update(@PathVariable("id") Long id, @Valid @RequestBody UpdateSubdivision uDto) {
         return modelConverter.map(subdivisionService.update(id, uDto), SubdivisionDto.class);
     }
 
-    @RequiresPermission("subdivision:read")
+    @RequiresPermission(Permissions.SUBDIVISION_READ)
     @Operation(summary = "Get subdivision by ID")
     @GetMapping(value = "{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     private SubdivisionDto get(@PathVariable("id") Long id) {
         return modelConverter.map(subdivisionService.get(id), SubdivisionDto.class);
     }
 
-    @RequiresPermission("subdivision:update")
+    @RequiresPermission(Permissions.SUBDIVISION_UPDATE)
     @Operation(summary = "Change subdivision activation status")
     @PatchMapping(value = "/status/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public SubdivisionDto activate(@PathVariable("id") Long id, @Valid @RequestBody ActivationDto activationDto) {
         return modelConverter.map(subdivisionService.changeActivation(id, activationDto.getActive()), SubdivisionDto.class);
     }
 
-    @RequiresPermission("subdivision:read")
+    @RequiresPermission(Permissions.SUBDIVISION_READ)
     @Operation(summary = "Export subdivisions to Excel")
     @GetMapping(value = "/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
     public ResponseEntity<StreamingResponseBody> exportExcel(@Parameter(hidden = true) @Filter Specification<Subdivision> spec,

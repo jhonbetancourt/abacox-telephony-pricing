@@ -11,6 +11,7 @@ import com.infomedia.abacox.telephonypricing.dto.generic.FilterRequest;
 import com.infomedia.abacox.telephonypricing.dto.generic.PageableRequest;
 
 import com.infomedia.abacox.telephonypricing.security.annotation.RequiresPermission;
+import com.infomedia.abacox.telephonypricing.security.permissions.Permissions;
 import com.infomedia.abacox.telephonypricing.service.InventoryOwnerService;
 import com.turkraft.springfilter.boot.Filter;
 import io.swagger.v3.oas.annotations.Operation;
@@ -44,7 +45,7 @@ public class InventoryOwnerController {
     private final InventoryOwnerService inventoryOwnerService;
     private final ModelConverter modelConverter;
 
-    @RequiresPermission("inventory:read")
+    @RequiresPermission(Permissions.INVENTORY_READ)
     @Operation(summary = "List inventory owners")
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public Slice<InventoryOwnerDto> find(@Parameter(hidden = true) @Filter Specification<InventoryOwner> spec,
@@ -54,28 +55,28 @@ public class InventoryOwnerController {
         return modelConverter.mapSlice(inventoryOwnerService.find(spec, pageable), InventoryOwnerDto.class);
     }
 
-    @RequiresPermission("inventory:create")
+    @RequiresPermission(Permissions.INVENTORY_CREATE)
     @Operation(summary = "Create an inventory owner")
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public InventoryOwnerDto create(@Valid @RequestBody CreateInventoryOwner cDto) {
         return modelConverter.map(inventoryOwnerService.create(cDto), InventoryOwnerDto.class);
     }
 
-    @RequiresPermission("inventory:update")
+    @RequiresPermission(Permissions.INVENTORY_UPDATE)
     @Operation(summary = "Update an inventory owner")
     @PatchMapping(value = "{id}", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public InventoryOwnerDto update(@PathVariable("id") Long id, @Valid @RequestBody UpdateInventoryOwner uDto) {
         return modelConverter.map(inventoryOwnerService.update(id, uDto), InventoryOwnerDto.class);
     }
 
-    @RequiresPermission("inventory:read")
+    @RequiresPermission(Permissions.INVENTORY_READ)
     @Operation(summary = "Get inventory owner by ID")
     @GetMapping(value = "{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public InventoryOwnerDto get(@PathVariable("id") Long id) {
         return modelConverter.map(inventoryOwnerService.get(id), InventoryOwnerDto.class);
     }
 
-    @RequiresPermission("inventory:read")
+    @RequiresPermission(Permissions.INVENTORY_READ)
     @Operation(summary = "Export inventory owners to Excel")
     @GetMapping(value = "/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
     public ResponseEntity<StreamingResponseBody> exportExcel(@Parameter(hidden = true) @Filter Specification<InventoryOwner> spec,

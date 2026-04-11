@@ -8,6 +8,7 @@ import com.infomedia.abacox.telephonypricing.dto.telephonytype.UpdateTelephonyTy
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivationDto;
 import com.infomedia.abacox.telephonypricing.db.entity.TelephonyType;
 import com.infomedia.abacox.telephonypricing.security.annotation.RequiresPermission;
+import com.infomedia.abacox.telephonypricing.security.permissions.Permissions;
 import com.infomedia.abacox.telephonypricing.service.TelephonyTypeService;
 import com.turkraft.springfilter.boot.Filter;
 import io.swagger.v3.oas.annotations.Operation;
@@ -45,7 +46,7 @@ public class TelephonyTypeController {
     private final TelephonyTypeService telephonyTypeService;
     private final ModelConverter modelConverter;
 
-    @RequiresPermission("telephony-config:read")
+    @RequiresPermission(Permissions.TELEPHONY_CONFIG_READ)
     @Operation(summary = "List telephony types")
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public Slice<TelephonyTypeDto> find(@Parameter(hidden = true) @Filter Specification<TelephonyType> spec
@@ -55,35 +56,35 @@ public class TelephonyTypeController {
         return modelConverter.mapSlice(telephonyTypeService.find(spec, pageable), TelephonyTypeDto.class);
     }
 
-    @RequiresPermission("telephony-config:create")
+    @RequiresPermission(Permissions.TELEPHONY_CONFIG_CREATE)
     @Operation(summary = "Create a telephony type")
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public TelephonyTypeDto create(@Valid @RequestBody CreateTelephonyType createTelephonyType) {
         return modelConverter.map(telephonyTypeService.create(createTelephonyType), TelephonyTypeDto.class);
     }
 
-    @RequiresPermission("telephony-config:update")
+    @RequiresPermission(Permissions.TELEPHONY_CONFIG_UPDATE)
     @Operation(summary = "Update a telephony type")
     @PatchMapping(value = "{id}", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public TelephonyTypeDto update(@PathVariable("id") Long id, @Valid @RequestBody UpdateTelephonyType uDto) {
         return modelConverter.map(telephonyTypeService.update(id, uDto), TelephonyTypeDto.class);
     }
 
-    @RequiresPermission("telephony-config:read")
+    @RequiresPermission(Permissions.TELEPHONY_CONFIG_READ)
     @Operation(summary = "Get telephony type by ID")
     @GetMapping(value = "{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public TelephonyTypeDto get(@PathVariable("id") Long id) {
         return modelConverter.map(telephonyTypeService.get(id), TelephonyTypeDto.class);
     }
 
-    @RequiresPermission("telephony-config:update")
+    @RequiresPermission(Permissions.TELEPHONY_CONFIG_UPDATE)
     @Operation(summary = "Change telephony type activation status")
     @PatchMapping(value = "/status/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public TelephonyTypeDto activate(@PathVariable("id") Long id, @Valid @RequestBody ActivationDto activationDto) {
         return modelConverter.map(telephonyTypeService.changeActivation(id, activationDto.getActive()), TelephonyTypeDto.class);
     }
 
-    @RequiresPermission("telephony-config:read")
+    @RequiresPermission(Permissions.TELEPHONY_CONFIG_READ)
     @Operation(summary = "Export telephony types to Excel")
     @GetMapping(value = "/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
     public ResponseEntity<StreamingResponseBody> exportExcel(@Parameter(hidden = true) @Filter Specification<TelephonyType> spec,

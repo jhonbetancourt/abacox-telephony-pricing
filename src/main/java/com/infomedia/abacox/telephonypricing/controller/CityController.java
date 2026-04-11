@@ -8,6 +8,7 @@ import com.infomedia.abacox.telephonypricing.dto.city.UpdateCity;
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivationDto;
 import com.infomedia.abacox.telephonypricing.db.entity.City;
 import com.infomedia.abacox.telephonypricing.security.annotation.RequiresPermission;
+import com.infomedia.abacox.telephonypricing.security.permissions.Permissions;
 import com.infomedia.abacox.telephonypricing.service.CityService;
 import com.turkraft.springfilter.boot.Filter;
 import io.swagger.v3.oas.annotations.Operation;
@@ -45,7 +46,7 @@ public class CityController {
     private final CityService cityService;
     private final ModelConverter modelConverter;
 
-    @RequiresPermission("numbering:read")
+    @RequiresPermission(Permissions.NUMBERING_READ)
     @Operation(summary = "List cities")
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public Slice<CityDto> find(@Parameter(hidden = true) @Filter Specification<City> spec
@@ -55,35 +56,35 @@ public class CityController {
         return modelConverter.mapSlice(cityService.find(spec, pageable), CityDto.class);
     }
 
-    @RequiresPermission("numbering:create")
+    @RequiresPermission(Permissions.NUMBERING_CREATE)
     @Operation(summary = "Create a city")
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public CityDto create(@Valid @RequestBody CreateCity createCity) {
         return modelConverter.map(cityService.create(createCity), CityDto.class);
     }
 
-    @RequiresPermission("numbering:update")
+    @RequiresPermission(Permissions.NUMBERING_UPDATE)
     @Operation(summary = "Update a city")
     @PatchMapping(value = "{id}", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public CityDto update(@PathVariable("id") Long id, @Valid @RequestBody UpdateCity uDto) {
         return modelConverter.map(cityService.update(id, uDto), CityDto.class);
     }
 
-    @RequiresPermission("numbering:read")
+    @RequiresPermission(Permissions.NUMBERING_READ)
     @Operation(summary = "Get city by ID")
     @GetMapping(value = "{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public CityDto get(@PathVariable("id") Long id) {
         return modelConverter.map(cityService.get(id), CityDto.class);
     }
 
-    @RequiresPermission("numbering:update")
+    @RequiresPermission(Permissions.NUMBERING_UPDATE)
     @Operation(summary = "Change city activation status")
     @PatchMapping(value = "/status/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public CityDto activate(@PathVariable("id") Long id, @Valid @RequestBody ActivationDto activationDto) {
         return modelConverter.map(cityService.changeActivation(id, activationDto.getActive()), CityDto.class);
     }
 
-    @RequiresPermission("numbering:read")
+    @RequiresPermission(Permissions.NUMBERING_READ)
     @Operation(summary = "Export cities to Excel")
     @GetMapping(value = "/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
     public ResponseEntity<StreamingResponseBody> exportExcel(@Parameter(hidden = true) @Filter Specification<City> spec,

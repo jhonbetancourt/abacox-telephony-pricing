@@ -8,6 +8,7 @@ import com.infomedia.abacox.telephonypricing.dto.officedetails.UpdateOfficeDetai
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivationDto;
 import com.infomedia.abacox.telephonypricing.db.entity.OfficeDetails;
 import com.infomedia.abacox.telephonypricing.security.annotation.RequiresPermission;
+import com.infomedia.abacox.telephonypricing.security.permissions.Permissions;
 import com.infomedia.abacox.telephonypricing.service.OfficeDetailsService;
 import com.turkraft.springfilter.boot.Filter;
 import io.swagger.v3.oas.annotations.Operation;
@@ -45,7 +46,7 @@ public class OfficeDetailsController {
     private final OfficeDetailsService officeDetailsService;
     private final ModelConverter modelConverter;
 
-    @RequiresPermission("company:read")
+    @RequiresPermission(Permissions.COMPANY_READ)
     @Operation(summary = "List office details")
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public Slice<OfficeDetailsDto> find(@Parameter(hidden = true) @Filter Specification<OfficeDetails> spec
@@ -55,35 +56,35 @@ public class OfficeDetailsController {
         return modelConverter.mapSlice(officeDetailsService.find(spec, pageable), OfficeDetailsDto.class);
     }
 
-    @RequiresPermission("company:create")
+    @RequiresPermission(Permissions.COMPANY_CREATE)
     @Operation(summary = "Create an office details record")
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public OfficeDetailsDto create(@Valid @RequestBody CreateOfficeDetails createOfficeDetails) {
         return modelConverter.map(officeDetailsService.create(createOfficeDetails), OfficeDetailsDto.class);
     }
 
-    @RequiresPermission("company:update")
+    @RequiresPermission(Permissions.COMPANY_UPDATE)
     @Operation(summary = "Update an office details record")
     @PatchMapping(value = "{id}", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public OfficeDetailsDto update(@PathVariable("id") Long id, @Valid @RequestBody UpdateOfficeDetails uDto) {
         return modelConverter.map(officeDetailsService.update(id, uDto), OfficeDetailsDto.class);
     }
 
-    @RequiresPermission("company:update")
+    @RequiresPermission(Permissions.COMPANY_UPDATE)
     @Operation(summary = "Change office details activation status")
     @PatchMapping(value = "/status/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public OfficeDetailsDto activate(@PathVariable("id") Long id, @Valid @RequestBody ActivationDto activationDto) {
         return modelConverter.map(officeDetailsService.changeActivation(id, activationDto.getActive()), OfficeDetailsDto.class);
     }
 
-    @RequiresPermission("company:read")
+    @RequiresPermission(Permissions.COMPANY_READ)
     @Operation(summary = "Get office details by ID")
     @GetMapping(value = "{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public OfficeDetailsDto get(@PathVariable("id") Long id) {
         return modelConverter.map(officeDetailsService.get(id), OfficeDetailsDto.class);
     }
 
-    @RequiresPermission("company:read")
+    @RequiresPermission(Permissions.COMPANY_READ)
     @Operation(summary = "Export office details to Excel")
     @GetMapping(value = "/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
     public ResponseEntity<StreamingResponseBody> exportExcel(@Parameter(hidden = true) @Filter Specification<OfficeDetails> spec,

@@ -11,6 +11,7 @@ import com.infomedia.abacox.telephonypricing.dto.generic.FilterRequest;
 import com.infomedia.abacox.telephonypricing.dto.generic.PageableRequest;
 
 import com.infomedia.abacox.telephonypricing.security.annotation.RequiresPermission;
+import com.infomedia.abacox.telephonypricing.security.permissions.Permissions;
 import com.infomedia.abacox.telephonypricing.service.InventoryAdditionalServiceService;
 import com.turkraft.springfilter.boot.Filter;
 import io.swagger.v3.oas.annotations.Operation;
@@ -44,7 +45,7 @@ public class InventoryAdditionalServiceController {
     private final InventoryAdditionalServiceService inventoryAdditionalServiceService;
     private final ModelConverter modelConverter;
 
-    @RequiresPermission("inventory:read")
+    @RequiresPermission(Permissions.INVENTORY_READ)
     @Operation(summary = "List inventory additional services")
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public Slice<InventoryAdditionalServiceDto> find(@Parameter(hidden = true) @Filter Specification<InventoryAdditionalService> spec,
@@ -54,28 +55,28 @@ public class InventoryAdditionalServiceController {
         return modelConverter.mapSlice(inventoryAdditionalServiceService.find(spec, pageable), InventoryAdditionalServiceDto.class);
     }
 
-    @RequiresPermission("inventory:create")
+    @RequiresPermission(Permissions.INVENTORY_CREATE)
     @Operation(summary = "Create an inventory additional service")
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public InventoryAdditionalServiceDto create(@Valid @RequestBody CreateInventoryAdditionalService cDto) {
         return modelConverter.map(inventoryAdditionalServiceService.create(cDto), InventoryAdditionalServiceDto.class);
     }
 
-    @RequiresPermission("inventory:update")
+    @RequiresPermission(Permissions.INVENTORY_UPDATE)
     @Operation(summary = "Update an inventory additional service")
     @PatchMapping(value = "{id}", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public InventoryAdditionalServiceDto update(@PathVariable("id") Long id, @Valid @RequestBody UpdateInventoryAdditionalService uDto) {
         return modelConverter.map(inventoryAdditionalServiceService.update(id, uDto), InventoryAdditionalServiceDto.class);
     }
 
-    @RequiresPermission("inventory:read")
+    @RequiresPermission(Permissions.INVENTORY_READ)
     @Operation(summary = "Get inventory additional service by ID")
     @GetMapping(value = "{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public InventoryAdditionalServiceDto get(@PathVariable("id") Long id) {
         return modelConverter.map(inventoryAdditionalServiceService.get(id), InventoryAdditionalServiceDto.class);
     }
 
-    @RequiresPermission("inventory:read")
+    @RequiresPermission(Permissions.INVENTORY_READ)
     @Operation(summary = "Export inventory additional services to Excel")
     @GetMapping(value = "/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
     public ResponseEntity<StreamingResponseBody> exportExcel(@Parameter(hidden = true) @Filter Specification<InventoryAdditionalService> spec,

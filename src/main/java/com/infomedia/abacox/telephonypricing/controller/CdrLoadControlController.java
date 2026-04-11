@@ -11,6 +11,7 @@ import com.infomedia.abacox.telephonypricing.dto.generic.FilterRequest;
 import com.infomedia.abacox.telephonypricing.dto.generic.PageableRequest;
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivationDto;
 import com.infomedia.abacox.telephonypricing.security.annotation.RequiresPermission;
+import com.infomedia.abacox.telephonypricing.security.permissions.Permissions;
 import com.infomedia.abacox.telephonypricing.service.CdrLoadControlService;
 import com.turkraft.springfilter.boot.Filter;
 import io.swagger.v3.oas.annotations.Operation;
@@ -44,7 +45,7 @@ public class CdrLoadControlController {
     private final CdrLoadControlService cdrLoadControlService;
     private final ModelConverter modelConverter;
 
-    @RequiresPermission("cdr:read")
+    @RequiresPermission(Permissions.CDR_READ)
     @Operation(summary = "List CDR load control entries")
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public Slice<CdrLoadControlDto> find(@Parameter(hidden = true) @Filter Specification<CdrLoadControl> spec,
@@ -54,35 +55,35 @@ public class CdrLoadControlController {
         return modelConverter.mapSlice(cdrLoadControlService.find(spec, pageable), CdrLoadControlDto.class);
     }
 
-    @RequiresPermission("cdr:create")
+    @RequiresPermission(Permissions.CDR_CREATE)
     @Operation(summary = "Create a CDR load control entry")
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public CdrLoadControlDto create(@Valid @RequestBody CreateCdrLoadControl cDto) {
         return modelConverter.map(cdrLoadControlService.create(cDto), CdrLoadControlDto.class);
     }
 
-    @RequiresPermission("cdr:update")
+    @RequiresPermission(Permissions.CDR_UPDATE)
     @Operation(summary = "Update a CDR load control entry")
     @PatchMapping(value = "{id}", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public CdrLoadControlDto update(@PathVariable("id") Long id, @Valid @RequestBody UpdateCdrLoadControl uDto) {
         return modelConverter.map(cdrLoadControlService.update(id, uDto), CdrLoadControlDto.class);
     }
 
-    @RequiresPermission("cdr:read")
+    @RequiresPermission(Permissions.CDR_READ)
     @Operation(summary = "Get CDR load control entry by ID")
     @GetMapping(value = "{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public CdrLoadControlDto get(@PathVariable("id") Long id) {
         return modelConverter.map(cdrLoadControlService.get(id), CdrLoadControlDto.class);
     }
 
-    @RequiresPermission("cdr:update")
+    @RequiresPermission(Permissions.CDR_UPDATE)
     @Operation(summary = "Change CDR load control activation status")
     @PatchMapping(value = "/status/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public CdrLoadControlDto activate(@PathVariable("id") Long id, @Valid @RequestBody ActivationDto activationDto) {
         return modelConverter.map(cdrLoadControlService.changeActivation(id, activationDto.getActive()), CdrLoadControlDto.class);
     }
 
-    @RequiresPermission("cdr:read")
+    @RequiresPermission(Permissions.CDR_READ)
     @Operation(summary = "Export CDR load control entries to Excel")
     @GetMapping(value = "/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
     public ResponseEntity<StreamingResponseBody> exportExcel(@Parameter(hidden = true) @Filter Specification<CdrLoadControl> spec,

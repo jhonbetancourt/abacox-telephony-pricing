@@ -11,6 +11,7 @@ import com.infomedia.abacox.telephonypricing.dto.generic.FilterRequest;
 import com.infomedia.abacox.telephonypricing.dto.generic.PageableRequest;
 
 import com.infomedia.abacox.telephonypricing.security.annotation.RequiresPermission;
+import com.infomedia.abacox.telephonypricing.security.permissions.Permissions;
 import com.infomedia.abacox.telephonypricing.service.InventoryService;
 import com.turkraft.springfilter.boot.Filter;
 import io.swagger.v3.oas.annotations.Operation;
@@ -44,7 +45,7 @@ public class InventoryController {
     private final InventoryService inventoryService;
     private final ModelConverter modelConverter;
 
-    @RequiresPermission("inventory:read")
+    @RequiresPermission(Permissions.INVENTORY_READ)
     @Operation(summary = "List inventory")
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public Slice<InventoryDto> find(@Parameter(hidden = true) @Filter Specification<Inventory> spec,
@@ -54,28 +55,28 @@ public class InventoryController {
         return modelConverter.mapSlice(inventoryService.find(spec, pageable), InventoryDto.class);
     }
 
-    @RequiresPermission("inventory:create")
+    @RequiresPermission(Permissions.INVENTORY_CREATE)
     @Operation(summary = "Create an inventory item")
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public InventoryDto create(@Valid @RequestBody CreateInventory cDto) {
         return modelConverter.map(inventoryService.create(cDto), InventoryDto.class);
     }
 
-    @RequiresPermission("inventory:update")
+    @RequiresPermission(Permissions.INVENTORY_UPDATE)
     @Operation(summary = "Update an inventory item")
     @PatchMapping(value = "{id}", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public InventoryDto update(@PathVariable("id") Long id, @Valid @RequestBody UpdateInventory uDto) {
         return modelConverter.map(inventoryService.update(id, uDto), InventoryDto.class);
     }
 
-    @RequiresPermission("inventory:read")
+    @RequiresPermission(Permissions.INVENTORY_READ)
     @Operation(summary = "Get inventory item by ID")
     @GetMapping(value = "{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public InventoryDto get(@PathVariable("id") Long id) {
         return modelConverter.map(inventoryService.get(id), InventoryDto.class);
     }
 
-    @RequiresPermission("inventory:update")
+    @RequiresPermission(Permissions.INVENTORY_UPDATE)
     @Operation(summary = "Retire an inventory item")
     @PatchMapping(value = "/retire/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<Void> retire(@PathVariable("id") Long id) {
@@ -83,7 +84,7 @@ public class InventoryController {
         return ResponseEntity.noContent().build();
     }
 
-    @RequiresPermission("inventory:read")
+    @RequiresPermission(Permissions.INVENTORY_READ)
     @Operation(summary = "Export inventory to Excel")
     @GetMapping(value = "/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
     public ResponseEntity<StreamingResponseBody> exportExcel(@Parameter(hidden = true) @Filter Specification<Inventory> spec,

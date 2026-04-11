@@ -8,6 +8,7 @@ import com.infomedia.abacox.telephonypricing.dto.indicator.UpdateIndicator;
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivationDto;
 import com.infomedia.abacox.telephonypricing.db.entity.Indicator;
 import com.infomedia.abacox.telephonypricing.security.annotation.RequiresPermission;
+import com.infomedia.abacox.telephonypricing.security.permissions.Permissions;
 import com.infomedia.abacox.telephonypricing.service.IndicatorService;
 import com.turkraft.springfilter.boot.Filter;
 import io.swagger.v3.oas.annotations.Operation;
@@ -45,7 +46,7 @@ public class IndicatorController {
     private final IndicatorService indicatorService;
     private final ModelConverter modelConverter;
 
-    @RequiresPermission("numbering:read")
+    @RequiresPermission(Permissions.NUMBERING_READ)
     @Operation(summary = "List indicators")
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public Slice<IndicatorDto> find(@Parameter(hidden = true) @Filter Specification<Indicator> spec
@@ -55,35 +56,35 @@ public class IndicatorController {
         return modelConverter.mapSlice(indicatorService.find(spec, pageable), IndicatorDto.class);
     }
 
-    @RequiresPermission("numbering:create")
+    @RequiresPermission(Permissions.NUMBERING_CREATE)
     @Operation(summary = "Create an indicator")
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public IndicatorDto create(@Valid @RequestBody CreateIndicator createIndicator) {
         return modelConverter.map(indicatorService.create(createIndicator), IndicatorDto.class);
     }
 
-    @RequiresPermission("numbering:update")
+    @RequiresPermission(Permissions.NUMBERING_UPDATE)
     @Operation(summary = "Update an indicator")
     @PatchMapping(value = "{id}", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public IndicatorDto update(@PathVariable("id") Long id, @Valid @RequestBody UpdateIndicator uDto) {
         return modelConverter.map(indicatorService.update(id, uDto), IndicatorDto.class);
     }
 
-    @RequiresPermission("numbering:read")
+    @RequiresPermission(Permissions.NUMBERING_READ)
     @Operation(summary = "Get indicator by ID")
     @GetMapping(value = "{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     private IndicatorDto get(@PathVariable("id") Long id) {
         return modelConverter.map(indicatorService.get(id), IndicatorDto.class);
     }
 
-    @RequiresPermission("numbering:update")
+    @RequiresPermission(Permissions.NUMBERING_UPDATE)
     @Operation(summary = "Change indicator activation status")
     @PatchMapping(value = "/status/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public IndicatorDto activate(@PathVariable("id") Long id, @Valid @RequestBody ActivationDto activationDto) {
         return modelConverter.map(indicatorService.changeActivation(id, activationDto.getActive()), IndicatorDto.class);
     }
 
-    @RequiresPermission("numbering:read")
+    @RequiresPermission(Permissions.NUMBERING_READ)
     @Operation(summary = "Export indicators to Excel")
     @GetMapping(value = "/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
     public ResponseEntity<StreamingResponseBody> exportExcel(@Parameter(hidden = true) @Filter Specification<Indicator> spec,

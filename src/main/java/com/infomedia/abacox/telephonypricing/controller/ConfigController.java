@@ -6,6 +6,7 @@ import com.infomedia.abacox.telephonypricing.component.modeltools.ModelConverter
 import com.infomedia.abacox.telephonypricing.dto.configuration.ConfigurationDto;
 import com.infomedia.abacox.telephonypricing.dto.configuration.UpdateConfigurationDto;
 import com.infomedia.abacox.telephonypricing.security.annotation.RequiresPermission;
+import com.infomedia.abacox.telephonypricing.security.permissions.Permissions;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
@@ -31,7 +32,7 @@ public class ConfigController {
     private final ConfigService configService;
     private final ModelConverter modelConverter;
 
-    @RequiresPermission("configuration:read")
+    @RequiresPermission(Permissions.CONFIGURATION_READ)
     @Operation(summary = "Get CDR configuration")
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public ConfigurationDto getConfiguration() {
@@ -39,7 +40,7 @@ public class ConfigController {
         return modelConverter.fromMap(configMap, ConfigurationDto.class);
     }
 
-    @RequiresPermission("configuration:update")
+    @RequiresPermission(Permissions.CONFIGURATION_UPDATE)
     @Operation(summary = "Update CDR configuration")
     @PatchMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public ConfigurationDto updateConfiguration(@Valid @RequestBody UpdateConfigurationDto newConfig) {

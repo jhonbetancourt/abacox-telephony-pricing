@@ -11,6 +11,7 @@ import com.infomedia.abacox.telephonypricing.dto.specialextension.SpecialExtensi
 import com.infomedia.abacox.telephonypricing.dto.specialextension.UpdateSpecialExtension;
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivationDto;
 import com.infomedia.abacox.telephonypricing.security.annotation.RequiresPermission;
+import com.infomedia.abacox.telephonypricing.security.permissions.Permissions;
 import com.infomedia.abacox.telephonypricing.service.SpecialExtensionService;
 import com.turkraft.springfilter.boot.Filter;
 import io.swagger.v3.oas.annotations.Operation;
@@ -44,7 +45,7 @@ public class SpecialExtensionController {
     private final SpecialExtensionService specialExtensionService;
     private final ModelConverter modelConverter;
 
-    @RequiresPermission("telephony-config:read")
+    @RequiresPermission(Permissions.TELEPHONY_CONFIG_READ)
     @Operation(summary = "List special extensions")
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public Slice<SpecialExtensionDto> find(@Parameter(hidden = true) @Filter Specification<SpecialExtension> spec,
@@ -54,35 +55,35 @@ public class SpecialExtensionController {
         return modelConverter.mapSlice(specialExtensionService.find(spec, pageable), SpecialExtensionDto.class);
     }
 
-    @RequiresPermission("telephony-config:create")
+    @RequiresPermission(Permissions.TELEPHONY_CONFIG_CREATE)
     @Operation(summary = "Create a special extension")
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public SpecialExtensionDto create(@Valid @RequestBody CreateSpecialExtension createDto) {
         return modelConverter.map(specialExtensionService.create(createDto), SpecialExtensionDto.class);
     }
 
-    @RequiresPermission("telephony-config:update")
+    @RequiresPermission(Permissions.TELEPHONY_CONFIG_UPDATE)
     @Operation(summary = "Update a special extension")
     @PatchMapping(value = "{id}", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public SpecialExtensionDto update(@PathVariable("id") Long id, @Valid @RequestBody UpdateSpecialExtension uDto) {
         return modelConverter.map(specialExtensionService.update(id, uDto), SpecialExtensionDto.class);
     }
 
-    @RequiresPermission("telephony-config:read")
+    @RequiresPermission(Permissions.TELEPHONY_CONFIG_READ)
     @Operation(summary = "Get special extension by ID")
     @GetMapping(value = "{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public SpecialExtensionDto get(@PathVariable("id") Long id) {
         return modelConverter.map(specialExtensionService.get(id), SpecialExtensionDto.class);
     }
 
-    @RequiresPermission("telephony-config:update")
+    @RequiresPermission(Permissions.TELEPHONY_CONFIG_UPDATE)
     @Operation(summary = "Change special extension activation status")
     @PatchMapping(value = "/status/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public SpecialExtensionDto activate(@PathVariable("id") Long id, @Valid @RequestBody ActivationDto activationDto) {
         return modelConverter.map(specialExtensionService.changeActivation(id, activationDto.getActive()), SpecialExtensionDto.class);
     }
 
-    @RequiresPermission("telephony-config:read")
+    @RequiresPermission(Permissions.TELEPHONY_CONFIG_READ)
     @Operation(summary = "Export special extensions to Excel")
     @GetMapping(value = "/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
     public ResponseEntity<StreamingResponseBody> exportExcel(@Parameter(hidden = true) @Filter Specification<SpecialExtension> spec,

@@ -8,6 +8,7 @@ import com.infomedia.abacox.telephonypricing.dto.commlocation.UpdateCommLocation
 import com.infomedia.abacox.telephonypricing.dto.superclass.ActivationDto;
 import com.infomedia.abacox.telephonypricing.db.entity.CommunicationLocation;
 import com.infomedia.abacox.telephonypricing.security.annotation.RequiresPermission;
+import com.infomedia.abacox.telephonypricing.security.permissions.Permissions;
 import com.infomedia.abacox.telephonypricing.service.CommLocationService;
 import com.turkraft.springfilter.boot.Filter;
 import io.swagger.v3.oas.annotations.Operation;
@@ -45,7 +46,7 @@ public class CommLocationController {
     private final CommLocationService commLocationService;
     private final ModelConverter modelConverter;
 
-    @RequiresPermission("telephony-config:read")
+    @RequiresPermission(Permissions.TELEPHONY_CONFIG_READ)
     @Operation(summary = "List communication locations")
     @GetMapping(produces = MediaType.APPLICATION_JSON_VALUE)
     public Slice<CommLocationDto> find(@Parameter(hidden = true) @Filter Specification<CommunicationLocation> spec
@@ -55,35 +56,35 @@ public class CommLocationController {
         return modelConverter.mapSlice(commLocationService.find(spec, pageable), CommLocationDto.class);
     }
 
-    @RequiresPermission("telephony-config:create")
+    @RequiresPermission(Permissions.TELEPHONY_CONFIG_CREATE)
     @Operation(summary = "Create a communication location")
     @PostMapping(consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public CommLocationDto create(@Valid @RequestBody CreateCommLocation createCommLocation) {
         return modelConverter.map(commLocationService.create(createCommLocation), CommLocationDto.class);
     }
 
-    @RequiresPermission("telephony-config:update")
+    @RequiresPermission(Permissions.TELEPHONY_CONFIG_UPDATE)
     @Operation(summary = "Update a communication location")
     @PatchMapping(value = "{id}", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public CommLocationDto update(@PathVariable("id") Long id, @Valid @RequestBody UpdateCommLocation uDto) {
         return modelConverter.map(commLocationService.update(id, uDto), CommLocationDto.class);
     }
 
-    @RequiresPermission("telephony-config:update")
+    @RequiresPermission(Permissions.TELEPHONY_CONFIG_UPDATE)
     @Operation(summary = "Change communication location activation status")
     @PatchMapping(value = "/status/{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     public CommLocationDto activate(@PathVariable("id") Long id, @Valid @RequestBody ActivationDto activationDto) {
         return modelConverter.map(commLocationService.changeActivation(id, activationDto.getActive()), CommLocationDto.class);
     }
 
-    @RequiresPermission("telephony-config:read")
+    @RequiresPermission(Permissions.TELEPHONY_CONFIG_READ)
     @Operation(summary = "Get communication location by ID")
     @GetMapping(value = "{id}", produces = MediaType.APPLICATION_JSON_VALUE)
     private CommLocationDto get(@PathVariable("id") Long id) {
         return modelConverter.map(commLocationService.get(id), CommLocationDto.class);
     }
 
-    @RequiresPermission("telephony-config:read")
+    @RequiresPermission(Permissions.TELEPHONY_CONFIG_READ)
     @Operation(summary = "Export communication locations to Excel")
     @GetMapping(value = "/export/excel", produces = MediaType.APPLICATION_OCTET_STREAM_VALUE)
     public ResponseEntity<StreamingResponseBody> exportExcel(@Parameter(hidden = true) @Filter Specification<CommunicationLocation> spec,
