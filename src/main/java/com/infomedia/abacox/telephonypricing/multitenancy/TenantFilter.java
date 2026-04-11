@@ -17,11 +17,14 @@ import java.io.IOException;
  * <ol>
  *   <li>{@code X-Tenant-ID} header — used by internal service-to-service
  *       calls that carry the key in a header.</li>
- *   <li>{@code X-Forwarded-Prefix} header — set automatically by Traefik's
- *       {@code stripPrefixRegex} middleware to the portion it stripped (e.g.
- *       {@code /service/colsanitas/telephony-pricing}). We extract the
- *       tenant segment from there so public endpoints (health, swagger,
- *       etc.) still get a sensible tenant context.</li>
+ *   <li>The request's context path — which Spring's {@code ForwardedHeaderFilter}
+ *       (enabled via {@code server.forward-headers-strategy=framework}) populates
+ *       from the {@code X-Forwarded-Prefix} header set by Traefik's
+ *       {@code stripPrefixRegex} middleware. For a request that entered as
+ *       {@code /service/colsanitas/telephony-pricing/api/...}, the context
+ *       path will be {@code /service/colsanitas/telephony-pricing}. We
+ *       extract the tenant segment from there so public endpoints (health,
+ *       swagger, etc.) still get a sensible tenant context.</li>
  * </ol>
  * <p>
  * For JWT-authenticated requests the {@code tenant} claim is authoritative
@@ -31,7 +34,6 @@ import java.io.IOException;
 public class TenantFilter extends OncePerRequestFilter {
 
     private static final String TENANT_HEADER = "X-Tenant-ID";
-    private static final String FORWARDED_PREFIX_HEADER = "X-Forwarded-Prefix";
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
@@ -58,11 +60,11 @@ public class TenantFilter extends OncePerRequestFilter {
         if (headerTenant != null && !headerTenant.isBlank()) {
             return headerTenant;
         }
-        return extractTenantFromForwardedPrefix(request.getHeader(FORWARDED_PREFIX_HEADER));
+        return extractTenantFromForwardedPrefix(request.getContextPath());
     }
 
     /**
-     * Parses the tenant segment out of an X-Forwarded-Prefix of the form
+     * Parses the tenant segment out of a forwarded prefix of the form
      * {@code /service/<tenant>/<module>}. Returns {@code null} for any other
      * shape.
      */
