@@ -11,6 +11,7 @@ import org.springframework.core.NestedExceptionUtils;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.*;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
@@ -34,6 +35,16 @@ public class ExceptionHandlerConfig extends ResponseEntityExceptionHandler {
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
         problemDetail.setTitle("Resource Not Found");
         problemDetail.setType(URI.create("resource-not-found"));
+        problemDetail.setProperty("timestamp", LocalDateTime.now());
+        return problemDetail;
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ProblemDetail handleAccessDeniedException(AccessDeniedException ex) {
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN,
+                "You do not have permission to perform this action");
+        problemDetail.setTitle("Access Denied");
+        problemDetail.setType(URI.create("access-denied"));
         problemDetail.setProperty("timestamp", LocalDateTime.now());
         return problemDetail;
     }
