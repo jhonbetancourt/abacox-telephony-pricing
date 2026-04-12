@@ -45,6 +45,10 @@ public class PermissionAuthorizationManager implements AuthorizationManager<Meth
             return new AuthorizationDecision(false);
         }
 
+        if ("system".equals(auth.getName())) {
+            return new AuthorizationDecision(true);
+        }
+
         for (GrantedAuthority authority : auth.getAuthorities()) {
             if (required.equals(authority.getAuthority())) {
                 return new AuthorizationDecision(true);
