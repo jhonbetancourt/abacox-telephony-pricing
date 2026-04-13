@@ -50,8 +50,10 @@ public class SecurityConfig {
                     corsConfig.setAllowedHeaders(List.of("*"));
                     return corsConfig;
                 }))
-                .authorizeHttpRequests(auth -> auth.requestMatchers(publicPaths()).permitAll()
-                .anyRequest().authenticated())
+                .authorizeHttpRequests(auth -> auth
+                        .dispatcherTypeMatchers(jakarta.servlet.DispatcherType.ASYNC).permitAll()
+                        .requestMatchers(publicPaths()).permitAll()
+                        .anyRequest().authenticated())
                 .sessionManagement(manager -> manager.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .addFilterBefore(internalApiKeyFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(tenantFilter, UsernamePasswordAuthenticationFilter.class)
