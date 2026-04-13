@@ -15,6 +15,8 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.web.filter.CorsFilter;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -106,6 +108,17 @@ public class SecurityConfig {
                 .map(SimpleGrantedAuthority::new)
                 .map(GrantedAuthority.class::cast)
                 .toList();
+    }
+
+    @Bean
+    public CorsFilter corsFilter() {
+        var corsConfig = new CorsConfiguration();
+        corsConfig.setAllowedOrigins(List.of("*"));
+        corsConfig.setAllowedMethods(List.of("*"));
+        corsConfig.setAllowedHeaders(List.of("*"));
+        var source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", corsConfig);
+        return new CorsFilter(source);
     }
 
     @Bean
