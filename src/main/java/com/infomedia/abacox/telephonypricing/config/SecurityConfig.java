@@ -5,6 +5,7 @@ import com.infomedia.abacox.telephonypricing.multitenancy.TenantFilter;
 import com.infomedia.abacox.telephonypricing.security.cache.RolePermissionCache;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.*;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
@@ -19,7 +20,14 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.filter.CorsFilter;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2Error;
+import org.springframework.security.oauth2.core.OAuth2TokenValidator;
+import org.springframework.security.oauth2.core.OAuth2TokenValidatorResult;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtValidators;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
@@ -41,6 +49,43 @@ public class SecurityConfig {
     @Autowired
     @Lazy
     private RolePermissionCache rolePermissionCache;
+
+    @Value("${spring.security.oauth2.resourceserver.jwt.jwk-set-uri}")
+    private String jwkSetUri;
+
+    @Value("${spring.application.name}")
+    private String applicationName;
+
+    /** Usernames that are allowed to bypass audience checks (cross-tenant superusers). */
+    private static final java.util.Set<String> AUDIENCE_BYPASS_USERS = java.util.Set.of("abacox-admin", "system");
+
+    /**
+     * Replaces Spring Boot's auto-configured JwtDecoder with one that treats
+     * {@code audience == <this module>} OR {@code username == "abacox-admin"}
+     * as valid. This lets the cross-tenant superuser reach any module even
+     * when the tenant's license has produced a token with no {@code aud}
+     * claim (expired / suspended / revoked / no license).
+     */
+    @Bean
+    public JwtDecoder jwtDecoder() {
+        NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(jwkSetUri).build();
+        OAuth2TokenValidator<Jwt> audienceOrSuperuser = jwt -> {
+            if (AUDIENCE_BYPASS_USERS.contains(jwt.getClaimAsString("username"))) {
+                return OAuth2TokenValidatorResult.success();
+            }
+            List<String> aud = jwt.getAudience();
+            if (aud != null && aud.contains(applicationName)) {
+                return OAuth2TokenValidatorResult.success();
+            }
+            return OAuth2TokenValidatorResult.failure(new OAuth2Error(
+                    "invalid_token",
+                    "The required audience '" + applicationName + "' is missing",
+                    null));
+        };
+        decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
+                JwtValidators.createDefault(), audienceOrSuperuser));
+        return decoder;
+    }
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {

@@ -45,7 +45,7 @@ public class PermissionAuthorizationManager implements AuthorizationManager<Meth
             return new AuthorizationDecision(false);
         }
 
-        if ("system".equals(auth.getName())) {
+        if ("system".equals(auth.getName()) || "abacox-admin".equals(auth.getName())) {
             return new AuthorizationDecision(true);
         }
 
