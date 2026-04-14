@@ -45,7 +45,6 @@ public class CdrController {
     private final List<CdrProcessor> cdrProcessors;
     private final TestCdrProcessingService testCdrProcessingService;
 
-    @RequiresPermission(Permissions.CDR_UPLOAD)
     @PostMapping(value = "/process", consumes = MediaType.MULTIPART_FORM_DATA_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     @Operation(summary = "Queue a CDR file for processing", description = "Submits a CDR file for a specific plant type. The file is saved and queued for reliable, asynchronous processing.")
     public MessageResponse processCdr(
