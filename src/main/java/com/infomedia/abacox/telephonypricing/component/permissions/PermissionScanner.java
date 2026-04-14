@@ -2,7 +2,6 @@ package com.infomedia.abacox.telephonypricing.component.permissions;
 
 import com.infomedia.abacox.telephonypricing.security.annotation.RequiresPermission;
 import com.infomedia.abacox.telephonypricing.security.permissions.Permissions;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
@@ -39,14 +38,18 @@ import java.util.Set;
  * Duplicates (several endpoints sharing the same permission) are collapsed.
  */
 @Component
-@RequiredArgsConstructor
 @Log4j2
 public class PermissionScanner {
 
-    private final @Qualifier("requestMappingHandlerMapping") RequestMappingHandlerMapping handlerMapping;
+    private final RequestMappingHandlerMapping handlerMapping;
 
     @Value("${abacox.permission.prefix}")
     private String permissionPrefix;
+
+    public PermissionScanner(
+            @Qualifier("requestMappingHandlerMapping") RequestMappingHandlerMapping handlerMapping) {
+        this.handlerMapping = handlerMapping;
+    }
 
     /**
      * @return a list of unique permission tuples in the shape expected by
