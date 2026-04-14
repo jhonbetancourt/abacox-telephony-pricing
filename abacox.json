@@ -11,7 +11,7 @@
   "dependsOn": ["control", "core", "users"],
   "requiresControlRegistration": true,
   "skipHealthCheck": false,
-  "healthCheckPath": "/api/health",
+  "healthCheckPath": "/actuator/health/liveness",
   "jpaHibernateDdlAuto": "none",
   "forwardHeadersNative": false,
   "volumes": ["${ABACOX_MODULE_DIR}:/app/data"]

@@ -23,7 +23,6 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-import org.springframework.util.AntPathMatcher;
 
 import java.util.Collection;
 import java.util.HashSet;
@@ -127,17 +126,8 @@ public class SecurityConfig {
     }
 
     private String[] publicPaths() {
-        return new String[] { "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html", "/error", "/api/module/*",
-                "/api/health/**", "/websocket/module", "/api/cdr/process", "/api/cdr/test" };
-    }
-
-    public boolean isPublicPath(String path) {
-        AntPathMatcher matcher = new AntPathMatcher();
-        for (String url : publicPaths()) {
-            if (matcher.match(url, path)) {
-                return true;
-            }
-        }
-        return false;
+        return new String[] { "/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html", "/error",
+                "/actuator/health/liveness", "/actuator/health/readiness", "/actuator/info",
+                "/websocket/module", "/api/cdr/process", "/api/cdr/test" };
     }
 }
