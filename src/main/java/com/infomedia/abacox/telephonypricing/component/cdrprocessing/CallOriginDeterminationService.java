@@ -51,13 +51,18 @@ public class CallOriginDeterminationService {
         if (cleanPhoneNumber.isPbxPrefixStripped()) {
             String numberAfterPbxStrip = cleanPhoneNumber.getCleanedNumber();
             log.debug("Path A (PBX prefix stripped): Number for prefix lookup: {}", numberAfterPbxStrip);
-            List<PrefixInfo> prefixes = prefixLookupService.findMatchingPrefixes(
+            PrefixMatchResult prefixMatch = prefixLookupService.findMatchingPrefixesDetailed(
                     numberAfterPbxStrip, commLocation, false, null
             );
+            List<PrefixInfo> prefixes = prefixMatch.getPrefixes();
+            // Use the transformed lookup number (after Colombia 10-digit-fixed-line transform)
+            // for destination resolution; passing the untransformed number causes the same
+            // mis-classification as the outgoing path (see TariffCalculationService note).
+            String lookupNumberForDest = prefixMatch.getNumberForLookup();
             for (PrefixInfo pi : prefixes) {
                 if (hintedTelephonyTypeIdFromTransform == null || hintedTelephonyTypeIdFromTransform.equals(pi.getTelephonyTypeId())) {
                     Optional<DestinationInfo> destInfoOpt = indicatorLookupService.findDestinationIndicator(
-                            numberAfterPbxStrip,
+                            lookupNumberForDest,
                             pi.getTelephonyTypeId(),
                             pi.getTelephonyTypeMinLength() != null ? pi.getTelephonyTypeMinLength() : 0,
                             commLocation.getIndicatorId(),
