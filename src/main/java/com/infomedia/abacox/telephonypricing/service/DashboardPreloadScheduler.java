@@ -29,33 +29,41 @@ public class DashboardPreloadScheduler {
     @Async
     @EventListener(ApplicationReadyEvent.class)
     public void warmOnStartup() {
-        log.info("Starting dashboard cache warm-up on application ready");
-        preloadCurrentMonth();
-        log.info("Finished dashboard cache warm-up on application ready");
+        preloadCurrentMonth(true, "startup");
     }
 
     @Scheduled(cron = "0 15 2 * * *")
     public void dailyPreload() {
-        log.info("Starting scheduled dashboard cache preload");
-        preloadCurrentMonth();
-        log.info("Finished scheduled dashboard cache preload");
+        preloadCurrentMonth(false, "scheduled");
     }
 
-    private void preloadCurrentMonth() {
+    private void preloadCurrentMonth(boolean onlyIfMissing, String trigger) {
         YearMonth current = YearMonth.now();
         LocalDateTime start = current.atDay(1).atStartOfDay();
         LocalDateTime end   = current.atEndOfMonth().atTime(LocalTime.MAX);
 
+        int[] refreshed = {0};
+
         multitenantRunner.runForAllTenants(tenant -> {
             try {
-                log.info("Refreshing dashboard overview for tenant={} range={}..{}", tenant, start, end);
-                dashboardService.refreshDashboardOverview(start, end);
+                if (!onlyIfMissing || !dashboardService.isDashboardOverviewCached(start, end)) {
+                    log.info("Refreshing dashboard overview for tenant={} range={}..{}", tenant, start, end);
+                    dashboardService.refreshDashboardOverview(start, end);
+                    refreshed[0]++;
+                }
 
-                log.info("Refreshing employee activity dashboard for tenant={}", tenant);
-                dashboardService.refreshEmployeeActivityDashboard(null, null, null, null, start, end);
+                if (!onlyIfMissing || !dashboardService.isEmployeeActivityDashboardCached(start, end)) {
+                    log.info("Refreshing employee activity dashboard for tenant={}", tenant);
+                    dashboardService.refreshEmployeeActivityDashboard(null, null, null, null, start, end);
+                    refreshed[0]++;
+                }
             } catch (Exception ex) {
                 log.error("Dashboard preload failed for tenant={}", tenant, ex);
             }
         });
+
+        if (refreshed[0] > 0) {
+            log.info("Finished {} dashboard cache preload ({} entries refreshed)", trigger, refreshed[0]);
+        }
     }
 }

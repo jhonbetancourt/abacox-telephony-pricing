@@ -91,6 +91,20 @@ public class DashboardService {
         return result;
     }
 
+    public boolean isDashboardOverviewCached(LocalDateTime startDate, LocalDateTime endDate) {
+        String tenant = TenantContext.getTenant();
+        String key    = cacheKey(tenant, startDate, endDate);
+        Cache  cache  = cacheManager.getCache(cacheName(endDate));
+        return cache != null && cache.get(key) != null;
+    }
+
+    public boolean isEmployeeActivityDashboardCached(LocalDateTime startDate, LocalDateTime endDate) {
+        String tenant = TenantContext.getTenant();
+        String key    = cacheKey(tenant, startDate, endDate) + ":activity-dashboard";
+        Cache  cache  = cacheManager.getCache(employeeActivityCacheName(endDate));
+        return cache != null && cache.get(key) != null;
+    }
+
     public DashboardOverviewDto refreshDashboardOverview(LocalDateTime startDate, LocalDateTime endDate) {
         String tenant = TenantContext.getTenant();
         String key    = cacheKey(tenant, startDate, endDate);
