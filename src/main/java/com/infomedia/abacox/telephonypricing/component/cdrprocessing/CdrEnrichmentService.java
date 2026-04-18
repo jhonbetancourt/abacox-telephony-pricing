@@ -62,9 +62,10 @@ public class CdrEnrichmentService {
                     cdrData.setTelephonyTypeId(TelephonyTypeEnum.NO_CONSUMPTION.getValue());
                     cdrData.setTelephonyTypeName(telephonyTypeLookupService
                             .getTelephonyTypeName(TelephonyTypeEnum.NO_CONSUMPTION.getValue()));
+                    // Zero billed amount (no consumption) but keep the underlying tariff rate for reporting.
+                    // Legacy PHP preserves PRECIOMINUTO / PRECIOINICIAL here even when the call is
+                    // reclassified to "Sin Consumo"; zeroing them produced ~84 ppm mismatches vs legacy.
                     cdrData.setBilledAmount(BigDecimal.ZERO);
-                    cdrData.setPricePerMinute(BigDecimal.ZERO);
-                    cdrData.setInitialPricePerMinute(BigDecimal.ZERO);
                 }
             }
 
