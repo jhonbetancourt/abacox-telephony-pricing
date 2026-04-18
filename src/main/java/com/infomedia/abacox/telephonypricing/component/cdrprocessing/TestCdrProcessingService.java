@@ -19,9 +19,11 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -53,14 +55,13 @@ public class TestCdrProcessingService {
 
         List<ProcessedCdrResult> results = new ArrayList<>();
 
-        // 2. Process the file in memory
-        // NOTE: This endpoint intentionally runs per-line with historicalData=null so that each
-        // findEmployeeByExtensionOrAuthCode call lazy-fetches its own extension timeline (including
-        // destinations). Batch prefetching (as CdrProcessorService does) pre-populates only the
-        // calling-party timelines, which causes destination employee lookups to miss and produces
-        // null destination_employee_ids. Preserving per-line lazy fetches here keeps the test
-        // output byte-identical to legacy expectations — do not introduce a shared prefetch
-        // without also extending it to cover destination extensions / lastRedirectDn.
+        // 2. Process the file in memory.
+        // The test endpoint mirrors production (CdrRoutingService -> CdrProcessorService.processCdrBatch):
+        //   - chunk into CDR_PROCESSING_BATCH_SIZE (500) groups
+        //   - for each chunk, collect unique calling-party extensions + auth codes
+        //   - run ONE prefetchHistoricalData per chunk and share the resulting container
+        // Using one giant batch here would populate destination timelines that production's smaller
+        // batches never see, producing richer output than what is persisted to the DB.
         try (InputStream inputStream = file.getInputStream();
                 InputStreamReader reader = new InputStreamReader(inputStream, StandardCharsets.UTF_8);
                 BufferedReader bufferedReader = new BufferedReader(reader)) {
@@ -69,6 +70,10 @@ public class TestCdrProcessingService {
             Map<Long, List<ExtensionRange>> extensionRanges = employeeLookupService.getExtensionRanges();
             CdrProcessor initialParser = getProcessorForPlantType(plantTypeId);
             Map<String, Integer> currentHeaderMap = null;
+
+            // --- Pass 1: read + pre-parse every line so we can chunk deterministically.
+            List<String> dataLines = new ArrayList<>();
+            List<CdrData> preliminaryList = new ArrayList<>();
 
             String line;
             while ((line = bufferedReader.readLine()) != null) {
@@ -81,60 +86,85 @@ public class TestCdrProcessingService {
                     continue;
                 }
 
-                // If no header found yet and this line is not header, we treat it as data or
-                // fail if strict
-                // For test, we attempt to proceed.
-
-                // Pre-route
                 CdrData preliminaryCdrData = initialParser.evaluateFormat(trimmedLine, null, null, currentHeaderMap);
-
                 if (preliminaryCdrData == null) {
-                    // Could be skipped or invalid format
                     continue;
                 }
 
-                // Routing
-                Optional<CommunicationLocation> targetCommLocationOpt = commLocationLookupService
-                        .findBestCommunicationLocation(
-                                plantTypeId,
-                                preliminaryCdrData.getCallingPartyNumber(),
-                                preliminaryCdrData.getCallingPartyNumberPartition(),
-                                preliminaryCdrData.getFinalCalledPartyNumber(),
-                                preliminaryCdrData.getFinalCalledPartyNumberPartition(),
-                                preliminaryCdrData.getLastRedirectDn(),
-                                preliminaryCdrData.getLastRedirectDnPartition(),
-                                preliminaryCdrData.getDateTimeOrigination());
+                dataLines.add(trimmedLine);
+                preliminaryList.add(preliminaryCdrData);
+            }
 
-                if (targetCommLocationOpt.isPresent()) {
-                    CommunicationLocation targetCommLocation = targetCommLocationOpt.get();
-                    CdrProcessor finalProcessor = getProcessorForPlantType(targetCommLocation.getPlantTypeId());
+            // --- Pass 2: process in chunks matching production batch size.
+            int batchSize = CdrConfigService.CDR_PROCESSING_BATCH_SIZE;
+            for (int start = 0; start < dataLines.size(); start += batchSize) {
+                int end = Math.min(start + batchSize, dataLines.size());
 
-                    LineProcessingContext context = LineProcessingContext.builder()
-                            .cdrLine(trimmedLine)
-                            .commLocation(targetCommLocation)
-                            .cdrProcessor(finalProcessor)
-                            .extensionRanges(extensionRanges)
-                            .extensionLimits(extensionLimits)
-                            .fileInfo(dummyFileInfo)
-                            .headerPositions(currentHeaderMap)
-                            .build();
+                Set<String> uniqueExtensions = new HashSet<>();
+                Set<String> uniqueAuthCodes = new HashSet<>();
+                for (int i = start; i < end; i++) {
+                    CdrData pre = preliminaryList.get(i);
+                    // Mirror CdrProcessorService.processCdrBatch: include destination identifiers
+                    // so destination employee lookups find their timelines (legacy behavior).
+                    if (pre.getCallingPartyNumber() != null)
+                        uniqueExtensions.add(pre.getCallingPartyNumber());
+                    if (pre.getFinalCalledPartyNumber() != null)
+                        uniqueExtensions.add(pre.getFinalCalledPartyNumber());
+                    if (pre.getLastRedirectDn() != null)
+                        uniqueExtensions.add(pre.getLastRedirectDn());
+                    if (pre.getAuthCodeDescription() != null)
+                        uniqueAuthCodes.add(pre.getAuthCodeDescription());
+                }
 
-                    ProcessedCdrResult result = cdrProcessorService.processCdrData(context);
-                    if (result.getOutcome() != ProcessingOutcome.SKIPPED) {
-                        results.add(result);
+                HistoricalDataContainer historicalData =
+                        employeeLookupService.prefetchHistoricalData(uniqueExtensions, uniqueAuthCodes);
+
+                for (int i = start; i < end; i++) {
+                    String trimmedLine = dataLines.get(i);
+                    CdrData preliminaryCdrData = preliminaryList.get(i);
+
+                    Optional<CommunicationLocation> targetCommLocationOpt = commLocationLookupService
+                            .findBestCommunicationLocation(
+                                    plantTypeId,
+                                    preliminaryCdrData.getCallingPartyNumber(),
+                                    preliminaryCdrData.getCallingPartyNumberPartition(),
+                                    preliminaryCdrData.getFinalCalledPartyNumber(),
+                                    preliminaryCdrData.getFinalCalledPartyNumberPartition(),
+                                    preliminaryCdrData.getLastRedirectDn(),
+                                    preliminaryCdrData.getLastRedirectDnPartition(),
+                                    preliminaryCdrData.getDateTimeOrigination());
+
+                    if (targetCommLocationOpt.isPresent()) {
+                        CommunicationLocation targetCommLocation = targetCommLocationOpt.get();
+                        CdrProcessor finalProcessor = getProcessorForPlantType(targetCommLocation.getPlantTypeId());
+
+                        LineProcessingContext context = LineProcessingContext.builder()
+                                .cdrLine(trimmedLine)
+                                .commLocation(targetCommLocation)
+                                .cdrProcessor(finalProcessor)
+                                .extensionRanges(extensionRanges)
+                                .extensionLimits(extensionLimits)
+                                .fileInfo(dummyFileInfo)
+                                .headerPositions(currentHeaderMap)
+                                .historicalData(historicalData)
+                                .build();
+
+                        ProcessedCdrResult result = cdrProcessorService.processCdrData(context);
+                        if (result.getOutcome() != ProcessingOutcome.SKIPPED) {
+                            results.add(result);
+                        }
+                    } else {
+                        CdrData failData = new CdrData();
+                        failData.setRawCdrLine(trimmedLine);
+                        ProcessedCdrResult failResult = ProcessedCdrResult.builder()
+                                .cdrData(failData)
+                                .outcome(ProcessingOutcome.QUARANTINED)
+                                .errorType(QuarantineErrorType.PENDING_ASSOCIATION)
+                                .errorMessage("Could not route to CommunicationLocation")
+                                .errorStep("TestCdrRouting")
+                                .build();
+                        results.add(failResult);
                     }
-                } else {
-                    // Unroutable
-                    CdrData failData = new CdrData();
-                    failData.setRawCdrLine(trimmedLine);
-                    ProcessedCdrResult failResult = ProcessedCdrResult.builder()
-                            .cdrData(failData)
-                            .outcome(ProcessingOutcome.QUARANTINED)
-                            .errorType(QuarantineErrorType.PENDING_ASSOCIATION)
-                            .errorMessage("Could not route to CommunicationLocation")
-                            .errorStep("TestCdrRouting")
-                            .build();
-                    results.add(failResult);
                 }
             }
 

@@ -89,8 +89,18 @@ public class CdrProcessorService {
                     ctx.getCommLocationExtensionLimits(), ctx.getHeaderPositions());
 
             if (preCdr != null) {
+                // Include BOTH calling and destination identifiers so the shared HistoricalDataContainer
+                // has timelines for destination employees too. The legacy PHP pipeline did a fresh
+                // per-call lookup, which always populated the destination's timeline; pre-fetching
+                // only calling-party extensions caused destination lookups in
+                // InternalCallProcessorService.determineSpecificInternalCallType to miss, leaving
+                // destination_employee_id null and mis-classifying internal calls.
                 if (preCdr.getCallingPartyNumber() != null)
                     uniqueExtensions.add(preCdr.getCallingPartyNumber());
+                if (preCdr.getFinalCalledPartyNumber() != null)
+                    uniqueExtensions.add(preCdr.getFinalCalledPartyNumber());
+                if (preCdr.getLastRedirectDn() != null)
+                    uniqueExtensions.add(preCdr.getLastRedirectDn());
                 if (preCdr.getAuthCodeDescription() != null)
                     uniqueAuthCodes.add(preCdr.getAuthCodeDescription());
             }
