@@ -332,6 +332,12 @@ public class TariffCalculationService {
                         result.bestDestInfo.getIndicatorId());
                 log.info("TRACE_APPLY: isLocalExtended returned {}", isLocalExt);
             }
+            // Use a LOCAL variable for the tariffing prefix id. Do NOT mutate result.bestPrefixInfo
+            // because that PrefixInfo instance is shared with PrefixLookupService's country-level
+            // prefix cache — mutating prefixId here corrupts the cache for every subsequent parallel
+            // worker that reads the same cached LOCAL prefix, causing them to tariff with the
+            // LOCAL_EXTENDED rate (40.46) instead of LOCAL (38.00).
+            Long effectivePrefixIdForTariff = result.bestPrefixInfo.prefixId;
             if (cdrData.getTelephonyTypeId() == TelephonyTypeEnum.LOCAL.getValue() && isLocalExt) {
                 log.debug("Call to {} identified as LOCAL_EXTENDED.", result.bestDestInfo.getDestinationDescription());
                 log.info("TRACE_APPLY: promoting to LOCAL_EXTENDED");
@@ -343,18 +349,18 @@ public class TariffCalculationService {
                 if (localExtPrefixInfo != null) {
                     cdrData.setOperatorId(localExtPrefixInfo.getOperatorId());
                     cdrData.setOperatorName(localExtPrefixInfo.getOperatorName());
-                    result.bestPrefixInfo.prefixId = localExtPrefixInfo.getPrefixId(); // Update for subsequent logic
-                    log.info("TRACE_APPLY: swapped prefixId to LOCAL_EXT prefixId={}", result.bestPrefixInfo.prefixId);
+                    effectivePrefixIdForTariff = localExtPrefixInfo.getPrefixId();
+                    log.info("TRACE_APPLY: swapped prefixId (local only) to LOCAL_EXT prefixId={}", effectivePrefixIdForTariff);
                 }
             }
 
             TariffValue baseTariff = telephonyTypeLookupService.getBaseTariffValue(
-                    result.bestPrefixInfo.prefixId,
+                    effectivePrefixIdForTariff,
                     result.bestDestInfo.getIndicatorId(),
                     commLocation.getId(),
                     commLocation.getIndicatorId());
-            log.debug("Base tariff for prefixId {}: {}", result.bestPrefixInfo.prefixId, baseTariff);
-            log.info("TRACE_APPLY: finalPrefixId={} baseTariff.rate={}", result.bestPrefixInfo.prefixId, baseTariff.getRateValue());
+            log.debug("Base tariff for prefixId {}: {}", effectivePrefixIdForTariff, baseTariff);
+            log.info("TRACE_APPLY: finalPrefixId={} baseTariff.rate={}", effectivePrefixIdForTariff, baseTariff.getRateValue());
 
             cdrData.setPricePerMinute(baseTariff.getRateValue());
             cdrData.setPriceIncludesVat(baseTariff.isIncludesVat());
