@@ -5,9 +5,13 @@ import com.infomedia.abacox.telephonypricing.db.entity.CommunicationLocation;
 import com.infomedia.abacox.telephonypricing.db.entity.Employee;
 import com.infomedia.abacox.telephonypricing.db.entity.Indicator;
 import com.infomedia.abacox.telephonypricing.db.entity.Subdivision;
+import com.infomedia.abacox.telephonypricing.multitenancy.TenantContext;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -15,17 +19,62 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Service
 @Log4j2
 @RequiredArgsConstructor
 public class InternalCallProcessorService {
 
+    @PersistenceContext
+    private EntityManager entityManager;
+
     private final EmployeeLookupService employeeLookupService;
     private final TariffCalculationService tariffCalculationService;
     private final CdrConfigService appConfigService;
     private final TelephonyTypeLookupService telephonyTypeLookupService;
     private final PrefixLookupService prefixLookupService;
+
+    // PHP asignar_ubicacion (txt2dbv8.txt:1035) takes the call's origin/destination indicator from
+    // the employee's SUBDIVISION -> OFFICE_DETAILS -> INDICATOR_ID, not from the commLocation.
+    // The subdivision's office can live in a different indicator than the commLocation's (seen in
+    // colsanitas: subdivision 2290 "CM EPS EL BARZAL" sits at indicator 156/Popayan even though
+    // its employees belong to commLocation 50/Villavicencio/1045). Falling back to commLocation
+    // when the subdivision has no office_details row matches legacy fallback behavior.
+    // Cache key is "<tenant>:<subdivisionId>" so tenants cannot leak.
+    // Sentinel -1L is used to cache "no office found" to avoid repeated empty queries.
+    private static final Long OFFICE_INDICATOR_MISSING = -1L;
+    private final Map<String, Long> officeIndicatorBySubdivision = new ConcurrentHashMap<>();
+
+    @Transactional(readOnly = true)
+    public Long resolveOfficeIndicatorId(Long subdivisionId) {
+        if (subdivisionId == null || subdivisionId <= 0) return null;
+        String key = TenantContext.getTenant() + ":" + subdivisionId;
+        Long cached = officeIndicatorBySubdivision.computeIfAbsent(key, k -> {
+            List<Number> rows = entityManager.createNativeQuery(
+                    "SELECT indicator_id FROM office_details WHERE subdivision_id = :subId AND active = true LIMIT 1")
+                    .setParameter("subId", subdivisionId)
+                    .getResultList();
+            if (rows.isEmpty()) return OFFICE_INDICATOR_MISSING;
+            Number n = rows.get(0);
+            return n == null ? OFFICE_INDICATOR_MISSING : n.longValue();
+        });
+        return OFFICE_INDICATOR_MISSING.equals(cached) ? null : cached;
+    }
+
+    private Long effectiveIndicatorId(Employee emp, CommunicationLocation fallback) {
+        if (emp != null) {
+            Long subId = emp.getSubdivisionId();
+            if (subId != null) {
+                Long officeInd = resolveOfficeIndicatorId(subId);
+                if (officeInd != null) return officeInd;
+            }
+        }
+        if (fallback != null && fallback.getIndicator() != null) {
+            return fallback.getIndicator().getId();
+        }
+        return null;
+    }
 
     public void processInternal(CdrData cdrData, LineProcessingContext processingContext,
                                 boolean pbxSpecialRuleAppliedRecursively) {
@@ -214,8 +263,17 @@ public class InternalCallProcessorService {
                 && destCommLoc.getIndicator() != null) {
             Indicator originIndicator = originCommLoc.getIndicator();
             Indicator destIndicator = destCommLoc.getIndicator();
-            result.setOriginIndicatorId(originIndicator.getId());
-            result.setDestinationIndicatorId(destIndicator.getId());
+            // Legacy PHP takes the origin/dest indicator from the employee's subdivision office
+            // (txt2dbv8.txt:1046 -> $arrSubDirsCliente[$oficinaBuscada]['indicativo']), falling
+            // back to the commLocation's indicator when the subdivision has no office row. Using
+            // only commLocation caused e.g. Popayan subdivisions hosted in Villavicencio's
+            // commLoc to be misclassified (indicator 1045 vs legacy's 156).
+            Long originIndicatorId = effectiveIndicatorId(originEmpOpt.orElse(null), originCommLoc);
+            Long destIndicatorId = effectiveIndicatorId(destEmpOpt.orElse(null), destCommLoc);
+            if (originIndicatorId == null) originIndicatorId = originIndicator.getId();
+            if (destIndicatorId == null) destIndicatorId = destIndicator.getId();
+            result.setOriginIndicatorId(originIndicatorId);
+            result.setDestinationIndicatorId(destIndicatorId);
 
             Subdivision originSubdivision = originEmpOpt.map(Employee::getSubdivision).orElse(null);
             Long originOfficeId = originSubdivision != null ? originSubdivision.getId() : null;
@@ -224,7 +282,7 @@ public class InternalCallProcessorService {
 
             if (!Objects.equals(originIndicator.getOriginCountryId(), destIndicator.getOriginCountryId())) {
                 result.setTelephonyTypeId(TelephonyTypeEnum.INTERNAL_INTERNATIONAL_IP.getValue());
-            } else if (!Objects.equals(originIndicator.getId(), destIndicator.getId())) {
+            } else if (!Objects.equals(originIndicatorId, destIndicatorId)) {
                 result.setTelephonyTypeId(TelephonyTypeEnum.NATIONAL_IP.getValue());
             } else if (originOfficeId != null && destOfficeId != null
                     && !Objects.equals(originOfficeId, destOfficeId)) {
