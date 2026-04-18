@@ -48,11 +48,11 @@ public class DashboardPreloadScheduler {
 
         multitenantRunner.runForAllTenants(tenant -> {
             try {
-                log.debug("Preloading dashboard overview for tenant={} range={}..{}", tenant, start, end);
-                dashboardService.getDashboardOverview(start, end);
+                log.info("Refreshing dashboard overview for tenant={} range={}..{}", tenant, start, end);
+                dashboardService.refreshDashboardOverview(start, end);
 
-                log.debug("Preloading employee activity dashboard for tenant={}", tenant);
-                dashboardService.getEmployeeActivityDashboard(null, null, null, null, start, end);
+                log.info("Refreshing employee activity dashboard for tenant={}", tenant);
+                dashboardService.refreshEmployeeActivityDashboard(null, null, null, null, start, end);
             } catch (Exception ex) {
                 log.error("Dashboard preload failed for tenant={}", tenant, ex);
             }

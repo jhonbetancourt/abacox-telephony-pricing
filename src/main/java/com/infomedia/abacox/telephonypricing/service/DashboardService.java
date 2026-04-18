@@ -91,6 +91,38 @@ public class DashboardService {
         return result;
     }
 
+    public DashboardOverviewDto refreshDashboardOverview(LocalDateTime startDate, LocalDateTime endDate) {
+        String tenant = TenantContext.getTenant();
+        String key    = cacheKey(tenant, startDate, endDate);
+        Cache  cache  = cacheManager.getCache(cacheName(endDate));
+
+        DashboardOverviewDto result = computeDashboardOverview(startDate, endDate);
+        if (cache != null) {
+            cache.put(key, result);
+            log.debug("Dashboard cache refreshed: key={}", key);
+        }
+        return result;
+    }
+
+    public EmployeeActivityDashboardDto refreshEmployeeActivityDashboard(
+            String employeeName, String employeeExtension, Long subdivisionId, Long costCenterId,
+            LocalDateTime startDate, LocalDateTime endDate) {
+        String tenant = TenantContext.getTenant();
+        String key = cacheKey(tenant, startDate, endDate) + ":activity-dashboard";
+        Cache cache = cacheManager.getCache(employeeActivityCacheName(endDate));
+
+        List<EmployeeActivityReportDto> all =
+                employeeReportService.fetchAllEmployeeActivity(null, null, null, null, startDate, endDate);
+        if (cache != null) {
+            cache.put(key, all);
+            log.debug("Employee activity dashboard cache refreshed: key={}", key);
+        }
+
+        List<EmployeeActivityReportDto> filtered = applyEmployeeActivityFilters(
+                all, employeeName, employeeExtension, subdivisionId, costCenterId);
+        return computeEmployeeActivityDashboard(filtered);
+    }
+
     private String employeeActivityCacheName(LocalDateTime endDate) {
         YearMonth current = YearMonth.now();
         YearMonth end     = YearMonth.from(endDate);
