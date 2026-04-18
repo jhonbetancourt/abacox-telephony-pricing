@@ -1,6 +1,7 @@
 // File: com/infomedia/abacox/telephonypricing/component/cdrprocessing/IndicatorLookupService.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
+import com.infomedia.abacox.telephonypricing.multitenancy.TenantContext;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.NoResultException;
 import jakarta.persistence.PersistenceContext;
@@ -310,7 +311,10 @@ public class IndicatorLookupService {
 
     @Transactional(readOnly = true)
     public IndicatorConfig getIndicatorConfigForTelephonyType(Long telephonyTypeId, Long originCountryId) {
-        String cacheKey = telephonyTypeId + ":" + originCountryId;
+        // Schema-per-tenant: the same (telephonyTypeId, originCountryId) pair resolves to
+        // different rows across tenants, so the tenant MUST be part of the cache key.
+        String tenant = TenantContext.getTenant();
+        String cacheKey = (tenant != null ? tenant : "public") + ":" + telephonyTypeId + ":" + originCountryId;
         IndicatorConfigCacheEntry cached = indicatorConfigCache.get(cacheKey);
         if (cached != null && cached.isFresh()) {
             return cached.value;

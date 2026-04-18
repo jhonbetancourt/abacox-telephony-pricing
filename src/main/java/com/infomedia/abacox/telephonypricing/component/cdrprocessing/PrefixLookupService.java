@@ -1,6 +1,7 @@
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
 import com.infomedia.abacox.telephonypricing.db.entity.CommunicationLocation;
+import com.infomedia.abacox.telephonypricing.multitenancy.TenantContext;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.Tuple;
@@ -24,10 +25,17 @@ public class PrefixLookupService {
     private final PhoneNumberTransformationService phoneNumberTransformationService;
     private final TelephonyTypeLookupService telephonyTypeLookupService;
 
-    // CACHE: CountryID -> List of all Prefixes
-    private final Map<Long, List<PrefixInfo>> prefixCache = new ConcurrentHashMap<>();
-    private final Map<Long, Instant> cacheLastUpdated = new ConcurrentHashMap<>();
+    // CACHE: (tenant, countryId) -> List of all Prefixes. Schema-per-tenant means
+    // the same countryId across tenants resolves to different prefix rows, so the
+    // cache key MUST include the tenant identifier.
+    private final Map<String, List<PrefixInfo>> prefixCache = new ConcurrentHashMap<>();
+    private final Map<String, Instant> cacheLastUpdated = new ConcurrentHashMap<>();
     private static final long CACHE_TTL_SECONDS = 1800; // 30 Minutes
+
+    private static String cacheKey(Long countryId) {
+        String tenant = TenantContext.getTenant();
+        return (tenant != null ? tenant : "public") + ":" + countryId;
+    }
 
     @Transactional(readOnly = true)
     public List<PrefixInfo> findMatchingPrefixes(String dialedNumber,
@@ -118,21 +126,22 @@ public class PrefixLookupService {
     }
 
     private List<PrefixInfo> getPrefixesForCountry(Long countryId) {
-        Instant lastUpdate = cacheLastUpdated.get(countryId);
+        String key = cacheKey(countryId);
+        Instant lastUpdate = cacheLastUpdated.get(key);
         if (lastUpdate != null && !lastUpdate.isBefore(Instant.now().minusSeconds(CACHE_TTL_SECONDS))) {
-            return prefixCache.getOrDefault(countryId, Collections.emptyList());
+            return prefixCache.getOrDefault(key, Collections.emptyList());
         }
-        // Atomic refresh via ConcurrentHashMap; only one thread per countryId executes the loader,
-        // other threads block on that specific key (not a global monitor).
-        return prefixCache.compute(countryId, (key, existing) -> {
-            Instant currentUpdate = cacheLastUpdated.get(key);
+        // Atomic refresh via ConcurrentHashMap; only one thread per (tenant, countryId) executes the
+        // loader, other threads block on that specific key (not a global monitor).
+        return prefixCache.compute(key, (k, existing) -> {
+            Instant currentUpdate = cacheLastUpdated.get(k);
             if (existing != null && currentUpdate != null &&
                     !currentUpdate.isBefore(Instant.now().minusSeconds(CACHE_TTL_SECONDS))) {
                 return existing;
             }
-            log.debug("Reloading Prefix Cache for Country ID: {}", key);
-            List<PrefixInfo> loaded = loadPrefixesFromDb(key);
-            cacheLastUpdated.put(key, Instant.now());
+            log.debug("Reloading Prefix Cache for key: {}", k);
+            List<PrefixInfo> loaded = loadPrefixesFromDb(countryId);
+            cacheLastUpdated.put(k, Instant.now());
             return loaded;
         });
     }

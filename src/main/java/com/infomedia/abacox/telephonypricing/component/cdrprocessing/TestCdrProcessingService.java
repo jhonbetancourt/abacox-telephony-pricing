@@ -19,9 +19,11 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -63,6 +65,12 @@ public class TestCdrProcessingService {
             CdrProcessor initialParser = getProcessorForPlantType(plantTypeId);
             Map<String, Integer> currentHeaderMap = null;
 
+            // --- Pass 1: read all data lines + pre-parse to collect identifiers for a single historical prefetch.
+            List<String> dataLines = new ArrayList<>();
+            List<CdrData> preliminaryList = new ArrayList<>();
+            Set<String> uniqueExtensions = new HashSet<>();
+            Set<String> uniqueAuthCodes = new HashSet<>();
+
             String line;
             while ((line = bufferedReader.readLine()) != null) {
                 String trimmedLine = line.trim();
@@ -74,19 +82,30 @@ public class TestCdrProcessingService {
                     continue;
                 }
 
-                // If no header found yet and this line is not header, we treat it as data or
-                // fail if strict
-                // For test, we attempt to proceed.
-
-                // Pre-route
                 CdrData preliminaryCdrData = initialParser.evaluateFormat(trimmedLine, null, null, currentHeaderMap);
-
                 if (preliminaryCdrData == null) {
-                    // Could be skipped or invalid format
                     continue;
                 }
 
-                // Routing
+                dataLines.add(trimmedLine);
+                preliminaryList.add(preliminaryCdrData);
+
+                if (preliminaryCdrData.getCallingPartyNumber() != null)
+                    uniqueExtensions.add(preliminaryCdrData.getCallingPartyNumber());
+                if (preliminaryCdrData.getAuthCodeDescription() != null)
+                    uniqueAuthCodes.add(preliminaryCdrData.getAuthCodeDescription());
+            }
+
+            // --- Single historical prefetch shared across all lines. Without this the enrichment
+            //     for every line would lazy-load the full extension_range table once per CDR.
+            HistoricalDataContainer historicalData =
+                    employeeLookupService.prefetchHistoricalData(uniqueExtensions, uniqueAuthCodes);
+
+            // --- Pass 2: route, build context with shared historical data, process.
+            for (int i = 0; i < dataLines.size(); i++) {
+                String trimmedLine = dataLines.get(i);
+                CdrData preliminaryCdrData = preliminaryList.get(i);
+
                 Optional<CommunicationLocation> targetCommLocationOpt = commLocationLookupService
                         .findBestCommunicationLocation(
                                 plantTypeId,
@@ -110,6 +129,7 @@ public class TestCdrProcessingService {
                             .extensionLimits(extensionLimits)
                             .fileInfo(dummyFileInfo)
                             .headerPositions(currentHeaderMap)
+                            .historicalData(historicalData)
                             .build();
 
                     ProcessedCdrResult result = cdrProcessorService.processCdrData(context);
@@ -117,7 +137,6 @@ public class TestCdrProcessingService {
                         results.add(result);
                     }
                 } else {
-                    // Unroutable
                     CdrData failData = new CdrData();
                     failData.setRawCdrLine(trimmedLine);
                     ProcessedCdrResult failResult = ProcessedCdrResult.builder()
