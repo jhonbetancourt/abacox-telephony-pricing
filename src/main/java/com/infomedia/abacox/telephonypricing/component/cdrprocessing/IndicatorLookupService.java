@@ -10,7 +10,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigInteger;
+import java.time.Instant;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 @Service
@@ -19,6 +21,24 @@ public class IndicatorLookupService {
 
     @PersistenceContext
     private EntityManager entityManager;
+
+    // Reference data cache: (telephonyTypeId, originCountryId) -> IndicatorConfig.
+    // Populated on first use, refreshed per TTL. Config rarely changes, so repeated per-CDR
+    // lookups were hitting the DB with a COUNT + correlated subquery.
+    private static final long INDICATOR_CONFIG_TTL_SECONDS = 1800; // 30 minutes
+    private final Map<String, IndicatorConfigCacheEntry> indicatorConfigCache = new ConcurrentHashMap<>();
+
+    private static final class IndicatorConfigCacheEntry {
+        final IndicatorConfig value;
+        final Instant loadedAt;
+        IndicatorConfigCacheEntry(IndicatorConfig value) {
+            this.value = value;
+            this.loadedAt = Instant.now();
+        }
+        boolean isFresh() {
+            return !loadedAt.isBefore(Instant.now().minusSeconds(INDICATOR_CONFIG_TTL_SECONDS));
+        }
+    }
 
     /**
      * Finds a destination indicator and series that matches the given phone number.
@@ -290,6 +310,17 @@ public class IndicatorLookupService {
 
     @Transactional(readOnly = true)
     public IndicatorConfig getIndicatorConfigForTelephonyType(Long telephonyTypeId, Long originCountryId) {
+        String cacheKey = telephonyTypeId + ":" + originCountryId;
+        IndicatorConfigCacheEntry cached = indicatorConfigCache.get(cacheKey);
+        if (cached != null && cached.isFresh()) {
+            return cached.value;
+        }
+        IndicatorConfig loaded = loadIndicatorConfigFromDb(telephonyTypeId, originCountryId);
+        indicatorConfigCache.put(cacheKey, new IndicatorConfigCacheEntry(loaded));
+        return loaded;
+    }
+
+    private IndicatorConfig loadIndicatorConfigFromDb(Long telephonyTypeId, Long originCountryId) {
         String queryStr = "SELECT " +
                           "COALESCE(MIN(LENGTH(s.ndc::text)), 0) as min_ndc_len, " +
                           "COALESCE(MAX(LENGTH(s.ndc::text)), 0) as max_ndc_len, " +

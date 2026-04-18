@@ -38,4 +38,24 @@ public class PrefixInfo { // DTO to mimic PHP's $prefijo['datos'][$prefijoid]
         this.bandOk = p.isBandOk();
         this.bandsAssociatedCount = bandsCount;
     }
+
+    /** Flat constructor that avoids a per-row entityManager.find(Prefix.class, id). */
+    public static PrefixInfo fromFlat(Long prefixId, String prefixCode,
+                                      Long telephonyTypeId, String telephonyTypeName,
+                                      Long operatorId, String operatorName,
+                                      Integer cfgMin, Integer cfgMax,
+                                      boolean bandOk, int bandsCount) {
+        PrefixInfo pi = new PrefixInfo();
+        pi.prefixId = prefixId;
+        pi.prefixCode = prefixCode;
+        pi.telephonyTypeId = telephonyTypeId;
+        pi.telephonyTypeName = telephonyTypeName;
+        pi.operatorId = operatorId;
+        pi.operatorName = operatorName;
+        pi.telephonyTypeMinLength = cfgMin != null ? cfgMin : 0;
+        pi.telephonyTypeMaxLength = cfgMax != null ? cfgMax : 99;
+        pi.bandOk = bandOk;
+        pi.bandsAssociatedCount = bandsCount;
+        return pi;
+    }
 }

@@ -60,7 +60,14 @@ public class CdrProcessorService {
         this.trackerService = trackerService;
     }
 
-    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    /**
+     * Processes a batch of CDR lines. Intentionally NOT @Transactional: the pre-parse,
+     * counter registration and parallel per-line processing do not share a transactional
+     * context (each downstream @Transactional method opens its own). The prefetch of
+     * historical data is transactional at {@link EmployeeLookupService#prefetchHistoricalData}
+     * so the DB connection is only held while loading that snapshot — not during the
+     * parallel enrichment/persistence stage.
+     */
     public void processCdrBatch(List<LineProcessingContext> batch) {
         if (batch.isEmpty())
             return;

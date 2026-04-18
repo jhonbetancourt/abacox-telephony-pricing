@@ -1,6 +1,7 @@
 // File: com/infomedia/abacox/telephonypricing/component/cdrprocessing/HistoricalDataContainer.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
+import com.infomedia.abacox.telephonypricing.db.entity.CommunicationLocation;
 import com.infomedia.abacox.telephonypricing.db.entity.Employee;
 import com.infomedia.abacox.telephonypricing.db.entity.ExtensionRange;
 import lombok.AllArgsConstructor;
@@ -9,6 +10,8 @@ import lombok.Getter;
 import lombok.extern.log4j.Log4j2;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 
 @Getter
 @Log4j2
@@ -17,6 +20,22 @@ public class HistoricalDataContainer {
     private final Map<String, ResolvedTimeline> extensionTimelines = new HashMap<>();
     private final Map<String, ResolvedTimeline> authCodeTimelines = new HashMap<>();
     private final Map<Long, List<RangeSlice>> rangeSlicesByCommId = new HashMap<>();
+
+    // Batch-scoped CommunicationLocation memoization. Many range-matched conceptual
+    // employees share the same commLocationId; caching avoids a repeated PK lookup
+    // per CDR when running the parallel stream in CdrProcessorService.
+    private final Map<Long, CommunicationLocation> commLocationCache = new ConcurrentHashMap<>();
+    // Sentinel for "resolved but null" to avoid re-querying missing ids.
+    private static final CommunicationLocation MISSING_COMM_LOCATION = new CommunicationLocation();
+
+    public CommunicationLocation resolveCommunicationLocation(Long id, Function<Long, CommunicationLocation> loader) {
+        if (id == null) return null;
+        CommunicationLocation cl = commLocationCache.computeIfAbsent(id, key -> {
+            CommunicationLocation loaded = loader.apply(key);
+            return loaded != null ? loaded : MISSING_COMM_LOCATION;
+        });
+        return cl == MISSING_COMM_LOCATION ? null : cl;
+    }
 
     public void addEmployeeExtensionSlice(String extension, Employee emp, long fdesde, long fhasta, boolean isGlobal) {
         extensionTimelines.computeIfAbsent(extension, k -> new ResolvedTimeline()).addSlice(emp, fdesde, fhasta, isGlobal);

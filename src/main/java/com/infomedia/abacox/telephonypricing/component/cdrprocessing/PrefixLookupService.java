@@ -1,8 +1,6 @@
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
 import com.infomedia.abacox.telephonypricing.db.entity.CommunicationLocation;
-import com.infomedia.abacox.telephonypricing.db.entity.Prefix;
-import com.infomedia.abacox.telephonypricing.db.entity.TelephonyTypeConfig;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import jakarta.persistence.Tuple;
@@ -121,23 +119,29 @@ public class PrefixLookupService {
 
     private List<PrefixInfo> getPrefixesForCountry(Long countryId) {
         Instant lastUpdate = cacheLastUpdated.get(countryId);
-        if (lastUpdate == null || lastUpdate.isBefore(Instant.now().minusSeconds(CACHE_TTL_SECONDS))) {
-            synchronized (prefixCache) {
-                // Double check locking
-                lastUpdate = cacheLastUpdated.get(countryId);
-                if (lastUpdate == null || lastUpdate.isBefore(Instant.now().minusSeconds(CACHE_TTL_SECONDS))) {
-                    log.debug("Reloading Prefix Cache for Country ID: {}", countryId);
-                    List<PrefixInfo> loaded = loadPrefixesFromDb(countryId);
-                    prefixCache.put(countryId, loaded);
-                    cacheLastUpdated.put(countryId, Instant.now());
-                }
-            }
+        if (lastUpdate != null && !lastUpdate.isBefore(Instant.now().minusSeconds(CACHE_TTL_SECONDS))) {
+            return prefixCache.getOrDefault(countryId, Collections.emptyList());
         }
-        return prefixCache.getOrDefault(countryId, Collections.emptyList());
+        // Atomic refresh via ConcurrentHashMap; only one thread per countryId executes the loader,
+        // other threads block on that specific key (not a global monitor).
+        return prefixCache.compute(countryId, (key, existing) -> {
+            Instant currentUpdate = cacheLastUpdated.get(key);
+            if (existing != null && currentUpdate != null &&
+                    !currentUpdate.isBefore(Instant.now().minusSeconds(CACHE_TTL_SECONDS))) {
+                return existing;
+            }
+            log.debug("Reloading Prefix Cache for Country ID: {}", key);
+            List<PrefixInfo> loaded = loadPrefixesFromDb(key);
+            cacheLastUpdated.put(key, Instant.now());
+            return loaded;
+        });
     }
 
     private List<PrefixInfo> loadPrefixesFromDb(Long originCountryId) {
-        String queryStr = "SELECT p.*, ttc.min_value as ttc_min, ttc.max_value as ttc_max, " +
+        // Flat-select everything needed for PrefixInfo so we avoid a per-row entityManager.find(Prefix.class, id).
+        String queryStr = "SELECT p.id as prefix_id, p.code as prefix_code, p.telephony_type_id as tt_id, " +
+                "tt.name as tt_name, p.operator_id as op_id, o.name as op_name, p.band_ok as band_ok, " +
+                "ttc.min_value as ttc_min, ttc.max_value as ttc_max, " +
                 "(SELECT COUNT(*) FROM band b WHERE b.prefix_id = p.id AND b.active = true) as bands_count " +
                 "FROM prefix p " +
                 "JOIN operator o ON p.operator_id = o.id " +
@@ -152,14 +156,18 @@ public class PrefixLookupService {
         nativeQuery.setParameter("specialServicesTypeId", TelephonyTypeEnum.SPECIAL_SERVICES.getValue());
 
         List<Tuple> results = nativeQuery.getResultList();
-        return results.stream().map(tuple -> {
-            Prefix p = entityManager.find(Prefix.class, tuple.get("id", Number.class).longValue());
-            TelephonyTypeConfig cfg = new TelephonyTypeConfig();
-            cfg.setMinValue(tuple.get("ttc_min", Number.class) != null ? tuple.get("ttc_min", Number.class).intValue() : 0);
-            cfg.setMaxValue(tuple.get("ttc_max", Number.class) != null ? tuple.get("ttc_max", Number.class).intValue() : 99);
-            int bandsCount = tuple.get("bands_count", Number.class).intValue();
-            return new PrefixInfo(p, cfg, bandsCount);
-        }).collect(Collectors.toList());
+        return results.stream().map(tuple -> PrefixInfo.fromFlat(
+                tuple.get("prefix_id", Number.class).longValue(),
+                tuple.get("prefix_code", String.class),
+                tuple.get("tt_id", Number.class).longValue(),
+                tuple.get("tt_name", String.class),
+                tuple.get("op_id", Number.class).longValue(),
+                tuple.get("op_name", String.class),
+                tuple.get("ttc_min", Number.class) != null ? tuple.get("ttc_min", Number.class).intValue() : null,
+                tuple.get("ttc_max", Number.class) != null ? tuple.get("ttc_max", Number.class).intValue() : null,
+                Boolean.TRUE.equals(tuple.get("band_ok", Boolean.class)),
+                tuple.get("bands_count", Number.class).intValue()
+        )).collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)

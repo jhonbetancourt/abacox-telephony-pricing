@@ -1,7 +1,6 @@
 // File: com/infomedia/abacox/telephonypricing/cdr/TelephonyTypeLookupService.java
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
-import com.infomedia.abacox.telephonypricing.db.entity.Prefix;
 import com.infomedia.abacox.telephonypricing.db.entity.TelephonyTypeConfig;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.NoResultException;
@@ -34,7 +33,9 @@ public class TelephonyTypeLookupService {
 
     @Transactional(readOnly = true)
     public PrefixInfo getPrefixInfoForLocalExtended(Long originCountryId) {
-        String queryStr = "SELECT p.*, ttc.min_value as ttc_min, ttc.max_value as ttc_max, " +
+        String queryStr = "SELECT p.id as prefix_id, p.code as prefix_code, p.telephony_type_id as tt_id, " +
+                "tt.name as tt_name, p.operator_id as op_id, o.name as op_name, p.band_ok as band_ok, " +
+                "ttc.min_value as ttc_min, ttc.max_value as ttc_max, " +
                 "(SELECT COUNT(*) FROM band b WHERE b.prefix_id = p.id AND b.active = true) as bands_count " +
                 "FROM prefix p " +
                 "JOIN operator o ON p.operator_id = o.id " +
@@ -49,12 +50,18 @@ public class TelephonyTypeLookupService {
 
         try {
             Tuple tuple = (Tuple) nativeQuery.getSingleResult();
-            Prefix p = entityManager.find(Prefix.class, tuple.get("id", Number.class).longValue());
-            TelephonyTypeConfig cfg = new TelephonyTypeConfig();
-            cfg.setMinValue(tuple.get("ttc_min", Number.class) != null ? tuple.get("ttc_min", Number.class).intValue() : 0);
-            cfg.setMaxValue(tuple.get("ttc_max", Number.class) != null ? tuple.get("ttc_max", Number.class).intValue() : 99);
-            int bandsCount = tuple.get("bands_count", Number.class).intValue();
-            return new PrefixInfo(p, cfg, bandsCount);
+            return PrefixInfo.fromFlat(
+                    tuple.get("prefix_id", Number.class).longValue(),
+                    tuple.get("prefix_code", String.class),
+                    tuple.get("tt_id", Number.class).longValue(),
+                    tuple.get("tt_name", String.class),
+                    tuple.get("op_id", Number.class).longValue(),
+                    tuple.get("op_name", String.class),
+                    tuple.get("ttc_min", Number.class) != null ? tuple.get("ttc_min", Number.class).intValue() : null,
+                    tuple.get("ttc_max", Number.class) != null ? tuple.get("ttc_max", Number.class).intValue() : null,
+                    Boolean.TRUE.equals(tuple.get("band_ok", Boolean.class)),
+                    tuple.get("bands_count", Number.class).intValue()
+            );
         } catch (NoResultException e) {
             log.debug("No prefix definition found for LOCAL_EXTENDED type in country {}", originCountryId);
             return null;

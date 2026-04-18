@@ -37,6 +37,7 @@ public class EmployeeLookupService {
     }
 
     @SuppressWarnings("unchecked")
+    @Transactional(readOnly = true)
     public HistoricalDataContainer prefetchHistoricalData(Set<String> extensions, Set<String> authCodes) {
         log.debug("Pre-fetching historical data for {} extensions and {} auth codes", extensions.size(), authCodes.size());
 
@@ -56,14 +57,16 @@ public class EmployeeLookupService {
 
         // --- 1. Fetch Employees ---
         if (!cleanedExtensions.isEmpty() || !validAuthCodes.isEmpty()) {
-            String fetchAllQuery = 
+            // Ordering matches the slice cursor in processHistorySlices so the grouping/sort
+            // can run as a single streaming pass in memory.
+            String fetchAllQuery =
                 "SELECT e.* FROM employee e " +
                 "WHERE e.extension IN (:extensions) OR e.auth_code IN (:authCodes) " +
                 "   OR (e.history_control_id IS NOT NULL AND e.history_control_id IN ( " +
                 "       SELECT e2.history_control_id FROM employee e2 " +
                 "       WHERE e2.extension IN (:extensions) OR e2.auth_code IN (:authCodes) " +
                 "   )) " +
-                "ORDER BY e.history_control_id, e.history_since DESC";
+                "ORDER BY e.history_control_id ASC NULLS LAST, e.history_since DESC NULLS LAST";
             jakarta.persistence.Query fetchQuery = entityManager.createNativeQuery(fetchAllQuery, Employee.class);
             fetchQuery.setParameter("extensions", cleanedExtensions.isEmpty() ? Collections.singleton("-1") : cleanedExtensions);
             fetchQuery.setParameter("authCodes", validAuthCodes.isEmpty() ? Collections.singleton("-1") : validAuthCodes);
@@ -83,10 +86,11 @@ public class EmployeeLookupService {
 
         // --- 2. Fetch Extension Ranges ---
         // Ensuring only active communication location ranges are prefetched.
+        // Ordering by history_control_id allows a single-pass cursor in processHistorySlices.
         String fetchRangesQuery = "SELECT er.* FROM extension_range er " +
                                   "JOIN communication_location cl ON er.comm_location_id = cl.id " +
                                   "WHERE cl.active = true " +
-                                  "ORDER BY er.history_since DESC";
+                                  "ORDER BY er.history_control_id NULLS LAST, er.history_since DESC";
         List<ExtensionRange> allRanges = entityManager.createNativeQuery(fetchRangesQuery, ExtensionRange.class).getResultList();
 
         processHistorySlices(allRanges, (range, fdesde, fhasta) -> {
@@ -97,41 +101,39 @@ public class EmployeeLookupService {
     }
 
     /**
-     * Calculates the fhasta (end date) for historical groups just like PHP's Obtener_HistoricoHasta_Listado
+     * Calculates the fhasta (end date) for historical groups just like PHP's Obtener_HistoricoHasta_Listado.
+     * Requires input already sorted by (historyControlId ASC NULLS LAST, historySince DESC NULLS LAST),
+     * which both prefetch queries now guarantee. This lets us avoid the intermediate groupingBy + per-group sort.
      */
     private <T extends HistoricalEntity> void processHistorySlices(List<T> entities, HistorySliceConsumer<T> consumer) {
-        // Group by history control id
-        Map<Long, List<T>> grouped = entities.stream()
-                .filter(e -> e.getHistoryControlId() != null)
-                .collect(Collectors.groupingBy(HistoricalEntity::getHistoryControlId));
+        Long currentControlId = null;
+        long nextFdesde = -1;
+        boolean groupStarted = false;
 
-        // Process entities WITH history control ID
-        for (List<T> group : grouped.values()) {
-            group.sort(Comparator.comparing(HistoricalEntity::getHistorySince, Comparator.nullsLast(Comparator.reverseOrder())));
-            long nextFdesde = -1;
+        for (T entity : entities) {
+            Long controlId = entity.getHistoryControlId();
 
-            for (T entity : group) {
-                long fdesde = entity.getHistorySince() != null ? 
-                        entity.getHistorySince().truncatedTo(ChronoUnit.DAYS).atZone(ZoneId.systemDefault()).toEpochSecond() : 0;
-                long fhasta = -1; // -1 means open/no limit
-
-                if (nextFdesde != -1) {
-                    fhasta = nextFdesde - 1;
-                }
-
-                consumer.accept(entity, fdesde, fhasta);
-                nextFdesde = fdesde;
+            if (controlId == null) {
+                // Standalone record (no history control): open-ended, no fhasta cursor.
+                long fdesde = entity.getHistorySince() != null ?
+                        entity.getHistorySince().atZone(ZoneId.systemDefault()).toEpochSecond() : 0;
+                consumer.accept(entity, fdesde, -1L);
+                continue;
             }
-        }
 
-        // Process entities WITHOUT history control ID (Standalone records)
-        entities.stream()
-                .filter(e -> e.getHistoryControlId() == null)
-                .forEach(e -> {
-                    long fdesde = e.getHistorySince() != null ? 
-                            e.getHistorySince().atZone(ZoneId.systemDefault()).toEpochSecond() : 0;
-                    consumer.accept(e, fdesde, -1L);
-                });
+            if (!groupStarted || !controlId.equals(currentControlId)) {
+                currentControlId = controlId;
+                nextFdesde = -1;
+                groupStarted = true;
+            }
+
+            long fdesde = entity.getHistorySince() != null ?
+                    entity.getHistorySince().truncatedTo(ChronoUnit.DAYS).atZone(ZoneId.systemDefault()).toEpochSecond() : 0;
+            long fhasta = (nextFdesde != -1) ? nextFdesde - 1 : -1L;
+
+            consumer.accept(entity, fdesde, fhasta);
+            nextFdesde = fdesde;
+        }
     }
 
     @Transactional
@@ -305,7 +307,9 @@ public class EmployeeLookupService {
                     bestMatch.getPrefix()); 
 
             if (bestMatch.getCommLocationId() != null) {
-                CommunicationLocation cl = entityManager.find(CommunicationLocation.class, bestMatch.getCommLocationId());
+                CommunicationLocation cl = historicalData.resolveCommunicationLocation(
+                        bestMatch.getCommLocationId(),
+                        id -> entityManager.find(CommunicationLocation.class, id));
                 conceptualEmployee.setCommunicationLocation(cl);
             }
             return Optional.of(conceptualEmployee);
