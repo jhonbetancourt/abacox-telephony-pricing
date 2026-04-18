@@ -421,10 +421,17 @@ public class EmployeeLookupService {
                         tuple -> tuple.get("comm_id", Number.class).longValue(),
                         Collectors.mapping(tuple -> tuple.get("extension", String.class), Collectors.toList())));
 
-        specialExtensionsByCommId.forEach((commId, extensions) -> resultMap.computeIfPresent(commId, (k, v) -> {
-            v.setSpecialFullExtensions(extensions);
-            return v;
-        }));
+        // PHP's ObtenerMaxMin takes mporigen_id (country) so extension-possibility limits are
+        // COUNTRY-GLOBAL, not per-commLocation. Without this union, a caller at commLoc X checking
+        // if '5728345' (registered at commLoc Y) is a possible internal extension gets false and
+        // the call is misclassified as external. Union all specialFullExtensions across commLocs
+        // and assign the SAME list to every commLoc's limits so isPossibleExtension() can find
+        // extensions registered in sibling plants (matching legacy behavior even with ext_globales=false).
+        List<String> globalSpecialExtensions = specialExtensionsByCommId.values().stream()
+                .flatMap(List::stream)
+                .distinct()
+                .collect(Collectors.toList());
+        resultMap.values().forEach(limits -> limits.setSpecialFullExtensions(globalSpecialExtensions));
 
         resultMap.values().forEach(ExtensionLimits::calculateFinalMinMaxValues);
         return resultMap;

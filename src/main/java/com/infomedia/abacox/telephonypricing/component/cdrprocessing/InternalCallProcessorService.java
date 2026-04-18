@@ -199,9 +199,15 @@ public class InternalCallProcessorService {
         }
         result.setOriginEmployee(originEmpOpt.orElse(null));
 
+        // Pass the current (caller's) commLocation so the historical timeline resolver prefers
+        // employees registered at the same plant when the extension exists in multiple plants.
+        // Legacy picks the same-plant employee (e.g. 5768170 at manizales_hcs when caller is in
+        // manizales_hcs, even though bogota_hcs has a more recent record). Passing null caused
+        // the most-recent global slice to win regardless of plant. Cross-plant destinations still
+        // resolve via the fallbackGlobalMatch path inside ResolvedTimeline.findMatch.
         Optional<Employee> destEmpOpt = employeeLookupService.findEmployeeByExtensionOrAuthCode(
                 cdrData.getEffectiveDestinationNumber(), null,
-                null, ignoredAuthCodes, processingContext.getExtensionRanges(),
+                currentCommLocation.getId(), ignoredAuthCodes, processingContext.getExtensionRanges(),
                 cdrData.getDateTimeOrigination(), processingContext.getHistoricalData());
         if (destEmpOpt.isEmpty() && CdrUtil.isPossibleExtension(cdrData.getEffectiveDestinationNumber(), limits)) {
             destEmpOpt = employeeLookupService.findEmployeeByExtensionRange(cdrData.getEffectiveDestinationNumber(),
