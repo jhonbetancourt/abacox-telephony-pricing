@@ -17,7 +17,6 @@ import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBo
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -245,8 +244,11 @@ public class TestCdrProcessingService {
                             "", // id (auto-generated)
                             data.getEffectiveDestinationNumber(),
                             commLocationId,
-                            DateTimeUtil.convertToZone(data.getDateTimeOrigination(), ZoneId.systemDefault())
-                                    .format(SERVICE_DATE_FORMAT),
+                            // dateTimeOrigination is already a LocalDateTime in the JVM's default zone
+                                    // (America/Bogota per Application.java), matching how it lands in the DB.
+                                    // Do NOT pass it through DateTimeUtil.convertToZone — that helper treats its
+                                    // input as UTC and would shift it -5h, producing 13:42 instead of 18:42.
+                            data.getDateTimeOrigination().format(SERVICE_DATE_FORMAT),
                             String.valueOf(data.getOperatorId()),
                             data.getCallingPartyNumber(),
                             data.getAuthCodeDescription(),
