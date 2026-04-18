@@ -18,6 +18,7 @@ import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -39,6 +40,10 @@ public class TestCdrProcessingService {
     private final List<CdrProcessor> cdrProcessors;
 
     private static final AtomicLong DUMMY_FILE_ID_GENERATOR = new AtomicLong(-1);
+
+    // Use a fixed pattern so seconds are always rendered (LocalDateTime.toString() drops ":00"
+    // when seconds are zero, which breaks key-based comparisons against the legacy CSV).
+    private static final DateTimeFormatter SERVICE_DATE_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     public ResponseEntity<StreamingResponseBody> processTestCdr(MultipartFile file, Long plantTypeId) {
         log.info("Starting TEST CDR processing for file: {}, PlantTypeID: {}", file.getOriginalFilename(), plantTypeId);
@@ -240,8 +245,8 @@ public class TestCdrProcessingService {
                             "", // id (auto-generated)
                             data.getEffectiveDestinationNumber(),
                             commLocationId,
-                            String.valueOf(DateTimeUtil.convertToZone(data.getDateTimeOrigination(),
-                                    ZoneId.systemDefault())),
+                            DateTimeUtil.convertToZone(data.getDateTimeOrigination(), ZoneId.systemDefault())
+                                    .format(SERVICE_DATE_FORMAT),
                             String.valueOf(data.getOperatorId()),
                             data.getCallingPartyNumber(),
                             data.getAuthCodeDescription(),
@@ -251,8 +256,12 @@ public class TestCdrProcessingService {
                             String.valueOf(data.getRingingTimeSeconds()),
                             String.valueOf(data.getTelephonyTypeId()),
                             String.valueOf(data.getBilledAmount()),
-                            String.valueOf(data.getPricePerMinute()),
-                            String.valueOf(data.getInitialPricePerMinute()),
+                            // Mirror CallRecordPersistenceService: persist pre-VAT per-minute values
+                            // so the test-endpoint CSV matches the production DB and legacy output.
+                            String.valueOf(CdrUtil.stripVat(data.getPricePerMinute(),
+                                    data.isPriceIncludesVat(), data.getVatRate())),
+                            String.valueOf(CdrUtil.stripVat(data.getInitialPricePerMinute(),
+                                    data.isInitialPriceIncludesVat(), data.getVatRate())),
                             isIncoming,
                             data.getDestDeviceName(),
                             data.getOrigDeviceName(),

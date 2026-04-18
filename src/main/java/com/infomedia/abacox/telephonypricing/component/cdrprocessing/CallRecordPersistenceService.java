@@ -14,9 +14,6 @@ import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.time.LocalDateTime;
 import java.util.*;
 
 @Service
@@ -147,8 +144,8 @@ public class CallRecordPersistenceService {
         // PRECIOMINUTO / PRECIOINICIAL at acumtotal_Insertar time. Billed amount is already
         // final (VAT-inclusive or not as the pipeline chose), but the per-minute columns
         // must be persisted pre-VAT to match legacy output.
-        callRecord.setPricePerMinute(stripVat(cdrData.getPricePerMinute(), cdrData.isPriceIncludesVat(), cdrData.getVatRate()));
-        callRecord.setInitialPrice(stripVat(cdrData.getInitialPricePerMinute(), cdrData.isInitialPriceIncludesVat(), cdrData.getVatRate()));
+        callRecord.setPricePerMinute(CdrUtil.stripVat(cdrData.getPricePerMinute(), cdrData.isPriceIncludesVat(), cdrData.getVatRate()));
+        callRecord.setInitialPrice(CdrUtil.stripVat(cdrData.getInitialPricePerMinute(), cdrData.isInitialPriceIncludesVat(), cdrData.getVatRate()));
         callRecord.setIsIncoming(cdrData.getCallDirection() == CallDirection.INCOMING);
         callRecord.setTrunk(truncate(cdrData.getDestDeviceName(), 50));
         callRecord.setInitialTrunk(truncate(cdrData.getOrigDeviceName(), 50));
@@ -182,22 +179,5 @@ public class CallRecordPersistenceService {
     private String truncate(String input, int limit) {
         if (input == null) return "";
         return input.length() > limit ? input.substring(0, limit) : input;
-    }
-
-    /**
-     * PHP ValorSinIVA: returns the per-minute rate with VAT removed if the rate is
-     * flagged as VAT-inclusive and a VAT rate is defined. Otherwise returns the value as-is.
-     * Mirrors include_captura.txt:3662 so LOCAL_EXTENDED (40.46 incl VAT) persists as 34.00.
-     */
-    private BigDecimal stripVat(BigDecimal value, boolean includesVat, BigDecimal vatRate) {
-        if (value == null) return null;
-        if (!includesVat || vatRate == null
-                || vatRate.compareTo(BigDecimal.ZERO) <= 0
-                || value.compareTo(BigDecimal.ZERO) <= 0) {
-            return value;
-        }
-        BigDecimal divisor = BigDecimal.ONE.add(
-                vatRate.divide(BigDecimal.valueOf(100), 8, RoundingMode.HALF_UP));
-        return value.divide(divisor, 4, RoundingMode.HALF_UP);
     }
 }

@@ -2,6 +2,8 @@
 package com.infomedia.abacox.telephonypricing.component.cdrprocessing;
 
 import java.io.*;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -14,6 +16,25 @@ import lombok.extern.log4j.Log4j2;
 public class CdrUtil {
 
     private static final int PROBE_LINE_COUNT = 5; // Read the first few lines for validation
+
+    /**
+     * PHP ValorSinIVA (include_captura.txt:3662): returns the per-minute rate with VAT
+     * removed if the rate is flagged as VAT-inclusive and a VAT rate is defined. Otherwise
+     * returns the value as-is. Shared between the persistence mapper and the test-endpoint
+     * CSV writer so both produce legacy-compatible PRECIOMINUTO / PRECIOINICIAL values
+     * (e.g. LOCAL_EXTENDED 40.46 incl. VAT persists as 34.00).
+     */
+    public static BigDecimal stripVat(BigDecimal value, boolean includesVat, BigDecimal vatRate) {
+        if (value == null) return null;
+        if (!includesVat || vatRate == null
+                || vatRate.compareTo(BigDecimal.ZERO) <= 0
+                || value.compareTo(BigDecimal.ZERO) <= 0) {
+            return value;
+        }
+        BigDecimal divisor = BigDecimal.ONE.add(
+                vatRate.divide(BigDecimal.valueOf(100), 8, RoundingMode.HALF_UP));
+        return value.divide(divisor, 4, RoundingMode.HALF_UP);
+    }
 
     public static List<String> parseCsvLine(String line, String separator) {
         if (line == null)
