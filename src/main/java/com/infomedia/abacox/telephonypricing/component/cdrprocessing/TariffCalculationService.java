@@ -83,7 +83,7 @@ public class TariffCalculationService {
                     Optional.empty(), true);
 
             if (attempt2.bestPrefixInfo != null && attempt2.bestPrefixInfo.telephonyTypeId > 0 &&
-                    attempt2.bestPrefixInfo.telephonyTypeId != TelephonyTypeEnum.ERRORS.getValue() &&
+                    !Objects.equals(attempt2.bestPrefixInfo.telephonyTypeId, TelephonyTypeEnum.ERRORS.getValue()) &&
                     attempt2.bestDestInfo != null && attempt2.bestDestInfo.getIndicatorId() != null
                     && attempt2.bestDestInfo.getIndicatorId() > 0) {
 
@@ -189,6 +189,7 @@ public class TariffCalculationService {
         log.info("TRACE_ATTEMPT: numberForLookup='{}' isTrunk={} isNormalization={}", numberForLookup, trunkInfoOpt.isPresent(), isNormalizationAttempt);
         TariffingAttemptResult result = new TariffingAttemptResult();
         result.setWasNormalizedAttempt(isNormalizationAttempt);
+        result.setOriginalInputNumber(numberForLookup);
 
         List<Long> trunkTelephonyTypeIds = null;
         if (trunkInfoOpt.isPresent() && !isNormalizationAttempt) {
@@ -302,9 +303,25 @@ public class TariffCalculationService {
             log.debug("Applying tariffing result. Destination: {}, Prefix: {}",
                     result.bestDestInfo.getDestinationDescription(), result.bestPrefixInfo.getPrefixCode());
 
-            cdrData.setEffectiveDestinationNumber(result.getMatchedNumber());
-            log.debug("CDR effective destination number updated to matched/truncated value: {}",
-                    cdrData.getEffectiveDestinationNumber());
+            // Persist the pre-transform input (PBX-cleaned, but NOT Colombia 10-digit transformed).
+            // result.matchedNumber holds the post-_esCelular_fijo value which strips the area code
+            // for LOCAL calls (e.g. '6076881810' -> '6881810' in Bucaramanga) -- legacy PHP only
+            // uses that form internally via $g_numero and stores the untransformed outer $telefono.
+            // Fall back to matchedNumber if no originalInputNumber was recorded (shouldn't happen).
+            String dialToPersist = result.getOriginalInputNumber() != null
+                    ? result.getOriginalInputNumber()
+                    : result.getMatchedNumber();
+            // Apply the prefix's max-length truncation to the pre-transform value (PHP truncates
+            // $telefono to $tipotelemax before buscarDestino, line 1573-1576 of include_captura).
+            if (result.bestPrefixInfo != null
+                    && result.bestPrefixInfo.getTelephonyTypeMaxLength() != null
+                    && dialToPersist != null
+                    && dialToPersist.length() > result.bestPrefixInfo.getTelephonyTypeMaxLength()) {
+                dialToPersist = dialToPersist.substring(0, result.bestPrefixInfo.getTelephonyTypeMaxLength());
+            }
+            cdrData.setEffectiveDestinationNumber(dialToPersist);
+            log.debug("CDR effective destination number updated to pre-transform value: {} (matchedNumber was: {})",
+                    cdrData.getEffectiveDestinationNumber(), result.getMatchedNumber());
 
             cdrData.setTelephonyTypeId(result.bestPrefixInfo.telephonyTypeId);
             cdrData.setTelephonyTypeName(result.bestPrefixInfo.telephonyTypeName);
@@ -551,7 +568,7 @@ public class TariffCalculationService {
                 result.bestPrefixInfo == null ||
                 result.bestPrefixInfo.telephonyTypeId == null ||
                 result.bestPrefixInfo.telephonyTypeId <= 0 ||
-                result.bestPrefixInfo.telephonyTypeId == TelephonyTypeEnum.ERRORS.getValue() ||
+                Objects.equals(result.bestPrefixInfo.telephonyTypeId, TelephonyTypeEnum.ERRORS.getValue()) ||
                 (result.bestDestInfo.getDestinationDescription() != null
                         && result.bestDestInfo.getDestinationDescription().contains(appConfigService.getAssumedText()))
                 ||

@@ -56,7 +56,7 @@ public class CdrEnrichmentService {
                     && cdrData.getDurationSeconds() <= appConfigService.getMinCallDurationForTariffing()) {
                 if (cdrData.getTelephonyTypeId() != null &&
                         cdrData.getTelephonyTypeId() > 0 &&
-                        cdrData.getTelephonyTypeId() != TelephonyTypeEnum.ERRORS.getValue()) {
+                        !cdrData.getTelephonyTypeId().equals(TelephonyTypeEnum.ERRORS.getValue())) {
                     log.debug("Call duration {}s <= min. Setting type to NO_CONSUMPTION after all processing.",
                             cdrData.getDurationSeconds());
                     cdrData.setTelephonyTypeId(TelephonyTypeEnum.NO_CONSUMPTION.getValue());
