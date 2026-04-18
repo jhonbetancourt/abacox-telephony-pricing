@@ -110,11 +110,16 @@ public class CdrUtil {
         StringBuilder cleanedRest = new StringBuilder();
 
         if (!restOfNumber.isEmpty()) {
+            // Legacy PHP's ValidarTelefono/preg_replace keeps digits plus '*', '#', '+'
+            // (DTMF control chars). We previously stopped at the first non-digit which
+            // dropped '*' entirely and caused '5*' to be persisted as '5'. Keep DTMF
+            // chars but still stop at truly invalid chars (letters, spaces) so callers
+            // that expect a clean numeric tail aren't surprised.
             for (char c : restOfNumber.toCharArray()) {
-                if (Character.isDigit(c)) {
+                if (Character.isDigit(c) || c == '*' || c == '#' || c == '+') {
                     cleanedRest.append(c);
                 } else {
-                    log.trace("Non-digit '{}' found after first char. Stopping cleaning of rest.", c);
+                    log.trace("Invalid char '{}' found after first char. Stopping cleaning of rest.", c);
                     break;
                 }
             }
