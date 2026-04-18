@@ -176,8 +176,14 @@ public class CdrEnrichmentService {
     }
 
     private void finalizeTransferInformation(CdrData cdrData) {
-        if (cdrData.getTransferCause() != TransferCause.NONE &&
-                cdrData.getLastRedirectDn() != null && !cdrData.getLastRedirectDn().isEmpty()) {
+        // Legacy PHP (txt2dbv8.php:1434) assigns $ext_transfer = trim($info['ext-redir'])
+        // unconditionally, then clears it only if it matches caller/callee AND is not a
+        // conference (line 1521-1526). We previously gated the whole block on
+        // transferCause != NONE, which meant outgoing mobile calls where lastRedirectDn
+        // equals the raw dial number got employee_transfer=null. Legacy stores the
+        // lastRedirectDn unmodified because by the time its clear-check runs, CME has
+        // already stripped the leading '0' from dial_number so the strings no longer match.
+        if (cdrData.getLastRedirectDn() != null && !cdrData.getLastRedirectDn().isEmpty()) {
             cdrData.setEmployeeTransferExtension(cdrData.getLastRedirectDn());
 
             boolean transferToSelfOrOtherParty = false;
