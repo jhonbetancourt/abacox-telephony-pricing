@@ -162,6 +162,11 @@ public class PhoneNumberTransformationService {
                     String ndcPart = phoneNumber.substring(2, 3); // X
                     String subscriberPart = phoneNumber.substring(3); // NNN NNNN
                     log.debug("10-digit fixed '60...' number. NDC part: '{}', Subscriber part: '{}'", ndcPart, subscriberPart);
+                    log.info("TRACE_60: input='{}' ndcPart='{}' subscriberPart='{}' plantIndicator.id={} plantDept='{}' plantCity='{}'",
+                            phoneNumber, ndcPart, subscriberPart,
+                            commLocation.getIndicator().getId(),
+                            commLocation.getIndicator().getDepartmentCountry(),
+                            commLocation.getIndicator().getCityName());
 
                     String seriesLookupQuery = "SELECT i.department_country, i.city_name, s.company " +
                             "FROM series s JOIN indicator i ON s.indicator_id = i.id " +
@@ -186,18 +191,25 @@ public class PhoneNumberTransformationService {
                         String dbCity = seriesData.get("city_name", String.class);
                         String dbCompany = seriesData.get("company", String.class);
                         log.debug("Series lookup result: Dept='{}', City='{}', Company='{}'", dbDept, dbCity, dbCompany);
+                        log.info("TRACE_60: seriesLookup dbDept='{}' dbCity='{}' dbCompany='{}'", dbDept, dbCity, dbCompany);
 
                         Indicator plantIndicator = commLocation.getIndicator();
+                        log.info("TRACE_60: compare plantDept='{}' plantCity='{}' vs dbDept='{}' dbCity='{}' deptEq={} cityEq={}",
+                                plantIndicator.getDepartmentCountry(), plantIndicator.getCityName(), dbDept, dbCity,
+                                Objects.equals(dbDept, plantIndicator.getDepartmentCountry()),
+                                Objects.equals(dbCity, plantIndicator.getCityName()));
                         if (Objects.equals(dbDept, plantIndicator.getDepartmentCountry()) &&
                                 Objects.equals(dbCity, plantIndicator.getCityName())) {
                             transformedNumber = subscriberPart; // Becomes local number
                             newTelephonyTypeId = TelephonyTypeEnum.LOCAL.getValue();
                             log.debug("Matched plant's city/dept. Transformed to local: '{}', type hint: LOCAL", transformedNumber);
+                            log.info("TRACE_60: MATCHED LOCAL -> transformedNumber='{}'", transformedNumber);
                         }
                         else if (Objects.equals(dbDept, plantIndicator.getDepartmentCountry())) {
                             transformedNumber = subscriberPart; // Becomes local extended number
                             newTelephonyTypeId = TelephonyTypeEnum.LOCAL_EXTENDED.getValue();
                             log.debug("Matched plant's dept. Transformed to local extended: '{}', type hint: LOCAL_EXTENDED", transformedNumber);
+                            log.info("TRACE_60: MATCHED LOCAL_EXTENDED -> transformedNumber='{}'", transformedNumber);
                         }
                         else { // National
                             String operatorPrefix = mapCompanyToOperatorPrefix(dbCompany);
@@ -208,12 +220,14 @@ public class PhoneNumberTransformationService {
                             }
                             newTelephonyTypeId = TelephonyTypeEnum.NATIONAL.getValue();
                             log.debug("No local/extended match. Transformed to national: '{}' (prefix: '{}'), type hint: NATIONAL", transformedNumber, operatorPrefix.isEmpty() ? "09" : operatorPrefix);
+                            log.info("TRACE_60: MATCHED NATIONAL -> transformedNumber='{}' operatorPrefix='{}'", transformedNumber, operatorPrefix);
                         }
                     } catch (NoResultException e) {
                         // PHP: $numero = substr($numero, 2); $g_numero = $numero = '09'.$numero;
                         transformedNumber = "09" + phoneNumber.substring(2); // Default to "09" + XNNNNNNN
                         newTelephonyTypeId = TelephonyTypeEnum.NATIONAL.getValue();
                         log.debug("No series match for '60...' number. Defaulting to national: '{}', type hint: NATIONAL", transformedNumber);
+                        log.info("TRACE_60: NoResultException - no series match, fallback NATIONAL '{}'", transformedNumber);
                     }
                 }
             }

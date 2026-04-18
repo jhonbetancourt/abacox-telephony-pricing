@@ -50,12 +50,15 @@ public class PrefixLookupService {
         if (commLocation != null && commLocation.getIndicator() != null &&
             commLocation.getIndicator().getOriginCountryId() != null) {
             TransformationResult res = phoneNumberTransformationService.transformForPrefixLookup(dialedNumber, commLocation);
+            log.info("TRACE_PREFIX: input dialedNumber='{}' isTrunk={} transformResult: transformed={} transformedNumber='{}' hint={}",
+                    dialedNumber, isTrunkCall, res.isTransformed(), res.getTransformedNumber(), res.getNewTelephonyTypeId());
             if (res.isTransformed()) {
                 numberForLookup = res.getTransformedNumber();
                 hintedTelephonyTypeId = res.getNewTelephonyTypeId();
             }
         }
         final String finalNumber = numberForLookup;
+        log.info("TRACE_PREFIX: finalNumber='{}' hintedType={}", finalNumber, hintedTelephonyTypeId);
         Long countryId = commLocation.getIndicator().getOriginCountryId();
 
         // 2. Get All Prefixes for Country from Cache (or load DB)
@@ -122,6 +125,17 @@ public class PrefixLookupService {
                 .comparing((PrefixInfo pi) -> pi.getPrefixCode() != null ? pi.getPrefixCode().length() : 0, Comparator.reverseOrder())
                 .thenComparing((PrefixInfo pi) -> pi.getTelephonyTypeMinLength() != null ? pi.getTelephonyTypeMinLength() : 0));
 
+        if (log.isInfoEnabled()) {
+            StringBuilder sb = new StringBuilder();
+            for (PrefixInfo pi : matchedPrefixes) {
+                sb.append("[id=").append(pi.getPrefixId())
+                  .append(" code='").append(pi.getPrefixCode())
+                  .append("' type=").append(pi.getTelephonyTypeId())
+                  .append(" op=").append(pi.getOperatorId())
+                  .append("] ");
+            }
+            log.info("TRACE_PREFIX: matchedPrefixes ({} total) -> {}", matchedPrefixes.size(), sb.toString().trim());
+        }
         return matchedPrefixes;
     }
 

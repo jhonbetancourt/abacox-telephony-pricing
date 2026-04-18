@@ -34,12 +34,16 @@ public class TariffCalculationService {
             ExtensionLimits extensionLimits) {
         log.debug("Calculating tariffs for OUTGOING/EXTERNAL CDR: {}, CommLocation: {}", cdrData.getCtlHash(),
                 commLocation.getDirectory());
+        log.info("TRACE_OUT: entering calculateTariffsForOutgoing ctlHash={} commLocId={} destDevice='{}' effectiveDest='{}' finalCalled='{}'",
+                cdrData.getCtlHash(), commLocation.getId(), cdrData.getDestDeviceName(),
+                cdrData.getEffectiveDestinationNumber(), cdrData.getFinalCalledPartyNumber());
 
         Optional<TrunkInfo> trunkInfoOpt = Optional.empty();
         if (cdrData.getDestDeviceName() != null && !cdrData.getDestDeviceName().isEmpty()) {
             trunkInfoOpt = trunkLookupService.findTrunkByName(cdrData.getDestDeviceName(), commLocation.getId());
             log.debug("Trunk lookup for '{}': {}", cdrData.getDestDeviceName(),
                     trunkInfoOpt.isPresent() ? "Found" : "Not Found");
+            log.info("TRACE_OUT: trunk lookup '{}' found={}", cdrData.getDestDeviceName(), trunkInfoOpt.isPresent());
         }
 
         String numberForTariffing = cdrData.getEffectiveDestinationNumber();
@@ -182,6 +186,7 @@ public class TariffCalculationService {
             Optional<TrunkInfo> trunkInfoOpt, boolean isNormalizationAttempt) {
         log.debug("Attempting tariffing for number: '{}', isTrunk: {}, isNormalization: {}", numberForLookup,
                 trunkInfoOpt.isPresent(), isNormalizationAttempt);
+        log.info("TRACE_ATTEMPT: numberForLookup='{}' isTrunk={} isNormalization={}", numberForLookup, trunkInfoOpt.isPresent(), isNormalizationAttempt);
         TariffingAttemptResult result = new TariffingAttemptResult();
         result.setWasNormalizedAttempt(isNormalizationAttempt);
 
@@ -231,6 +236,8 @@ public class TariffCalculationService {
                         prefixInfo.getTelephonyTypeMaxLength(), prefixInfo.getTelephonyTypeId(), numberForDestLookup);
             }
 
+            log.info("TRACE_ATTEMPT: calling findDestinationIndicator numberForDestLookup='{}' prefixType={} prefixId={} operatorPrefixToPass='{}' stripped={}",
+                    numberForDestLookup, prefixInfo.telephonyTypeId, prefixInfo.prefixId, operatorPrefixToPassToFindDest, (operatorPrefixToPassToFindDest == null));
             Optional<DestinationInfo> destInfoOpt = indicatorLookupService.findDestinationIndicator(
                     numberForDestLookup, // Use the potentially truncated number
                     prefixInfo.telephonyTypeId,
@@ -243,6 +250,11 @@ public class TariffCalculationService {
                     operatorPrefixToPassToFindDest);
             log.trace("Destination lookup for '{}' (type {}): {}", numberForDestLookup, prefixInfo.telephonyTypeId,
                     destInfoOpt.isPresent() ? destInfoOpt.get() : "Not Found");
+            log.info("TRACE_ATTEMPT: findDestinationIndicator result present={} indicator={} ndc='{}' approx={}",
+                    destInfoOpt.isPresent(),
+                    destInfoOpt.map(d -> String.valueOf(d.getIndicatorId())).orElse("N/A"),
+                    destInfoOpt.map(DestinationInfo::getNdc).orElse("N/A"),
+                    destInfoOpt.map(DestinationInfo::isApproximateMatch).orElse(false));
 
             if (destInfoOpt.isPresent()) {
                 DestinationInfo currentDestInfo = destInfoOpt.get();
@@ -273,6 +285,11 @@ public class TariffCalculationService {
 
     private void applyTariffingResult(CdrData cdrData, TariffingAttemptResult result,
             CommunicationLocation commLocation, Optional<TrunkInfo> trunkInfoOpt, ExtensionLimits extensionLimits) {
+        log.info("TRACE_APPLY: entering applyTariffingResult bestDestInfo={} bestPrefixInfo={} trunkPresent={} normalizedAttempt={}",
+                result.bestDestInfo != null ? (result.bestDestInfo.getIndicatorId() + "/" + result.bestDestInfo.getNdc()) : "NULL",
+                result.bestPrefixInfo != null ? ("id=" + result.bestPrefixInfo.getPrefixId() + " type=" + result.bestPrefixInfo.getTelephonyTypeId() + " op=" + result.bestPrefixInfo.getOperatorId()) : "NULL",
+                trunkInfoOpt.isPresent(),
+                result.isWasNormalizedAttempt());
         if (result.bestDestInfo != null && result.bestPrefixInfo != null) {
             log.debug("Applying tariffing result. Destination: {}, Prefix: {}",
                     result.bestDestInfo.getDestinationDescription(), result.bestPrefixInfo.getPrefixCode());
@@ -298,10 +315,18 @@ public class TariffCalculationService {
             cdrData.setIndicatorId(result.bestDestInfo.getIndicatorId());
             cdrData.setDestinationCityName(result.bestDestInfo.getDestinationDescription());
 
-            if (cdrData.getTelephonyTypeId() == TelephonyTypeEnum.LOCAL.getValue() &&
-                    indicatorLookupService.isLocalExtended(result.bestDestInfo.getNdc(), commLocation.getIndicatorId(),
-                            result.bestDestInfo.getIndicatorId())) {
+            log.info("TRACE_APPLY: before LOCAL_EXT check type={} destNdc='{}' originIndicator={} destIndicator={}",
+                    cdrData.getTelephonyTypeId(), result.bestDestInfo.getNdc(),
+                    commLocation.getIndicatorId(), result.bestDestInfo.getIndicatorId());
+            boolean isLocalExt = false;
+            if (cdrData.getTelephonyTypeId() == TelephonyTypeEnum.LOCAL.getValue()) {
+                isLocalExt = indicatorLookupService.isLocalExtended(result.bestDestInfo.getNdc(), commLocation.getIndicatorId(),
+                        result.bestDestInfo.getIndicatorId());
+                log.info("TRACE_APPLY: isLocalExtended returned {}", isLocalExt);
+            }
+            if (cdrData.getTelephonyTypeId() == TelephonyTypeEnum.LOCAL.getValue() && isLocalExt) {
                 log.debug("Call to {} identified as LOCAL_EXTENDED.", result.bestDestInfo.getDestinationDescription());
+                log.info("TRACE_APPLY: promoting to LOCAL_EXTENDED");
                 cdrData.setTelephonyTypeId(TelephonyTypeEnum.LOCAL_EXTENDED.getValue());
                 cdrData.setTelephonyTypeName(
                         telephonyTypeLookupService.getTelephonyTypeName(TelephonyTypeEnum.LOCAL_EXTENDED.getValue()));
@@ -311,6 +336,7 @@ public class TariffCalculationService {
                     cdrData.setOperatorId(localExtPrefixInfo.getOperatorId());
                     cdrData.setOperatorName(localExtPrefixInfo.getOperatorName());
                     result.bestPrefixInfo.prefixId = localExtPrefixInfo.getPrefixId(); // Update for subsequent logic
+                    log.info("TRACE_APPLY: swapped prefixId to LOCAL_EXT prefixId={}", result.bestPrefixInfo.prefixId);
                 }
             }
 
@@ -320,6 +346,7 @@ public class TariffCalculationService {
                     commLocation.getId(),
                     commLocation.getIndicatorId());
             log.debug("Base tariff for prefixId {}: {}", result.bestPrefixInfo.prefixId, baseTariff);
+            log.info("TRACE_APPLY: finalPrefixId={} baseTariff.rate={}", result.bestPrefixInfo.prefixId, baseTariff.getRateValue());
 
             cdrData.setPricePerMinute(baseTariff.getRateValue());
             cdrData.setPriceIncludesVat(baseTariff.isIncludesVat());
