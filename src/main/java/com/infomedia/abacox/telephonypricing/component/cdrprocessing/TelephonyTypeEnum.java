@@ -18,11 +18,7 @@ public enum TelephonyTypeEnum {
     INTERNAL_INTERNATIONAL_IP(14L, "Interna Internacional"),
     // ID 15 is missing in CSV
     NO_CONSUMPTION(16L, "Sin Consumo"),
-    // Legacy lib/defines.php:89 -> define('_TIPOTELE_ERRORES', 99).
-    // Persisting null caused unclassified calls (e.g. dial "0310") to land with telephony_type_id
-    // IS NULL in the DB, diverging from the legacy CSV which uses 99. csv/telephony_type.csv
-    // already seeds a row with id=99 "Error" for the FK to resolve.
-    ERRORS(99L, "Errores (No Válido)");
+    ERRORS(null, "Errores (No Válido)"); // PHP: _TIPOTELE_ERRORES = 99 in legacy, but no row 99 exists in our telephony_type table (FK would fail); keep NULL.
 
     private final Long value;
     private final String defaultName;
