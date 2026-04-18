@@ -37,11 +37,26 @@ public class PrefixLookupService {
         return (tenant != null ? tenant : "public") + ":" + countryId;
     }
 
+    /**
+     * @deprecated Use {@link #findMatchingPrefixesDetailed} instead. This variant drops the
+     * transformed lookup number, which callers need to pass to
+     * {@code IndicatorLookupService.findDestinationIndicator} for correct Colombia 10-digit-fixed
+     * classification. Kept temporarily for backward compatibility.
+     */
+    @Deprecated
     @Transactional(readOnly = true)
     public List<PrefixInfo> findMatchingPrefixes(String dialedNumber,
                                                  CommunicationLocation commLocation,
                                                  boolean isTrunkCall,
                                                  List<Long> trunkTelephonyTypeIds) {
+        return findMatchingPrefixesDetailed(dialedNumber, commLocation, isTrunkCall, trunkTelephonyTypeIds).getPrefixes();
+    }
+
+    @Transactional(readOnly = true)
+    public PrefixMatchResult findMatchingPrefixesDetailed(String dialedNumber,
+                                                          CommunicationLocation commLocation,
+                                                          boolean isTrunkCall,
+                                                          List<Long> trunkTelephonyTypeIds) {
         
         // 1. Transform Number
         String numberForLookup = dialedNumber;
@@ -136,7 +151,7 @@ public class PrefixLookupService {
             }
             log.info("TRACE_PREFIX: matchedPrefixes ({} total) -> {}", matchedPrefixes.size(), sb.toString().trim());
         }
-        return matchedPrefixes;
+        return new PrefixMatchResult(matchedPrefixes, finalNumber, hintedTelephonyTypeId);
     }
 
     private List<PrefixInfo> getPrefixesForCountry(Long countryId) {

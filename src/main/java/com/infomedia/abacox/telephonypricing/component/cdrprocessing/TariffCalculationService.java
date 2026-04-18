@@ -195,16 +195,24 @@ public class TariffCalculationService {
             trunkTelephonyTypeIds = trunkInfoOpt.get().getAllowedTelephonyTypeIds();
         }
 
-        List<PrefixInfo> prefixes = prefixLookupService.findMatchingPrefixes(
+        PrefixMatchResult prefixMatch = prefixLookupService.findMatchingPrefixesDetailed(
                 numberForLookup,
                 commLocation,
                 trunkInfoOpt.isPresent() && !isNormalizationAttempt,
                 trunkTelephonyTypeIds);
-        log.debug("Found {} potential prefixes for number '{}'", prefixes.size(), numberForLookup);
+        List<PrefixInfo> prefixes = prefixMatch.getPrefixes();
+        // CRITICAL: use the TRANSFORMED number for destination lookup, not the original.
+        // Legacy PHP's _esCelular_fijo persists the transformed number via $g_numero, which
+        // buscarDestino then reads. Passing the untransformed number here causes the Colombia
+        // 10-digit-fixed-line transformation to be ignored downstream — the destination
+        // resolves to a bogus indicator and LOCAL gets mis-classified as LOCAL_EXTENDED.
+        String transformedLookupNumber = prefixMatch.getNumberForLookup();
+        log.debug("Found {} potential prefixes for number '{}' (transformed: '{}')",
+                prefixes.size(), numberForLookup, transformedLookupNumber);
 
         for (PrefixInfo prefixInfo : prefixes) {
             log.trace("Evaluating prefix: {}", prefixInfo.getPrefixCode());
-            String numberAfterOperatorPrefixStrip = numberForLookup;
+            String numberAfterOperatorPrefixStrip = transformedLookupNumber;
             String operatorPrefixToPassToFindDest = prefixInfo.getPrefixCode();
 
             boolean stripOperatorPrefixForDestLookup = false;
@@ -221,8 +229,8 @@ public class TariffCalculationService {
 
             if (stripOperatorPrefixForDestLookup && prefixInfo.getPrefixCode() != null
                     && !prefixInfo.getPrefixCode().isEmpty()
-                    && numberForLookup.startsWith(prefixInfo.getPrefixCode())) {
-                numberAfterOperatorPrefixStrip = numberForLookup.substring(prefixInfo.getPrefixCode().length());
+                    && transformedLookupNumber.startsWith(prefixInfo.getPrefixCode())) {
+                numberAfterOperatorPrefixStrip = transformedLookupNumber.substring(prefixInfo.getPrefixCode().length());
                 operatorPrefixToPassToFindDest = null;
                 log.trace("Stripped operator prefix '{}'. Number for dest lookup: {}", prefixInfo.getPrefixCode(),
                         numberAfterOperatorPrefixStrip);
@@ -276,7 +284,7 @@ public class TariffCalculationService {
                 }
             }
         }
-        result.finalNumberUsedForDestLookup = numberForLookup;
+        result.finalNumberUsedForDestLookup = transformedLookupNumber;
         if (result.bestDestInfo != null) {
             result.finalNumberUsedForDestLookup = result.bestDestInfo.getMatchedPhoneNumber();
         }
