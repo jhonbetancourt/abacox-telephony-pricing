@@ -46,18 +46,6 @@ public class DefaultDataLoadingService implements TenantInitializer {
                 log.error("Error loading telephony type data into database", e);
             }
         }
-        // Backfill the legacy ERRORS row (id=99) for tenants that were seeded before it was
-        // added to the CSV. Legacy lib/defines.php:89 uses _TIPOTELE_ERRORES=99 and call_record
-        // has a FK to telephony_type, so setting the enum value to 99L requires this row to exist.
-        if (!telephonyTypeRepository.existsById(99L)) {
-            log.info("Backfilling telephony_type id=99 (Error) for legacy ERRORS compatibility");
-            TelephonyType errorType = TelephonyType.builder()
-                    .id(99L)
-                    .name("Error")
-                    .usesTrunks(false)
-                    .build();
-            telephonyTypeRepository.save(errorType);
-        }
     }
 
     private void loadCity() {
