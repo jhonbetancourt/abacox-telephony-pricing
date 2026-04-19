@@ -22,6 +22,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -152,7 +153,9 @@ public class DashboardService {
     }
 
     private String cacheKey(String tenant, LocalDateTime start, LocalDateTime end) {
-        return (tenant != null ? tenant : "default") + ":" + start + ":" + end;
+        return (tenant != null ? tenant : "default")
+                + ":" + start.truncatedTo(ChronoUnit.SECONDS)
+                + ":" + end.truncatedTo(ChronoUnit.SECONDS);
     }
 
     private List<EmployeeActivityReportDto> applyEmployeeActivityFilters(
