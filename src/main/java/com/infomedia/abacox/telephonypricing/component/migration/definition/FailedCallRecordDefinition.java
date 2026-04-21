@@ -2,8 +2,6 @@ package com.infomedia.abacox.telephonypricing.component.migration.definition;
 
 import com.infomedia.abacox.telephonypricing.component.cdrprocessing.QuarantineErrorType;
 import com.infomedia.abacox.telephonypricing.component.migration.TableMigrationConfig;
-import com.infomedia.abacox.telephonypricing.component.utils.XXHash128Util;
-import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 import static java.util.Map.entry;
@@ -23,23 +21,14 @@ public class FailedCallRecordDefinition implements MigrationTableDefinition {
                         entry("ACUMFALLIDO_ID", "id"),
                         entry("ACUMFALLIDO_EXTENSION", "employeeExtension"),
                         entry("ACUMFALLIDO_DATOS", "errorType"),
-                        entry("ACUMFALLIDO_MENSAJE", "errorMessage"),
                         entry("ACUMFALLIDO_ACUMTOTAL_ID", "originalCallRecordId"),
                         entry("ACUMFALLIDO_COMUBICACION_ID", "commLocationId"),
                         entry("ACUMFALLIDO_FILEINFO_ID", "fileInfoId"),
-                        entry("ACUMFALLIDO_CDR", "ctlHash"),
                         entry("ACUMFALLIDO_FCREACION", "createdDate"),
                         entry("ACUMFALLIDO_FMODIFICADO", "lastModifiedDate")))
                 .customValueTransformers(Map.of(
                         "errorType",
-                        val -> QuarantineErrorType.fromPhpType(String.valueOf(val)).name(),
-                        "ctlHash",
-                        val -> val != null
-                                ? XXHash128Util.hash(String.valueOf(val).getBytes(StandardCharsets.UTF_8))
-                                : null))
-                .sourceColumnExpressionOverrides(Map.of(
-                        "ACUMFALLIDO_CDR", "CAST(ACUMFALLIDO_CDR AS varchar(max))",
-                        "ACUMFALLIDO_MENSAJE", "CAST(ACUMFALLIDO_MENSAJE AS varchar(max))"))
+                        val -> QuarantineErrorType.fromPhpType(String.valueOf(val)).name()))
                 .maxEntriesToMigrate(context.getRunRequest().getMaxFailedCallRecordEntries())
                 .dropAndRebuildIndexes(true)
                 .specificValueReplacements(Map.of("originalCallRecordId", originalCallRecordIdReplacements))
